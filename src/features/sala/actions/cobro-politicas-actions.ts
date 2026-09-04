@@ -220,8 +220,41 @@ export async function ejecutarCobroCancelacion(
       return { ok: false, error: "Esta reserva no tiene tarjeta guardada." };
     }
 
+    if (r.cancelacion_estado === "desconocida") {
+      return {
+        ok: false,
+        error:
+          "Hay un cobro lanzado del que no sabemos el resultado. Se está comprobando con Revolut: no se cobra otra vez hasta saberlo.",
+      };
+    }
+
     const importe = Number(r.cancelacion_importe ?? 0);
     if (!(importe > 0)) return { ok: false, error: "No hay importe que cobrar." };
+
+    // ── Tope duro ────────────────────────────────────────────────────
+    //
+    // Lo que ya se movió por esta reserva, contando devoluciones. Nunca se
+    // cobra por encima del importe de la política: sin esto, cada llamada era
+    // un cargo nuevo y se podía cobrar al cliente tantas veces como se
+    // pulsara el botón.
+    const { data: previos } = await admin
+      .from("reserva_cobros")
+      .select("importe, estado")
+      .eq("reserva_id", reservaId)
+      .eq("concepto", "cancelacion")
+      .in("estado", ["cobrado", "lanzado", "desconocido", "devuelto"]);
+
+    const yaMovido = (previos ?? []).reduce(
+      (suma, c) => suma + Number(c.importe ?? 0),
+      0,
+    );
+    if (yaMovido >= importe) {
+      return {
+        ok: false,
+        error: `Ya se ha cobrado ${yaMovido.toFixed(2).replace(".", ",")} € de los ${importe.toFixed(2).replace(".", ",")} € de la política. No se cobra de más.`,
+      };
+    }
+    const aCobrar = Math.min(importe - yaMovido, importe);
 
     const cred = await getCredencialesRevolut(empresaId);
     if (!cred) return { ok: false, error: "Revolut no está configurado." };
@@ -248,17 +281,94 @@ export async function ejecutarCobroCancelacion(
       };
     }
 
+    // ── Cerrojo + registro ANTES de mover un céntimo ──────────────────
+    //
+    // El doble cobro nacía de aquí: entre comprobar el estado y escribirlo
+    // pasaban varios segundos —los que tarda Revolut—, y en ese hueco una
+    // segunda pulsación encontraba la reserva intacta y volvía a cobrar.
+    //
+    // Ahora la fila se escribe PRIMERO. El índice único deja pasar solo una
+    // por reserva mientras haya un cobro vivo, así que la segunda pulsación
+    // choca contra la base de datos y no llega a Revolut. Y si el proceso
+    // muere justo después, la fila queda como testigo de que se lanzó algo.
+    const referencia = `cobro-cancelacion:${reservaId}:${intentos}`;
+    const { data: registro, error: errRegistro } = await admin
+      .from("reserva_cobros")
+      .insert({
+        empresa_id: empresaId,
+        reserva_id: reservaId,
+        concepto: "cancelacion",
+        importe: aCobrar,
+        estado: "lanzado",
+        referencia,
+        usuario_id: usuarioId,
+      })
+      .select("id")
+      .single();
+
+    if (errRegistro || !registro) {
+      // Violación del índice único: ya hay un cobro en vuelo o cobrado.
+      const duplicado = (errRegistro?.code ?? "") === "23505";
+      if (duplicado) {
+        return {
+          ok: false,
+          error: "Ya hay un cobro en marcha para esta reserva. Espera a que termine.",
+        };
+      }
+      console.error("[cobro-politicas] registro:", errRegistro);
+      return { ok: false, error: "No se pudo registrar el cobro; no se ha cobrado nada." };
+    }
+
+    const cobroId = registro.id as string;
+
     const cobro = await cobrarTarjetaGuardada({
       secretKey: cred.secretKey,
       entorno: cred.entorno,
-      importe,
-      referencia: `cobro-cancelacion:${reservaId}:${intentos}`,
+      importe: aCobrar,
+      referencia,
       descripcion: "Política de cancelación",
       customerId,
       paymentMethodId,
     });
 
     const ahora = new Date();
+
+    if (!cobro.ok) {
+      // ⚠️ Un error de RED no es un cobro fallido: la orden puede haber salido
+      // igualmente y el dinero estar ya fuera de la tarjeta del cliente. Darlo
+      // por fallido es lo que hacía que el cron lo reintentara y cobrara dos
+      // veces. Se marca `desconocido` y lo resuelve el cuadre preguntando a
+      // Revolut por la referencia.
+      const esDeRed = /Error de red|fetch|timeout|ECONN|network/i.test(cobro.error);
+      if (esDeRed) {
+        await admin
+          .from("reserva_cobros")
+          .update({ estado: "desconocido", error: cobro.error, updated_at: ahora.toISOString() })
+          .eq("id", cobroId);
+        await admin
+          .from("reservas")
+          .update({
+            cancelacion_estado: "desconocida",
+            cancelacion_error: "No se pudo confirmar el cobro. Se está comprobando con Revolut.",
+            cancelacion_intentos: intentos,
+            cancelacion_ultimo_intento_at: ahora.toISOString(),
+            cancelacion_proximo_intento_at: null,
+          })
+          .eq("id", reservaId);
+        revalidatePath("/sala/reservas");
+        return {
+          ok: false,
+          error:
+            "No se pudo confirmar si el cobro salió. Se comprobará con Revolut antes de volver a intentarlo.",
+        };
+      }
+
+      // Rechazo explícito de Revolut: aquí sí sabemos que no se cobró.
+      await admin
+        .from("reserva_cobros")
+        .update({ estado: "fallido", error: cobro.error, updated_at: ahora.toISOString() })
+        .eq("id", cobroId);
+    }
 
     if (!cobro.ok) {
       // Falló: se apunta el motivo y, si quedan intentos, cuándo es el
@@ -285,6 +395,19 @@ export async function ejecutarCobroCancelacion(
           : `No se pudo cobrar y no quedan más intentos: ${cobro.error}`,
       };
     }
+
+    // Revolut confirmó el movimiento: queda escrito en el registro con su id
+    // de orden, que es lo que permite comprobarlo más tarde y cuadrarlo.
+    await admin
+      .from("reserva_cobros")
+      .update({
+        estado: "cobrado",
+        revolut_order_id: cobro.orden.id,
+        revolut_estado: String(cobro.orden.state),
+        comprobado_at: ahora.toISOString(),
+        updated_at: ahora.toISOString(),
+      })
+      .eq("id", cobroId);
 
     await admin
       .from("reservas")

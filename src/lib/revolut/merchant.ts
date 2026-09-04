@@ -73,6 +73,19 @@ export interface RevolutOrder {
   /** Token para el widget de pago incrustado. */
   token: string;
   state: RevolutOrderState;
+  /**
+   * ⚠️ `payment` (cobro) o `refund` (devolución). Una devolución también llega
+   * en estado `completed`, así que sin mirar ESTE campo se cuenta como si
+   * hubiera entrado dinero cuando en realidad salió. Se lee siempre con
+   * `resultadoDeOrden`, nunca a ojo.
+   */
+  type?: string;
+  /** Importe en céntimos. */
+  amount?: number;
+  /** Céntimos ya devueltos de esta orden: el neto real es `amount` menos esto. */
+  refunded_amount?: number;
+  /** Nuestra referencia, la que se mandó al crear la orden. */
+  merchant_order_ext_ref?: string;
   /** Página de pago alojada por Revolut. */
   checkout_url?: string;
   /**
@@ -247,6 +260,96 @@ export async function obtenerOrden(
     console.error("[revolut] obtenerOrden:", msg);
     return { ok: false, error: msg };
   }
+}
+
+/**
+ * Busca órdenes por NUESTRA referencia (`merchant_order_ext_ref`).
+ *
+ * Es la pieza que convierte un "no sé si se cobró" en una respuesta. Cuando la
+ * llamada de cobro se pierde a medias —timeout, corte de red— el dinero puede
+ * haber salido igualmente: la única forma de saberlo con certeza es
+ * preguntárselo a Revolut por la referencia que le mandamos al lanzarlo.
+ *
+ * Nunca se deduce un cobro. Se comprueba.
+ */
+export async function buscarOrdenesPorReferencia(
+  secretKey: string,
+  entorno: RevolutEntorno,
+  referencia: string,
+): Promise<{ ok: true; ordenes: RevolutOrder[] } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(
+      `${BASE_URL[entorno]}/orders?merchant_order_ext_ref=${encodeURIComponent(referencia)}`,
+      { headers: headers(secretKey), cache: "no-store" },
+    );
+    if (!res.ok) return { ok: false, error: await leerError(res) };
+    const cuerpo = (await res.json()) as { orders?: RevolutOrder[] } | RevolutOrder[];
+    // Revolut envuelve el listado en `{ orders: [...] }`, aunque algunas
+    // versiones devuelven el array pelado. Se aceptan las dos formas.
+    const ordenes = Array.isArray(cuerpo) ? cuerpo : (cuerpo.orders ?? []);
+    return { ok: true, ordenes };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    console.error("[revolut] buscarOrdenesPorReferencia:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Lista los movimientos del comercio en un periodo. Lo usa el cuadre diario.
+ *
+ * ⚠️ La fecha tiene que ir en ISO 8601 COMPLETO (con hora y zona). Con solo
+ * "2026-09-01" Revolut responde un 400 de validación.
+ */
+export async function listarOrdenes(
+  secretKey: string,
+  entorno: RevolutEntorno,
+  desdeISO: string,
+): Promise<{ ok: true; ordenes: RevolutOrder[] } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(
+      `${BASE_URL[entorno]}/orders?from_created_date=${encodeURIComponent(desdeISO)}&limit=100`,
+      { headers: headers(secretKey), cache: "no-store" },
+    );
+    if (!res.ok) return { ok: false, error: await leerError(res) };
+    const cuerpo = (await res.json()) as { orders?: RevolutOrder[] } | RevolutOrder[];
+    const ordenes = Array.isArray(cuerpo) ? cuerpo : (cuerpo.orders ?? []);
+    return { ok: true, ordenes };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    console.error("[revolut] listarOrdenes:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Qué dice Revolut que pasó con una orden, en los términos del registro.
+ *
+ * ⚠️ El campo `type` es imprescindible: una devolución (`refund`) también
+ * llega en estado `completed`, y contarla como cobro cuadra el doble de lo que
+ * se movió en realidad.
+ */
+export function resultadoDeOrden(
+  orden: RevolutOrder,
+): "cobrado" | "fallido" | "devuelto" | "en_curso" {
+  const tipo = String(orden.type ?? "payment").toLowerCase();
+  const estado = normalizar(orden.state);
+  if (tipo === "refund") return "devuelto";
+  if (estado === "completed" || estado === "authorised") return "cobrado";
+  if (estado === "failed" || estado === "cancelled") return "fallido";
+  return "en_curso";
+}
+
+/**
+ * Lo que se ha cobrado DE VERDAD por una orden, en euros y ya neto.
+ *
+ * `refunded_amount` descuenta lo devuelto: una orden de 4 € reembolsada
+ * entera vale 0, no 4.
+ */
+export function netoCobradoDeOrden(orden: RevolutOrder): number {
+  const bruto = Number(orden.amount ?? 0);
+  const devuelto = Number(orden.refunded_amount ?? 0);
+  return Math.max(0, bruto - devuelto) / 100;
 }
 
 /**

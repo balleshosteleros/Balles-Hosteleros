@@ -190,6 +190,53 @@ async function procesarPoliticaReserva(input: {
 }): Promise<boolean> {
   const { admin, orderId, referencia, tipoEvento } = input;
 
+  // ── Cobro de no-show ──────────────────────────────────────────────
+  //
+  // Estos cobros crean una orden NUEVA cada vez, con la referencia
+  // "cobro-cancelacion:<id>:<intento>". El webhook no la reconocía —solo
+  // entendía "cancelacion:<uuid>", la orden de guardar tarjeta—, así que
+  // cuando Revolut avisaba "he cobrado 4 €" no encontraba a quién pertenecía
+  // y contestaba ok sin apuntar nada: el dinero salía y el software no se
+  // enteraba. Ahora se resuelve por el registro de cobros.
+  if (/^cobro-cancelacion:/.test(referencia ?? "")) {
+    const cobrado = tipoEvento === "ORDER_COMPLETED" || tipoEvento === "ORDER_AUTHORISED";
+    const ahora = new Date().toISOString();
+
+    const { data: reg } = await admin
+      .from("reserva_cobros")
+      .select("id, reserva_id")
+      .eq("referencia", referencia as string)
+      .maybeSingle();
+    if (!reg) return false;
+
+    await admin
+      .from("reserva_cobros")
+      .update({
+        estado: cobrado ? "cobrado" : "fallido",
+        revolut_order_id: orderId,
+        revolut_estado: tipoEvento,
+        comprobado_at: ahora,
+        updated_at: ahora,
+      })
+      .eq("id", reg.id as string);
+
+    await admin
+      .from("reservas")
+      .update(
+        cobrado
+          ? {
+              cancelacion_estado: "cobrada",
+              cancelacion_cobrada_at: ahora,
+              cancelacion_proximo_intento_at: null,
+              cancelacion_error: null,
+            }
+          : { cancelacion_estado: "fallida" },
+      )
+      .eq("id", reg.reserva_id as string);
+
+    return true;
+  }
+
   const m = /^(garantia|cancelacion):([0-9a-f-]{36})$/.exec(referencia ?? "");
   const prefijo = m?.[1] as "garantia" | "cancelacion" | undefined;
 

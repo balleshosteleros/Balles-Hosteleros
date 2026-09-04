@@ -42,6 +42,10 @@ export async function GET(request: Request) {
 
   // Reservas cuyo próximo intento ya toca. `cobro_perdonado_at` las excluye:
   // si alguien decidió no cobrar, el software no insiste por su cuenta.
+  //
+  // ⚠️ Solo "fallida", nunca "desconocida". Un cobro del que no sabemos el
+  // resultado puede haber salido ya, y reintentarlo cobraría dos veces al
+  // cliente. Esos los resuelve el cron de cuadre preguntando a Revolut.
   const { data: pendientes, error } = await supabase
     .from("reservas")
     .select("id, empresa_id")

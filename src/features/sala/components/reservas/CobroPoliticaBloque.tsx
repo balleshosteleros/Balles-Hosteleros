@@ -183,6 +183,9 @@ function Cancelacion({
   }
 
   async function cobrar() {
+    // Doble red contra el cobro repetido: si ya se pulsó, no se vuelve a
+    // llamar aunque el botón se pinte activo un instante.
+    if (ocupado) return;
     const ok = await confirm({
       title: "Cobrar la cancelación",
       description: `Se intentarán cobrar ${importe} de la tarjeta del cliente. Puede fallar si no tiene fondos.`,
@@ -191,12 +194,19 @@ function Cancelacion({
     if (!ok) return;
     setOcupado("cobrar");
     const res = await cobrarCancelacion(datos.reservaId);
-    setOcupado(null);
-    if (!res.ok) toast.error(res.error);
-    else {
-      toast.success(`Cobrados ${importe}`);
+    if (!res.ok) {
+      // Solo se devuelve el botón cuando se sabe que NO se cobró. Si la
+      // respuesta fue "no sabemos si salió", el botón sigue bloqueado: lo
+      // resolverá el cuadre contra Revolut, no otra pulsación.
+      setOcupado(null);
+      toast.error(res.error);
       onCambio?.();
+      return;
     }
+    // Cobrado: el botón NO se reactiva. `onCambio` recarga la ficha, que ya
+    // vendrá con el estado "cobrada" y sin botón que pulsar.
+    toast.success(`Cobrados ${importe}`);
+    onCambio?.();
   }
 
   async function renunciar() {
