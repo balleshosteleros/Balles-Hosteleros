@@ -247,10 +247,13 @@ export async function createReserva(input: {
     }
 
     // Campos obligatorios. Nombre y apellidos siempre; email y teléfono según
-    // lo marcado en Ajustes → Departamentos → Sala → Reservas. Quedan fuera
-    // WALK_IN (se atiende en el momento, sin ficha) y LISTA_ESPERA (es una cola:
-    // se apunta al cliente con lo mínimo y aún no tiene mesa ni compromiso).
-    if (input.estado !== "WALK_IN" && input.estado !== "LISTA_ESPERA") {
+    // lo marcado en Ajustes → Departamentos → Sala → Reservas.
+    //
+    // Solo queda fuera WALK_IN: llega sin avisar y se le sienta en el momento,
+    // así que no hay a quién pedirle el teléfono. LISTA_ESPERA sí lo exige: es
+    // una reserva normal en otro estado —lo único que no pide es mesa—, y el
+    // teléfono es justo lo que hace falta para avisar cuando se libera una.
+    if (input.estado !== "WALK_IN") {
       const exige = await getCamposObligatoriosReserva(empresaId);
       if (!input.clienteNombre?.trim()) {
         return { ok: false, error: "El nombre del cliente es obligatorio." };
