@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setEmpresaPlaceId } from "@/features/calidad/actions/resenas-actions";
 import { toast } from "sonner";
-import { Activity, ExternalLink, Search } from "lucide-react";
+import { Activity, ExternalLink, Info, Search } from "lucide-react";
 import Link from "next/link";
 
 interface Props {
@@ -117,11 +117,19 @@ export function CanalGoogleConfigView({ empresaNombre, direccion, placeIdInicial
         </p>
       </div>
 
-      <p className="text-[11px] text-muted-foreground leading-relaxed">
-        El canal queda activo cuando el Place ID está configurado y Google nos acepta como
-        partner. Para activar la integración nativa con Google, contacta con tu administrador
-        Balles.
-      </p>
+      <div className="rounded-md border bg-muted/40 p-3 flex gap-2.5">
+        <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Con el Place ID puesto, este local ya está listo. El botón «Reservar» aparece en
+            Google cuando Google nos acepta como partner de reservas: es un trámite suyo, se
+            pide una sola vez para todo el software y no depende de este restaurante.
+          </p>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Mientras tanto, Instagram y Facebook sí se pueden activar hoy.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

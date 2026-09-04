@@ -168,16 +168,17 @@ const PALETA_EXTRA = [
  * Quedan fuera `WALKIN` (no se elige: lo fija el propio tipo de reserva) y
  * `WEB`/`GOOGLE` (los pone el motor de reservas al entrar solas).
  *
- * Hoy solo hay uno: el alta desde sala es la reserva que coge el personal por
- * TELÉFONO. WhatsApp, Instagram, Facebook y email no son canales de reserva
- * todavía —no hay por dónde entren—, así que ofrecerlos solo llevaría a
- * marcar un origen que no ha ocurrido y a ensuciar la analítica de canales.
- * Cuando alguno se abra de verdad, se añade aquí y el campo vuelve a ser un
- * desplegable solo.
+ * TELÉFONO es la inmensa mayoría y va primero (sale marcado por defecto).
+ * INSTAGRAM y FACEBOOK entraron el 2026-09-05, cuando se abrieron como canales
+ * de verdad en Ajustes → Canales: sus botones «Reservar» llevan al portal y la
+ * reserva entra sola con ese origen, pero el personal también recibe peticiones
+ * por mensaje directo y las apunta a mano, y esas necesitan poder marcarse.
  *
- * El primero es el que sale marcado por defecto.
+ * Un canal solo se añade aquí cuando existe de verdad: ofrecer un origen por el
+ * que no entra nada lleva a marcar algo que no ha ocurrido y ensucia la
+ * analítica de canales.
  */
-export const ORIGENES_ALTA_SALA: readonly string[] = ["TELEFONO"];
+export const ORIGENES_ALTA_SALA: readonly string[] = ["TELEFONO", "INSTAGRAM", "FACEBOOK"];
 
 /**
  * Normaliza cualquier string crudo de `reservas.origen` a su clave estable.

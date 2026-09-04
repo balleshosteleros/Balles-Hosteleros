@@ -28,9 +28,9 @@ const CANALES: CanalCard[] = [
   {
     id: "instagram",
     nombre: "Instagram",
-    descripcion: "Botón Reservar en tu perfil de Instagram Business.",
+    descripcion: "Botón Reservar en tu perfil que abre tu página de reservas.",
     href: "/ajustes/canales/instagram",
-    estado: "proximamente",
+    estado: "disponible",
     logo: (
       <span className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-500 text-white text-base font-bold">
         IG
@@ -40,9 +40,9 @@ const CANALES: CanalCard[] = [
   {
     id: "facebook",
     nombre: "Facebook",
-    descripcion: "Botón Reservar en tu página de Facebook.",
+    descripcion: "Botón Reservar en tu página que abre tu página de reservas.",
     href: "/ajustes/canales/facebook",
-    estado: "proximamente",
+    estado: "disponible",
     logo: (
       <span className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-[#1877F2] text-white text-base font-bold">
         f
