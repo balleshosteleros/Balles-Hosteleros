@@ -182,6 +182,7 @@ export async function updateSession(
       if (portal) {
         const slugs = await slugsDeDominio(rawHost)
         const slug = slugs ? portal.slug(slugs) : null
+        console.log('[portal-sin-slug]', JSON.stringify({ rawHost, pathname, haySlugs: !!slugs, slug }))
         // Sin slug (p.ej. empresa sin carta publicada) se deja pasar tal cual:
         // la propia ruta enseña su "no encontrado", que dice más que un login.
         if (slug) {
