@@ -19,6 +19,11 @@ interface CategoriaRow {
   descripcion: string | null;
   orden: number;
   visible: boolean;
+  familia: string | null;
+  destacada: boolean | null;
+  dias_semana: number[] | null;
+  hora_desde: string | null;
+  hora_hasta: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -98,7 +103,12 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
     visible: r.visible,
     created_at: r.created_at,
     updated_at: r.updated_at,
-  }));
+      familia: (r.familia as CartaCategoria["familia"]) ?? null,
+    destacada: r.destacada ?? false,
+    dias_semana: r.dias_semana,
+    hora_desde: r.hora_desde,
+    hora_hasta: r.hora_hasta,
+}));
 
   const items: CartaItem[] = ((itemsRes.data ?? []) as ItemRow[]).map((r) => ({
     id: r.id,

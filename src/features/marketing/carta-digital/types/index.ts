@@ -10,6 +10,8 @@ export type CartaAdminData = {
   items: CartaItem[];
 };
 
+export type FamiliaCarta = "comida" | "bebida";
+
 export type CartaCategoria = {
   id: string;
   empresa_id: string;
@@ -17,6 +19,18 @@ export type CartaCategoria = {
   descripcion: string | null;
   orden: number;
   visible: boolean;
+  /** COMIDA o BEBIDA: la carta se navega primero por familia. */
+  familia: FamiliaCarta | null;
+  /** Dietas especiales (celíacos, veganos, niños): botón con estilo propio. */
+  destacada: boolean;
+  /**
+   * Ventana de disponibilidad. El menú del día solo existe de lunes a viernes
+   * al mediodía: enseñarlo un sábado por la noche es prometer algo que no se
+   * sirve. `null` en los tres campos = siempre visible.
+   */
+  dias_semana: number[] | null;
+  hora_desde: string | null;
+  hora_hasta: string | null;
   created_at: string;
   updated_at: string;
 };

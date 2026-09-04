@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CartaPublica, CartaItem, Alergeno } from "../../types";
+import type { CartaPublica, CartaItem, Alergeno, FamiliaCarta } from "../../types";
 import { buildCartaTheme, themeToCssVars, googleFontsHref } from "../../lib/theme";
 import { useDeviceId } from "../../hooks/useDeviceId";
 import { getLikesDelDevice } from "../../actions/like-actions";
@@ -21,11 +21,18 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
   );
 
   const deviceId = useDeviceId();
+  // Familia activa: la carta se navega primero por COMIDA / BEBIDA.
+  const [familia, setFamilia] = useState<FamiliaCarta>("comida");
   const [activeCat, setActiveCat] = useState<string | null>(carta.categorias[0]?.id ?? null);
   const [openItem, setOpenItem] = useState<CartaItem | null>(null);
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
   const [filtroExcluidos, setFiltroExcluidos] = useState<Set<Alergeno>>(new Set());
   const listRef = useRef<HTMLDivElement | null>(null);
+
+  const catsFamilia = useMemo(
+    () => carta.categorias.filter((c) => (c.familia ?? "comida") === familia),
+    [carta.categorias, familia],
+  );
 
   const itemIds = useMemo(
     () => carta.categorias.flatMap((c) => c.items.map((i) => i.id)),
@@ -113,12 +120,20 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
               categorias={carta.categorias}
               activeId={activeCat}
               onSelect={handleSelectCategoria}
+              familia={familia}
+              onFamilia={(f) => {
+                setFamilia(f);
+                // Al cambiar de familia el ancla anterior ya no existe: se
+                // vuelve arriba en vez de dejar la vista a medio camino.
+                setActiveCat(null);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
             />
 
             <div className="min-w-0">
               <ItemList
                 ref={listRef}
-                categorias={carta.categorias}
+                categorias={catsFamilia}
                 filtroExcluidos={filtroExcluidos}
                 counters={counters}
                 likedSet={likedSet}

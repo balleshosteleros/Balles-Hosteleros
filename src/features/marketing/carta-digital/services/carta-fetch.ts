@@ -46,6 +46,7 @@ interface EmpresaRow {
   carta_fuente_titulos: string | null;
   carta_fuente_cuerpo: string | null;
   carta_hero_url: string | null;
+  config_operativa: { zonaHoraria?: string } | null;
   carta_estilo_cards: string | null;
   carta_modo: string | null;
 }
@@ -57,6 +58,11 @@ interface CategoriaRow {
   descripcion: string | null;
   orden: number;
   visible: boolean;
+  familia: string | null;
+  destacada: boolean | null;
+  dias_semana: number[] | null;
+  hora_desde: string | null;
+  hora_hasta: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -88,9 +94,52 @@ function rowToCategoria(r: CategoriaRow): CartaCategoria {
     descripcion: r.descripcion,
     orden: r.orden,
     visible: r.visible,
+    familia: (r.familia as CartaCategoria["familia"]) ?? null,
+    destacada: r.destacada ?? false,
+    dias_semana: r.dias_semana,
+    hora_desde: r.hora_desde,
+    hora_hasta: r.hora_hasta,
     created_at: r.created_at,
     updated_at: r.updated_at,
   };
+}
+
+/**
+ * ¿Toca servir esta categoría ahora mismo?
+ *
+ * Se evalúa en el SERVIDOR con la hora del restaurante, no la del móvil del
+ * comensal: si alguien abre la carta con el reloj en otra zona, debe ver lo
+ * que la cocina está sirviendo aquí, no lo que marca su teléfono.
+ */
+function categoriaEnHorario(c: CartaCategoria, zona: string): boolean {
+  if (!c.dias_semana?.length && !c.hora_desde && !c.hora_hasta) return true;
+
+  const ahora = new Date();
+  const fmt = new Intl.DateTimeFormat("es-ES", {
+    timeZone: zona,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const partes = Object.fromEntries(fmt.formatToParts(ahora).map((p) => [p.type, p.value]));
+
+  if (c.dias_semana?.length) {
+    // Intl da el día como texto; se traduce a 1=lunes … 7=domingo.
+    const dias: Record<string, number> = { lun: 1, mar: 2, mié: 3, mie: 3, jue: 4, vie: 5, sáb: 6, sab: 6, dom: 7 };
+    const clave = (partes.weekday ?? "").toLowerCase().slice(0, 3);
+    const hoy = dias[clave];
+    if (hoy && !c.dias_semana.includes(hoy)) return false;
+  }
+
+  if (c.hora_desde || c.hora_hasta) {
+    const minutos = Number(partes.hour) * 60 + Number(partes.minute);
+    const aMin = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+    if (c.hora_desde && minutos < aMin(c.hora_desde)) return false;
+    if (c.hora_hasta && minutos > aMin(c.hora_hasta)) return false;
+  }
+
+  return true;
 }
 
 function rowToItem(r: ItemRow): CartaItem {
@@ -126,7 +175,7 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
     const { data: empresa, error: empresaErr } = await supabase
       .from("empresas")
       .select(
-        "id, nombre, carta_slug, carta_publicada, carta_descripcion, logo_url, logo_alt_url, isotipo_url, color, color_secundario, color_texto, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo",
+        "id, nombre, carta_slug, carta_publicada, carta_descripcion, config_operativa, logo_url, logo_alt_url, isotipo_url, color, color_secundario, color_texto, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo",
       )
       .eq("carta_slug", slug)
       .eq("carta_publicada", true)
@@ -206,10 +255,17 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
       }
       return item;
     });
-    const categorias = categoriasRows.map(rowToCategoria).map((c) => ({
-      ...c,
-      items: items.filter((i) => i.categoria_id === c.id),
-    }));
+    // Zona del restaurante, no la del móvil de quien mira la carta.
+    const zona =
+      (empresa.config_operativa?.zonaHoraria || "").trim() || "Europe/Madrid";
+
+    const categorias = categoriasRows
+      .map(rowToCategoria)
+      .filter((c) => categoriaEnHorario(c, zona))
+      .map((c) => ({
+        ...c,
+        items: items.filter((i) => i.categoria_id === c.id),
+      }));
     const destacados = items.filter((i) => i.destacado);
 
     return { empresa: empresaPub, categorias, destacados };
