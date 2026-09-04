@@ -162,6 +162,16 @@ export function ReservaPublicaForm({
     !ticketObligatorio || Boolean(ticketProductoId) || Boolean(ticketCanje);
   // Si escribió un código, tiene que ser válido para poder reservar: un código
   // a medias o rechazado no puede colarse como reserva normal.
+  /**
+   * Teléfono con su prefijo, como se va a guardar.
+   *
+   * La validación exige el prefijo dentro del número —así ninguno se queda
+   * huérfano y acaba dado por español—, pero en pantalla el prefijo vive en su
+   * propio desplegable. Sin juntarlos aquí, el formulario decía "falta el
+   * prefijo del país" con el +34 ya elegido, y no había forma de continuar.
+   */
+  const telefonoCompleto = componerTelefono(telefonoPrefijo, telefono);
+
   const canjeConforme = ticketCodigo.trim().length === 0 || ticketCanje !== null;
   /**
    * La fecha elegida NO vale para el ticket que trae el cliente.
@@ -198,7 +208,7 @@ export function ReservaPublicaForm({
   const valido =
     nombre.trim().length > 0 &&
     apellidos.trim().length > 0 &&
-    validarTelefono(telefono, obligatorios.telefono).ok &&
+    validarTelefono(telefonoCompleto, obligatorios.telefono).ok &&
     validarEmail(email, obligatorios.email).ok &&
     validarNombre(nombre).ok &&
     personas > 0 &&
@@ -228,7 +238,7 @@ export function ReservaPublicaForm({
     if (!hora) return "Elige la hora.";
     // El teléfono es la única vía para avisar de un cambio de mesa o una
     // incidencia: uno inventado deja la reserva incontactable.
-    const vTel = validarTelefono(telefono, obligatorios.telefono);
+    const vTel = validarTelefono(telefonoCompleto, obligatorios.telefono);
     if (!vTel.ok) return vTel.error;
     const vEmail = validarEmail(email, obligatorios.email);
     if (!vEmail.ok) return vEmail.error;
