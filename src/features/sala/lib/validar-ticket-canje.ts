@@ -56,11 +56,14 @@ export const TICKET_MOTIVO_LABELS: Record<TicketMotivoInvalidez, string> = {
   NO_PAGADO: "Este código todavía no está activo. Si acabas de pagar, espera unos minutos.",
   ANULADO: "Este código ya no es válido.",
   CADUCADO: "Este código ha caducado.",
-  DIA_NO_PERMITIDO: "Tu código no es válido este día de la semana.",
-  FECHA_EXCLUIDA: "Tu código no se puede usar en esta fecha.",
-  TURNO_NO_PERMITIDO: "Tu código no es válido para este turno.",
-  HORA_NO_PERMITIDA: "Tu código no es válido a esta hora.",
-  ZONA_NO_PERMITIDA: "Tu código no es válido para esta zona.",
+  // Estos cinco NO son culpa del código: es bueno, lo que no encaja es el día,
+  // la hora o la zona elegidos. Decirle "tu código no es válido" le hacía
+  // pensar que había comprado mal, cuando solo tiene que cambiar la fecha.
+  DIA_NO_PERMITIDO: "Tu experiencia no se puede usar ese día de la semana. Elige otra fecha.",
+  FECHA_EXCLUIDA: "Tu experiencia no se puede usar en esa fecha. Elige otro día.",
+  TURNO_NO_PERMITIDO: "Tu experiencia no incluye ese turno. Prueba con el otro.",
+  HORA_NO_PERMITIDA: "Tu experiencia no se puede usar a esa hora. Elige otra.",
+  ZONA_NO_PERMITIDA: "Tu experiencia no incluye esa zona. Elige otra.",
 };
 
 /** "HH:MM" → minutos desde medianoche. */

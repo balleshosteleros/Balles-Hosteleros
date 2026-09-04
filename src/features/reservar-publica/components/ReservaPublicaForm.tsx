@@ -4,6 +4,7 @@ import { useState, useTransition, useMemo, useEffect } from "react";
 import type { TicketPublico } from "@/features/reservar-publica/actions/validar-ticket-publico";
 import { TicketCodigoInput } from "@/features/reservar-publica/components/TicketCodigoInput";
 import {
+  fechaPermitidaPorTicket,
   horaPermitidaPorTicket,
   zonaPermitidaPorTicket,
 } from "@/features/sala/lib/validar-ticket-canje";
@@ -162,6 +163,17 @@ export function ReservaPublicaForm({
   // Si escribió un código, tiene que ser válido para poder reservar: un código
   // a medias o rechazado no puede colarse como reserva normal.
   const canjeConforme = ticketCodigo.trim().length === 0 || ticketCanje !== null;
+  /**
+   * La fecha elegida NO vale para el ticket que trae el cliente.
+   *
+   * El campo de fecha del navegador no deja bloquear días sueltos, así que se
+   * avisa en cuanto elige. El problema es la FECHA, no el código: su código es
+   * bueno, y decírselo al revés le hacía pensar que había comprado mal.
+   */
+  const fechaFueraDelTicket =
+    ticketCanje !== null &&
+    fecha.length > 0 &&
+    !fechaPermitidaPorTicket(ticketCanje.condiciones, fecha);
 
   // Comensales que se ofrecen. Un ticket vendido por paquetes (la Cena
   // Experiencia va de 2 en 2) solo admite múltiplos de su tamaño: ofrecer 3 en
@@ -195,6 +207,7 @@ export function ReservaPublicaForm({
     (!zonaExigida || grupoZonaId.length > 0) &&
     ticketValido &&
     canjeConforme &&
+    !fechaFueraDelTicket &&
     aceptaPrivacidad &&
     cuponValido !== false;
 
@@ -221,6 +234,7 @@ export function ReservaPublicaForm({
     if (!vEmail.ok) return vEmail.error;
     if (zonaExigida && !grupoZonaId) return "Elige la zona.";
     if (!ticketValido) return "Elige uno de los productos disponibles.";
+    if (fechaFueraDelTicket) return "Tu experiencia no se puede usar ese día. Elige otra fecha.";
     if (!canjeConforme) return "El código que has escrito no es válido. Bórralo o corrígelo.";
     if (cuponValido === false) return "El código promocional no es válido.";
     if (!aceptaPrivacidad) return "Marca la casilla de la política de privacidad.";
@@ -600,6 +614,11 @@ export function ReservaPublicaForm({
                 required
                 className="mt-1.5 h-11 w-full min-w-0 max-w-full appearance-none rounded-xl border-zinc-200 bg-white px-3 text-sm"
               />
+              {fechaFueraDelTicket && (
+                <p className="mt-1.5 text-xs text-amber-700">
+                  Tu experiencia no se puede usar ese día. Prueba con otra fecha.
+                </p>
+              )}
             </div>
 
             {/* Horas REALES del restaurante para esa fecha y comensales.
