@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, CheckSquare2, MessageCircle, Phone, Folder } from "lucide-react";
+import { Home, CheckSquare2, MessageCircle, Phone, Fingerprint } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
 type NavItem = {
@@ -10,14 +10,20 @@ type NavItem = {
   label: string;
   icon: typeof Home;
   primary?: boolean;
+  /** Botón destacado del centro: círculo elevado, más grande que el resto. */
+  destacado?: boolean;
 };
 
+// Fichar va en el CENTRO y destacado a propósito: es lo que más veces al día
+// hace un empleado, y hasta ahora la única forma de fichar era cazar el aviso
+// automático en su ventana de ±15 min. Si se te pasaba, no había manera de
+// fichar desde ningún sitio (nadie enlazaba a /m/fichar).
 const items: readonly NavItem[] = [
   { href: "/m", label: "Inicio", icon: Home },
   { href: "/m/llamar", label: "Llamar", icon: Phone },
+  { href: "/m/fichar", label: "Fichar", icon: Fingerprint, destacado: true },
   { href: "/m/tareas", label: "Tareas", icon: CheckSquare2, primary: true },
   { href: "/m/comunicacion", label: "Chat", icon: MessageCircle },
-  { href: "/m/archivos", label: "Archivos", icon: Folder },
 ];
 
 export function MobileBottomNav() {
@@ -39,6 +45,42 @@ export function MobileBottomNav() {
           const Icon = item.icon;
           const active =
             item.href === "/m" ? pathname === "/m" : pathname.startsWith(item.href);
+          if (item.destacado) {
+            return (
+              <li key={item.href} className="flex-1">
+                <Link
+                  href={item.href}
+                  prefetch={false}
+                  aria-label={item.label}
+                  className="flex h-full flex-col items-center justify-start"
+                >
+                  {/* Círculo elevado: sube sobre la barra con margen negativo y
+                      se recorta contra el fondo para que el relieve se vea. El
+                      contenedor de la barra NO puede recortarlo (no lleva
+                      overflow hidden), así que el saliente queda visible. */}
+                  <span
+                    className={cn(
+                      "-mt-5 flex h-14 w-14 items-center justify-center rounded-full border-4 border-background shadow-lg transition-colors",
+                      active
+                        ? "bg-emerald-600 text-white shadow-emerald-600/30"
+                        : "bg-emerald-500 text-white shadow-emerald-500/30 active:bg-emerald-600",
+                    )}
+                  >
+                    <Icon className="h-7 w-7" strokeWidth={active ? 2.6 : 2.2} />
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-0.5 w-full truncate text-center text-[10px] font-medium leading-tight",
+                      active ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {item.label}
+                  </span>
+                </Link>
+              </li>
+            );
+          }
+
           return (
             <li key={item.href} className="flex-1">
               <Link
