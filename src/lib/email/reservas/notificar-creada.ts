@@ -1,9 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  ZONA_HORARIA_FALLBACK,
-  zonaLocalAUtcISO,
-} from "@/features/empresa/lib/zona-horaria";
+import { ZONA_HORARIA_FALLBACK } from "@/features/empresa/lib/zona-horaria";
 import { enviarReservaEmail, type ReservaEmailActor } from "./mailer";
+import { necesitaReconfirmacionInmediata } from "./pasada-reconfirmacion";
 
 /**
  * Correo de confirmación de una reserva recién creada, sea cual sea su origen:
@@ -66,7 +64,7 @@ export async function notificarReservaCreada(
     const { data: cfg } = await admin
       .from("empresa_reservas_config")
       .select(
-        "reconfirmacion_activa, reconfirmacion_dias_antes, reconfirmacion_envio_inmediato",
+        "reconfirmacion_activa, reconfirmacion_dias_antes, reconfirmacion_hora_envio, reconfirmacion_envio_inmediato",
       )
       .eq("empresa_id", r.empresa_id as string)
       .maybeSingle();
@@ -75,7 +73,8 @@ export async function notificarReservaCreada(
     const envioInmediato = cfg?.reconfirmacion_envio_inmediato === true;
     if (!activa || !envioInmediato) return { ok: res.ok };
 
-    const diasAntes = (cfg?.reconfirmacion_dias_antes as number | null) ?? 1;
+    const diasAntes = (cfg?.reconfirmacion_dias_antes as number | null) ?? 0;
+    const horaEnvio = (cfg?.reconfirmacion_hora_envio as string | null) ?? "10:00";
 
     // `fecha`/`hora` son hora local del RESTAURANTE, no del servidor: sin la
     // zona de la empresa, `new Date("...T21:00:00")` se interpretaba en la del
@@ -92,16 +91,16 @@ export async function notificarReservaCreada(
         ? cfgOp.zonaHoraria.trim()
         : ZONA_HORARIA_FALLBACK;
 
-    const ts = new Date(
-      zonaLocalAUtcISO(
-        r.fecha as string,
-        (r.hora as string).slice(0, 5),
-        tzEmpresa,
-      ),
-    );
-    const diffMs = ts.getTime() - Date.now();
-    const leadMs = diasAntes * 24 * 3600 * 1000;
-    if (diffMs > 0 && diffMs < leadMs) {
+    // Solo si su pasada del cron ya ocurrió: quien todavía la tiene por
+    // delante la recibirá a su hora, como toca.
+    const alInstante = necesitaReconfirmacionInmediata({
+      fecha: r.fecha as string,
+      hora: r.hora as string,
+      diasAntes,
+      horaEnvio,
+      tz: tzEmpresa,
+    });
+    if (alInstante) {
       await enviarReservaEmail(reservaId, "RECONFIRMADA", { actor }).catch((e) =>
         console.error("[reservas][notificarReservaCreada] RECONFIRMADA:", e),
       );

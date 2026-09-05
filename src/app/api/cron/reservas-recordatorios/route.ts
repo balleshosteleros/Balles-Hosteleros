@@ -17,12 +17,15 @@
  * 2. RECONFIRMACIÓN (config: reconfirmacion_activa + reconfirmacion_dias_antes
  *    + reconfirmacion_hora_envio, esta última en hora LOCAL de la empresa):
  *    si la empresa tiene la reconfirmación activa, barre el DÍA ENTERO que
- *    cae a N días vista y avisa a las reservas en estado CONFIRMADA. Solo se
- *    envía si no se envió ya (idempotente vía email_reconfirmacion_at). Si la
- *    empresa tiene `reconfirmacion_activa = false`, no se envía nada.
- *    Quien reserva DESPUÉS de que pase el cron (menos de N días de antelación)
- *    no lo coge esta tirada: a ése le llega en el acto al reservar, vía
- *    `reconfirmacion_envio_inmediato` en notificar-creada.ts.
+ *    cae a N días vista y avisa a las reservas en estado CONFIRMADA. Con
+ *    `dias_antes = 0` —"El mismo día", el valor por defecto— ese día es HOY:
+ *    cada mañana a su hora se pregunta por los servicios de la jornada, que es
+ *    como funciona un restaurante. Solo se envía si no se envió ya (idempotente
+ *    vía email_reconfirmacion_at). Si la empresa tiene
+ *    `reconfirmacion_activa = false`, no se envía nada.
+ *    Quien reserva DESPUÉS de que pase el cron no lo coge esta tirada: a ése
+ *    le llega en el acto al reservar, vía `reconfirmacion_envio_inmediato` en
+ *    notificar-creada.ts.
  *
  * 2b. SIN RESPUESTA → NO_RECONFIRMADA: a quien se le pidió reconfirmar y no
  *    contestó, se le marca así en cuanto pasa la hora de su reserva. Sala lo
@@ -209,7 +212,9 @@ export async function GET(request: Request) {
     // ── RECONFIRMACIÓN ────────────────────────────────────────────────────
     if (c.reconfirmacion_activa) {
       try {
-        const diasAntes = c.reconfirmacion_dias_antes ?? 1;
+        // 0 = el mismo día de la reserva (por defecto). El `??` solo cubre la
+        // fila sin valor; la columna es NOT NULL DEFAULT 0.
+        const diasAntes = c.reconfirmacion_dias_antes ?? 0;
 
         // La hora la manda la EMPRESA, no el reloj del servidor. El cron pasa
         // varias veces y solo dispara en la pasada que cae en la hora local
@@ -260,6 +265,10 @@ export async function GET(request: Request) {
           new Date(zonaLocalAUtcISO(diaObjetivo, "00:00", tz)).getTime() +
             24 * 60 * 60 * 1000,
         );
+        // Nunca antes de ahora: a quien ya se ha sentado no se le pregunta si
+        // viene. Con "El mismo día" (`diasAntes = 0`) esto además recorta el
+        // barrido a lo que queda de jornada, que es justo lo que se quiere
+        // preguntar por la mañana.
         const desdeR = ahora;
         const pendientesR = await buscarPendientes(supabase, {
           empresaId: c.empresa_id,

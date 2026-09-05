@@ -445,9 +445,10 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   // Reconfirmación automática por correo.
   //   · `reconfirmacionActiva = false` → master OFF, no se envía ningún correo
   //     de reconfirmación (ni cron ni inmediato).
-  //   · `reconfirmacionActiva = true`  → el correo se envía a la misma hora
-  //     que la reserva, `reconfirmacionDiasAntes` días antes (1–7). Si la
-  //     reserva entra con MENOS antelación que ese lead time:
+  //   · `reconfirmacionActiva = true`  → el correo sale a `reconfirmacionHoraEnvio`
+  //     (hora del restaurante), `reconfirmacionDiasAntes` días antes (0–7);
+  //     0 = el mismo día de la reserva. Si la reserva entra cuando esa pasada
+  //     YA ha ocurrido:
   //       · `reconfirmacionEnvioInmediato = true`  → envía inmediatamente tras
   //         la confirmación.
   //       · `reconfirmacionEnvioInmediato = false` → no envía reconfirmación.
@@ -639,10 +640,18 @@ export const DURACION_RESERVA_OPCIONES: { minutos: number; label: string }[] =
     },
   );
 
-/** Límites de `reconfirmacionDiasAntes` (ver migración 20260602180000). */
-export const RECONFIRMACION_DIAS_MIN = 1;
+/**
+ * Límites de `reconfirmacionDiasAntes` (ver migración 20260905120000).
+ *
+ * El 0 es "el mismo día de la reserva" y es el valor por defecto: en un
+ * restaurante lo natural es preguntar por la mañana por los servicios de HOY.
+ * Con el mínimo en 1 quedaba un agujero —la pasada que le tocaba a una reserva
+ * ocurría el día anterior, y quien reservaba después de esa hora no lo recogía
+ * nadie— que dejaba clientes sin preguntar sin que nadie se enterara.
+ */
+export const RECONFIRMACION_DIAS_MIN = 0;
 export const RECONFIRMACION_DIAS_MAX = 7;
-export const RECONFIRMACION_DIAS_DEFAULT = 1;
+export const RECONFIRMACION_DIAS_DEFAULT = 0;
 /** Hora local del restaurante a la que sale la reconfirmación por defecto. */
 export const RECONFIRMACION_HORA_DEFAULT = "10:00";
 

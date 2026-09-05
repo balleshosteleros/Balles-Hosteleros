@@ -1,9 +1,13 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import {
+  getEmpresaActivaForUser,
+  getZonaHorariaEmpresa,
+} from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ReservaEmailActor } from "@/lib/email/reservas/mailer";
+import { necesitaReconfirmacionInmediata } from "@/lib/email/reservas/pasada-reconfirmacion";
 import {
   CANCELACION_HORAS_DEFAULT,
   CANCELACION_IMPORTE_DEFAULT,
@@ -299,7 +303,7 @@ async function barrerReconfirmacionesPendientesPorCambio(
   const { data: cfg } = await admin
     .from("empresa_reservas_config")
     .select(
-      "reconfirmacion_activa, reconfirmacion_dias_antes, reconfirmacion_envio_inmediato",
+      "reconfirmacion_activa, reconfirmacion_dias_antes, reconfirmacion_hora_envio, reconfirmacion_envio_inmediato",
     )
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -307,7 +311,7 @@ async function barrerReconfirmacionesPendientesPorCambio(
   if (cfg.reconfirmacion_activa !== true) return;
   if (cfg.reconfirmacion_envio_inmediato !== true) return;
 
-  const diasAntes = (cfg.reconfirmacion_dias_antes as number | null) ?? 1;
+  const diasAntes = (cfg.reconfirmacion_dias_antes as number | null) ?? 0;
   const ahora = new Date();
   const limite = new Date(ahora.getTime() + diasAntes * 24 * 3600 * 1000);
   const fechaDesde = ahora.toISOString().slice(0, 10);
@@ -325,11 +329,25 @@ async function barrerReconfirmacionesPendientesPorCambio(
     .limit(500);
   if (!pendientes || pendientes.length === 0) return;
 
-  const leadMs = diasAntes * 24 * 3600 * 1000;
+  // `fecha`/`hora` son hora local del RESTAURANTE: sin la zona de la empresa,
+  // `new Date("...T21:00:00")` se interpretaba en la del proceso (UTC en
+  // Vercel) y el cálculo se iba las horas que deciden el caso del borde.
+  const tzEmpresa = await getZonaHorariaEmpresa(
+    admin as unknown as SupabaseClient,
+    empresaId,
+  );
   for (const r of pendientes) {
-    const ts = new Date(`${r.fecha as string}T${(r.hora as string).slice(0, 5)}:00`);
-    const diffMs = ts.getTime() - ahora.getTime();
-    if (diffMs > 0 && diffMs < leadMs) {
+    // Solo las que ya no tienen pasada del cron por delante: al resto les
+    // llega a su hora, y adelantarlo sería escribirles dos veces.
+    const alInstante = necesitaReconfirmacionInmediata({
+      fecha: r.fecha as string,
+      hora: r.hora as string,
+      diasAntes,
+      horaEnvio: cfg.reconfirmacion_hora_envio as string | null,
+      tz: tzEmpresa,
+      ahora,
+    });
+    if (alInstante) {
       await enviarReservaEmail(r.id as string, "RECONFIRMADA", {
         actor: actor ?? { origen: "AUTOMATICO" },
       }).catch((e: unknown) =>

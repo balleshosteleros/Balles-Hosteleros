@@ -13,7 +13,6 @@ import {
   getEmpresaActivaForUser,
   getZonaHorariaEmpresa,
 } from "@/features/empresa/lib/empresa-server";
-import { zonaLocalAUtcISO } from "@/features/empresa/lib/zona-horaria";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrLinkClienteSala, type CampoDistinto } from "@/features/sala/lib/cliente-link";
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
@@ -38,6 +37,7 @@ import {
   enviarReservaEmail,
   type ReservaEmailActor,
 } from "@/lib/email/reservas/mailer";
+import { necesitaReconfirmacionInmediata } from "@/lib/email/reservas/pasada-reconfirmacion";
 import { enviarAvisoReserva } from "@/lib/mensajeria/reservas";
 import {
   esTipoEstado,
@@ -1282,27 +1282,30 @@ export async function notificarReservaCreadaPorEmail(reservaId: string) {
       const { data: cfg } = await supabase
         .from("empresa_reservas_config")
         .select(
-          "reconfirmacion_activa, reconfirmacion_dias_antes, reconfirmacion_envio_inmediato",
+          "reconfirmacion_activa, reconfirmacion_dias_antes, reconfirmacion_hora_envio, reconfirmacion_envio_inmediato",
         )
         .eq("empresa_id", r.empresa_id as string)
         .maybeSingle();
       const activa = cfg?.reconfirmacion_activa === true;
-      const diasAntes = (cfg?.reconfirmacion_dias_antes as number | null) ?? 1;
+      const diasAntes = (cfg?.reconfirmacion_dias_antes as number | null) ?? 0;
       const envioInmediato = cfg?.reconfirmacion_envio_inmediato === true;
       // La hora de la reserva es local del restaurante: hay que convertirla con
       // la zona de la empresa antes de compararla con "ahora" (el servidor va
-      // en UTC y desviaba el cálculo del lead 1-2 h).
+      // en UTC y desviaba el cálculo 1-2 h).
       const tzEmpresa = await getZonaHorariaEmpresa(
         supabase as unknown as SupabaseClient,
         r.empresa_id as string,
       );
-      const ts = new Date(
-        zonaLocalAUtcISO(r.fecha as string, (r.hora as string).slice(0, 5), tzEmpresa),
-      );
-      const diffMs = ts.getTime() - Date.now();
-      const leadMs = diasAntes * 24 * 3600 * 1000;
-      const porDebajoDelLead = diffMs > 0 && diffMs < leadMs;
-      if (activa && porDebajoDelLead && envioInmediato) {
+      // Solo si su pasada del cron ya ocurrió: quien todavía la tiene por
+      // delante la recibirá a su hora.
+      const alInstante = necesitaReconfirmacionInmediata({
+        fecha: r.fecha as string,
+        hora: r.hora as string,
+        diasAntes,
+        horaEnvio: cfg?.reconfirmacion_hora_envio as string | null,
+        tz: tzEmpresa,
+      });
+      if (activa && alInstante && envioInmediato) {
         after(
           enviarReservaEmail(reservaId, "RECONFIRMADA", { actor }).catch((e) =>
             console.error("[reservas] mail RECONFIRMADA lt-lead:", e),

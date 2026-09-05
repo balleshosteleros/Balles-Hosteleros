@@ -345,7 +345,7 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
                   onValueChange={(v) => {
                     const n = Math.min(
                       RECONFIRMACION_DIAS_MAX,
-                      Math.max(RECONFIRMACION_DIAS_MIN, Number(v) || 1),
+                      Math.max(RECONFIRMACION_DIAS_MIN, Number(v) || 0),
                     );
                     handleConfigChange({ reconfirmacionDiasAntes: n });
                   }}
@@ -359,14 +359,18 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
                       (_, i) => i + RECONFIRMACION_DIAS_MIN,
                     ).map((d) => (
                       <SelectItem key={d} value={String(d)}>
-                        {d === 1 ? "1 día antes" : `${d} días antes`}
+                        {d === 0
+                          ? "El mismo día"
+                          : d === 1
+                            ? "1 día antes"
+                            : `${d} días antes`}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground">
-                  El mínimo de antelación es 24 h, por eso la opción más
-                  cercana es 1 día antes.
+                  Con «El mismo día», cada mañana a la hora elegida se pide la
+                  reconfirmación de los servicios de ese día.
                 </p>
               </div>
 
@@ -404,16 +408,15 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
             <div className="flex items-start justify-between gap-3 rounded-md border p-3 max-w-md">
               <div className="space-y-0.5">
                 <Label className="text-xs font-medium" htmlFor="reconf-envio-inmediato">
-                  Reconfirmar al instante si la reserva entra con menos
-                  antelación que la configurada
+                  Reconfirmar al instante si la reserva entra cuando su envío
+                  ya ha pasado
                 </Label>
                 <p className="text-[10px] text-muted-foreground">
-                  Toma como referencia los días seleccionados arriba (no 24 h
-                  fijas). Ej.: con la opción «3 días antes», una reserva que
-                  entra a 2 días: si está activo recibe la reconfirmación a la
-                  vez que la confirmación; si está apagado no recibe
-                  reconfirmación. Las reservas con antelación igual o mayor a
-                  la configurada se envían siempre a la hora programada.
+                  Ej.: con «El mismo día» a las 10:00, quien reserva hoy a las
+                  18:00 para esta noche ya no llega a ese envío. Si está
+                  activo, recibe la reconfirmación a la vez que la
+                  confirmación; si está apagado, no la recibe. A las demás les
+                  llega siempre a la hora elegida.
                 </p>
               </div>
               <Switch
