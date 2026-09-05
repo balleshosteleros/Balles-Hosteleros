@@ -118,7 +118,7 @@ export const HERRAMIENTAS: HerramientaDef[] = [
     id: "archivos",
     nombre: "Archivos",
     descripcion:
-      "Archivos de la empresa, en carpetas por departamento. El Drive propio del software.",
+      "Los archivos de la empresa: el Drive de la cuenta conectada, en vivo.",
     Icon: Folder,
     colorKey: "cyan",
   },

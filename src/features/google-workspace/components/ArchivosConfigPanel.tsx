@@ -28,7 +28,7 @@ export function ArchivosConfigPanel() {
 
       {connected ? (
         <p className="text-xs text-muted-foreground">
-          Archivos muestra el Drive de <span className="font-medium">{email}</span> en
+          Se muestra el Drive de <span className="font-medium">{email}</span> en
           vivo: lo que cambie en Drive aparece aquí al volver a entrar. Se ve
           «Mi unidad» y «Compartido conmigo», y quién ve cada carpeta lo decide
           Google según los permisos que tenga en el propio Drive.

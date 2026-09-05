@@ -38,7 +38,7 @@ export function DriveDrawer({ children }: { children: ReactNode }) {
           <div className="flex items-center justify-between gap-2">
             <SheetTitle className="flex items-center gap-2 text-base">
               <DriveIcon className="h-4 w-4" />
-              Archivos
+              Drive
             </SheetTitle>
             <div className="flex items-center gap-1">
               <SheetMaximizeButton
