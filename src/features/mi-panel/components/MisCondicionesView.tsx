@@ -191,9 +191,9 @@ function GeneralesCard({ datos }: { datos: DatosGenerales }) {
 }
 
 /**
- * Salario BRUTO mensual del empleado. Sale de sus condiciones pactadas, y en su
- * defecto del puesto de su ficha. Si no hay cifra cargada se dice que falta por
- * publicar: 0 € sería afirmar que no cobra.
+ * Salario BRUTO mensual pactado en SU ficha. El puesto es solo la plantilla que
+ * se copia al contratar: si luego le cambian las condiciones a mano, el puesto
+ * ya no pinta nada. Sin cifra se dice que falta por publicar, nunca 0 €.
  */
 function SalarioCard({ salario }: { salario: MisCondicionesSalario | null }) {
   const bruto = salario?.salarioBruto ?? null;

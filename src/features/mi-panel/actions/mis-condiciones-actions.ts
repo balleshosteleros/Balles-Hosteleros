@@ -107,9 +107,13 @@ export async function getMisCondicionesContrato(): Promise<{
  * correo del trabajador. Con los datos reales eso dejaba a 20 de 21 empleados
  * viendo "Pendiente" pese a tener la ficha completa, y acertaba solo por
  * casualidad en quien se llamaba como su puesto. Peor: alguien apellidado
- * "Sala" habría visto el salario de un puesto ajeno. Aquí el salario sale de
- * las condiciones pactadas del empleado y, si no las tiene, del puesto de su
- * ficha; nunca de una coincidencia de texto.
+ * "Sala" habría visto el salario de un puesto ajeno.
+ *
+ * El salario sale SIEMPRE de `empleado_condiciones`: la fila vigente de SU
+ * ficha. El puesto es solo la plantilla que se copia al contratar; en cuanto
+ * alguien le cambia las condiciones a mano, el puesto deja de tener nada que
+ * ver. Por eso aquí no se lee `puesto_salarios` ni como respaldo: sería
+ * enseñarle una cifra de catálogo que no es la suya.
  */
 
 /** Un día del horario semanal. `tramos` vacío = libra ese día. */
@@ -130,8 +134,8 @@ export interface MisCondicionesSalario {
   jornadaContrato: string | null;
   horasSemanales: number | null;
   diasLibres: number | null;
-  /** De dónde sale: sus condiciones pactadas o la plantilla del puesto. */
-  origen: "empleado" | "puesto" | null;
+  /** Puesto tal y como quedó pactado en su ficha (no el catálogo de puestos). */
+  puestoNombre: string | null;
 }
 
 export interface MisCondicionesHorario {
@@ -142,10 +146,9 @@ export interface MisCondicionesHorario {
 }
 
 /**
- * Salario del empleado en la empresa activa. Prioridad:
- *   1. `empleado_condiciones` vigente  → lo pactado con ÉL.
- *   2. `puesto_salarios` de su puesto  → la plantilla del puesto de su ficha.
- * Si el puesto no tiene salario cargado devuelve null: "sin dato" no es 0 €.
+ * Salario pactado del empleado en la empresa activa: la fila vigente de su
+ * ficha (`empleado_condiciones`). Sin fila vigente devuelve null, y la vista
+ * dice que falta por publicar: "sin dato" no es 0 €.
  */
 export async function getMiSalario(): Promise<{
   ok: boolean;
@@ -158,67 +161,36 @@ export async function getMiSalario(): Promise<{
 
     const { data: emp } = await supabase
       .from("empleados")
-      .select("id, puesto")
+      .select("id")
       .eq("user_id", userId)
       .eq("empresa_id", empresaId)
       .maybeSingle();
     if (!emp) return { ok: true, data: null };
 
-    // 1) Lo pactado con el empleado (incluye promociones: la fila vigente).
+    // ÚNICA fuente: la fila vigente de su ficha. El puesto NO entra aquí.
     const { data: cond } = await supabase
       .from("empleado_condiciones")
-      .select("salario_bruto, jornada_contrato, horas_semanales, dias_libres")
+      .select("salario_bruto, jornada_contrato, horas_semanales, dias_libres, puesto_nombre")
       .eq("empleado_id", emp.id as string)
       .eq("empresa_id", empresaId)
       .is("vigente_hasta", null)
       .maybeSingle();
+    if (!cond) return { ok: true, data: null };
 
-    const num = (v: unknown): number | null =>
-      v === null || v === undefined ? null : Number(v);
-
-    if (cond && num(cond.salario_bruto) !== null && Number(cond.salario_bruto) > 0) {
-      return {
-        ok: true,
-        data: {
-          salarioBruto: num(cond.salario_bruto),
-          jornadaContrato: (cond.jornada_contrato as string | null) ?? null,
-          horasSemanales: num(cond.horas_semanales),
-          diasLibres: num(cond.dias_libres),
-          origen: "empleado",
-        },
-      };
-    }
-
-    // 2) La plantilla del puesto que figura en su ficha (nivel más bajo).
-    const puestoNombre = (emp.puesto as string | null) ?? null;
-    if (!puestoNombre) return { ok: true, data: null };
-
-    const { data: puesto } = await supabase
-      .from("puestos")
-      .select("id")
-      .eq("empresa_id", empresaId)
-      .eq("nombre", puestoNombre)
-      .maybeSingle();
-    if (!puesto) return { ok: true, data: null };
-
-    const { data: sal } = await supabase
-      .from("puesto_salarios")
-      .select("salario_bruto, jornada_contrato, horas_semanales, dias_libres")
-      .eq("empresa_id", empresaId)
-      .eq("puesto_id", puesto.id as string)
-      .order("nivel")
-      .limit(1)
-      .maybeSingle();
-    if (!sal) return { ok: true, data: null };
+    const num = (v: unknown): number | null => {
+      if (v === null || v === undefined || v === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
 
     return {
       ok: true,
       data: {
-        salarioBruto: num(sal.salario_bruto),
-        jornadaContrato: (sal.jornada_contrato as string | null) ?? null,
-        horasSemanales: num(sal.horas_semanales),
-        diasLibres: num(sal.dias_libres),
-        origen: "puesto",
+        salarioBruto: num(cond.salario_bruto),
+        jornadaContrato: (cond.jornada_contrato as string | null) ?? null,
+        horasSemanales: num(cond.horas_semanales),
+        diasLibres: num(cond.dias_libres),
+        puestoNombre: (cond.puesto_nombre as string | null) ?? null,
       },
     };
   } catch (err: unknown) {
