@@ -35,11 +35,20 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
   const [openItem, setOpenItem] = useState<CartaItem | null>(null);
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
   const [filtroExcluidos, setFiltroExcluidos] = useState<Set<Alergeno>>(new Set());
+  const [soloFavoritos, setSoloFavoritos] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const catsFamilia = useMemo(
-    () => carta.categorias.filter((c) => (c.familia ?? "comida") === familia),
-    [carta.categorias, familia],
+    () =>
+      carta.categorias
+        .filter((c) => (c.familia ?? "comida") === familia)
+        .map((c) =>
+          soloFavoritos ? { ...c, items: c.items.filter((i) => i.destacado) } : c,
+        )
+        // Con el filtro puesto, una categoría sin platos de la casa sobra: si se
+        // deja, la carta se llena de titulares vacíos.
+        .filter((c) => !soloFavoritos || c.items.length > 0),
+    [carta.categorias, familia, soloFavoritos],
   );
 
   const itemIds = useMemo(
@@ -189,6 +198,8 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
           onChange={setFiltroExcluidos}
           totalItems={totalItems}
           itemsVisibles={itemsVisibles}
+          soloFavoritos={soloFavoritos}
+          onSoloFavoritos={setSoloFavoritos}
         />
 
         <ItemFichaModal
