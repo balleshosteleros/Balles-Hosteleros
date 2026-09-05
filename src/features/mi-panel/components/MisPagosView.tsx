@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   listMisPagosAbonados,
   type PagoAbonado,
 } from "@/features/rrhh/actions/pagos-actions";
 import { HistorialPagos } from "@/features/rrhh/components/pagos/HistorialPagos";
-import { Euro, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 /**
  * Portal del empleado → "Mis pagos". Muestra SOLO las liquidaciones ya abonadas
@@ -38,25 +37,6 @@ export function MisPagosView() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
-      <Card className="p-4 md:p-5 flex items-center gap-4 border-dashed">
-        <div className="h-10 w-10 rounded-md bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-          <Euro className="h-5 w-5" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold">Tus pagos abonados</p>
-          <p className="text-xs text-muted-foreground">
-            Histórico de las liquidaciones que ya se te han abonado. Abre cualquier
-            mes para ver el desglose: de la nómina bruta a la neta, y lo que paga la
-            empresa por ti a la Seguridad Social.
-          </p>
-        </div>
-        {!cargando && (
-          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-0">
-            {pagos.length} {pagos.length === 1 ? "pago" : "pagos"}
-          </Badge>
-        )}
-      </Card>
-
       {cargando ? (
         <Card className="p-10 flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Cargando…

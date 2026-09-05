@@ -3,6 +3,7 @@ export { CalendarDrawer } from "./CalendarDrawer";
 export { MeetDrawer } from "./MeetDrawer";
 export { DriveDrawer } from "./DriveDrawer";
 export { DriveIcon } from "./DriveIcon";
+export { ArchivosConfigPanel } from "./ArchivosConfigPanel";
 export { TareasDrawer } from "./TareasDrawer";
 export { ChatDrawer } from "./ChatDrawer";
 export { TelefonoDrawer } from "./TelefonoDrawer";

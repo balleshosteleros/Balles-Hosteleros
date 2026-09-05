@@ -26,6 +26,7 @@ interface Ventana {
   /** Inicio de CADA tramo del día: en turno partido, los N que haya. */
   entradasMin: number[];
   salidaMin: number | null;
+  salidasMin: number[];
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
   avisoSonido: boolean;
@@ -62,10 +63,17 @@ function calcularDebe(
     debeEntrada =
       estado === "sin-fichar" &&
       inicios.some((ini) => dentroVentana(nowMin, ini, mAntes, mDespues));
+    // Igual que la entrada: hay que avisar en CADA salida del día. Quien
+    // encadena dos empresas (una acaba a las 23:30, la otra empieza ahí) tiene
+    // dos cierres, y mirando solo el último no se avisaba del primero.
+    const finales =
+      ventana?.salidasMin?.length
+        ? ventana.salidasMin
+        : ventana?.salidaMin != null
+          ? [ventana.salidaMin]
+          : [];
     debeSalida =
-      trabajando &&
-      ventana?.salidaMin != null &&
-      dentroVentana(nowMin, ventana.salidaMin, mAntes, mDespues);
+      trabajando && finales.some((fin) => dentroVentana(nowMin, fin, mAntes, mDespues));
   }
   return { debeEntrada, debeSalida };
 }
@@ -132,34 +140,63 @@ export function MobileFichajeProvider() {
     return r.ok ? r.data : null;
   }, []);
 
+  // Recarga la ventana horaria del día (turnos de TODAS sus empresas).
+  const refetchVentana = useCallback(async () => {
+    const v = await getMiVentanaFichajeHoy();
+    if (!v.ok) return;
+    setVentana({
+      tieneHorario: v.tieneHorario,
+      entradaMin: v.entradaMin,
+      entradasMin: v.entradasMin,
+      salidaMin: v.salidaMin,
+      salidasMin: v.salidasMin,
+      popupMargenAntesMin: v.popupMargenAntesMin,
+      popupMargenDespuesMin: v.popupMargenDespuesMin,
+      avisoSonido: v.avisoSonido,
+      avisoVibracion: v.avisoVibracion,
+      zonaHoraria: v.zonaHoraria,
+    });
+    // Recalcula "ahora" en la zona de la empresa (entradaMin/salidaMin van
+    // en esa referencia), por si difiere de la del dispositivo.
+    setNowMin(minutosAhoraEnZona(v.zonaHoraria));
+  }, []);
+
   // Carga inicial: estado del fichaje + ventana horaria del día.
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [, v] = await Promise.all([refetch(), getMiVentanaFichajeHoy()]);
+      await Promise.all([refetch(), refetchVentana()]);
       if (!alive) return;
-      if (v.ok) {
-        setVentana({
-          tieneHorario: v.tieneHorario,
-          entradaMin: v.entradaMin,
-          entradasMin: v.entradasMin,
-          salidaMin: v.salidaMin,
-          popupMargenAntesMin: v.popupMargenAntesMin,
-          popupMargenDespuesMin: v.popupMargenDespuesMin,
-          avisoSonido: v.avisoSonido,
-          avisoVibracion: v.avisoVibracion,
-          zonaHoraria: v.zonaHoraria,
-        });
-        // Recalcula "ahora" en la zona de la empresa (entradaMin/salidaMin van
-        // en esa referencia), por si difiere de la del dispositivo.
-        setNowMin(minutosAhoraEnZona(v.zonaHoraria));
-      }
       setCargado(true);
     })();
     return () => {
       alive = false;
     };
-  }, [refetch]);
+  }, [refetch, refetchVentana]);
+
+  // La ventana se cargaba UNA sola vez al montar y se quedaba congelada: quien
+  // dejaba la app abierta en segundo plano por la mañana volvía a su turno de
+  // tarde con los datos de la mañana, y el aviso de fichar no saltaba nunca.
+  // Se refresca cada 10 min, y además al cambiar de día (turnos de noche: a las
+  // 00:00 el día de la empresa cambia y toca releer los turnos).
+  const diaCargado = useRef<string | null>(null);
+  useEffect(() => {
+    const i = setInterval(() => void refetchVentana(), 600_000);
+    return () => clearInterval(i);
+  }, [refetchVentana]);
+
+  useEffect(() => {
+    if (!ventana?.zonaHoraria) return;
+    const hoy = new Date().toLocaleDateString("en-CA", { timeZone: ventana.zonaHoraria });
+    if (diaCargado.current === null) {
+      diaCargado.current = hoy;
+      return;
+    }
+    if (diaCargado.current !== hoy) {
+      diaCargado.current = hoy;
+      void refetchVentana();
+    }
+  }, [nowMin, ventana?.zonaHoraria, refetchVentana]);
 
   // Reloj en vivo (1 s) mientras hay jornada abierta: alimenta el cronómetro.
   useEffect(() => {
@@ -180,11 +217,18 @@ export function MobileFichajeProvider() {
   useEffect(() => {
     const onFocus = () => {
       void refetch();
+      // La ventana también: volver a la app tras horas es justo el caso en que
+      // los turnos cargados pueden ser ya de otro momento (u otro día).
+      void refetchVentana();
       setNowMin(minutosAhoraEnZona(ventana?.zonaHoraria));
     };
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [refetch, ventana?.zonaHoraria]);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [refetch, refetchVentana, ventana?.zonaHoraria]);
 
   // Sonido/vibración cuando aparece el aviso (solo en la transición a visible).
   const avisoEmitido = useRef(false);

@@ -307,6 +307,10 @@ function addMonths(iso: string, n: number) {
  * La columna TIEMPO va la última: es un dato que se mira de reojo (cuánto
  * falta, cuánto se retrasa, cuánto lleva sentada), no uno que se lea en cada
  * fila. El ancho extra que necesita se lo cede el plano, que se escala solo.
+ *
+ * MESA sube a 72: su cabecera lleva DOS embudos en fila -el de la mesa y el
+ * de la zona, que se ve en la misma celda debajo-, y en 58 px el segundo se
+ * salia. Los codigos de mesa ("VIP1", "TE10") ya cabian de sobra en 58.
  */
 /**
  * Ancho de la lista de reservas cuando se ve junto al plano.
@@ -367,7 +371,7 @@ const LISTA_GRID =
   // completo, así que recortarlas no pierde el dato) y lo que sueltan se lo
   // queda el nombre. Los chips que van pegados al nombre (visitas, cupón,
   // reconfirmación) no se cuentan: solo salen en algunas filas.
-  "grid grid-cols-[56px_58px_minmax(0,1fr)_42px_58px_64px_60px_64px] gap-1.5 items-center";
+  "grid grid-cols-[56px_72px_minmax(0,1fr)_42px_58px_64px_60px_64px] gap-1.5 items-center";
 
 /**
  * TIPO de la reserva: cuál de las cuatro es (PRP-082).
@@ -5678,10 +5682,11 @@ export function ReservasView() {
               ordenLabelDesc="Después"
             />
             {/* La celda enseña mesa y zona una sobre otra, así que la cabecera
-                filtra por las dos. La palabra "Zona" no se escribe: debajo de
-                "Mesa" solo repetía lo que ya dice la celda y estrechaba a las
-                columnas de al lado. Se queda su embudo, que es lo que se usa. */}
-            <span className="flex min-w-0 flex-col leading-tight">
+                filtra por las dos: "Mesa" con su embudo y, al lado, el de zona.
+                En FILA y no apilados —como Nombre y Etiquetas—: debajo de
+                "Mesa" el segundo embudo quedaba suelto, sin rótulo que lo
+                explicara y encima de una cabecera que ya tenía el suyo. */}
+            <span className="flex min-w-0 items-center gap-1">
               <ColumnaListaHeader
                 label="Mesa"
                 campo="mesa"

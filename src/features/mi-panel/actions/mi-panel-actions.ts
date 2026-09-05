@@ -457,6 +457,13 @@ export interface VentanaFichajeHoy {
    */
   entradasMin: number[];
   salidaMin: number | null;
+  /**
+   * Fin de CADA tramo del día, ordenados. Igual que `entradasMin` pero para la
+   * salida: quien encadena dos empresas el mismo día (BACANAL 19:30-23:30 y
+   * HABANA 23:30-03:30) tiene DOS salidas, y con solo `salidaMin` (el
+   * `Math.max`, las 03:30) el aviso de cerrar la primera no saltaba nunca.
+   */
+  salidasMin: number[];
   cruzaMedianoche: boolean;
   /** Config del aviso (pop-up) de fichar — Ajustes RRHH → Fichajes. */
   popupMargenAntesMin: number;
@@ -537,6 +544,7 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
     entradaMin: null as number | null,
     entradasMin: [] as number[],
     salidaMin: null as number | null,
+    salidasMin: [] as number[],
     cruzaMedianoche: false,
     popupMargenAntesMin: 15,
     popupMargenDespuesMin: 15,
@@ -594,6 +602,8 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
     // Todos los inicios del día, sin repetir: en turno partido son dos (o más)
     // y cada uno abre su ventana de cortesía.
     const entradasMin = [...new Set(fijos.map((f) => f.entradaMin))].sort((a, b) => a - b);
+    // Y todos los finales, por lo mismo: cada tramo se cierra por su cuenta.
+    const salidasMin = [...new Set(fijos.map((f) => f.salidaMin))].sort((a, b) => a - b);
 
     return {
       ok: true,
@@ -601,6 +611,7 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
       entradaMin,
       entradasMin,
       salidaMin,
+      salidasMin,
       cruzaMedianoche: salidaMin <= entradaMin,
       ...popup,
       zonaHoraria,

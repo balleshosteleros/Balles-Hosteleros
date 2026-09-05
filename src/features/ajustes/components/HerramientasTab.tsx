@@ -16,7 +16,7 @@ import { EmailRedaccionPanel } from "@/features/ajustes/components/EmailRedaccio
 import { AccesosTab } from "@/features/ajustes/components/AccesosTab";
 import type { ToolNotifKey } from "@/features/ajustes/data/ajustes";
 import { HERRAMIENTAS, toolTextColor } from "@/features/layout/data/herramientas";
-import { ArchivosConfigPanel } from "@/features/archivos/components/ArchivosConfigPanel";
+import { ArchivosConfigPanel } from "@/features/google-workspace/components/ArchivosConfigPanel";
 
 // Iconos sin contador real → se oculta el toggle del círculo de aviso.
 const SIN_BADGE = new Set<ToolNotifKey>(["videovigilancia", "aplicaciones"]);
