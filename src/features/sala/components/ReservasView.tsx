@@ -62,6 +62,7 @@ import {
   ESTADO_DOT_CLASS,
   ESTADOS_NO_OCUPANTES,
   ESTADOS_NO_ASISTEN,
+  ESTADOS_OCULTOS_EN_LISTA,
   TIPO_RESERVA_CATEGORIA_LABELS,
   DURACION_RESERVA_MAX_MINUTOS,
   DURACION_RESERVA_MIN_MINUTOS,
@@ -2999,7 +3000,7 @@ function PlanoCanvas({
                     // queda marcada. Al mover el raton se enciende unicamente
                     // la mesa que se esta señalando.
                     mesasResaltadasIds.has(m.id) &&
-                      "!border-red-500 ring-[6px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
+                      "!border-red-500 ring-[10px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
                     moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
                     destinoInvalido && "opacity-40 cursor-not-allowed",
                   )}
@@ -3137,6 +3138,14 @@ function PlanoCanvas({
     </div>
   );
 }
+
+/**
+ * Estados que la lista NO enseña mientras nadie toque el filtro de la columna
+ * Estado, escritos como se leen en la celda (que es lo que compara el filtro).
+ */
+const ESTADOS_OCULTOS_LABELS: string[] = ESTADOS_OCULTOS_EN_LISTA.map(
+  (e) => ESTADO_RESERVA_LABELS[e],
+);
 
 export function ReservasView() {
   const { empresaActual, ajustes } = useEmpresa();
@@ -4183,10 +4192,22 @@ export function ReservasView() {
     [mesasIdsDeReserva, mesas],
   );
 
+  const reservasDia = useMemo(() => reservasResueltas.filter(r => r.fecha === fecha), [reservasResueltas, fecha]);
+  const reservasTurno = useMemo(() => reservasDia.filter(r => r.turno === turno), [reservasDia, turno]);
+
   const mesasResaltadasIds = useMemo(() => {
     const ids = new Set<string>();
-    // Raton encima de una mesa del plano: se marca esa mesa y solo esa.
-    if (mesaHoverId) ids.add(mesaHoverId);
+    // Raton encima de una mesa del plano: se marca esa mesa y, si esta ocupada
+    // por una reserva que junta varias ("M1+M2"), TODAS las del grupo. Pasar
+    // por una sola mesa tiene que enseñar la union entera.
+    if (mesaHoverId) {
+      ids.add(mesaHoverId);
+      for (const r of reservasTurno) {
+        if (ESTADOS_NO_OCUPANTES.includes(r.estado)) continue;
+        const delGrupo = mesasIdsDeReserva(r);
+        if (delGrupo.has(mesaHoverId)) for (const id of delGrupo) ids.add(id);
+      }
+    }
     // Raton encima de una fila del listado: se marcan sus mesas (una union
     // ocupa dos, y las dos tienen que encenderse).
     if (reservaHoverId) {
@@ -4194,7 +4215,13 @@ export function ReservasView() {
       for (const id of mesasIdsDeReserva(r ?? null)) ids.add(id);
     }
     return ids;
-  }, [mesaHoverId, reservaHoverId, reservasResueltas, mesasIdsDeReserva]);
+  }, [
+    mesaHoverId,
+    reservaHoverId,
+    reservasResueltas,
+    reservasTurno,
+    mesasIdsDeReserva,
+  ]);
 
   /**
    * Camino INVERSO: reservas que se encienden en el listado porque el raton
@@ -4202,8 +4229,6 @@ export function ReservasView() {
    * que una union ("M1+M2") encienda su fila pasando por CUALQUIERA de las dos
    * mesas, no solo por la primera.
    */
-  const reservasDia = useMemo(() => reservasResueltas.filter(r => r.fecha === fecha), [reservasResueltas, fecha]);
-  const reservasTurno = useMemo(() => reservasDia.filter(r => r.turno === turno), [reservasDia, turno]);
 
   const reservasResaltadasIds = useMemo(() => {
     const ids = new Set<string>();
@@ -4281,9 +4306,14 @@ export function ReservasView() {
     const columnasFiltradas = Object.entries(filtrosColumna).filter(
       ([, valores]) => valores.length > 0,
     );
+    // Sin tocar la columna Estado, la lista arranca sin canceladas, no-shows ni
+    // liberadas: es el punto de partida del turno, igual en todas las empresas
+    // y cada vez que se entra. Marcarlas en el filtro las devuelve a la lista.
+    const ocultarCaidas = !filtrosColumna.estado?.length;
     const filtradas = reservasTurno.filter(r => {
       const q = busqueda.toLowerCase();
       const matchQ = !q || r.cliente.toLowerCase().includes(q) || r.apellidos.toLowerCase().includes(q) || r.telefono.includes(q);
+      if (ocultarCaidas && ESTADOS_OCULTOS_EN_LISTA.includes(r.estado)) return false;
       // Columnas: se combinan con Y; dentro de cada una, los valores con O.
       // Estado y origen se filtran DESDE SU COLUMNA, como el resto: los dos
       // botones de la barra que hacían lo mismo ya no existen.
@@ -4334,9 +4364,15 @@ export function ReservasView() {
       const otras = Object.entries(filtrosColumna).filter(
         ([c, valores]) => c !== campo && valores.length > 0,
       );
+      // El punto de partida de Estado (sin canceladas, no-shows ni liberadas)
+      // acota igual que un filtro puesto para las DEMÁS columnas: si esas
+      // reservas no se ven, sus mesas y orígenes tampoco se ofrecen. En la
+      // propia columna Estado no se aplica, o no habría forma de recuperarlas.
+      const ocultarCaidas = campo !== "estado" && !filtrosColumna.estado?.length;
       const base = reservasTurno.filter((r) => {
         const q = busqueda.toLowerCase();
         const matchQ = !q || r.cliente.toLowerCase().includes(q) || r.apellidos.toLowerCase().includes(q) || r.telefono.includes(q);
+        if (ocultarCaidas && ESTADOS_OCULTOS_EN_LISTA.includes(r.estado)) return false;
           const matchC = otras.every(([c, valores]) =>
           valoresDeColumna(r, c).some((v) => valores.includes(v)),
         );
@@ -5655,6 +5691,7 @@ export function ReservasView() {
               opciones={opcionesColumna("estado")}
               seleccionadas={filtrosColumna.estado ?? []}
               onSeleccionChange={(v) => setFiltroColumna("estado", v)}
+              ocultasPorDefecto={ESTADOS_OCULTOS_LABELS}
               colorOpcion={colorOpcionEstado}
               ordenable
               panelClassName={panelTemaSala}
@@ -6063,7 +6100,7 @@ export function ReservasView() {
                                       // del raton, no se queda pegado al abrir
                                       // una reserva ni al elegir una mesa.
                                       mesasResaltadasIds.has(m.id) &&
-                                        "!border-red-500 ring-[6px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
+                                        "!border-red-500 ring-[10px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
                                       moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
                                       destinoInvalido && "opacity-40 cursor-not-allowed",
                                     )}

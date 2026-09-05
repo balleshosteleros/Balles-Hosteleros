@@ -53,6 +53,24 @@ export const ESTADOS_NO_OCUPANTES: EstadoReserva[] = [
 ];
 
 /**
+ * Estados que la LISTA DE RESERVAS no enseña de entrada.
+ *
+ * Al abrir el servicio interesa lo que va a venir a comer, no lo que ya se cayó:
+ * una cancelada, un no-show o una mesa liberada ocupan sitio en la lista sin
+ * aportar nada a quien está trabajando el turno. Se pueden ver en cualquier
+ * momento marcándolas en el filtro de la columna Estado, pero al volver a
+ * entrar la lista arranca otra vez así, en todas las empresas.
+ *
+ * No es un filtro puesto: es el punto de partida de la columna, así que la
+ * cabecera no se enciende hasta que el usuario se sale de él.
+ */
+export const ESTADOS_OCULTOS_EN_LISTA: EstadoReserva[] = [
+  "CANCELADA",
+  "NO_SHOW",
+  "LIBERADA",
+];
+
+/**
  * Estados que NO cuentan en los totales que ve el usuario (comensales del
  * turno, mesas ocupadas, desglose por nº de personas, totales del calendario).
  *

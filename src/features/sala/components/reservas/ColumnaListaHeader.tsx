@@ -42,6 +42,15 @@ export interface ColumnaListaHeaderProps {
   seleccionadas?: string[];
   onSeleccionChange?: (valores: string[]) => void;
   /**
+   * Valores que la columna NO enseña mientras nadie toque el filtro.
+   *
+   * Es el punto de partida de la columna, no un filtro puesto: sus casillas
+   * salen desmarcadas pero la cabecera no se enciende ni ofrece "Limpiar",
+   * porque el usuario no ha filtrado nada todavía. En cuanto toca una casilla
+   * se pasa a una selección normal, y "Limpiar" devuelve aquí.
+   */
+  ocultasPorDefecto?: string[];
+  /**
    * Punto de color de cada opción. Sin esto la columna filtra igual, solo que
    * en blanco y negro: es para las columnas donde el color ES el dato —el
    * estado y las etiquetas se reconocen en sala por su tono antes que por su
@@ -71,6 +80,7 @@ export function ColumnaListaHeader({
   opciones = [],
   seleccionadas = [],
   onSeleccionChange,
+  ocultasPorDefecto = [],
   colorOpcion,
   ordenable = false,
   orden = null,
@@ -85,8 +95,18 @@ export function ColumnaListaHeader({
 
   const tieneFiltro = !!campo && !!onSeleccionChange;
   const tieneOrden = ordenable && !!campo && !!onOrdenChange;
+  /** Hay una selección puesta por el usuario (vacío = punto de partida). */
   const filtroActivo = seleccionadas.length > 0;
   const ordenActivo = !!campo && orden?.campo === campo;
+  /**
+   * Lo que de verdad se está viendo en la columna. Sin selección son todas las
+   * opciones menos las que la columna esconde de salida.
+   */
+  const marcadas = useMemo(() => {
+    if (filtroActivo) return new Set(seleccionadas);
+    const fuera = new Set(ocultasPorDefecto);
+    return new Set(opciones.filter((o) => !fuera.has(o)));
+  }, [filtroActivo, seleccionadas, opciones, ocultasPorDefecto]);
 
   const opcionesVisibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -110,22 +130,27 @@ export function ColumnaListaHeader({
    * se querían para lograrlo. Enseñándolas marcadas —que es además lo que se
    * está viendo en la lista— basta con desmarcar la que sobra.
    *
-   * Por dentro no cambia nada: la lista vacía sigue significando "sin filtro".
-   * Al desmarcar la primera se guardan todas MENOS esa; y si se acaban
-   * desmarcando todas, se vuelve a dejar vacío en vez de esconder la lista
-   * entera, que no le sirve a nadie.
+   * Por dentro no cambia nada: la lista vacía sigue significando "el punto de
+   * partida de la columna" (todas, o todas menos las que esconde de salida).
+   * Al tocar la primera casilla se guarda lo que queda visible; y si se acaban
+   * desmarcando todas, se vuelve al punto de partida en vez de esconder la
+   * lista entera, que no le sirve a nadie.
    */
   function alternar(valor: string, marcado: boolean) {
-    if (!filtroActivo) {
-      // Primera vez que se toca: se parte de todas y se quita la desmarcada.
-      onSeleccionChange!(marcado ? opciones : opciones.filter((v) => v !== valor));
-      return;
-    }
-    const siguiente = marcado
-      ? [...seleccionadas, valor]
-      : seleccionadas.filter((v) => v !== valor);
-    // Todas marcadas y todas desmarcadas son lo mismo: no filtrar.
-    onSeleccionChange!(siguiente.length === opciones.length ? [] : siguiente);
+    const siguienteSet = new Set(marcadas);
+    if (marcado) siguienteSet.add(valor);
+    else siguienteSet.delete(valor);
+    // Se guardan en el orden de la columna para que la lista sea estable.
+    const siguiente = opciones.filter((v) => siguienteSet.has(v));
+    // Quedarse sin nada marcado es volver al punto de partida. Enseñarlo TODO
+    // solo lo es en una columna sin nada escondido de salida: donde sí lo hay
+    // (Estado esconde canceladas, no-show y liberadas), "todas" es una elección
+    // del usuario y hay que guardarla, o al soltar el popover volverían a
+    // esconderse las tres.
+    const marcadasTodas = siguiente.length === opciones.length;
+    const sinFiltrar =
+      siguiente.length === 0 || (marcadasTodas && ocultasPorDefecto.length === 0);
+    onSeleccionChange!(sinFiltrar ? [] : siguiente);
   }
 
   return (
@@ -223,8 +248,8 @@ export function ColumnaListaHeader({
 
             <div className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[10px] font-medium normal-case tracking-normal">
               <span className="text-muted-foreground">
-                {filtroActivo
-                  ? `${seleccionadas.length} de ${opciones.length}`
+                {filtroActivo || marcadas.size < opciones.length
+                  ? `${marcadas.size} de ${opciones.length}`
                   : "Todas"}
               </span>
               {filtroActivo && (
@@ -233,6 +258,8 @@ export function ColumnaListaHeader({
                   onClick={() => onSeleccionChange!([])}
                   className="rounded px-1 py-0.5 text-primary transition-colors hover:bg-primary/10"
                 >
+                  {/* Devuelve la columna a su punto de partida, que en Estado
+                      no es "todas" sino "todas menos las que no se enseñan". */}
                   Limpiar
                 </button>
               )}
@@ -240,7 +267,7 @@ export function ColumnaListaHeader({
 
             <div className="max-h-56 space-y-px overflow-y-auto pr-0.5">
               {opcionesVisibles.map((opt) => {
-                const marcado = !filtroActivo || seleccionadas.includes(opt);
+                const marcado = marcadas.has(opt);
                 const color = colorOpcion?.(opt);
                 return (
                   <button
