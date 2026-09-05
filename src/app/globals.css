@@ -113,18 +113,18 @@
     @apply border-border;
   }
   /*
-    Letra un punto más grande en TODO el software.
+    Tamaño base del software: el de siempre del navegador (16 px).
 
     Tailwind mide sus tamaños (text-xs, text-sm, text-base...) en `rem`, o sea
-    en múltiplos de esta raíz: subirla de los 16 px que trae el navegador a 17
-    sube de golpe las ~6.000 clases de texto de la app, sin tocarlas una a una
-    ni descuadrar los espaciados, que crecen en la misma proporción.
+    en múltiplos de esta raíz: tocarla mueve de golpe las ~6.000 clases de
+    texto de la app Y sus espaciados. Se subió a 17 px y el resultado fue que
+    TODO el software se veía más grande de la cuenta: la barra de reservas
+    dejó de caber en una línea y sus botones se partían a una segunda fila.
 
-    No se toca `body`: ahí el tamaño no lo heredan las clases de Tailwind y
-    todo se habría quedado igual.
+    Se deja en 16 px, que es la medida con la que están pensadas las pantallas.
   */
   html {
-    font-size: 17px;
+    font-size: 16px;
   }
   body {
     @apply bg-background text-foreground;
