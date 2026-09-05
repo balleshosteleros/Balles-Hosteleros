@@ -193,3 +193,52 @@ export async function getGruposZonasDisponibles(
     };
   });
 }
+
+/**
+ * Grupos de zonas activos, sin mirar ocupación.
+ *
+ * Lo usa el formulario público mientras el cliente todavía no ha elegido hora:
+ * la ocupación se calcula por franja, así que sin hora no hay nada que contar,
+ * pero el recuadro de zona ya puede salir con todas las opciones. Al elegir
+ * hora se vuelve a pedir con `getGruposZonasDisponibles` y ahí sí se marcan
+ * las llenas.
+ */
+export async function getGruposZonasActivos(
+  supabase: SupabaseClient,
+  localId: string,
+): Promise<GrupoZonaDisponible[]> {
+  const { data: gruposRaw, error } = await supabase
+    .from("grupos_zonas")
+    .select("id, nombre, orden, activa")
+    .eq("local_id", localId)
+    .eq("activa", true)
+    .order("orden", { ascending: true })
+    .order("nombre", { ascending: true });
+  if (error || !gruposRaw || gruposRaw.length === 0) {
+    if (error) console.error("[grupos-zonas-activos]", error);
+    return [];
+  }
+
+  const grupoIds = gruposRaw.map((g) => g.id as string);
+  const { data: rel } = await supabase
+    .from("grupo_zona_zonas")
+    .select("grupo_zona_id, zona_id")
+    .in("grupo_zona_id", grupoIds);
+
+  const zonasPorGrupo = new Map<string, string[]>();
+  for (const r of rel ?? []) {
+    const k = r.grupo_zona_id as string;
+    const lista = zonasPorGrupo.get(k);
+    if (lista) lista.push(r.zona_id as string);
+    else zonasPorGrupo.set(k, [r.zona_id as string]);
+  }
+
+  return gruposRaw.map((g) => ({
+    id: g.id as string,
+    nombre: g.nombre as string,
+    zonaIds: zonasPorGrupo.get(g.id as string) ?? [],
+    // Sin hora no se puede afirmar que esté completa: se enseña elegible.
+    disponible: true,
+    opcionesLibres: 0,
+  }));
+}

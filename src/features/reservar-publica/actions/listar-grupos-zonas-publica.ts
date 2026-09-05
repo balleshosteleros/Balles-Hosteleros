@@ -8,18 +8,26 @@
  * libre a esa fecha/hora y para ese número de comensales, de modo que el
  * formulario pueda mostrarlo en gris y sin poder elegirse — igual que hace
  * CoverManager con su "(Zona Completo)".
+ *
+ * Sin hora todavía elegida se devuelven igualmente las zonas del restaurante,
+ * todas como disponibles: el cliente ve desde el principio que va a tener que
+ * elegir zona, y en cuanto elige hora se recalcula de verdad cuál está llena.
  */
 
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getGruposZonasDisponibles } from "@/features/sala/lib/grupos-zonas-disponibilidad";
+import {
+  getGruposZonasDisponibles,
+  getGruposZonasActivos,
+} from "@/features/sala/lib/grupos-zonas-disponibilidad";
 import { MAX_COMENSALES_ENTRADA } from "@/features/sala/data/reservas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const inputSchema = z.object({
   empresaSlug: z.string().min(1).max(120),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  hora: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+  /** Vacía mientras el cliente no ha elegido hora: entonces no se calcula ocupación. */
+  hora: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).or(z.literal("")),
   personas: z.number().int().min(1).max(MAX_COMENSALES_ENTRADA),
 });
 
@@ -69,13 +77,17 @@ export async function listarGruposZonasPublica(
       .maybeSingle();
     const exigido = (cfg?.exigir_zona_cliente as boolean) ?? false;
 
-    const grupos = await getGruposZonasDisponibles(admin as unknown as SupabaseClient, {
-      empresaId: empresa.id as string,
-      localId: local.id as string,
-      fecha: data.fecha,
-      hora: data.hora,
-      personas: data.personas,
-    });
+    // Sin hora no hay ocupación que mirar (la ocupación es por franja): se
+    // listan las zonas activas tal cual, todas elegibles.
+    const grupos = data.hora
+      ? await getGruposZonasDisponibles(admin as unknown as SupabaseClient, {
+          empresaId: empresa.id as string,
+          localId: local.id as string,
+          fecha: data.fecha,
+          hora: data.hora,
+          personas: data.personas,
+        })
+      : await getGruposZonasActivos(admin as unknown as SupabaseClient, local.id as string);
 
     return {
       exigido,

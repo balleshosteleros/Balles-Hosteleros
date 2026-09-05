@@ -308,8 +308,13 @@ export function ReservaPublicaForm({
   // Zonas disponibles: dependen de fecha, hora y personas, así que se
   // recalculan cada vez que el cliente cambia algo de eso. Una zona sin hueco
   // para ESE grupo se muestra en gris y no se puede elegir.
+  //
+  // Con la fecha basta para que el recuadro salga: sin hora todavía no se
+  // puede saber qué zona está llena, así que se listan todas elegibles y al
+  // elegir hora se recalcula. Esperar a la hora hacía que el recuadro
+  // apareciera de golpe a mitad del formulario y descolocaba lo de debajo.
   useEffect(() => {
-    if (!fecha || !hora || personas <= 0) {
+    if (!fecha || personas <= 0) {
       setGruposZonas([]);
       return;
     }
@@ -541,8 +546,18 @@ export function ReservaPublicaForm({
         {/* FORM CARD — full-bleed en móvil, card en sm+ */}
         <form
           onSubmit={onSubmit}
-          className="bg-white sm:rounded-2xl sm:shadow-xl sm:border sm:border-zinc-100 px-5 sm:px-7 pt-2 pb-6 sm:pt-7 sm:pb-7 space-y-5"
+          // Marco propio en lugar del borde gris de siempre: filete de marca
+          // arriba y sombra suave. El color sale de Imagen de marca, así que
+          // cada empresa lo ve con el suyo sin tocar nada.
+          className="relative overflow-hidden bg-white rounded-2xl border border-zinc-200/70 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_28px_-14px_rgba(0,0,0,0.18)] px-4 sm:px-6 pt-5 pb-5 sm:pt-6 sm:pb-6 space-y-4"
         >
+          {/* Filete de marca: el único adorno de la tarjeta. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-1"
+            style={{ background: accent }}
+          />
+
           {/* Aquí NO se venden Tickets ni se pide su código: la web es solo
               para reservar mesa. Los Tickets se compran en su propia tienda, y
               quien ya tenga uno lo canjea desde el enlace de su correo, que
@@ -575,9 +590,9 @@ export function ReservaPublicaForm({
               panel para separarlo visualmente de los datos de contacto.
               Las personas van primero porque la disponibilidad depende de
               cuánta gente viene. */}
-          <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50/60 p-4 space-y-4">
+          <div className="rounded-xl border border-zinc-200/70 bg-zinc-50/70 p-3 space-y-3">
             <div>
-              <Label className="text-zinc-700 flex items-center gap-1.5">
+              <Label className="text-xs font-medium text-zinc-600 flex items-center gap-1.5">
                 <Users className="h-3.5 w-3.5" />
                 Personas *
               </Label>
@@ -592,7 +607,7 @@ export function ReservaPublicaForm({
                 // Con un ticket por persona el número lo fija lo que pagó: si
                 // pudiera subirlo, entrarían más comensales de los abonados.
                 disabled={ticketCanje?.porPersona === true}
-                className="mt-1.5 h-11 w-full min-w-0 max-w-full appearance-none rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-500"
+                className="mt-1 h-10 w-full min-w-0 max-w-full appearance-none rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-500"
               >
                 {opcionesPersonas.map((n) => (
                   <option key={n} value={n}>
@@ -601,12 +616,12 @@ export function ReservaPublicaForm({
                 ))}
               </select>
               {ticketCanje?.porPersona ? (
-                <p className="mt-1.5 text-xs text-zinc-500">
+                <p className="mt-1 text-[11px] text-zinc-500">
                   Tu ticket cubre {ticketCanje.unidades}{" "}
                   {ticketCanje.unidades === 1 ? "persona" : "personas"}.
                 </p>
               ) : (
-                <p className="mt-1.5 text-xs text-zinc-500">
+                <p className="mt-1 text-[11px] text-zinc-500">
                   Para grupos de más de {maxPersonas}{" "}
                   {maxPersonas === 1 ? "persona" : "personas"}, llámanos y lo
                   organizamos contigo.
@@ -615,7 +630,7 @@ export function ReservaPublicaForm({
             </div>
 
             <div>
-              <Label htmlFor="fecha" className="text-zinc-700 flex items-center gap-1.5">
+              <Label htmlFor="fecha" className="text-xs font-medium text-zinc-600 flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5" />
                 Fecha *
               </Label>
@@ -626,10 +641,10 @@ export function ReservaPublicaForm({
                 onChange={(e) => setFecha(e.target.value)}
                 min={hoyLocal}
                 required
-                className="mt-1.5 h-11 w-full min-w-0 max-w-full appearance-none rounded-xl border-zinc-200 bg-white px-3 text-sm"
+                className="mt-1 h-10 w-full min-w-0 max-w-full appearance-none rounded-lg border-zinc-200 bg-white px-3 text-sm"
               />
               {fechaFueraDelTicket && (
-                <p className="mt-1.5 text-xs text-amber-700">
+                <p className="mt-1 text-[11px] text-amber-700">
                   Tu experiencia no se puede usar ese día. Prueba con otra fecha.
                 </p>
               )}
@@ -639,7 +654,7 @@ export function ReservaPublicaForm({
                 Sustituye al iframe de CoverManager: el cliente elige un pase
                 abierto en vez de escribir una hora que luego rechazaríamos. */}
             <div>
-              <Label className="text-zinc-700 flex items-center gap-1.5 mb-1.5">
+              <Label className="text-xs font-medium text-zinc-600 flex items-center gap-1.5 mb-1">
                 <Clock className="h-3.5 w-3.5" />
                 Hora *
               </Label>
@@ -656,11 +671,11 @@ export function ReservaPublicaForm({
             </div>
 
           {/* Zonas. Solo si la empresa ha activado "exigir zona": si está
-                apagado, el cliente no elige y no se le muestra nada. Hace falta
-                ademas fecha/hora/personas para saber cuál está llena. */}
+                apagado, el cliente no elige y no se le muestra nada. Sale ya
+                con la fecha puesta; al elegir hora se marcan las llenas. */}
             {zonaExigida && zonasVisibles.length > 0 && (
               <div>
-                <Label htmlFor="zona" className="text-zinc-700 flex items-center gap-1.5 mb-1.5">
+                <Label htmlFor="zona" className="text-xs font-medium text-zinc-600 flex items-center gap-1.5 mb-1">
                   <MapPin className="h-3.5 w-3.5" />
                   Zonas *
                 </Label>
@@ -669,7 +684,7 @@ export function ReservaPublicaForm({
                   value={grupoZonaId}
                   onChange={(e) => setGrupoZonaId(e.target.value)}
                   disabled={cargandoZonas}
-                  className="w-full h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
+                  className="w-full h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
                 >
                   <option value="">
                     {cargandoZonas ? "Comprobando disponibilidad…" : "Seleccione la zona"}
@@ -684,7 +699,7 @@ export function ReservaPublicaForm({
                     </option>
                   ))}
                 </select>
-                {!cargandoZonas && gruposZonas.every((g) => !g.disponible) && (
+                {!cargandoZonas && hora && gruposZonas.every((g) => !g.disponible) && (
                   <p className="mt-1.5 text-xs text-red-600">
                     No queda sitio para {personas}{" "}
                     {personas === 1 ? "persona" : "personas"} a esa hora. Prueba con otra hora.
@@ -697,7 +712,7 @@ export function ReservaPublicaForm({
           {/* Datos de contacto */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="nombre" className="text-zinc-700">Nombre *</Label>
+              <Label htmlFor="nombre" className="text-xs font-medium text-zinc-600">Nombre *</Label>
               <Input
                 id="nombre"
                 value={nombre}
@@ -705,11 +720,11 @@ export function ReservaPublicaForm({
                 required
                 maxLength={RESERVA_NOMBRE_MAX_CHARS}
                 autoComplete="given-name"
-                className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
+                className="mt-1.5 h-10 rounded-lg border-zinc-200 text-sm"
               />
             </div>
             <div>
-              <Label htmlFor="apellidos" className="text-zinc-700">Apellidos *</Label>
+              <Label htmlFor="apellidos" className="text-xs font-medium text-zinc-600">Apellidos *</Label>
               <Input
                 id="apellidos"
                 value={apellidos}
@@ -717,13 +732,13 @@ export function ReservaPublicaForm({
                 required
                 maxLength={RESERVA_APELLIDOS_MAX_CHARS}
                 autoComplete="family-name"
-                className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
+                className="mt-1.5 h-10 rounded-lg border-zinc-200 text-sm"
               />
             </div>
           </div>
 
           <div>
-            <Label htmlFor="telefono" className="text-zinc-700 flex items-center gap-1.5">
+            <Label htmlFor="telefono" className="text-xs font-medium text-zinc-600 flex items-center gap-1.5">
               <Phone className="h-3.5 w-3.5" />
               Teléfono{obligatorios.telefono ? " *" : ""}
             </Label>
@@ -735,7 +750,7 @@ export function ReservaPublicaForm({
                 onChange={(e) => setTelefonoPrefijo(e.target.value)}
                 disabled={enviando}
                 aria-label="Prefijo del país"
-                className="h-12 sm:h-11 w-28 shrink-0 rounded-xl border border-zinc-200 bg-white px-2 text-base sm:text-sm"
+                className="h-10 w-24 shrink-0 rounded-lg border border-zinc-200 bg-white px-2 text-sm"
               >
                 {PREFIJOS_TELEFONO.map((p) => (
                   <option key={p.prefijo} value={p.prefijo} title={p.label}>
@@ -752,43 +767,47 @@ export function ReservaPublicaForm({
                 onChange={(e) => setTelefono(e.target.value)}
                 required={obligatorios.telefono}
                 placeholder="612 345 678"
-                className="h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
+                className="h-10 rounded-lg border-zinc-200 text-sm"
               />
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="nacimiento" className="text-zinc-700 flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5" />
-              Fecha de nacimiento{obligatorios.fechaNacimiento ? " *" : ""}
-            </Label>
-            <Input
-              id="nacimiento"
-              type="date"
-              value={fechaNacimiento}
-              onChange={(e) => setFechaNacimiento(e.target.value)}
-              required={obligatorios.fechaNacimiento}
-              max={hoyLocal}
-              className="mt-1.5 h-11 w-full min-w-0 appearance-none rounded-xl border-zinc-200 px-3 text-sm"
-            />
-          </div>
+          {/* Nacimiento y email comparten fila: por separado estiraban el
+              formulario media pantalla más para dos campos cortos. */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="nacimiento" className="text-xs font-medium text-zinc-600 flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" />
+                Nacimiento{obligatorios.fechaNacimiento ? " *" : ""}
+              </Label>
+              <Input
+                id="nacimiento"
+                type="date"
+                value={fechaNacimiento}
+                onChange={(e) => setFechaNacimiento(e.target.value)}
+                required={obligatorios.fechaNacimiento}
+                max={hoyLocal}
+                className="mt-1 h-10 w-full min-w-0 appearance-none rounded-lg border-zinc-200 px-3 text-sm"
+              />
+            </div>
 
-          <div>
-            <Label htmlFor="email" className="text-zinc-700 flex items-center gap-1.5">
-              <Mail className="h-3.5 w-3.5" />
-              Email{obligatorios.email ? " *" : ""}
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required={obligatorios.email}
-              placeholder="carlos@gmail.com"
-              className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
-            />
+            <div>
+              <Label htmlFor="email" className="text-xs font-medium text-zinc-600 flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5" />
+                Email{obligatorios.email ? " *" : ""}
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required={obligatorios.email}
+                placeholder="carlos@gmail.com"
+                className="mt-1.5 h-10 rounded-lg border-zinc-200 text-sm"
+              />
+            </div>
           </div>
 
           {/* Cupón y ticket son tipos de reserva incompatibles: si el cliente
@@ -822,7 +841,7 @@ export function ReservaPublicaForm({
             </div>
           )}
 
-          <label className="flex items-start gap-2 pt-1 text-xs leading-snug text-zinc-500">
+          <label className="flex items-start gap-2 text-[11px] leading-snug text-zinc-500">
             <input
               type="checkbox"
               checked={aceptaPrivacidad}
@@ -846,7 +865,7 @@ export function ReservaPublicaForm({
 
           {/* Comercial: consentimiento distinto del de privacidad y opcional.
               Exigirlo para reservar lo invalidaria (RGPD art. 7.4). */}
-          <label className="flex items-start gap-2 text-xs leading-snug text-zinc-500">
+          <label className="flex items-start gap-2 text-[11px] leading-snug text-zinc-500">
             <input
               type="checkbox"
               checked={aceptaMarketing}
@@ -862,7 +881,7 @@ export function ReservaPublicaForm({
           <Button
             type="submit"
             size="lg"
-            className="w-full font-semibold text-base h-14 sm:h-12 rounded-xl shadow-md hover:shadow-lg transition-shadow mt-2"
+            className="w-full font-semibold text-sm h-11 rounded-lg shadow-sm hover:shadow transition-shadow mt-1"
             disabled={!valido || enviando}
             style={{ background: accent, color: onAccent }}
           >
@@ -874,7 +893,9 @@ export function ReservaPublicaForm({
           )}
         </form>
 
-        <footer className="text-center mt-6 text-xs text-zinc-400">
+        {/* Va justo debajo de la tarjeta: separado del todo parecía el pie
+            de la web, no la coletilla de la reserva. */}
+        <footer className="text-center mt-2 text-[11px] text-zinc-400">
           <p>Confirmación inmediata · {empresaNombre}</p>
         </footer>
       </div>
