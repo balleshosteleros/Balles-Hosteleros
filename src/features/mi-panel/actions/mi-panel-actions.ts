@@ -1721,6 +1721,8 @@ function mapSolicitud(
     entregaTipoNombre: (row.entrega_tipo_nombre as string | null) ?? null,
     entregaTalla: (row.entrega_talla as string | null) ?? null,
     entregaId: (row.entrega_id as string | null) ?? null,
+    horaInicio: (row.hora_inicio as string | null) ?? null,
+    horaFin: (row.hora_fin as string | null) ?? null,
   };
 }
 
@@ -2775,10 +2777,32 @@ export async function listarSolicitudesEmpresa(filtro: "pendientes" | "todas" = 
     }
 
     const nombres = await nombresDeRevisores(supabase, empresaId, data ?? []);
-    const dataConFlag = (data ?? []).map((row) => {
-      const base = mapSolicitud(row, nombres);
-      return { ...base, puedoValidar: puedoValidarA.has(base.userId) };
-    });
+    const base = (data ?? []).map((row) => mapSolicitud(row, nombres));
+
+    // Turno que cada empleado TENÍA el día que pide, para poder comparar sin
+    // salir de la pantalla. Solo aplica a los días trabajados (ver el servicio).
+    const { horariosPrevistosDeSolicitudes } = await import(
+      "@/features/mi-panel/services/horario-previsto-solicitud"
+    );
+    const previstos = await horariosPrevistosDeSolicitudes(
+      supabase,
+      empresaId,
+      base.map((s) => ({
+        id: s.id,
+        empresaId: s.empresaId,
+        userId: s.userId,
+        subtipo: s.subtipo,
+        fechaInicio: s.fechaInicio,
+        horaInicio: s.horaInicio ?? null,
+        horaFin: s.horaFin ?? null,
+      })),
+    );
+
+    const dataConFlag = base.map((s) => ({
+      ...s,
+      puedoValidar: puedoValidarA.has(s.userId),
+      horarioPrevistoDia: previstos.get(s.id) ?? null,
+    }));
 
     return { ok: true, data: dataConFlag };
   } catch (err: unknown) {

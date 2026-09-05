@@ -62,6 +62,13 @@ function tipoLabel(tipo: SolicitudTipo): string {
   return "Trabajo";
 }
 
+/** "HH:MM:SS" de la base de datos → "HH:MM", que es como se pidió. */
+function hhmm(v: string | null | undefined): string {
+  if (!v) return "";
+  const m = /^(\d{1,2}):(\d{2})/.exec(v.trim());
+  return m ? `${m[1].padStart(2, "0")}:${m[2]}` : v;
+}
+
 function formatFecha(s: string | null): string {
   if (!s) return "—";
   try {
@@ -134,6 +141,19 @@ export function SolicitudesView() {
     if (campo === "fechaInicio") return s.fechaInicio;
     if (campo === "createdAt") return s.createdAt;
     if (campo === "revisadoPor") return s.revisadoPor ?? "";
+    if (campo === "solicita")
+      return s.horaInicio && s.horaFin ? `${hhmm(s.horaInicio)}–${hhmm(s.horaFin)}` : "";
+    if (campo === "previsto") {
+      const p = s.horarioPrevistoDia;
+      if (!p) return "";
+      return p.trabaja ? p.texto : "Libraba";
+    }
+    // Se filtra y ordena por el texto que se ve, no por el booleano: así en el
+    // filtro salen "Sí"/"No" y no true/false.
+    if (campo === "coincide") {
+      const c = s.horarioPrevistoDia?.coincide ?? null;
+      return c === null ? "" : c ? "Sí" : "No";
+    }
     return (s as unknown as Record<string, unknown>)[campo];
   };
 
@@ -197,6 +217,9 @@ export function SolicitudesView() {
     { campo: "empleado", label: "Empleado", bloqueada: true },
     { campo: "tipo", label: "Tipo" },
     { campo: "fechas", label: "Fechas" },
+    { campo: "solicita", label: "Solicita" },
+    { campo: "previsto", label: "Su horario" },
+    { campo: "coincide", label: "Coincide" },
     { campo: "motivo", label: "Motivo" },
     { campo: "enviada", label: "Enviada" },
     { campo: "estado", label: "Estado" },
@@ -244,6 +267,63 @@ export function SolicitudesView() {
           )}
         </TableCell>
       ),
+    },
+    // Tramo que pide el trabajador. Solo las solicitudes de trabajo lo llevan.
+    solicita: {
+      th: <TableHead key="solicita">Solicita</TableHead>,
+      td: (s) => (
+        <TableCell key="solicita" className="text-sm tabular-nums whitespace-nowrap">
+          {s.horaInicio && s.horaFin ? (
+            `${hhmm(s.horaInicio)}–${hhmm(s.horaFin)}`
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+      ),
+    },
+    // Lo que ese día tenía asignado en el cuadrante, para comparar de un vistazo.
+    previsto: {
+      th: <TableHead key="previsto">Su horario</TableHead>,
+      td: (s) => {
+        const p = s.horarioPrevistoDia;
+        return (
+          <TableCell key="previsto" className="text-sm tabular-nums whitespace-nowrap">
+            {!p ? (
+              <span className="text-muted-foreground">—</span>
+            ) : !p.trabaja ? (
+              <span className="text-muted-foreground">Libraba</span>
+            ) : (
+              p.texto
+            )}
+          </TableCell>
+        );
+      },
+    },
+    // Verde = pide exactamente su turno. Roja = no cuadra y hay que mirarlo.
+    // Vacía = no hay horario contra el que comparar (horas extras, jornada
+    // flexible o días sin cuadrante): ahí no se afirma nada.
+    coincide: {
+      th: <TableHead key="coincide" className="text-center">Coincide</TableHead>,
+      td: (s) => {
+        const c = s.horarioPrevistoDia?.coincide ?? null;
+        return (
+          <TableCell key="coincide" className="text-center">
+            {c === true ? (
+              <CheckCircle2
+                className="h-5 w-5 text-emerald-600 inline-block"
+                aria-label="Coincide con su horario"
+              />
+            ) : c === false ? (
+              <XCircle
+                className="h-5 w-5 text-rose-600 inline-block"
+                aria-label="No coincide con su horario"
+              />
+            ) : (
+              <span className="sr-only">Sin horario con el que comparar</span>
+            )}
+          </TableCell>
+        );
+      },
     },
     motivo: {
       th: <TableHead key="motivo">Motivo</TableHead>,
@@ -422,6 +502,20 @@ export function SolicitudesView() {
                     revisando.fechaFin !== revisando.fechaInicio &&
                     ` – ${formatFecha(revisando.fechaFin)}`}
                   {revisando.horas != null && ` · ${revisando.horas}h`}
+                  {revisando.horaInicio && revisando.horaFin && (
+                    <>
+                      <br />
+                      Solicita {hhmm(revisando.horaInicio)}–{hhmm(revisando.horaFin)}
+                      {revisando.horarioPrevistoDia && (
+                        <>
+                          {" · su horario: "}
+                          {revisando.horarioPrevistoDia.trabaja
+                            ? revisando.horarioPrevistoDia.texto
+                            : "libraba"}
+                        </>
+                      )}
+                    </>
+                  )}
                 </>
               )}
             </DialogDescription>

@@ -49,6 +49,36 @@ export interface SolicitudPersonal {
   entregaTalla?: string | null;
   /** Entrega creada al aprobarla. NULL mientras está pendiente o si se denegó. */
   entregaId?: string | null;
+  /** Tramo solicitado ("HH:MM"), solo en las solicitudes de trabajo. */
+  horaInicio?: string | null;
+  horaFin?: string | null;
+  /**
+   * Turno que el empleado TENÍA ese día según sus horarios reales, para que
+   * quien valida compare de un vistazo sin salir de la pantalla.
+   *
+   * Solo se resuelve en las solicitudes de DÍA TRABAJADO: son los días que el
+   * empleado debería haber fichado y por tanto sí tienen horario con el que
+   * contrastar. Las horas extras se hacen fuera del turno, así que no hay nada
+   * que comparar y esto queda a `null`.
+   */
+  horarioPrevistoDia?: HorarioPrevistoSolicitud | null;
+}
+
+/**
+ * Lo que el empleado tenía previsto trabajar el día de la solicitud.
+ *
+ * `coincide` responde a una pregunta muy concreta: ¿lo que pide es exactamente
+ * su turno? Vale `null` cuando no se puede afirmar ni una cosa ni la otra —no
+ * tiene horario asignado ese día, o el turno es flexible y no tiene horas
+ * fijas—, y entonces la columna se deja vacía en vez de inventar una X.
+ */
+export interface HorarioPrevistoSolicitud {
+  /** false = ese día libraba. */
+  trabaja: boolean;
+  /** "12:00–16:00", o varios tramos separados por coma. "" si libra. */
+  texto: string;
+  /** true = exacto, false = distinto, null = no hay con qué comparar. */
+  coincide: boolean | null;
 }
 
 export interface MiFichajeHoy {
