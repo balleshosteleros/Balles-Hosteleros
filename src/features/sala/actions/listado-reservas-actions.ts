@@ -255,6 +255,10 @@ function filaBase(): ListadoReservaRow {
  * Las compras sin canjear se recortan siempre por su fecha de compra: no tienen
  * día reservado —ése es justo el dato que les falta—, así que filtrarlas por
  * `fecha` las dejaría fuera siempre.
+ *
+ * Con `soloConDinero` se deja fuera todo lo que no lleve dinero aparejado. Es
+ * lo que pide la vista de cobros: una reserva gratis, sin garantía ni política
+ * ni ticket, no pinta nada en una pantalla de cobros.
  */
 export async function getListadoReservas(params: {
   desde: string;
@@ -262,6 +266,8 @@ export async function getListadoReservas(params: {
   campoFecha?: "fecha" | "created_at";
   /** Si es `false` no se consultan las compras (la vista no las pide). */
   incluirComprasTicket?: boolean;
+  /** Solo reservas con garantía, política de cancelación o ticket. */
+  soloConDinero?: boolean;
 }): Promise<ListadoReservasResult> {
   const vacio: ListadoReservasResult = { ok: false, reservas: [], comprasTicket: [] };
   try {
@@ -281,12 +287,24 @@ export async function getListadoReservas(params: {
     const hastaFiltro =
       columna === "created_at" ? `${params.hasta}T23:59:59Z` : params.hasta;
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("reservas")
       .select("*")
       .eq("empresa_id", empresaId)
       .gte(columna, desdeFiltro)
-      .lte(columna, hastaFiltro)
+      .lte(columna, hastaFiltro);
+
+    // Vista de cobros: solo lo que lleva dinero aparejado. Se filtra en la base
+    // de datos y no en memoria porque Supabase corta a 1000 filas: filtrando
+    // después, las reservas gratis se comerían el cupo y las de dinero —que son
+    // las únicas que importan aquí— se quedarían fuera del listado.
+    if (params.soloConDinero) {
+      query = query.or(
+        "tiene_garantia.eq.true,tiene_cancelacion.eq.true,es_ticket.eq.true",
+      );
+    }
+
+    const { data, error } = await query
       .order("fecha", { ascending: false })
       .order("hora", { ascending: true });
     if (error) throw error;

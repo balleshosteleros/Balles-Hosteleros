@@ -954,6 +954,9 @@ export function ListadoReservasPanel({
         hasta,
         campoFecha,
         incluirComprasTicket: verComprasTicket,
+        // La vista de cobros solo enseña reservas con dinero aparejado. Una
+        // reserva gratis no tiene nada que cobrar y solo ensucia el listado.
+        soloConDinero: enfoque === "cobros",
       });
       if (!res.ok) {
         toast.error(res.error ?? "No se pudo cargar el listado de reservas");
@@ -968,7 +971,7 @@ export function ListadoReservasPanel({
   useEffect(() => {
     recargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [desde, hasta, campoFecha, verComprasTicket]);
+  }, [desde, hasta, campoFecha, verComprasTicket, enfoque]);
 
   /**
    * Todo lo que se puede llegar a ver, antes de filtrar.
@@ -1137,6 +1140,9 @@ export function ListadoReservasPanel({
             <span className="font-medium text-foreground">
               {formatNumero(totalReservas)}{" "}
               {totalReservas === 1 ? "reserva" : "reservas"}
+              {/* En cobros el listado ya viene recortado: se dice, para que
+                  nadie lea el número como el total de reservas del periodo. */}
+              {enfoque === "cobros" && " con dinero"}
             </span>
             {verComprasTicket && totalCompras > 0 && (
               <>
@@ -1349,7 +1355,11 @@ export function ListadoReservasPanel({
 
         {filtradas.length === 0 ? (
           <p className="p-6 text-center text-sm text-muted-foreground">
-            {pending ? "Cargando reservas…" : "No hay reservas que coincidan."}
+            {pending
+              ? "Cargando reservas…"
+              : enfoque === "cobros"
+                ? "No hay reservas con dinero en este periodo."
+                : "No hay reservas que coincidan."}
           </p>
         ) : (
           <div className="flex items-center justify-between gap-4 border-t px-3 py-2 text-sm">
