@@ -114,11 +114,14 @@ export function ItemCard({
         {item.destacado ? (
           // Estrella + rótulo: la estrella sola no dice por qué está ahí.
           <span
-            className="absolute left-2.5 top-2.5 inline-flex items-center gap-1.5 rounded-full bg-black/45 py-1 pl-1.5 pr-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.4)] ring-1 ring-white/25 backdrop-blur-md"
+            // En móvil la etiqueta llegaba a tocar el contador de la esquina
+            // opuesta: aquí va compacta, y el rótulo solo aparece cuando hay
+            // ancho para los dos.
+            className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/45 px-1.5 py-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.4)] ring-1 ring-white/25 backdrop-blur-md sm:gap-1.5 sm:pl-1.5 sm:pr-2.5 sm:py-1"
             title="Uno de los más pedidos"
           >
-            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" strokeWidth={1.5} />
-            <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-white">
+            <Star className="h-3 w-3 fill-amber-400 text-amber-400 sm:h-3.5 sm:w-3.5" strokeWidth={1.5} />
+            <span className="hidden text-[9px] font-bold uppercase tracking-[0.12em] text-white sm:inline">
               Best seller
             </span>
           </span>

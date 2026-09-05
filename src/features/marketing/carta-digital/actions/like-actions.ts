@@ -31,6 +31,28 @@ function totalVisible(item: { likes_count: number; likes_base?: number | null } 
   return (item.likes_base ?? 0) + (item.likes_count ?? 0);
 }
 
+/**
+ * Lee el total visible de un plato con clave de servicio.
+ *
+ * La RLS de `carta_items` cruza con `empresas`, que anon no puede leer: la
+ * consulta no falla, devuelve vacío, y el contador se quedaba en 0 al votar.
+ * Es la misma razón por la que la carta se carga desde el servidor.
+ */
+async function leerTotal(itemId: string): Promise<number> {
+  const { createClient } = await import("@supabase/supabase-js");
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  const { data } = await admin
+    .from("carta_items")
+    .select("likes_count, likes_base")
+    .eq("id", itemId)
+    .maybeSingle();
+  return totalVisible(data as { likes_count: number; likes_base: number | null } | null);
+}
+
 async function obtenerIpHash(): Promise<string | null> {
   const h = await headers();
   const fwd = h.get("x-forwarded-for");
@@ -80,15 +102,10 @@ export async function toggleLike(itemId: string, deviceId: string): Promise<Togg
         console.error("[like] del:", delErr.message);
         return { ok: false, error: "No se pudo retirar el like.", codigo: "ERROR" };
       }
-      const { data: item } = await supabase
-        .from("carta_items")
-        .select("likes_count, likes_base")
-        .eq("id", itemId)
-        .maybeSingle();
-      return {
+            return {
         ok: true,
         liked: false,
-        likesCount: totalVisible(item),
+        likesCount: await leerTotal(itemId),
       };
     }
 
@@ -107,31 +124,21 @@ export async function toggleLike(itemId: string, deviceId: string): Promise<Togg
     if (insErr) {
       if (insErr.code === "23505") {
         // race: ya existe
-        const { data: item } = await supabase
-          .from("carta_items")
-          .select("likes_count, likes_base")
-          .eq("id", itemId)
-          .maybeSingle();
-        return {
+                return {
           ok: true,
           liked: true,
-          likesCount: totalVisible(item),
+          likesCount: await leerTotal(itemId),
         };
       }
       console.error("[like] ins:", insErr.message);
       return { ok: false, error: "No se pudo registrar el like.", codigo: "ERROR" };
     }
 
-    const { data: item } = await supabase
-      .from("carta_items")
-      .select("likes_count, likes_base")
-      .eq("id", itemId)
-      .maybeSingle();
-
+    
     return {
       ok: true,
       liked: true,
-      likesCount: totalVisible(item),
+      likesCount: await leerTotal(itemId),
     };
   } catch (err) {
     console.error("[like] fatal:", err);

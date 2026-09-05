@@ -56,7 +56,7 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
     [carta.categorias],
   );
 
-  const counters = useLikesRealtime(itemIds);
+  const { counters, fijar } = useLikesRealtime(itemIds);
 
   useEffect(() => {
     if (!deviceId || itemIds.length === 0) return;
@@ -124,9 +124,22 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
   const handleLikeRapido = async (item: CartaItem) => {
     if (!deviceId) return;
     const yaEstaba = likedSet.has(item.id);
+    const actual = counters[item.id] ?? item.likes_base + item.likes_count;
+
+    // El número se mueve YA, sin esperar al servidor: en un gesto tan pequeño,
+    // un segundo de retraso se lee como "no ha funcionado" y se vuelve a pulsar.
     handleToggleLocalLike(item.id, !yaEstaba);
+    fijar(item.id, Math.max(0, actual + (yaEstaba ? -1 : 1)));
+
     const r = await toggleLike(item.id, deviceId);
-    if (!r.ok) handleToggleLocalLike(item.id, yaEstaba);
+    if (r.ok) {
+      // El servidor manda: corrige el número por si otro comensal votó a la vez.
+      fijar(item.id, r.likesCount);
+      handleToggleLocalLike(item.id, r.liked);
+    } else {
+      handleToggleLocalLike(item.id, yaEstaba);
+      fijar(item.id, actual);
+    }
   };
 
   const handleToggleLocalLike = (itemId: string, liked: boolean) => {
