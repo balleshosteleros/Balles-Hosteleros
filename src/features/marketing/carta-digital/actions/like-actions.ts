@@ -38,13 +38,17 @@ function totalVisible(item: { likes_count: number; likes_base?: number | null } 
  * consulta no falla, devuelve vacío, y el contador se quedaba en 0 al votar.
  * Es la misma razón por la que la carta se carga desde el servidor.
  */
-async function leerTotal(itemId: string): Promise<number> {
+async function clienteServicio() {
   const { createClient } = await import("@supabase/supabase-js");
-  const admin = createClient(
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false, autoRefreshToken: false } },
   );
+}
+
+async function leerTotal(itemId: string): Promise<number> {
+  const admin = await clienteServicio();
   const { data } = await admin
     .from("carta_items")
     .select("likes_count, likes_base")
@@ -90,17 +94,31 @@ export async function toggleLike(itemId: string, deviceId: string): Promise<Togg
     if (caducado) {
       // Se limpia el viejo para que el insert de abajo no choque con la clave
       // única (item + dispositivo) y el voto quede con fecha de hoy.
-      await supabase.from("carta_item_likes").delete().eq("id", previo!.id);
+      const admin = await clienteServicio();
+      await admin.from("carta_item_likes").delete().eq("id", previo!.id);
     }
 
     if (previo && !caducado) {
-      const { error: delErr } = await supabase
+      // El borrado va con clave de servicio: `carta_item_likes` no tiene
+      // politica de DELETE para anon —y no debe tenerla, o cualquiera podria
+      // borrar votos ajenos—, asi que por el cliente publico Postgres no
+      // borraba nada y tampoco daba error: el corazon se apagaba, el numero
+      // bajaba un instante y volvia a subir al releer el total.
+      const admin = await clienteServicio();
+      const { data: borradas, error: delErr } = await admin
         .from("carta_item_likes")
         .delete()
-        .eq("id", previo.id);
+        .eq("id", previo.id)
+        .eq("device_id", deviceId)
+        .select("id");
       if (delErr) {
         console.error("[like] del:", delErr.message);
         return { ok: false, error: "No se pudo retirar el like.", codigo: "ERROR" };
+      }
+      // Si no se borro ninguna fila el voto sigue puesto: hay que decirlo, o el
+      // corazon quedaria apagado mientras el voto sigue contando.
+      if (!borradas || borradas.length === 0) {
+        return { ok: true, liked: true, likesCount: await leerTotal(itemId) };
       }
             return {
         ok: true,
