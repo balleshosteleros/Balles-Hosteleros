@@ -6709,11 +6709,7 @@ export function ReservasView() {
                   <Label className="text-muted-foreground text-xs">
                     Etiquetas de la reserva
                   </Label>
-                  <EtiquetasPanel
-                    scope="reserva"
-                    entityId={selectedReserva.id}
-                    clienteVinculadoId={selectedReserva.clienteId ?? null}
-                  />
+                  <EtiquetasPanel scope="reserva" entityId={selectedReserva.id} />
                 </div>
                 {/* Etiquetas DE LA PERSONA (alergias, VIP, moroso…): le
                     acompañan en todas sus reservas, a diferencia de las de la
@@ -6725,11 +6721,7 @@ export function ReservasView() {
                     Etiquetas del cliente
                   </Label>
                   {selectedReserva.clienteId ? (
-                    <EtiquetasPanel
-                      scope="cliente"
-                      entityId={selectedReserva.clienteId}
-                      clienteVinculadoId={selectedReserva.clienteId}
-                    />
+                    <EtiquetasPanel scope="cliente" entityId={selectedReserva.clienteId} />
                   ) : (
                     <p className="text-[10px] text-muted-foreground">
                       Esta reserva no tiene ficha de cliente.

@@ -26,72 +26,53 @@ import {
 
 interface Props {
   /**
-   * 'reserva' → gestiona la lista exclusiva de esta reserva. Si además
-   * pasas `clienteVinculadoId`, las etiquetas heredadas del cliente se
-   * muestran en read-only (no se pueden quitar desde aquí; se editan en
-   * la ficha del cliente).
+   * Cada panel toca UNA sola tabla y nunca la otra: son dos bases de datos
+   * distintas y mezclarlas escribía en la ficha del cliente desde la reserva.
    *
-   * 'cliente' → gestiona las etiquetas persistentes del cliente. Solo
-   * se ofrecen etiquetas con scope='cliente'.
+   * 'reserva' → etiquetas de ESTA reserva. Solo se ofrecen las de
+   * scope='reserva'.
+   * 'cliente' → etiquetas persistentes del cliente. Solo se ofrecen las de
+   * scope='cliente'.
    */
   scope: EtiquetaScope;
   entityId: string;
-  clienteVinculadoId?: string | null;
   onChange?: () => void;
 }
 
-export function EtiquetasPanel({
-  scope,
-  entityId,
-  clienteVinculadoId,
-  onChange,
-}: Props) {
+export function EtiquetasPanel({ scope, entityId, onChange }: Props) {
   const [todasCategorias, setTodasCategorias] = useState<EtiquetaCategoria[]>([]);
   const [todasEtiquetas, setTodasEtiquetas] = useState<Etiqueta[]>([]);
   const [propias, setPropias] = useState<Etiqueta[]>([]);
-  const [heredadasCliente, setHeredadasCliente] = useState<Etiqueta[]>([]);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busqueda, setBusqueda] = useState("");
 
   const cargar = useCallback(async () => {
-    const [cats, etiqs, propiasRes, heredadasRes] = await Promise.all([
+    const [cats, etiqs, propiasRes] = await Promise.all([
       listEtiquetaCategorias(),
       listEtiquetas({ soloActivas: true }),
       scope === "reserva"
         ? listEtiquetasDeReserva(entityId)
         : listEtiquetasDeCliente(entityId),
-      scope === "reserva" && clienteVinculadoId
-        ? listEtiquetasDeCliente(clienteVinculadoId)
-        : Promise.resolve({ ok: true, data: [] as Etiqueta[] }),
     ]);
     if (cats.ok) setTodasCategorias(cats.data);
     if (etiqs.ok) setTodasEtiquetas(etiqs.data);
     if (propiasRes.ok) setPropias(propiasRes.data);
-    if (heredadasRes.ok) setHeredadasCliente(heredadasRes.data);
     setLoading(false);
-  }, [scope, entityId, clienteVinculadoId]);
+  }, [scope, entityId]);
 
   useEffect(() => {
     cargar();
   }, [cargar]);
 
   const propiasIds = useMemo(() => new Set(propias.map((e) => e.id)), [propias]);
-  const heredadasIds = useMemo(
-    () => new Set(heredadasCliente.map((e) => e.id)),
-    [heredadasCliente],
-  );
 
-  // Etiquetas ofrecidas en el picker según el scope del panel.
-  const ofrecidas = useMemo(() => {
-    if (scope === "cliente") {
-      // En la ficha del cliente solo tiene sentido asignar etiquetas de cliente.
-      return todasEtiquetas.filter((e) => e.scope === "cliente");
-    }
-    // En la reserva ofrecemos ambos scopes: las de reserva van a esta reserva,
-    // las de cliente se propagan al cliente vinculado (si existe).
-    return todasEtiquetas;
-  }, [todasEtiquetas, scope]);
+  // El picker solo ofrece etiquetas de su propio scope: desde la reserva no
+  // se tocan las del cliente (son otra tabla) y viceversa.
+  const ofrecidas = useMemo(
+    () => todasEtiquetas.filter((e) => e.scope === scope),
+    [todasEtiquetas, scope],
+  );
 
   const ofrecidasPorCategoria = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -109,35 +90,10 @@ export function EtiquetasPanel({
   }, [ofrecidas, busqueda]);
 
   function estaSeleccionada(e: Etiqueta): boolean {
-    if (e.scope === "cliente" && scope === "reserva") {
-      return heredadasIds.has(e.id);
-    }
     return propiasIds.has(e.id);
   }
 
   async function toggle(e: Etiqueta) {
-    if (e.scope === "cliente" && scope === "reserva") {
-      // Modifica la lista del cliente vinculado.
-      if (!clienteVinculadoId) {
-        toast.error(
-          "Vincula primero un cliente a la reserva para poder marcarle etiquetas persistentes.",
-        );
-        return;
-      }
-      const set = new Set(heredadasIds);
-      if (set.has(e.id)) set.delete(e.id);
-      else set.add(e.id);
-      const res = await setEtiquetasCliente(clienteVinculadoId, Array.from(set));
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo guardar");
-        return;
-      }
-      cargar();
-      onChange?.();
-      return;
-    }
-
-    // Etiqueta del scope propio del panel.
     const set = new Set(propiasIds);
     if (set.has(e.id)) set.delete(e.id);
     else set.add(e.id);
@@ -171,47 +127,26 @@ export function EtiquetasPanel({
     return <div className="text-xs text-muted-foreground">Cargando etiquetas…</div>;
   }
 
-  // Combinada para la visualización (propias + heredadas cuando aplica).
-  const visibles: Array<{ etiqueta: Etiqueta; origen: "propia" | "cliente" }> = [
-    ...propias.map((e) => ({ etiqueta: e, origen: "propia" as const })),
-    ...(scope === "reserva"
-      ? heredadasCliente
-          .filter((e) => !propiasIds.has(e.id))
-          .map((e) => ({ etiqueta: e, origen: "cliente" as const }))
-      : []),
-  ];
+  const visibles = propias;
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-1.5">
-        {visibles.map(({ etiqueta, origen }) => (
-          <span
-            key={`${origen}-${etiqueta.id}`}
-            className="inline-flex items-center group"
-            title={
-              origen === "cliente"
-                ? "Heredada del cliente — edítala en su ficha"
-                : undefined
-            }
-          >
+        {visibles.map((etiqueta) => (
+          <span key={etiqueta.id} className="inline-flex items-center group">
             <EtiquetaChip
               nombre={etiqueta.nombre}
               emoji={etiqueta.emoji}
               color={etiqueta.color}
-              className={cn(
-                origen === "cliente" && "ring-1 ring-offset-0 ring-muted-foreground/30",
-              )}
             />
-            {origen === "propia" && (
-              <button
-                type="button"
-                onClick={() => quitarDePropias(etiqueta)}
-                className="ml-0.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition"
-                title="Quitar"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => quitarDePropias(etiqueta)}
+              className="ml-0.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition"
+              title="Quitar"
+            >
+              <X className="h-3 w-3" />
+            </button>
           </span>
         ))}
 
@@ -238,20 +173,14 @@ export function EtiquetasPanel({
             </div>
             <div className="max-h-72 overflow-y-auto pr-1 space-y-3">
               {todasCategorias
-                .filter((c) => {
-                  if (scope === "cliente") return c.scope === "cliente";
-                  return true;
-                })
+                .filter((c) => c.scope === scope)
                 .map((cat) => {
                   const lista = ofrecidasPorCategoria.get(cat.id) ?? [];
                   if (lista.length === 0) return null;
                   return (
                     <div key={cat.id}>
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
-                        <span>{cat.nombre}</span>
-                        <span className="text-[9px] font-normal opacity-60">
-                          ({cat.scope === "reserva" ? "solo esta reserva" : "del cliente"})
-                        </span>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                        {cat.nombre}
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {lista.map((e) => {
