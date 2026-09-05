@@ -180,8 +180,11 @@ function esEnlaceEmpleo(href?: string): boolean {
  * (/carta, /empleo) no se toca, porque su destino no vive en esta página.
  */
 function limpiarEnlacesRotos(bloque: Bloque, anclasVivas: Set<string>): Bloque {
+  // `href === "#"` no es un enlace roto: es como el footer guarda las líneas
+  // que son texto y no llevan a ninguna parte (los horarios). Tratarlas como
+  // ancla muerta las borraba, y la columna "Horarios" salía vacía en la web.
   const rota = (href?: string) =>
-    typeof href === "string" && href.startsWith("#") && !anclasVivas.has(href);
+    typeof href === "string" && href.startsWith("#") && href !== "#" && !anclasVivas.has(href);
 
   if (bloque.tipo === "hero" && rota(bloque.datos.cta?.href)) {
     const { cta: _descartado, ...resto } = bloque.datos;
