@@ -366,6 +366,28 @@ export function MobileFichajeProvider() {
 
   const posponer = () => setPospuestoHasta(Date.now() + POSPONER_MS);
 
+  // Hora de salida prevista (HH:MM) del tramo que está cursando, para poder
+  // decirle en el aviso a qué hora terminaba. El tramo es el primer fin que
+  // aún no ha pasado; si ya pasaron todos, no se muestra hora.
+  const salidaPrevista = (() => {
+    const finales = ventana?.salidasMin?.length
+      ? ventana.salidasMin
+      : ventana?.salidaMin != null
+        ? [ventana.salidaMin]
+        : [];
+    if (finales.length === 0) return null;
+    const pendiente =
+      finales.find((fin) => {
+        let d = (((fin - nowMin) % 1440) + 1440) % 1440;
+        if (d > 720) d -= 1440;
+        return d > 0;
+      }) ?? null;
+    if (pendiente == null) return null;
+    const h = Math.floor(pendiente / 60);
+    const m = pendiente % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  })();
+
   return (
     <>
       {/* Indicador verde parpadeante mientras trabaja */}
@@ -501,6 +523,20 @@ export function MobileFichajeProvider() {
               </button>
             ) : (
               <div className="mt-5 space-y-2">
+                {/* Aviso claro ANTES de escribir el motivo: paralizar cierra la
+                    jornada antes de la hora prevista y solo cuentan las horas
+                    realmente fichadas. Que nadie lo haga sin saberlo. */}
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 dark:border-rose-900 dark:bg-rose-950">
+                  <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">
+                    Vas a salir antes de tu horario
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-rose-600 dark:text-rose-400">
+                    Se cerrará tu jornada ahora y solo contarán las horas que
+                    llevas fichadas
+                    {salidaPrevista ? ` (tu salida era a las ${salidaPrevista})` : ""}.
+                    ¿Es lo que quieres?
+                  </p>
+                </div>
                 <p className="text-sm font-medium">
                   ¿Por qué paralizas el fichaje antes de tu horario?
                 </p>

@@ -84,6 +84,12 @@ export interface MiFichajeHoy {
    * que se vea de un vistazo por qué existe ese registro.
    */
   porSolicitud: boolean;
+  /**
+   * true si el empleado paralizó el crono ANTES de su hora de salida. Se marca
+   * en la lista con un reloj rojo junto a la salida: las horas contadas son las
+   * realmente fichadas, no las del turno previsto.
+   */
+  cierreAnticipado: boolean;
 }
 
 export interface DiaCalendario {

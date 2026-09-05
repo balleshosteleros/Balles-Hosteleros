@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Inbox, AlertTriangle, LogIn, LogOut, CheckCircle2 } from "lucide-react";
+import { Loader2, Inbox, AlertTriangle, LogIn, LogOut, CheckCircle2, ClockAlert } from "lucide-react";
 import { listarMisFichajes } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
@@ -215,8 +215,17 @@ export function MisFichajesMobile() {
                                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
                                     Salida
                                   </p>
-                                  <p className="text-sm font-semibold tabular-nums">
+                                  <p className="flex items-center gap-1 text-sm font-semibold tabular-nums">
                                     {formatHora(t.horaSalida, t.zonaHoraria)}
+                                    {/* Paró el crono antes de su hora: las horas
+                                        que cuentan son las fichadas, no las del
+                                        turno previsto. */}
+                                    {t.cierreAnticipado && (
+                                      <ClockAlert
+                                        className="h-3.5 w-3.5 shrink-0 text-rose-600"
+                                        aria-label="Paralizó el fichaje antes de su horario"
+                                      />
+                                    )}
                                   </p>
                                 </div>
                               </div>
