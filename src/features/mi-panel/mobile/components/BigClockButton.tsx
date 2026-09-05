@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Fingerprint, Loader2, Coffee, Play, CheckCircle2, WifiOff, MapPin, House } from "lucide-react";
 import { toast } from "sonner";
@@ -12,10 +12,13 @@ import {
   iniciarPausaPersonal,
   finalizarPausaPersonal,
   getMiConfigFichaje,
+  getMiVentanaFichajeHoy,
   getTiposFichajeDisponibles,
   type ModoFichaje,
   type TipoFichajeDisponible,
+  type VentanaFichajeHoy,
 } from "@/features/mi-panel/actions/mi-panel-actions";
+import { minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { fichajeColorDot } from "@/features/rrhh/data/fichajes";
 import { enqueue } from "../lib/offline-fichaje-db";
 import { useOfflineFichajes } from "../hooks/use-offline-fichajes";
@@ -74,9 +77,19 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
   const [tiposDisponibles, setTiposDisponibles] = useState<TipoFichajeDisponible[]>([]);
   const [eligiendoTipo, setEligiendoTipo] = useState(false);
   const [tipoElegido, setTipoElegido] = useState<string | undefined>(undefined);
+  // Ventana horaria: decide si el botón está VIVO (verde) o apagado (gris).
+  // El botón vive siempre en pantalla; lo que cambia es si se puede pulsar.
+  const [ventana, setVentana] = useState<VentanaFichajeHoy | null>(null);
+  const [nowMin, setNowMin] = useState<number>(() => Date.now());
   const { online, pending: pendingOffline, flushing } = useOfflineFichajes(() => {
     startTransition(() => router.refresh());
   });
+
+  const cargarVentana = useCallback(() => {
+    getMiVentanaFichajeHoy().then((v) => {
+      if (v.ok) setVentana(v);
+    });
+  }, []);
 
   useEffect(() => {
     getMiConfigFichaje().then((res) => {
@@ -85,10 +98,95 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
     getTiposFichajeDisponibles().then((res) => {
       if (res.ok) setTiposDisponibles(res.data);
     });
+    cargarVentana();
+  }, [cargarVentana]);
+
+  // El botón se apaga y enciende solo con el paso del tiempo, así que hace
+  // falta un reloj. Cada 15 s basta: la ventana se mide en minutos.
+  useEffect(() => {
+    const i = setInterval(() => setNowMin(Date.now()), 15_000);
+    return () => clearInterval(i);
   }, []);
 
+  // Y al volver a la app: los turnos pueden haber cambiado (o ser de otro día).
+  useEffect(() => {
+    const onFocus = () => {
+      cargarVentana();
+      setNowMin(Date.now());
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [cargarVentana]);
+
   const Icon = STYLES[estado].icon;
+
+  // ─── ¿Puede fichar AHORA? ─────────────────────────────────────────────────
+  // Misma regla que aplica el servidor en `evaluarEntradaFichaje`, para que el
+  // botón no invite a pulsar algo que va a ser rechazado. Dos motivos posibles
+  // de apagado, y se distinguen a propósito porque no se arreglan igual:
+  //   · SIN TURNO HOY   → no hay nada planificado; se pide por solicitud.
+  //   · FUERA DE TURNO  → sí trabaja hoy, pero no a esta hora.
+  const motivoApagado: "sin-turno" | "fuera-de-turno" | null = (() => {
+    // Mientras carga no se apaga: apagar y encender a los 300 ms es peor que
+    // esperar. Una vez cerrada la jornada tampoco aplica (el botón ya es gris).
+    if (!ventana || estado === "completado") return null;
+    // Salir siempre se puede: quien está dentro tiene que poder cerrar, aunque
+    // se le haya pasado la hora (si no, la jornada queda abierta para siempre).
+    if (estado === "trabajando" || estado === "pausa") return null;
+    // Config abierta: sin hora límite, el botón nunca se apaga.
+    if (ventana.permitirFueraHorario) return null;
+    if (!ventana.tieneHorario) return "sin-turno";
+
+    const tz = ventana.zonaHoraria || "Europe/Madrid";
+    const ahora = minutosDiaEnZona(new Date(nowMin), tz);
+    const inicios = ventana.entradasMin?.length
+      ? ventana.entradasMin
+      : ventana.entradaMin != null
+        ? [ventana.entradaMin]
+        : [];
+    if (inicios.length === 0) return "sin-turno";
+
+    // Ventana REAL de fichaje: la cortesía configurada en Ajustes, la misma que
+    // valida el servidor. Circular sobre 24 h por los turnos de noche.
+    //
+    // OJO: `entradasMin` junta los tramos de TODAS sus empresas, pero la
+    // cortesía que llega es la de UNA (la del tramo más temprano). Hoy las dos
+    // empresas tienen la misma (5/5) así que coincide; si algún día difieren,
+    // el gris podría adelantarse o retrasarse unos minutos respecto al
+    // servidor. Quien manda y rechaza sigue siendo el servidor: esto es solo
+    // la pista visual.
+    const antes = ventana.margenAntesMin ?? 0;
+    const despues = ventana.margenDespuesMin ?? 0;
+    const dentro = inicios.some((ini) => {
+      let diff = (((ahora - ini) % 1440) + 1440) % 1440;
+      if (diff > 720) diff -= 1440;
+      return diff >= -antes && diff <= despues;
+    });
+    return dentro ? null : "fuera-de-turno";
+  })();
+
+  const apagado = motivoApagado !== null;
   const disabled = estado === "completado" || busy || pending || flushing;
+
+  // Al pulsar el botón apagado NO se ficha: se explica por qué, y se ofrece la
+  // salida real (la solicitud), que es lo que el empleado tiene que hacer.
+  const avisarApagado = () => {
+    const msg =
+      motivoApagado === "sin-turno"
+        ? "Hoy no tienes turno asignado, así que no puedes fichar el horario normal. Si has trabajado, pídelo por solicitud y tu responsable lo revisará."
+        : "Estás fuera de tu turno: aún no se abre tu hora de fichaje o ya se ha pasado. Si has trabajado, pídelo por solicitud y tu responsable lo revisará.";
+    toast.error(msg, {
+      duration: 9000,
+      action: {
+        label: "Ir a solicitudes",
+        onClick: () => router.push("/m/solicitudes"),
+      },
+    });
+  };
 
   const enqueueOffline = async (
     kind: "entrada" | "salida" | "pausa_inicio" | "pausa_fin",
@@ -226,13 +324,19 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
         </div>
       )}
 
+      {/* El botón NO desaparece nunca: fuera de la ventana se queda gris y, al
+          pulsarlo, dice por qué. Antes solo existía dentro del aviso, y a quien
+          se le pasaba la ventana se quedaba sin ninguna forma de fichar. */}
       <button
         type="button"
-        onClick={action}
+        onClick={apagado ? avisarApagado : action}
         disabled={disabled}
+        aria-disabled={apagado}
         className={cn(
           "flex w-full flex-col items-center justify-center gap-3 rounded-3xl py-9 text-lg font-semibold shadow-lg transition-transform",
-          STYLES[estado].bg,
+          apagado
+            ? "bg-muted text-muted-foreground shadow-none"
+            : STYLES[estado].bg,
           !disabled && "active:scale-[0.98]",
           disabled && "opacity-90",
         )}
@@ -243,6 +347,11 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
           <Icon className="h-10 w-10" strokeWidth={2.2} />
         )}
         <span className="tracking-wide">{STYLES[estado].label}</span>
+        {apagado && (
+          <span className="text-xs font-medium normal-case tracking-normal opacity-80">
+            {motivoApagado === "sin-turno" ? "Hoy no tienes turno" : "Fuera de tu turno"}
+          </span>
+        )}
       </button>
 
       {estado === "trabajando" && fichajeId && (
