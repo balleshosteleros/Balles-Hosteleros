@@ -532,7 +532,9 @@ export function ReservaPublicaForm({
         className={
           embedded
             ? "mx-auto w-full max-w-3xl"
-            : "max-w-md mx-auto pb-[max(env(safe-area-inset-bottom),1.5rem)]"
+            : // En móvil manda el ancho de siempre; a partir de tablet la
+              // tarjeta se ensancha para las dos columnas.
+              "max-w-md md:max-w-3xl mx-auto pb-[max(env(safe-area-inset-bottom),1.5rem)]"
         }
       >
         {/* Vuelta a la web del restaurante: el portal es una página entera, no
