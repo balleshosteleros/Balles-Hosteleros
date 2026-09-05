@@ -5724,11 +5724,16 @@ export function ReservasView() {
                           (dónde se sienta) y antes competían en dos columnas.
                           La mesa manda, la zona la acompaña en pequeño. */}
                       <span className="flex min-w-0 flex-col leading-tight">
+                        {/* UNION ("TI5+TI6"): el codigo ENTERO, no solo la
+                            primera mesa. `mesa` resuelve unicamente la primera,
+                            asi que una union se leia "TI5" y parecia que TI5 y
+                            TI6 se duplicaban solas en el plano; en realidad esa
+                            reserva ocupa las dos. */}
                         <span
                           className="truncate font-mono text-[15px] font-bold leading-tight"
-                          title={mesa?.codigo ?? undefined}
+                          title={r.mesaCodigo || mesa?.codigo || undefined}
                         >
-                          {mesa?.codigo ?? "—"}
+                          {r.mesaCodigo || mesa?.codigo || "—"}
                         </span>
                         <span className="truncate text-[10px] text-muted-foreground">
                           {zonaLabel(r.zona ? String(r.zona) : null) || "—"}
