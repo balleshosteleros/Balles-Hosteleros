@@ -59,7 +59,7 @@ import { CalendarDays, Grid3X3, Users, LayoutGrid, AlertTriangle, Clock, Mail, C
 import {
   SAMPLE_MESAS,
   Mesa, Reserva, EstadoReserva, ZonaSala, TurnoReserva,
-  zonaLabel, ESTADO_RESERVA_LABELS, ESTADO_MESA_LABELS, ESTADOS_RESERVA,
+  zonaLabel, ESTADO_RESERVA_LABELS, ESTADOS_RESERVA,
   ESTADO_BADGE_CLASS,
   ESTADO_DOT_CLASS,
   ESTADOS_NO_OCUPANTES,
@@ -115,7 +115,6 @@ import {
   type ReservaBloqueo,
 } from "@/features/sala/bloqueos/data/bloqueos";
 import {
-  COLORES_PASTEL_ZONAS,
   type Sala as SalaConfig,
   type Zona as ZonaReal,
   type PlanoMesaPosicion,
@@ -182,17 +181,8 @@ import { useModoInmersivo } from "@/features/layout/contexts/modo-inmersivo-cont
 import { friendlyError } from "@/shared/lib/friendly-errors";
 // Color de zona: vive en `lib/color-zona` porque lo comparten el plano, el
 // listado por zonas y el salón de reasignación manual de mesas.
-import {
-  colorZona,
-  lightenHex,
-  ZONA_LIGHTEN,
-} from "@/features/sala/lib/color-zona";
+import { colorZona } from "@/features/sala/lib/color-zona";
 import { formatearFechaEs } from "@/shared/lib/fecha";
-
-/** Rampa pastel arcoíris construida con la paleta canónica de zonas. */
-const LIBRE_RAINBOW = `linear-gradient(135deg, ${COLORES_PASTEL_ZONAS
-  .map((c, i) => `${lightenHex(c, ZONA_LIGHTEN)} ${(i / (COLORES_PASTEL_ZONAS.length - 1)) * 100}%`)
-  .join(", ")})`;
 
 /**
  * Paleta de fondo de mesa por estado.
@@ -3105,7 +3095,15 @@ function PlanoCanvas({
                         mismo tamaño que el codigo de mesa y en semibold.
                         Estaba en 9px y a un metro del monitor no se leia. */}
                     {firstR && (
-                      <span className={cn("text-[12px] font-semibold leading-tight truncate max-w-full", isLibre ? "text-foreground/90" : "opacity-100")}>
+                      <span
+                        className={cn(
+                          // El nombre va SIEMPRE a color pleno y en bold: es el
+                          // dato que se busca cruzando la sala. Con opacidad
+                          // heredada se lavaba sobre los verdes.
+                          "text-[12px] font-bold leading-tight truncate max-w-full !opacity-100",
+                          isLibre && "text-foreground",
+                        )}
+                      >
                         {isWalkIn ? "WALK IN" : firstR.cliente}
                       </span>
                     )}
@@ -3148,24 +3146,6 @@ function PlanoCanvas({
         })}
       </div>
       </div>
-      </div>
-      <div className="flex items-center gap-4 pt-3 text-[10px] text-muted-foreground justify-center flex-wrap">
-        {Object.entries(mesaBg).map(([k, cls]) => {
-          const isLibre = k === "LIBRE";
-          return (
-            <span key={k} className="flex items-center gap-1.5">
-              <span
-                className={cn("w-3 h-3 rounded", !isLibre && cls)}
-                style={
-                  isLibre
-                    ? { background: LIBRE_RAINBOW }
-                    : undefined
-                }
-              />
-              {ESTADO_MESA_LABELS[k as keyof typeof ESTADO_MESA_LABELS]}
-            </span>
-          );
-        })}
       </div>
     </div>
   );
@@ -6445,7 +6425,7 @@ export function ReservasView() {
                                     {/* Mismo criterio que en el plano: la hora
                                         y el nombre se leen de lejos. */}
                                     {firstR && (
-                                      <span className={cn("relative text-[11px] font-semibold mt-1 truncate max-w-full", isLibre ? "text-foreground/90" : "opacity-100")}>
+                                      <span className={cn("relative text-[11px] font-bold mt-1 truncate max-w-full !opacity-100", isLibre && "text-foreground")}>
                                         {firstR.hora} {isWalkIn ? "WALK IN" : firstR.cliente}
                                       </span>
                                     )}
@@ -6469,24 +6449,6 @@ export function ReservasView() {
                     );
                   })
               )}
-              <div className="flex items-center gap-4 pt-2 text-[10px] text-muted-foreground justify-center flex-wrap border-t">
-                {Object.entries(mesaBg).map(([k, cls]) => {
-                  const isLibre = k === "LIBRE";
-                  return (
-                    <span key={k} className="flex items-center gap-1.5">
-                      <span
-                        className={cn("w-3 h-3 rounded", !isLibre && cls)}
-                        style={
-                          isLibre
-                            ? { background: LIBRE_RAINBOW }
-                            : undefined
-                        }
-                      />
-                      {ESTADO_MESA_LABELS[k as keyof typeof ESTADO_MESA_LABELS]}
-                    </span>
-                  );
-                })}
-              </div>
             </div>
           )}
         </div>
