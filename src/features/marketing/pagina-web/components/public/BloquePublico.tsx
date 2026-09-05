@@ -1373,11 +1373,22 @@ function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
           backdropFilter: "blur(6px)",
         };
 
+  // Sombra bajo el texto: con la foto de fondo menos oscurecida, el blanco solo
+  // no siempre gana contra una zona clara de la imagen.
+  const sombraSobreFoto = imagen_url
+    ? { textShadow: "0 2px 18px rgba(0,0,0,0.85), 0 1px 4px rgba(0,0,0,0.7)" }
+    : undefined;
+
   const contenido = (
     <>
-      <h2 className="pw-h2 font-extrabold">{titulo}</h2>
+      <h2 className="pw-h2 font-extrabold" style={sombraSobreFoto}>
+        {titulo}
+      </h2>
       {texto ? (
-        <p className="mt-5 max-w-2xl mx-auto text-base md:text-lg opacity-80 leading-relaxed">
+        <p
+          className="mt-5 max-w-2xl mx-auto text-base md:text-lg opacity-90 leading-relaxed"
+          style={sombraSobreFoto}
+        >
           {texto}
         </p>
       ) : null}
@@ -1398,16 +1409,18 @@ function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
     return <section className="py-20 md:py-28 px-4 text-center">{contenido}</section>;
   }
 
-  // Con foto: el equipo al fondo, DIFUMINADO y oscurecido. La imagen ambienta,
-  // no compite — si se deja nítida, el titular deja de leerse.
+  // Con foto: el equipo al fondo. Se reconoce a la gente —es una foto de
+  // plantilla, esconderla no tiene sentido— pero sigue habiendo un velo que
+  // sostiene el titular. Desenfoque suave y oscurecido más fuerte arriba y
+  // abajo (donde caen texto y botón) que en el centro (donde están las caras).
   return (
     <section className="relative isolate overflow-hidden px-4 py-24 text-center md:py-32">
       <div
         aria-hidden
-        className="absolute inset-0 -z-10 scale-110 bg-cover bg-center"
+        className="absolute inset-0 -z-10 scale-105 bg-cover bg-center"
         style={{
-          backgroundImage: `url(${imagenOptimizada(imagen_url, { width: 1400, quality: 68 })})`,
-          filter: "blur(7px) saturate(115%)",
+          backgroundImage: `url(${imagenOptimizada(imagen_url, { width: 1800, quality: 78 })})`,
+          filter: "blur(2px) saturate(112%)",
         }}
       />
       <div
@@ -1415,7 +1428,7 @@ function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
         className="absolute inset-0 -z-10"
         style={{
           background:
-            "linear-gradient(180deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.62) 45%, rgba(0,0,0,0.86) 100%)",
+            "linear-gradient(180deg, rgba(0,0,0,0.68) 0%, rgba(0,0,0,0.34) 45%, rgba(0,0,0,0.72) 100%)",
         }}
       />
       <div className="relative">{contenido}</div>
