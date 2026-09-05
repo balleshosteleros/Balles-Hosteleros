@@ -18,12 +18,25 @@
  *    cambio solo existe al pulsar "Validar". Sin eso, un clic de más sobre el
  *    plano ya movía a un cliente de mesa.
  *
+ * 2b. Mover es lo que se hace a diario; unir es la excepción. Por eso pulsar
+ *    otra mesa SUSTITUYE la selección (la reserva se muda) y solo en modo
+ *    "Unir" se suma a las que ya había. Cuando pulsar sumaba siempre, cambiar
+ *    de mesa dejaba a la reserva ocupando las dos.
+ *
+ * 2c. Si la mesa que se pulsa YA tiene otra reserva, no se decide por el
+ *    usuario: se para y se pregunta en medio de la pantalla si se intercambian
+ *    las dos (cada una a la mesa de la otra) o si se unen igualmente. Es el
+ *    momento en el que además se le enseña lo que se va a encontrar —si el
+ *    cambio pisa a alguien más y si el grupo no cabe en la mesa nueva—, pero
+ *    siempre como aviso: quien está en la sala decide y puede seguir.
+ *
  * 3. Un choque con otra reserva avisa, no bloquea. Se dice con quién se pisa y
  *    hasta qué hora, y se decide en sala (ver `forzarSolape` en updateReserva).
  */
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Move } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Move } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +67,40 @@ export function codigosDeMesa(valor: string | null | undefined): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Mesa ocupada que se ha pulsado y espera decisión. Lleva ya calculados los
+ * avisos, para que el diálogo se pinte de una vez y no aparezcan líneas nuevas
+ * mientras alguien está leyendo.
+ */
+interface DecisionMesaOcupada {
+  /** Código de la mesa pulsada. */
+  codigo: string;
+  /** Reserva que la ocupa ahora mismo. */
+  otra: Reserva;
+  /** Solapes con TERCEROS que provocaría el cambio. Vacío si no hay. */
+  solapes: ChoqueReserva[];
+  /** Aviso de aforo, ya redactado. `null` si el grupo cabe. */
+  avisoAforo: string | null;
+  /** Aviso de aforo para la OTRA reserva al recibir la mesa que se deja. */
+  avisoAforoOtra: string | null;
+  /**
+   * Cliente del intercambio ya pactado, si lo hay: mientras exista, no se
+   * puede pactar otro y el botón de intercambiar sale apagado.
+   */
+  bloqueadoPorIntercambio: string | null;
+}
+
+/** Intercambio ya aceptado, a la espera de "Guardar". */
+interface IntercambioPendiente {
+  otraReservaId: string;
+  /** Cliente de la otra reserva, para el resumen. */
+  otraCliente: string;
+  /** Mesa que recibe la reserva movida: la que estaba ocupada. */
+  mesaRecibida: string;
+  /** Mesas que pasa a tener la otra reserva. */
+  mesaParaLaOtra: string;
+}
+
 interface Props {
   abierto: boolean;
   onCerrar: () => void;
@@ -71,6 +118,16 @@ interface Props {
   getReservasMesa: (mesaId: string) => Reserva[];
   /** Aplica la nueva selección. Recibe el código compuesto ("M1+M2") o "". */
   onValidar: (codigoMesas: string, forzar: boolean) => Promise<void>;
+  /**
+   * Permuta las mesas con otra reserva. Va aparte de `onValidar` porque las
+   * dos reservas tienen que moverse a la vez: hecho en dos pasos, el de en
+   * medio las deja sobre la misma mesa y el bloqueo de solape lo rechaza.
+   */
+  onIntercambiar: (params: {
+    otraReservaId: string;
+    mesaDestino: string;
+    mesaOrigen: string;
+  }) => Promise<void>;
 }
 
 export function EditorMesasReserva({
@@ -85,6 +142,7 @@ export function EditorMesasReserva({
   esOscuro,
   getReservasMesa,
   onValidar,
+  onIntercambiar,
 }: Props) {
   /** Códigos que tenía la reserva al abrir: la referencia de "lo que había". */
   const codigosOriginales = useMemo(
@@ -101,10 +159,26 @@ export function EditorMesasReserva({
    * anterior no puede sobrevivir a un "Cancelar".
    */
   const [seleccion, setSeleccion] = useState<string[]>(codigosOriginales);
+  /**
+   * Qué hace pulsar una mesa: mudar la reserva ("mover") o sumarla a las que
+   * ya tiene ("unir"). Arranca siempre en mover —es lo habitual en servicio— y
+   * el modo no sobrevive al cierre del diálogo, igual que la selección.
+   */
+  const [modo, setModo] = useState<"mover" | "unir">("mover");
   const [guardando, setGuardando] = useState(false);
   const [comprobando, setComprobando] = useState(false);
   /** Choques pendientes de que el usuario decida si sigue adelante. */
   const [choques, setChoques] = useState<ChoqueReserva[] | null>(null);
+  /**
+   * Mesa ocupada que se acaba de pulsar, esperando a que se decida qué hacer
+   * con ella. Mientras esto no sea `null` la selección NO se ha tocado: el
+   * plano sigue como estaba y nada se mueve hasta que se responde.
+   */
+  const [decision, setDecision] = useState<DecisionMesaOcupada | null>(null);
+  /** Intercambio pactado en el diálogo, pendiente de "Guardar". */
+  const [intercambio, setIntercambio] = useState<IntercambioPendiente | null>(
+    null,
+  );
 
   const mesasConPos = useMemo(
     () => mesas.filter((m) => posiciones.has(m.id)),
@@ -134,11 +208,138 @@ export function EditorMesasReserva({
     [seleccion, codigosOriginales],
   );
 
-  const alternarMesa = (codigo: string) => {
+  /**
+   * Aviso de aforo de una mesa para un grupo, o `null` si cabe. Nunca impide
+   * nada: una mesa de 4 se le da a 2 sin problema si en sala lo ven claro, y a
+   * 6 apretados también. Solo se dice, para que no sorprenda al montar.
+   */
+  const avisoAforoDeMesa = (codigo: string, personas: number): string | null =>
+    avisoAforoDeMesas([codigo], personas);
+
+  /** Lo mismo para un conjunto de mesas: las capacidades se suman. */
+  const avisoAforoDeMesas = (
+    codigos: string[],
+    personas: number,
+  ): string | null => {
+    let min = 0;
+    let max = 0;
+    let conocidas = 0;
+    for (const codigo of codigos) {
+      const mesa = mesas.find((m) => m.codigo.toUpperCase() === codigo.toUpperCase());
+      const meta = mesa ? mesasMeta.get(mesa.id) : undefined;
+      if (!meta) continue;
+      conocidas += 1;
+      min += meta.capacidadMin;
+      max += meta.capacidadMax;
+    }
+    if (conocidas === 0) return null;
+    const donde = codigos.length === 1 ? `la mesa ${codigos[0]}` : `${codigos.join(" + ")}`;
+    if (personas > max) {
+      return `${personas} personas en ${donde}, que admite ${max}.`;
+    }
+    if (personas < min) {
+      return `${personas} ${personas === 1 ? "persona" : "personas"} en ${donde}, pensada para ${min} como mínimo.`;
+    }
+    return null;
+  };
+
+  /**
+   * Pulsar una mesa del plano.
+   *
+   * En "mover", una mesa nueva se lleva la reserva entera: sustituye a todas
+   * las anteriores. En "unir" se suma. En los dos casos, pulsar una que ya
+   * está elegida la quita, que es como se deshace un clic de más.
+   *
+   * Ctrl/⌘ suma sin salir de "mover": el atajo de siempre para quien va con
+   * ratón, sin obligar a cambiar de modo para juntar dos mesas.
+   */
+  const pulsarMesa = async (codigo: string, sumar: boolean) => {
     const c = codigo.toUpperCase();
-    setSeleccion((prev) =>
-      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
-    );
+
+    // Quitar una mesa ya elegida nunca pregunta: es deshacer, no ocupar nada.
+    if (seleccion.includes(c)) {
+      setSeleccion((prev) => prev.filter((x) => x !== c));
+      // Si la mesa que se suelta era la del intercambio pactado, el trato se
+      // cae con ella: no puede quedar una reserva apuntada a una mesa que ya
+      // no está en juego.
+      if (intercambio && intercambio.mesaRecibida === c) setIntercambio(null);
+      return;
+    }
+
+    const mesa = mesas.find((m) => m.codigo.toUpperCase() === c);
+    const otras = mesa
+      ? getReservasMesa(mesa.id).filter((r) => r.id !== reserva.id)
+      : [];
+
+    // Mesa libre: se aplica directo, sin interrumpir a nadie. Solo se deja el
+    // aviso de aforo si el grupo no encaja, que es un dato para montar la mesa,
+    // no una pregunta: nadie tiene que responder nada para seguir.
+    if (otras.length === 0) {
+      const une = sumar || modo === "unir";
+      const nueva = une ? [...seleccion, c] : [c];
+      setSeleccion(nueva);
+      // Cambiar de mesa sin intercambio deshace el trato pactado; sumar una
+      // mesa libre encima de un intercambio, no: el trato sigue en pie.
+      if (!une) setIntercambio(null);
+      const aviso = avisoAforoDeMesas(nueva, reserva.comensales);
+      if (aviso) toast.warning(aviso);
+      return;
+    }
+
+    // Mesa ocupada: se para aquí. Se preguntan los solapes con terceros ANTES
+    // de abrir el diálogo para enseñarlo todo junto —quién está, a quién más
+    // se pisa y si el grupo cabe— y que la decisión se tome con todo delante.
+    setComprobando(true);
+    const res = await getChoquesMesa({
+      fecha: reserva.fecha,
+      hora: reserva.hora,
+      mesa: c,
+      duracionMin: reserva.duracionMinutos ?? null,
+      ignoreReservaId: reserva.id,
+    });
+    setComprobando(false);
+
+    const otra = otras[0];
+    setDecision({
+      codigo: c,
+      otra,
+      // Un intercambio ya pactado bloquea el siguiente: el segundo sustituiría
+      // al primero y esa primera reserva se quedaría apuntada a una mesa que
+      // esta ya no libera. Se permuta con UNA reserva; para encadenar cambios
+      // se guarda y se vuelve a entrar.
+      bloqueadoPorIntercambio: intercambio !== null ? intercambio.otraCliente : null,
+      // La reserva que ocupa la mesa NO es un tercero: es con quien se está
+      // negociando, y sale con nombre y hora en la cabecera del diálogo.
+      solapes: res.ok ? res.data.filter((x) => x.reservaId !== otra.id) : [],
+      avisoAforo: avisoAforoDeMesa(c, reserva.comensales),
+      avisoAforoOtra:
+        codigosOriginales.length > 0
+          ? avisoAforoDeMesas(codigosOriginales, otra.comensales)
+          : null,
+    });
+  };
+
+  /** Se acepta el intercambio: cada reserva a la mesa de la otra. */
+  const aceptarIntercambio = () => {
+    if (!decision) return;
+    setSeleccion([decision.codigo]);
+    setIntercambio({
+      otraReservaId: decision.otra.id,
+      otraCliente: decision.otra.cliente || "WALK IN",
+      mesaRecibida: decision.codigo,
+      // La otra se queda con lo que la reserva movida deja libre. Si no tenía
+      // mesa, se queda sin ella: no hay nada que darle.
+      mesaParaLaOtra: codigosOriginales.join("+"),
+    });
+    setDecision(null);
+  };
+
+  /** Se unen: la mesa ocupada se suma a las que ya tenía la reserva. */
+  const aceptarUnion = () => {
+    if (!decision) return;
+    setSeleccion((prev) => [...prev, decision.codigo]);
+    setIntercambio(null);
+    setDecision(null);
   };
 
   /**
@@ -148,6 +349,13 @@ export function EditorMesasReserva({
   const validar = async () => {
     if (!hayCambios) {
       onCerrar();
+      return;
+    }
+    // En un intercambio los solapes ya se enseñaron al pactarlo, y las mesas
+    // que entran están ocupadas a propósito por la reserva con la que se
+    // permuta: volver a preguntar aquí sacaría un aviso por algo ya decidido.
+    if (intercambio) {
+      await aplicar(true);
       return;
     }
     // Solo hace falta preguntar por las mesas que ENTRAN: las que ya tenía la
@@ -172,7 +380,15 @@ export function EditorMesasReserva({
 
   const aplicar = async (forzar: boolean) => {
     setGuardando(true);
-    await onValidar(codigoCompuesto, forzar);
+    if (intercambio) {
+      await onIntercambiar({
+        otraReservaId: intercambio.otraReservaId,
+        mesaDestino: codigoCompuesto,
+        mesaOrigen: intercambio.mesaParaLaOtra,
+      });
+    } else {
+      await onValidar(codigoCompuesto, forzar);
+    }
     setGuardando(false);
     setChoques(null);
   };
@@ -252,9 +468,33 @@ export function EditorMesasReserva({
                   </span>
                 </span>
               )}
-              <span className="ml-auto text-muted-foreground">
-                Pulsa las mesas para añadirlas o quitarlas.
-              </span>
+              {/* El modo va aquí, junto al resumen: se ve qué va a pasar al
+                  pulsar ANTES de pulsar. Con el texto de ayuda de antes había
+                  que descubrirlo moviendo a un cliente por error. */}
+              <div className="ml-auto flex items-center gap-1">
+                <div className="flex items-center rounded-md border p-0.5">
+                  {(["mover", "unir"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setModo(m)}
+                      className={cn(
+                        "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
+                        modo === m
+                          ? "bg-foreground text-background"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {m === "mover" ? "Mover" : "Unir"}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-muted-foreground">
+                  {modo === "mover"
+                    ? "Pulsa una mesa para llevar la reserva ahí."
+                    : "Pulsa las mesas que quieres juntar."}
+                </span>
+              </div>
             </div>
 
             {mesasConPos.length === 0 ? (
@@ -272,7 +512,7 @@ export function EditorMesasReserva({
                 esOscuro={esOscuro}
                 seleccion={seleccion}
                 originales={codigosOriginales}
-                onToggle={alternarMesa}
+                onToggle={pulsarMesa}
                 getReservasMesa={getReservasMesa}
                 reservaId={reserva.id}
               />
@@ -296,9 +536,146 @@ export function EditorMesasReserva({
                     <span className="font-medium">{quitadas.join(", ")}</span>
                   </span>
                 )}
+                {/* El intercambio mueve a alguien que no está en pantalla: si
+                    no se dice aquí, se guarda sin recordar que hay una segunda
+                    reserva cambiando de mesa. */}
+                {intercambio && (
+                  <span>
+                    ·{" "}
+                    <span className="font-medium">{intercambio.otraCliente}</span>{" "}
+                    {intercambio.mesaParaLaOtra
+                      ? `pasa a ${intercambio.mesaParaLaOtra.split("+").join(" + ")}`
+                      : "se queda sin mesa"}
+                  </span>
+                )}
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* La mesa pulsada ya tiene reserva. Aquí no se decide por el usuario:
+          se para en medio de la pantalla y se pregunta qué quiere hacer, con
+          los avisos delante. Las tres salidas son las de la sala: dejarlo
+          estar, cambiar a la gente de sitio, o juntar las mesas igualmente. */}
+      <Dialog open={decision !== null} onOpenChange={(v) => { if (!v) setDecision(null); }}>
+        <DialogContent className={cn("max-w-lg", "sala-tema", esOscuro && "sala-oscuro")}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <ArrowLeftRight className="h-4 w-4" />
+              La mesa {decision?.codigo} ya tiene reserva
+            </DialogTitle>
+          </DialogHeader>
+          {decision && (
+            <div className="space-y-3 text-xs">
+              {/* Quién está en cada lado, para no tener que recordarlo. */}
+              <div className="rounded-md border divide-y">
+                <div className="flex items-center justify-between gap-2 px-3 py-2">
+                  <span className="truncate">
+                    <span className="font-medium">
+                      {reserva.cliente || "WALK IN"} {reserva.apellidos}
+                    </span>{" "}
+                    <span className="text-muted-foreground">
+                      · {reserva.hora.slice(0, 5)} · {reserva.comensales} per
+                    </span>
+                  </span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {codigosOriginales.length > 0
+                      ? codigosOriginales.join(" + ")
+                      : "sin mesa"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 px-3 py-2">
+                  <span className="truncate">
+                    <span className="font-medium">
+                      {decision.otra.cliente || "WALK IN"} {decision.otra.apellidos}
+                    </span>{" "}
+                    <span className="text-muted-foreground">
+                      · {decision.otra.hora.slice(0, 5)} · {decision.otra.comensales} per
+                    </span>
+                  </span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {decision.codigo}
+                  </span>
+                </div>
+              </div>
+
+              {/* Avisos. Ninguno bloquea: se dicen para que la decisión se tome
+                  sabiendo con qué se va a encontrar sala al montar. */}
+              {(decision.solapes.length > 0 ||
+                decision.avisoAforo ||
+                decision.avisoAforoOtra) && (
+                <div className="space-y-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
+                  {decision.avisoAforo && (
+                    <p className="flex gap-1.5 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                      <span>{decision.avisoAforo}</span>
+                    </p>
+                  )}
+                  {decision.avisoAforoOtra && (
+                    <p className="flex gap-1.5 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                      <span>
+                        Si se intercambian: {decision.avisoAforoOtra.charAt(0).toLowerCase()}
+                        {decision.avisoAforoOtra.slice(1)}
+                      </span>
+                    </p>
+                  )}
+                  {decision.solapes.map((c) => (
+                    <p
+                      key={c.reservaId}
+                      className="flex gap-1.5 text-amber-700 dark:text-amber-300"
+                    >
+                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                      <span>
+                        Se pisa con {c.cliente || "WALK IN"} en {c.mesa}, que la
+                        tiene ocupada hasta las {c.horaFin}.
+                      </span>
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {decision.bloqueadoPorIntercambio && (
+                <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-amber-700 dark:text-amber-300">
+                  Ya hay un intercambio pendiente con{" "}
+                  {decision.bloqueadoPorIntercambio}. Guarda ese cambio antes de
+                  hacer otro; aquí solo puedes unir la mesa.
+                </p>
+              )}
+
+              {/* Qué hace cada botón, en una línea: se lee antes de pulsar. */}
+              <p className="text-muted-foreground">
+                <span className="font-medium text-foreground">Intercambiar</span>{" "}
+                cambia a las dos de sitio
+                {codigosOriginales.length > 0
+                  ? ` — ${decision.otra.cliente || "WALK IN"} pasa a ${codigosOriginales.join(" + ")}.`
+                  : ` — ${decision.otra.cliente || "WALK IN"} se queda sin mesa, porque esta reserva no tiene ninguna que darle.`}{" "}
+                <span className="font-medium text-foreground">Unir</span> deja a
+                las dos reservas sobre {decision.codigo}.
+              </p>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setDecision(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button size="sm" variant="outline" onClick={aceptarUnion}>
+                  Unir
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={decision.bloqueadoPorIntercambio !== null}
+                  onClick={aceptarIntercambio}
+                >
+                  Intercambiar
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

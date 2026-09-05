@@ -57,7 +57,8 @@ export function PlanoSeleccionMesas({
   esOscuro: boolean;
   seleccion: string[];
   originales: string[];
-  onToggle: (codigo: string) => void;
+  /** Pulsación sobre una mesa. `sumar` = Ctrl/⌘ pulsado (unir sin cambiar de modo). */
+  onToggle: (codigo: string, sumar: boolean) => void;
   getReservasMesa: (mesaId: string) => Reserva[];
   reservaId: string;
 }) {
@@ -196,7 +197,7 @@ export function PlanoSeleccionMesas({
               <button
                 key={m.id}
                 type="button"
-                onClick={() => onToggle(codigo)}
+                onClick={(e) => onToggle(codigo, e.metaKey || e.ctrlKey)}
                 title={
                   ocupadaPorOtra
                     ? `${m.codigo} · ocupada por ${otras[0].cliente || "WALK IN"} a las ${otras[0].hora.slice(0, 5)}`

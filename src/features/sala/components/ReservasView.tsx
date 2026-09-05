@@ -53,7 +53,7 @@ import {
   AvisoAforoMesa,
   type EstadoMesaParaReserva,
 } from "@/features/sala/components/reservas/SelectorMesaConAvisos";
-import { EditorMesasReserva } from "@/features/sala/components/reservas/EditorMesasReserva";
+import { EditorMesasReserva, codigosDeMesa } from "@/features/sala/components/reservas/EditorMesasReserva";
 import { CalendarioMes } from "@/features/sala/components/reservas/CalendarioMes";
 import { CalendarDays, Grid3X3, Users, LayoutGrid, AlertTriangle, Clock, Mail, CheckCircle2 } from "lucide-react";
 import {
@@ -96,6 +96,7 @@ import {
   listReservas,
   createReserva,
   updateReserva,
+  intercambiarMesasReservas,
   notificarReservaCreadaPorEmail,
 } from "@/features/sala/actions/reservas-actions";
 import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
@@ -3368,7 +3369,20 @@ export function ReservasView() {
   const [reservaADesplazar, setReservaADesplazar] = useState<Reserva | null>(null);
   /** Mesa destino elegida que pisaría a otras reservas: hay que confirmar. */
   const [choqueDesplazar, setChoqueDesplazar] = useState<
-    { mesa: Mesa; choques: ChoqueReserva[] } | null
+    {
+      mesa: Mesa;
+      choques: ChoqueReserva[];
+      /**
+       * Reserva que ocupa la mesa destino ahora mismo, cuando es UNA sola y
+       * por tanto se puede permutar con ella. Si hay varias no se ofrece:
+       * "intercambiar" con tres reservas a la vez no significa nada.
+       */
+      permutable: Reserva | null;
+      /** Aviso de aforo de la mesa destino para el grupo que llega. */
+      avisoAforo: string | null;
+      /** Aviso de aforo de la mesa que se deja, para quien la recibiría. */
+      avisoAforoOtra: string | null;
+    } | null
   >(null);
   const [guardandoDesplazar, setGuardandoDesplazar] = useState(false);
   /** Fila del listado con la ficha rápida abierta (una sola, y ninguna en modo mover). */
@@ -4959,6 +4973,39 @@ export function ReservasView() {
     void loadReservas(fecha);
   };
 
+  /**
+   * Permutar las mesas de dos reservas. Se guarda en una sola llamada: hecho
+   * en dos updates, el de en medio deja a las dos reservas sobre la misma mesa
+   * y el bloqueo de solape tumba el segundo, dejando el cambio a medias.
+   */
+  const intercambiarMesas = async (
+    id: string,
+    p: { otraReservaId: string; mesaDestino: string; mesaOrigen: string },
+  ) => {
+    const res = await intercambiarMesasReservas({
+      reservaId: id,
+      otraReservaId: p.otraReservaId,
+      mesaDestino: p.mesaDestino,
+      mesaOrigen: p.mesaOrigen,
+      localId: localId || null,
+    });
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudieron intercambiar las mesas.");
+      return;
+    }
+    toast.success(
+      `Mesas intercambiadas: ${p.mesaDestino.split("+").join(" + ")}`,
+    );
+    setShowEditorMesas(false);
+    setActividadVersion((v) => v + 1);
+    setSelectedReserva((prev) =>
+      prev && prev.id === id ? { ...prev, mesaCodigo: p.mesaDestino } : prev,
+    );
+    // Igual que al asignar mesa: el guardado ya está confirmado y no se espera
+    // a que vuelva el listado entero para devolver el control a sala.
+    void loadReservas(fecha);
+  };
+
   const guardarDatosCliente = async (id: string) => {
     if (!clienteEdit.nombre.trim()) {
       toast.error("El nombre es obligatorio.");
@@ -5204,6 +5251,70 @@ export function ReservasView() {
   );
 
   /**
+   * Intercambia las mesas de las dos reservas: la que se mueve va a la mesa
+   * destino y la que estaba allí se queda con la que esta deja.
+   *
+   * Va en UNA sola llamada al servidor, no en dos updates: hecho por pasos, el
+   * de en medio deja a las dos reservas sobre la misma mesa y el bloqueo de
+   * solape tumba el segundo, dejando el cambio a medias.
+   */
+  const permutarDesplazamiento = useCallback(
+    async (r: Reserva, mesaDestino: Mesa, otra: Reserva) => {
+      setGuardandoDesplazar(true);
+      const res = await intercambiarMesasReservas({
+        reservaId: r.id,
+        otraReservaId: otra.id,
+        mesaDestino: mesaDestino.codigo,
+        mesaOrigen: codigosDeMesa(r.mesaCodigo).join("+"),
+        localId: localId || null,
+      });
+      setGuardandoDesplazar(false);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudieron intercambiar las mesas");
+        return;
+      }
+      toast.success(
+        `${r.cliente || "WALK IN"} a la mesa ${mesaDestino.codigo}, ${otra.cliente || "WALK IN"} a ${codigosDeMesa(r.mesaCodigo).join(" + ")}`,
+      );
+      setReservaADesplazar(null);
+      setChoqueDesplazar(null);
+      loadReservas(fecha);
+    },
+    [fecha, loadReservas, localId],
+  );
+
+  /**
+   * Aviso de aforo de unas mesas para un grupo, o `null` si encaja. Nunca
+   * impide nada: una mesa de 4 se le da a 2 si en sala lo ven claro. Solo se
+   * dice, para que no sorprenda al montar.
+   */
+  const avisoAforoMesas = useCallback(
+    (codigos: string[], personas: number): string | null => {
+      let min = 0;
+      let max = 0;
+      let conocidas = 0;
+      for (const codigo of codigos) {
+        const mesa = mesas.find(
+          (m) => m.codigo.toUpperCase() === codigo.toUpperCase(),
+        );
+        const meta = mesa ? mesasMeta.get(mesa.id) : undefined;
+        if (!meta) continue;
+        conocidas += 1;
+        min += meta.capacidadMin;
+        max += meta.capacidadMax;
+      }
+      if (conocidas === 0) return null;
+      const donde =
+        codigos.length === 1 ? `la mesa ${codigos[0]}` : codigos.join(" + ");
+      if (personas > max) return `${personas} personas en ${donde}, que admite ${max}.`;
+      if (personas < min)
+        return `${personas} ${personas === 1 ? "persona" : "personas"} en ${donde}, pensada para ${min} como mínimo.`;
+      return null;
+    },
+    [mesas, mesasMeta],
+  );
+
+  /**
    * Clic sobre una mesa estando en modo mover. Antes de tocar nada se pregunta
    * al servidor si esa mesa tiene reservas que se pisen por horario con esta
    * (contando la duración real de cada una, no solo la hora de inicio). Si las
@@ -5234,13 +5345,43 @@ export function ReservasView() {
         toast.error(res.error ?? "No se pudo comprobar la mesa");
         return;
       }
+      const avisoAforo = avisoAforoMesas([mesaDestino.codigo], r.comensales);
+
       if (res.data.length > 0) {
-        setChoqueDesplazar({ mesa: mesaDestino, choques: res.data });
+        // Con UNA sola reserva enfrente se puede permutar: cada una a la mesa
+        // de la otra. Con varias no se ofrece —"intercambiar" con tres a la
+        // vez no significa nada— y solo queda mover encima o cancelar.
+        const ocupantes = (
+          reservasActivasPorMesa.get(mesaDestino.id) ?? []
+        ).filter((x) => x.id !== r.id);
+        const permutable =
+          ocupantes.length === 1 && codigosDeMesa(r.mesaCodigo).length > 0
+            ? ocupantes[0]
+            : null;
+        setChoqueDesplazar({
+          mesa: mesaDestino,
+          choques: res.data,
+          permutable,
+          avisoAforo,
+          avisoAforoOtra: permutable
+            ? avisoAforoMesas(codigosDeMesa(r.mesaCodigo), permutable.comensales)
+            : null,
+        });
         return;
       }
+      // Mesa libre: se mueve sin preguntar, pero si el grupo no encaja en ella
+      // se deja dicho. Es un dato para montar la mesa, no una pregunta.
+      if (avisoAforo) toast.warning(avisoAforo);
       await aplicarDesplazamiento(r, mesaDestino);
     },
-    [reservaADesplazar, mesasBloqueadasIds, cfgReservas, aplicarDesplazamiento],
+    [
+      reservaADesplazar,
+      mesasBloqueadasIds,
+      cfgReservas,
+      aplicarDesplazamiento,
+      avisoAforoMesas,
+      reservasActivasPorMesa,
+    ],
   );
 
   /**
@@ -7027,6 +7168,9 @@ export function ReservasView() {
           onValidar={(codigo, forzar) =>
             guardarMesasReserva(selectedReserva.id, codigo, forzar)
           }
+          onIntercambiar={(p) =>
+            intercambiarMesas(selectedReserva.id, p)
+          }
         />
       )}
 
@@ -7198,20 +7342,76 @@ export function ReservasView() {
                   </div>
                 ))}
               </div>
+              {/* Avisos de aforo. No bloquean: se dicen para que la decisión
+                  se tome sabiendo con qué se va a encontrar sala al montar. */}
+              {(choqueDesplazar.avisoAforo || choqueDesplazar.avisoAforoOtra) && (
+                <div className="space-y-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
+                  {choqueDesplazar.avisoAforo && (
+                    <p className="flex gap-1.5 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                      <span>{choqueDesplazar.avisoAforo}</span>
+                    </p>
+                  )}
+                  {choqueDesplazar.avisoAforoOtra && (
+                    <p className="flex gap-1.5 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                      <span>
+                        Si se intercambian:{" "}
+                        {choqueDesplazar.avisoAforoOtra.charAt(0).toLowerCase()}
+                        {choqueDesplazar.avisoAforoOtra.slice(1)}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Qué hace cada botón, con nombres reales: se lee antes de
+                  pulsar, que es cuando importa. */}
               <p className="text-muted-foreground">
-                Si la mueves igualmente, las dos quedarán sobre la misma mesa a la vez.
+                {choqueDesplazar.permutable ? (
+                  <>
+                    <span className="font-medium text-foreground">Intercambiar</span>{" "}
+                    cambia a las dos de sitio —{" "}
+                    {choqueDesplazar.permutable.cliente || "WALK IN"} pasa a{" "}
+                    {codigosDeMesa(reservaADesplazar.mesaCodigo).join(" + ")}.{" "}
+                    <span className="font-medium text-foreground">Mover igualmente</span>{" "}
+                    deja a las dos reservas sobre {choqueDesplazar.mesa.codigo}.
+                  </>
+                ) : (
+                  "Si la mueves igualmente, las dos quedarán sobre la misma mesa a la vez."
+                )}
               </p>
               <div className="flex justify-end gap-2">
-                <Button size="sm" variant="outline" onClick={() => setChoqueDesplazar(null)}>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setChoqueDesplazar(null)}
+                >
                   Cancelar
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
                   disabled={guardandoDesplazar}
                   onClick={() => aplicarDesplazamiento(reservaADesplazar, choqueDesplazar.mesa)}
                 >
                   Mover igualmente
                 </Button>
+                {choqueDesplazar.permutable && (
+                  <Button
+                    size="sm"
+                    disabled={guardandoDesplazar}
+                    onClick={() =>
+                      permutarDesplazamiento(
+                        reservaADesplazar,
+                        choqueDesplazar.mesa,
+                        choqueDesplazar.permutable!,
+                      )
+                    }
+                  >
+                    Intercambiar
+                  </Button>
+                )}
               </div>
             </div>
           )}
