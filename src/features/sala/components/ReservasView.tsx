@@ -3001,7 +3001,7 @@ function PlanoCanvas({
                     // queda marcada. Al mover el raton se enciende unicamente
                     // la mesa que se esta señalando.
                     mesasResaltadasIds.has(m.id) &&
-                      "!border-red-500 ring-[10px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
+                      "!border-red-500 !border-[6px] ring-[18px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
                     moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
                     destinoInvalido && "opacity-40 cursor-not-allowed",
                   )}
@@ -6101,7 +6101,7 @@ export function ReservasView() {
                                       // del raton, no se queda pegado al abrir
                                       // una reserva ni al elegir una mesa.
                                       mesasResaltadasIds.has(m.id) &&
-                                        "!border-red-500 ring-[10px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
+                                        "!border-red-500 !border-[6px] ring-[18px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
                                       moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
                                       destinoInvalido && "opacity-40 cursor-not-allowed",
                                     )}

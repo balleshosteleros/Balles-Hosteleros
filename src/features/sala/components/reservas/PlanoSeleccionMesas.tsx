@@ -212,7 +212,7 @@ export function PlanoSeleccionMesas({
                   // Borde rojo: misma norma visual que la mesa seleccionada en
                   // el plano de la vista de sala.
                   elegida
-                    ? "ring-4 ring-red-500 z-10 border-red-500"
+                    ? "ring-[10px] ring-red-500 z-10 !border-red-500 !border-4"
                     : "border-foreground/30 hover:border-foreground",
                   ocupadaPorOtra && !elegida && "border-amber-500/70",
                 )}
@@ -258,7 +258,7 @@ export function PlanoSeleccionMesas({
 
       <div className="shrink-0 flex flex-wrap items-center justify-center gap-4 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded border-2 border-red-500 ring-2 ring-red-500" />
+          <span className="h-3 w-3 rounded border-2 border-red-500 ring-[3px] ring-red-500" />
           En esta reserva
         </span>
         <span className="flex items-center gap-1.5">
