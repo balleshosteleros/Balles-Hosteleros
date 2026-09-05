@@ -70,15 +70,6 @@ const HORAS_RECORDATORIO: number[] = [1, 2, 3, 4, 6, 8, 12, 24, 48];
  * siguiente"), no en horas. Por defecto 1 día: la visita sigue reciente y el
  * correo cae a la misma hora a la que vino, sin madrugar al cliente.
  */
-const HORAS_VALORACION: { valor: number; etiqueta: string }[] = [
-  { valor: 2, etiqueta: "2 h" },
-  { valor: 4, etiqueta: "4 h" },
-  { valor: 12, etiqueta: "12 h" },
-  { valor: 24, etiqueta: "1 día" },
-  { valor: 48, etiqueta: "2 días" },
-  { valor: 72, etiqueta: "3 días" },
-  { valor: 168, etiqueta: "1 semana" },
-];
 
 /** Horas en punto a las que puede salir la peticion de valoracion. */
 const HORAS_DIA: string[] = Array.from(
@@ -408,34 +399,7 @@ export function ComunicacionesPanel() {
                   <>
                     <div className="flex items-center gap-2">
                       <Label className="text-xs text-muted-foreground">
-                        Enviar
-                      </Label>
-                      <Select
-                        value={String(config.valoracionEmailHorasDespues)}
-                        onValueChange={(v) =>
-                          actualizarRecordatorio({
-                            valoracionEmailHorasDespues: Number(v),
-                          })
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs w-48">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {HORAS_VALORACION.map((h) => (
-                            <SelectItem key={h.valor} value={String(h.valor)}>
-                              {h.etiqueta}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Label className="text-xs text-muted-foreground">
-                        después de la reserva
-                      </Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs text-muted-foreground">
-                        A las
+                        Se envía al día siguiente, a las
                       </Label>
                       <Select
                         value={config.valoracionEmailHoraEnvio}
@@ -459,10 +423,11 @@ export function ComunicacionesPanel() {
                       </Label>
                     </div>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Sale una vez al día, a esa hora, con las reservas que ya
-                      han cumplido el plazo. Solo se pide valoración a quien
-                      vino y dejó su email, una sola vez por reserva. Los
-                      walk-in no reciben: no son reservas de cliente.
+                      Sale una vez al día, a esa hora, a todos los que vinieron
+                      el día anterior: da igual que comieran a mediodía o
+                      cenaran de madrugada. Solo a quien dejó su email, una sola
+                      vez por reserva. Los walk-in no reciben: no son reservas
+                      de cliente.
                     </p>
 
                     <div className="pt-1 space-y-2 border-t border-border">

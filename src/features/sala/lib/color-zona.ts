@@ -53,10 +53,12 @@ export function zonaOscura(hex: string): string {
     h *= 60;
     if (h < 0) h += 360;
   }
-  // Matiz intacto; saturación contenida y luminosidad baja para que la mesa
-  // libre sea una superficie tintada sobre el lienzo, no un bloque de color.
-  const satOut = Math.min(sat, 0.42) * 100;
-  const lumOut = 26;
+  // Matiz intacto: es lo que identifica la zona de un vistazo. La luminosidad
+  // sube lo justo para que el NOMBRE Y LA CAPACIDAD de la mesa, que van en
+  // negro, se lean sobre el fondo. Con luminosidad 26 el texto oscuro quedaba
+  // ilegible y el claro se comía el matiz de la zona.
+  const satOut = Math.min(sat, 0.45) * 100;
+  const lumOut = 62;
   return `hsl(${h.toFixed(0)} ${satOut.toFixed(0)}% ${lumOut}%)`;
 }
 

@@ -332,19 +332,20 @@ export async function GET(request: Request) {
           continue;
         }
 
-        const horasDespues = c.valoracion_email_horas_despues ?? 24;
-        const hastaV = new Date(ahora.getTime() - horasDespues * 3600 * 1000);
-        // Ventana de 24 h hacia atrás, no de 1 h: el envío ocurre UNA VEZ AL
-        // DÍA (a la hora de la empresa), así que una ventana de una hora
-        // dejaría fuera el 96% de las reservas y no se les pediría valoración
-        // nunca. Reenviar no es riesgo: `email_valoracion_at` garantiza un solo
-        // correo por reserva, y el filtro `is(auditCol, null)` descarta las ya
-        // avisadas.
-        const desdeV = new Date(hastaV.getTime() - 24 * 60 * 60 * 1000);
+        // EL DÍA ANTERIOR ENTERO, no "X horas después de la reserva".
+        //
+        // El plazo en horas y la hora fija se peleaban: a las 10:00 el que cenó
+        // ayer a las 21:00 solo llevaba 13 h y no le tocaba; cuando cumplía las
+        // 24 h, esa noche, el cron ya no volvía a pasar hasta el día siguiente
+        // y entonces caía fuera de la ventana. Resultado: la CENA —el grueso de
+        // la casa— no recibía nunca la petición.
+        //
+        // Ahora es lo que se pidió y lo que hacía Cover: comiste o cenaste
+        // ayer, hoy a las 10:00 te llega. Sin cuentas de horas.
+        const ayer = diaEnZona(new Date(ahora.getTime() - 86_400_000), tz);
         const pendientesV = await buscarPendientes(supabase, {
           empresaId: c.empresa_id,
-          desde: desdeV,
-          hasta: hastaV,
+          dia: ayer,
           // A TODO el que asistió, sin mirar el tipo de reserva ni el origen:
           // el que entró sin reservar y acabó sentado comió lo mismo que el
           // que reservó por la web, y su opinión vale igual.
@@ -455,8 +456,17 @@ async function buscarPendientes(
   supabase: any,
   args: {
     empresaId: string;
-    desde: Date;
-    hasta: Date;
+    /**
+     * Rango de instantes (recordatorio y reconfirmacion, que van "X horas
+     * antes"). Excluyente con `dia`.
+     */
+    desde?: Date;
+    hasta?: Date;
+    /**
+     * Dia civil del restaurante ("AAAA-MM-DD") COMPLETO. Lo usa la valoracion:
+     * se pide por el dia en que se comio, no por horas transcurridas.
+     */
+    dia?: string;
     estados: string[];
     auditCol:
       | "email_recordatorio_at"
@@ -483,8 +493,13 @@ async function buscarPendientes(
   // fuera del `gte/lte` y NUNCA recibía recordatorio (el envío marca la columna
   // de auditoría, así que tampoco se recuperaba en tiradas posteriores).
   const DIA_MS = 86_400_000;
-  const fechaDesde = diaEnZona(new Date(args.desde.getTime() - DIA_MS), args.tz);
-  const fechaHasta = diaEnZona(new Date(args.hasta.getTime() + DIA_MS), args.tz);
+  // Por dia civil: la ventana ES ese dia, sin margenes ni conversion a UTC.
+  const fechaDesde = args.dia
+    ? args.dia
+    : diaEnZona(new Date(args.desde!.getTime() - DIA_MS), args.tz);
+  const fechaHasta = args.dia
+    ? args.dia
+    : diaEnZona(new Date(args.hasta!.getTime() + DIA_MS), args.tz);
 
   let q = supabase
     .from("reservas")
@@ -505,9 +520,20 @@ async function buscarPendientes(
   for (const r of data ?? []) {
     const fecha = r.fecha as string;
     const hora = (r.hora as string).slice(0, 5);
+    // Por dia civil no hay que afinar la hora: vale el dia entero, de la
+    // comida de las 13:00 a la cena que acabo de madrugada.
+    if (args.dia) {
+      dentroVentana.push({
+        id: r.id as string,
+        empresa_id: r.empresa_id as string,
+        cliente_id: (r.cliente_id as string | null) ?? null,
+        fecha,
+      });
+      continue;
+    }
     // `fecha`/`hora` son hora local del restaurante → a UTC con SU zona.
     const ts = new Date(zonaLocalAUtcISO(fecha, hora, args.tz));
-    if (ts.getTime() >= args.desde.getTime() && ts.getTime() < args.hasta.getTime()) {
+    if (ts.getTime() >= args.desde!.getTime() && ts.getTime() < args.hasta!.getTime()) {
       dentroVentana.push({
         id: r.id as string,
         empresa_id: r.empresa_id as string,

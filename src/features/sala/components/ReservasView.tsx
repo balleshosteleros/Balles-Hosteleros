@@ -208,9 +208,14 @@ const LIBRE_RAINBOW = `linear-gradient(135deg, ${COLORES_PASTEL_ZONAS
  */
 const mesaBg: Record<string, string> = {
   LIBRE: "",
-  OCUPADA: "bg-[#1F6F3E] hover:bg-[#22783F] text-white",
+  // Los tres estados con color llevan el texto en NEGRO: el nombre de la mesa
+  // y su capacidad son lo que se busca de un vistazo en el plano, y sobre el
+  // lienzo oscuro el texto blanco sobre verde o fucsia no se leia. Los fondos
+  // suben de luminosidad lo justo para que el negro contraste sin perder el
+  // codigo de color de cada estado.
+  OCUPADA: "bg-[#34A85A] hover:bg-[#3CBA66] text-zinc-900",
   RESERVADA: "bg-[#4ADE80] hover:bg-[#22C55E] text-zinc-900",
-  TERMINADA: "bg-[#C026D3] hover:bg-[#A21CAF] text-white",
+  TERMINADA: "bg-[#E879F9] hover:bg-[#D946EF] text-zinc-900",
   // En tema oscuro el negro puro se confundía con el lienzo azul marino: la
   // mesa bloqueada pasa a un gris azulado con borde marcado para seguir
   // leyéndose como "apagada" sin desaparecer del plano.
@@ -2995,7 +3000,7 @@ function PlanoCanvas({
                   className={cn(
                     "sala-mesa absolute flex flex-col items-center justify-center text-[11px] font-semibold border-2 transition-all cursor-pointer px-1 overflow-hidden",
                     mesaBg[estado] ?? "",
-                    isLibre ? "text-foreground border-foreground/40" : "border-white/10",
+                    isLibre ? "text-zinc-900 border-black/30" : "border-black/20",
                     // Recuadro rojo SOLO mientras el raton esta encima: ni al
                     // abrir la ficha de una reserva ni al elegir una mesa se
                     // queda marcada. Al mover el raton se enciende unicamente
@@ -6096,7 +6101,7 @@ export function ReservasView() {
                                     className={cn(
                                       "relative overflow-hidden h-20 rounded-md flex flex-col items-center justify-center text-[11px] font-bold shadow-sm border-2 transition-all cursor-pointer px-1",
                                       mesaBg[estado] ?? "",
-                                      isLibre ? "text-foreground border-foreground/40" : "border-white/10",
+                                      isLibre ? "text-zinc-900 border-black/30" : "border-black/20",
                                       // Igual que en el plano: el rojo es solo
                                       // del raton, no se queda pegado al abrir
                                       // una reserva ni al elegir una mesa.
