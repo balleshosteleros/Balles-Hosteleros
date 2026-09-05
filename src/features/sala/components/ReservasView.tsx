@@ -5208,12 +5208,9 @@ export function ReservasView() {
             las zonas de todas las salas, así que no se mueven al cambiar de
             sala ni de zona, solo al cambiar de plano o de local. */}
         <div className={cn("flex gap-1 items-center", vista !== "dia" && "invisible pointer-events-none")} aria-hidden={vista !== "dia"} inert={vista !== "dia"}>
-          {/* SOLO EL ICONO, y en color: sol para la comida y luna para la
-              cena, los mismos que ya identifican los dos turnos en la vista
-              mes. Son dos botones que se pulsan todo el día y con la palabra
-              entera ocupaban el doble. El turno elegido va relleno, así que
-              se sigue viendo cuál está activo; el nombre queda en el texto
-              emergente y en `aria-label`. */}
+          {/* Icono en color y el nombre del turno al lado: sol para la comida
+              y luna para la cena, los mismos que ya identifican los dos turnos
+              en la vista mes. El turno elegido va relleno. */}
           {(["COMIDA", "CENA"] as const).map(t => {
             const esComida = t === "COMIDA";
             const nombre = esComida ? "Comida" : "Cena";
@@ -5224,7 +5221,7 @@ export function ReservasView() {
                 key={t}
                 size="sm"
                 variant={activo ? "default" : "outline"}
-                className="size-8 p-0"
+                className="h-8 gap-1.5 px-2.5"
                 title={nombre}
                 aria-label={nombre}
                 aria-pressed={activo}
@@ -5242,6 +5239,7 @@ export function ReservasView() {
                         : "text-indigo-400",
                   )}
                 />
+                {nombre}
               </Button>
             );
           })}
@@ -5318,16 +5316,6 @@ export function ReservasView() {
               />
             </div>
           )}
-          {/* Toggle vista: icono + texto de la vista OPUESTA — al pulsarlo cambias a ella */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs h-8 gap-1.5 px-2.5"
-            title={vista === "dia" ? "Cambiar a vista Mes" : "Cambiar a vista Día"}
-            onClick={() => setVista(vista === "dia" ? "mes" : "dia")}
-          >
-            {vista === "dia" ? <><Grid3X3 className="h-3.5 w-3.5" />Mes</> : <><CalendarDays className="h-3.5 w-3.5" />Día</>}
-          </Button>
           {vista === "mes" ? (
             <div className="flex items-center gap-0.5">
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFecha(addMonths(fecha, -1))}><ChevronLeft className="h-4 w-4" /></Button>
@@ -5365,6 +5353,19 @@ export function ReservasView() {
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
+          {/* Cambio de vista: cuadrado y solo con icono, junto al resto de
+              botones de la derecha. El icono es el de la vista OPUESTA —la que
+              se abre al pulsarlo—, igual que decia el texto que llevaba antes. */}
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            title={vista === "dia" ? "Cambiar a vista Mes" : "Cambiar a vista Día"}
+            aria-label={vista === "dia" ? "Cambiar a vista Mes" : "Cambiar a vista Día"}
+            onClick={() => setVista(vista === "dia" ? "mes" : "dia")}
+          >
+            {vista === "dia" ? <CalendarDays className="h-4 w-4" /> : <Grid3X3 className="h-4 w-4" />}
+          </Button>
           <Button
             variant="outline"
             size="icon"
@@ -5471,7 +5472,6 @@ export function ReservasView() {
                 ordenable
                 orden={ordenColumna}
                 onOrdenChange={setOrdenColumna}
-                className="text-[9px] font-normal"
               />
             </span>
             <ColumnaListaHeader

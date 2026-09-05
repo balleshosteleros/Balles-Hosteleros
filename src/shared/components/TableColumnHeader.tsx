@@ -80,9 +80,11 @@ export function TableColumnHeader({
   const colKey = campo ?? label;
   const resize = useResizableColumn(colKey);
   const thRef = useRef<HTMLTableCellElement | null>(null);
+  // El ancho guardado manda, pero nunca por debajo de lo que ocupa el propio
+  // título: si no, el encabezado sale recortado ("ETIQUE...") y deja de leerse.
   const thStyle =
     resize.enabled && resize.width
-      ? { width: resize.width, minWidth: resize.width }
+      ? { width: resize.width, minWidth: "max-content" }
       : undefined;
 
   function onResizeMouseDown(e: React.MouseEvent) {

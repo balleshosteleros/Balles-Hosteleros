@@ -195,7 +195,28 @@ const COLUMNAS: ColumnaDef[] = [
     bloqueada: true,
     valor: (f) => f.cliente,
   },
-  { campo: "telefono", label: "Teléfono", filtro: "texto", valor: (f) => f.telefono },
+  {
+    // Las etiquetas (las de la reserva y las del cliente, ya unidas en el
+    // servidor) van pegadas al teléfono: ocupan mucho menos que en una columna
+    // propia, que salía casi siempre vacía.
+    campo: "telefono",
+    label: "Teléfono",
+    filtro: "texto",
+    valor: (f) => f.telefono,
+    celda: (f) => {
+      if (!f.telefono && f.etiquetas.length === 0) return "";
+      return (
+        <span className="flex flex-wrap items-center gap-1">
+          {f.telefono ? <span>{f.telefono}</span> : null}
+          {f.etiquetas.map((e) => (
+            <Badge key={e} variant="secondary" className="font-normal">
+              {e}
+            </Badge>
+          ))}
+        </span>
+      );
+    },
+  },
   { campo: "email", label: "Email", filtro: "texto", valor: (f) => f.email },
   {
     campo: "clienteClasificacion",
@@ -295,29 +316,6 @@ const COLUMNAS: ColumnaDef[] = [
     // que las opciones salen de lo que realmente hay en los datos.
     opciones: (fs) => valoresDe(fs, (f) => origenLabel(f.origen)),
     valor: (f) => origenLabel(f.origen),
-  },
-  {
-    campo: "etiquetas",
-    label: "Etiquetas",
-    filtro: "lista",
-    opciones: (fs) => {
-      const set = new Set<string>();
-      for (const f of fs) for (const e of f.etiquetas) set.add(e);
-      return [...set].sort((a, b) => a.localeCompare(b, "es"));
-    },
-    valor: (f) => f.etiquetas,
-    celda: (f) =>
-      f.etiquetas.length === 0 ? (
-        ""
-      ) : (
-        <span className="flex flex-wrap gap-1">
-          {f.etiquetas.map((e) => (
-            <Badge key={e} variant="secondary" className="font-normal">
-              {e}
-            </Badge>
-          ))}
-        </span>
-      ),
   },
   { campo: "observaciones", label: "Observaciones", filtro: "texto", valor: (f) => f.observaciones },
 
@@ -1325,9 +1323,7 @@ export function ListadoReservasPanel({
                           esCliente && "font-medium",
                         )}
                       >
-                        {vacio ? (
-                          <span className="text-muted-foreground">—</span>
-                        ) : destino ? (
+                        {vacio ? null : destino ? (
                           <Link
                             href={destino}
                             className="hover:underline"
