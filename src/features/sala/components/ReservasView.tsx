@@ -284,14 +284,17 @@ function addMonths(iso: string, n: number) {
 /**
  * Rejilla de la lista. El panel mide LISTA_ANCHO_PX y el ancho fijo tiene que
  * dejar sitio de verdad al nombre, que es por lo que se busca a la gente en
- * sala. Reparto: hora 46, mesa 58, per. 34, origen 62, tipo 66, estado 62,
+ * sala. Reparto: hora 46, mesa 58, per. 42, origen 58, tipo 64, estado 60,
  * tiempo 64 + 7 huecos de 6 px + 24 de padding = 458 px, y los ~210 px que
  * quedan son para el NOMBRE, que ha de caber con apellido.
  *
  * TIEMPO sube a 64 porque una mesa muy pasada de hora marca "+08:00" y en 52
- * se cortaba en "+08…", justo el dato que la columna existe para dar. Los 12
- * px salen de TIPO y ESTADO, que iban sobrados: sus valores son cortos
- * ("Gratis", "Sentada") y ademas los dos llevan `title` con el texto entero.
+ * se cortaba en "+08…", justo el dato que la columna existe para dar.
+ *
+ * PER. necesita 42, no 34: su cabecera no es solo el texto, tambien reserva
+ * sitio para la flecha de ordenar, asi que a la palabra le quedaban 18 px de
+ * los 34 y se leia "P…". Todas las cabeceras que filtran u ordenan pagan ese
+ * peaje; en las demas columnas no se nota porque su texto ya cabe.
  *
  * "Per." necesita 34: con 24 la cabecera se cortaba en "P.". Los 12 px que le
  * faltaban salen de ESTADO, que iba sobrado y además lleva `title`.
@@ -359,7 +362,7 @@ const LISTA_GRID =
   // completo, así que recortarlas no pierde el dato) y lo que sueltan se lo
   // queda el nombre. Los chips que van pegados al nombre (visitas, cupón,
   // reconfirmación) no se cuentan: solo salen en algunas filas.
-  "grid grid-cols-[46px_58px_minmax(0,1fr)_34px_62px_66px_62px_64px] gap-1.5 items-center";
+  "grid grid-cols-[46px_58px_minmax(0,1fr)_42px_58px_64px_60px_64px] gap-1.5 items-center";
 
 /**
  * TIPO de la reserva: cuál de las cuatro es (PRP-082).
