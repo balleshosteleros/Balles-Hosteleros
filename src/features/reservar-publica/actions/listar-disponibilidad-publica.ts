@@ -21,11 +21,7 @@ import {
   getCamposObligatoriosReserva,
   type CamposObligatoriosReserva,
 } from "@/features/sala/lib/reserva-campos-obligatorios";
-import {
-  diaNegocioDe,
-  fechaCivilDe,
-  turnoDeHora,
-} from "@/features/sala/lib/dia-negocio";
+import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import {
@@ -206,23 +202,22 @@ export async function listarDisponibilidadPublicaAction(
 
   // Reservas ya existentes en ese SERVICIO, para descontar aforo.
   //
-  // El servicio de una noche se guarda en DOS días de calendario: la cena del
-  // jueves ocupa el jueves de 20:00 a 23:45 y el viernes de 00:00 a 02:00. Por
-  // eso se piden los dos días y se descarta lo que no pertenece a este
-  // servicio; mirando solo `fecha` la madrugada quedaba sin contar y el portal
-  // ofrecía como libres mesas que ya estaban dadas.
-  const manana = fechaCivilDe(fecha, "00:00");
+  // Un solo día: `reservas.fecha` es el DÍA DE NEGOCIO, así que la cena de las
+  // 21:00 y la madrugada de las 00:30 de esa misma noche comparten fecha. Se
+  // pedían DOS días de calendario porque el portal guardaba la madrugada con
+  // la fecha civil (un día por delante); corregido eso, el segundo día solo
+  // traía reservas de la noche SIGUIENTE, que se descartaban después.
   const { data: reservasRows } = await admin
     .from("reservas")
     .select("personas, hora, estado, fecha")
     .eq("empresa_id", empresaId)
-    .in("fecha", [fecha, manana])
+    .eq("fecha", fecha)
     .not("estado", "in", `(${ESTADOS_NO_OCUPANTES.join(",")})`);
-  const reservas = ((reservasRows ?? []) as {
+  const reservas = (reservasRows ?? []) as {
     personas: number;
     hora: string;
     fecha: string;
-  }[]).filter((r) => diaNegocioDe(r.fecha, r.hora ?? "") === fecha);
+  }[];
 
   // Bloqueos de sala vigentes esa fecha (cierres puntuales, privatizaciones).
   // Solo cierran el turno cuando bloquean el local ENTERO: un bloqueo de mesas

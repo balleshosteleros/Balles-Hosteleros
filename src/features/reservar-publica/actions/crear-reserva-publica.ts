@@ -19,7 +19,7 @@ import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
 import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
 import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
 import { enviarReservaEmail } from "@/lib/email/reservas/mailer";
-import { fechaCivilDe, turnoDeHora } from "@/features/sala/lib/dia-negocio";
+import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import {
   validarCanjeTicket,
   TICKET_MOTIVO_LABELS,
@@ -187,17 +187,26 @@ export async function crearReservaPublicaAction(
   }
 
   // La fecha que llega es el DÍA DE SERVICIO que eligió el cliente ("quiero
-  // venir el jueves"). Si la hora es de madrugada, el día real de calendario
-  // es el siguiente: la noche del jueves a las 00:30 ocurre de hecho el
-  // viernes. Es la regla de `dia-negocio.ts` — el día no cambia a medianoche,
-  // cambia a las 06:00 — y aquí no se estaba aplicando al guardar.
+  // venir el viernes"), y así se guarda: `reservas.fecha` es el DÍA DE
+  // NEGOCIO, no la fecha civil. Una madrugada de las 00:30 pertenece a la
+  // noche anterior y se guarda con el día que eligió el cliente.
   //
-  // Sin esto, quien elegía "jueves" + "00:00" acababa con una reserva en la
-  // madrugada del jueves, es decir la noche ANTERIOR y ya pasada: aparecía en
-  // sala como vencida desde hacía horas y nadie la esperaba esa noche.
+  // Antes se aplicaba aquí `fechaCivilDe`, que a una madrugada le suma un día,
+  // y eso rompía la reserva por partida doble:
   //
-  // A partir de aquí se usa SIEMPRE `fechaReserva`, nunca `data.fecha`.
-  const fechaReserva = fechaCivilDe(data.fecha, data.hora);
+  //   · La sala la veía en el día siguiente. Quien elegía "sábado 00:00"
+  //     acababa guardado en domingo, un día en el que ni se abre de noche, así
+  //     que la reserva desaparecía del servicio que la esperaba. El correo, en
+  //     cambio, sí decía el día correcto: el cliente leía "sábado" y en sala
+  //     no estaba.
+  //   · La conversión se hacía DOS veces. `validarMotorWebReserva` recibe el
+  //     día de negocio y vuelve a aplicar `fechaCivilDe` por su cuenta (ver
+  //     `instanteReservaMin`), así que la reserva se situaba dos días por
+  //     delante al comprobar si la hora ya había pasado.
+  //
+  // La sala (`createReserva`) siempre guardó el día de negocio; el portal era
+  // la excepción. Ahora las dos vías escriben `fecha` con el mismo significado.
+  const fechaReserva = data.fecha;
 
   // Motor web: grid de 15 min, cierre del día actual y tope de personas por
   // hora. Aplicar antes que cualquier otro side-effect.
