@@ -7,6 +7,7 @@ import { CalendarioPersonal } from "@/features/mi-panel/components/CalendarioPer
 import { SolicitudModal } from "@/features/mi-panel/components/SolicitudModal";
 import { MisSolicitudesList } from "@/features/mi-panel/components/MisSolicitudesList";
 import { MisTareasCronogramaWidget } from "@/features/mi-panel/components/MisTareasCronogramaWidget";
+import { WidgetBoundary } from "@/shared/components/WidgetBoundary";
 // import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate"; // desactivado en pruebas
 import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
 import { PointsHeroCard } from "@/features/mi-panel/components/PointsHeroCard";
@@ -100,25 +101,42 @@ export function MiPanelView() {
         <NotificacionBell />
       </div>
 
+      {/* Cada widget va aislado: si uno revienta, se apaga SOLO ese y el resto
+          del panel sigue en pie. Antes una excepción en cualquiera de ellos
+          subía por el árbol y dejaba la pantalla entera en el error de Next
+          ("No se ha podido cargar esta pantalla"), sin panel y sin fichaje. */}
+
       {/* Barra de fichaje */}
-      <FichajeBar onChange={handleRefresh} onSolicitar={() => setSolicitudOpen(true)} />
+      <WidgetBoundary nombre="fichaje">
+        <FichajeBar onChange={handleRefresh} onSolicitar={() => setSolicitudOpen(true)} />
+      </WidgetBoundary>
 
       {/* POINTS — destacado */}
-      <PointsHeroCard resumen={resumen.points} loading={loadingResumen} />
+      <WidgetBoundary nombre="points" silencioso>
+        <PointsHeroCard resumen={resumen.points} loading={loadingResumen} />
+      </WidgetBoundary>
 
       {/* Tareas del cronograma del rol del usuario */}
-      <MisTareasCronogramaWidget />
+      <WidgetBoundary nombre="tareas-cronograma" silencioso>
+        <MisTareasCronogramaWidget />
+      </WidgetBoundary>
 
       {/* Resumen de toda mi panel */}
-      <ResumenTiles resumen={resumen} loading={loadingResumen} />
+      <WidgetBoundary nombre="resumen" silencioso>
+        <ResumenTiles resumen={resumen} loading={loadingResumen} />
+      </WidgetBoundary>
 
       {/* Detalle: calendario + solicitudes */}
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-5">
-          <CalendarioPersonal refreshKey={refreshKey} />
+          <WidgetBoundary nombre="calendario">
+            <CalendarioPersonal refreshKey={refreshKey} />
+          </WidgetBoundary>
         </div>
         <div className="space-y-5">
-          <MisSolicitudesList refreshKey={refreshKey} onChange={handleRefresh} />
+          <WidgetBoundary nombre="solicitudes">
+            <MisSolicitudesList refreshKey={refreshKey} onChange={handleRefresh} />
+          </WidgetBoundary>
         </div>
       </div>
 

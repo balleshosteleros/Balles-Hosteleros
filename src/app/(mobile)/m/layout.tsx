@@ -6,6 +6,7 @@ import { MobileBottomNav } from "@/features/mi-panel/mobile/components/MobileBot
 import { MobileFichajeProvider } from "@/features/mi-panel/mobile/components/MobileFichajeProvider";
 import { VersionAutoUpdate } from "@/features/mi-panel/mobile/components/VersionAutoUpdate";
 import { MobileIdentidadProvider } from "@/features/mi-panel/mobile/components/MobileIdentidadProvider";
+import { WidgetBoundary } from "@/shared/components/WidgetBoundary";
 import { getMobileIdentidad } from "@/features/mi-panel/mobile/lib/mobile-identidad-data";
 // import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate"; // desactivado en pruebas
 
@@ -110,7 +111,13 @@ export default async function MobileLayout({ children }: { children: React.React
         {children}
       </main>
       <MobileBottomNav />
-      <MobileFichajeProvider />
+      {/* Va en TODAS las pantallas de la app: si su aviso de fichaje revienta,
+          se lleva por delante la app entera esté donde esté el empleado. Aislado
+          y silencioso: como mucho se pierde el aviso automático, nunca la app
+          (y el botón de fichar de la barra sigue funcionando). */}
+      <WidgetBoundary nombre="fichaje-provider" silencioso>
+        <MobileFichajeProvider />
+      </WidgetBoundary>
       {/* Gate bloqueante de notificaciones desactivado durante las pruebas:
           los empleados no deben verse forzados a pulsar "Visto" para trabajar. */}
       {/* <NotificacionesGate /> */}
