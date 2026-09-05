@@ -943,7 +943,11 @@ export function ReservaPublicaForm({
           <Button
             type="submit"
             size="lg"
-            className="w-full font-semibold text-sm h-11 rounded-lg shadow-sm hover:shadow transition-shadow mt-1"
+            // El botón base se atenúa al 50% mientras está desactivado, y el
+            // color de la empresa salía lavado, distinto al de los
+            // desplegables. Se queda en el color pleno: que falta algo ya lo
+            // dice el aviso de debajo, sin descolorir la marca.
+            className="w-full font-semibold text-sm h-11 rounded-lg shadow-sm hover:shadow transition-shadow mt-1 disabled:opacity-100 disabled:cursor-not-allowed"
             disabled={!valido || enviando}
             style={{ background: accent, color: onAccent }}
           >
