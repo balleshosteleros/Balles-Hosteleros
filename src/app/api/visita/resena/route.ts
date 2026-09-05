@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { sendEmail } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -170,6 +171,20 @@ export async function POST(req: Request) {
     }
   }
 
+  // AVISO DE ESTRENO: la PRIMERA valoración que entra por el software (de
+  // cualquier empresa) se avisa por correo, una sola vez, para poder verla
+  // funcionar. No hace falta una marca aparte: si solo existe esta reseña
+  // propia, es que es la primera. A partir de la segunda no vuelve a salir.
+  await avisarPrimeraValoracion(supabase, {
+    empresaId: lead.empresa_id,
+    nombre: lead.nombre,
+    rating,
+    ratingComida,
+    ratingServicio,
+    ratingAmbiente,
+    comentario,
+  });
+
   // ¿Redirección a Google si 5⭐?
   let redirect: string | undefined;
   if (rating === 5) {
@@ -184,4 +199,81 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true, redirect });
+}
+
+/** Destinatario del aviso de estreno. */
+const AVISO_PRIMERA_VALORACION_A = "balleshosteleros@gmail.com";
+
+/**
+ * Correo de estreno: avisa de la PRIMERA valoración recogida por el software.
+ *
+ * Se manda una sola vez en todo el sistema, sea de la empresa que sea. Es para
+ * comprobar que el circuito funciona de punta a punta, no un aviso permanente:
+ * en cuanto hay más de una reseña propia, deja de salir para siempre.
+ *
+ * Nunca tumba la respuesta al cliente: si el correo falla, la valoración ya
+ * está guardada y eso es lo que importa.
+ */
+async function avisarPrimeraValoracion(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  datos: {
+    empresaId: string;
+    nombre: string | null;
+    rating: number;
+    ratingComida: number | null | undefined;
+    ratingServicio: number | null | undefined;
+    ratingAmbiente: number | null | undefined;
+    comentario: string | null | undefined;
+  },
+): Promise<void> {
+  try {
+    // Reseñas nacidas EN el software: las de Cover y las de Google no cuentan,
+    // son histórico importado y no dicen nada de si esto funciona.
+    const { count } = await supabase
+      .from("resenas")
+      .select("id", { count: "exact", head: true })
+      .in("origen", ["reserva", "carta"]);
+    if ((count ?? 0) !== 1) return;
+
+    const { data: emp } = await supabase
+      .from("empresas")
+      .select("nombre")
+      .eq("id", datos.empresaId)
+      .maybeSingle();
+    const local = (emp?.nombre as string | null) ?? "";
+
+    const fila = (etiqueta: string, valor: string) =>
+      `<tr><td style="padding:4px 12px 4px 0;color:#666">${etiqueta}</td>` +
+      `<td style="padding:4px 0;font-weight:600">${valor}</td></tr>`;
+    const nota = (n: number | null | undefined) =>
+      typeof n === "number" ? `${n} / 5` : "no se preguntó";
+
+    const html =
+      `<p>Ha entrado la <strong>primera valoración</strong> recogida por el ` +
+      `software. El circuito funciona.</p>` +
+      `<table style="border-collapse:collapse;font-size:14px">` +
+      fila("Local", local) +
+      fila("Cliente", datos.nombre ?? "Comensal") +
+      fila("Nota global", `${datos.rating} / 5`) +
+      fila("Comida", nota(datos.ratingComida)) +
+      fila("Servicio", nota(datos.ratingServicio)) +
+      fila("Ambiente", nota(datos.ratingAmbiente)) +
+      `</table>` +
+      (datos.comentario
+        ? `<p style="margin-top:12px"><em>“${datos.comentario}”</em></p>`
+        : "") +
+      `<p style="color:#666;font-size:13px;margin-top:16px">Este aviso sale ` +
+      `una sola vez, con la primera. Las siguientes se ven en Calidad → ` +
+      `Reseñas.</p>`;
+
+    await sendEmail({
+      to: AVISO_PRIMERA_VALORACION_A,
+      subject: `Primera valoración recogida${local ? ` — ${local}` : ""}`,
+      html,
+      empresaId: datos.empresaId,
+    });
+  } catch (e) {
+    console.error("[resena] aviso primera valoracion:", e);
+  }
 }
