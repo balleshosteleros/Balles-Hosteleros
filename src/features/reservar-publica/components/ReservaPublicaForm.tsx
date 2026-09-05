@@ -25,6 +25,7 @@ import type { ProductoTicketPublico } from "@/features/reservar-publica/componen
 import { SelectorDisponibilidad } from "@/features/reservar-publica/components/SelectorDisponibilidad";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
 import { SelectorOpcion } from "@/components/ui/selector-opcion";
+import { VolverAWebPublica } from "@/components/VolverAWebPublica";
 import {
   listarGruposZonasPublica,
   type GrupoZonaPublico,
@@ -542,12 +543,13 @@ export function ReservaPublicaForm({
             carta, fotos o ubicación. Va sobre el logo y en discreto: la acción
             de esta página es reservar, esto solo evita el callejón sin salida. */}
         {!embedded && hrefWeb && (
-          <a
-            href={hrefWeb}
-            className="inline-flex items-center gap-1.5 pt-[max(env(safe-area-inset-top),1.25rem)] sm:pt-0 text-sm text-zinc-500 transition-colors hover:text-zinc-800"
-          >
-            <span aria-hidden>←</span> Volver a la web
-          </a>
+          <div className="pt-[max(env(safe-area-inset-top),1.25rem)] sm:pt-0">
+            {/* El mismo botón que la carta y el portal de empleo: una sola
+                salida en todo el software, con el mismo aspecto. Aquí el fondo
+                es claro (en la carta es el hero oscuro), así que se aclara
+                igual que en empleo. */}
+            <VolverAWebPublica className="!border-zinc-200 !bg-white/80 !text-zinc-700 hover:!bg-zinc-100" />
+          </div>
         )}
         {/* HERO con logo — oculto en embed para que el iframe quede limpio. */}
         {!embedded && (
@@ -663,13 +665,7 @@ export function ReservaPublicaForm({
                   Tu ticket cubre {ticketCanje.unidades}{" "}
                   {ticketCanje.unidades === 1 ? "persona" : "personas"}.
                 </p>
-              ) : (
-                <p className="mt-1 text-[11px] text-zinc-500">
-                  Para grupos de más de {maxPersonas}{" "}
-                  {maxPersonas === 1 ? "persona" : "personas"}, llámanos y lo
-                  organizamos contigo.
-                </p>
-              )}
+              ) : null}
             </div>
 
             <div>
