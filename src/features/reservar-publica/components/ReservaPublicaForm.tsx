@@ -55,6 +55,16 @@ interface Props {
   ticketOnly?: boolean;
   /** Si es true, oculta el header con logo (modo iframe / embed). */
   embedded?: boolean;
+  /**
+   * Web del restaurante, para volver desde el portal. Reservar dejó de ser una
+   * sección de la home y pasó a ser esta página entera: sin una vuelta visible,
+   * quien entra por el botón de "Reservar" se queda encerrado en el formulario y
+   * no puede seguir mirando la carta, la ubicación o las fotos.
+   *
+   * Solo se pasa cuando el portal se sirve en el dominio del restaurante; si se
+   * abre desde el dominio del software, esa web no está ahí y no se pinta nada.
+   */
+  hrefWeb?: string | null;
   /** Código de Ticket que llega en el enlace del correo de compra. */
   ticketCodigoInicial?: string | null;
   /**
@@ -102,6 +112,7 @@ export function ReservaPublicaForm({
   ticketOnly = false,
   embedded = false,
   ticketCodigoInicial = null,
+  hrefWeb = null,
   zonaHoraria,
 }: Props) {
   const [nombre, setNombre] = useState("");
@@ -515,9 +526,25 @@ export function ReservaPublicaForm({
             : "max-w-md mx-auto pb-[max(env(safe-area-inset-bottom),1.5rem)]"
         }
       >
+        {/* Vuelta a la web del restaurante: el portal es una página entera, no
+            una sección, así que hace falta una salida visible para seguir viendo
+            carta, fotos o ubicación. Va sobre el logo y en discreto: la acción
+            de esta página es reservar, esto solo evita el callejón sin salida. */}
+        {!embedded && hrefWeb && (
+          <a
+            href={hrefWeb}
+            className="inline-flex items-center gap-1.5 pt-[max(env(safe-area-inset-top),1.25rem)] sm:pt-0 text-sm text-zinc-500 transition-colors hover:text-zinc-800"
+          >
+            <span aria-hidden>←</span> Volver a la web
+          </a>
+        )}
         {/* HERO con logo — oculto en embed para que el iframe quede limpio. */}
         {!embedded && (
-          <header className="text-center pt-[max(env(safe-area-inset-top),1.5rem)] sm:pt-0 pb-4">
+          <header
+            className={`text-center pb-4 ${
+              hrefWeb ? "pt-2" : "pt-[max(env(safe-area-inset-top),1.5rem)] sm:pt-0"
+            }`}
+          >
             {logoUrl ? (
               <div className="mx-auto w-32 h-32 sm:w-44 sm:h-44 flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

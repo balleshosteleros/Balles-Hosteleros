@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
+import { esHostPrincipal } from "@/features/marketing/pagina-web/services/hostname-resolver";
 import type { Viewport } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { zonaHorariaDeConfig } from "@/features/empresa/lib/empresa-server";
@@ -95,6 +97,11 @@ export default async function ReservarCortoPage({
     ? await fetchProductosTicket(slug, keyword.toUpperCase())
     : await fetchProductosTicket(slug, null);
 
+  // Igual que en el portal normal: la vuelta solo existe si estamos en el
+  // dominio del restaurante, donde "/" es su web.
+  const host = (await headers()).get("host") ?? "";
+  const hrefWeb = esHostPrincipal(host) ? null : "/";
+
   return (
     <ReservaPublicaForm
       empresaSlug={empresa.slug}
@@ -106,6 +113,7 @@ export default async function ReservarCortoPage({
       origen={normalizarOrigen(keyword)}
       productosTicket={productosTicket}
       ticketOnly={linkInfo.vendeTickets}
+      hrefWeb={hrefWeb}
     />
   );
 }

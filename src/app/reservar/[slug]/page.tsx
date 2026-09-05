@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
+import { esHostPrincipal } from "@/features/marketing/pagina-web/services/hostname-resolver";
 import type { Viewport } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { zonaHorariaDeConfig } from "@/features/empresa/lib/empresa-server";
@@ -92,6 +94,13 @@ export default async function ReservarPublicaPage({
   const ticketCodigo =
     ticket && /^[A-Z0-9]{6}$/.test(ticket.toUpperCase()) ? ticket.toUpperCase() : null;
 
+  // "Volver a la web" solo tiene sentido si hay una web detrás: cuando el portal
+  // se abre en el dominio del restaurante (bacanalmadrid.com/reservar), su "/"
+  // ES la web. Servido desde el dominio del software, "/" es el login, así que
+  // el enlace no se pinta.
+  const host = (await headers()).get("host") ?? "";
+  const hrefWeb = esHostPrincipal(host) ? null : "/";
+
   return (
     <ReservaPublicaForm
       empresaSlug={empresa.slug}
@@ -103,6 +112,7 @@ export default async function ReservarPublicaPage({
       origen={origenLimpio}
       productosTicket={productosTicket}
       ticketCodigoInicial={ticketCodigo}
+      hrefWeb={hrefWeb}
     />
   );
 }

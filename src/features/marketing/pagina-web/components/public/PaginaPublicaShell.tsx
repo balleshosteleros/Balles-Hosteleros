@@ -82,37 +82,50 @@ export function PaginaPublicaShell({
       : b,
   );
 
-  // Anclas que EXISTEN en esta web. Un botón que apunta a "#reservas" cuando el
-  // cliente ha quitado la sección de reservas deja al visitante donde estaba,
-  // sin que nada se mueva: parece que la web está rota. Aquí se detecta y el
-  // botón simplemente no se pinta.
+  // Reservar es un PORTAL propio (/reservar/slug), como la carta y el empleo, y
+  // no una sección de la home. Antes había las dos cosas: el formulario metido
+  // en un trozo de la página y la página entera, así que el visitante reservaba
+  // en un sitio o en otro según por dónde entrara. Los enlaces guardados en las
+  // webs siguen diciendo "#reservas" (así se crearon), y se reescriben aquí en
+  // vez de migrar los datos: cualquier web nueva o importada queda bien sola.
+  const conReservasResuelto = contexto?.empresaSlug
+    ? conEmpleoResuelto.map((b) => reescribirReservas(b, `/reservar/${contexto.empresaSlug}`))
+    : conEmpleoResuelto;
+
+  // Anclas que EXISTEN en esta web. Un botón que apunta a "#mapa" cuando el
+  // cliente ha quitado el mapa deja al visitante donde estaba, sin que nada se
+  // mueva: parece que la web está rota. Aquí se detecta y el botón simplemente
+  // no se pinta. "#reservas" ya no está: lo de arriba lo ha convertido en un
+  // enlace al portal, que existe siempre.
   const anclasVivas = new Set<string>();
   for (const [tipo, ancla] of [
-    ["reservas", "#reservas"],
     ["mapa", "#mapa"],
     ["footer", "#contacto"],
     ["historia", "#historia"],
   ] as Array<[Bloque["tipo"], string]>) {
-    if (visibleEn(conEmpleoResuelto, tipo)) anclasVivas.add(ancla);
+    if (visibleEn(conReservasResuelto, tipo)) anclasVivas.add(ancla);
   }
 
   // #carta aparte: la sección existe solo si además tiene foto.
   if (
-    conEmpleoResuelto.some(
+    conReservasResuelto.some(
       (b) => b.tipo === "collage_carta" && b.visible && (b.datos.imagenes?.length ?? 0) > 0,
     )
   ) {
     anclasVivas.add("#carta");
   }
 
-  const bloquesLimpios = conEmpleoResuelto.map((b) => limpiarEnlacesRotos(b, anclasVivas));
+  const bloquesLimpios = conReservasResuelto.map((b) => limpiarEnlacesRotos(b, anclasVivas));
 
   // El menú SALE DE LA WEB YA RESUELTA, no está cableado: cada enlace aparece
   // solo si su sección ha sobrevivido. Antes "Ubicación" o "Contacto" se
   // pintaban siempre, así que un cliente que quitara el mapa se quedaba con un
   // enlace en la barra que no llevaba a ninguna parte.
   const visible = (tipo: Bloque["tipo"]) => visibleEn(bloquesLimpios, tipo);
-  const hayReservas = visible("reservas");
+  // El botón de reservar de la barra es la acción principal de la web y lleva al
+  // portal. Solo falta si la empresa no tiene slug todavía, que es cuando el
+  // portal aún no existe.
+  const hrefReservar = contexto?.empresaSlug ? `/reservar/${contexto.empresaSlug}` : null;
   const nav: Array<{ href: string; label: string }> = [];
   // La carta es un portal aparte (/carta/slug); el bloque de la web solo es la
   // llamada. Sin ese bloque, el cliente no quiere enseñar carta.
@@ -151,7 +164,7 @@ export function PaginaPublicaShell({
         } as React.CSSProperties
       }
     >
-      <NavPublica logo={logo} titulo={tituloNav} hayReservas={hayReservas} enlaces={nav} />
+      <NavPublica logo={logo} titulo={tituloNav} hrefReservar={hrefReservar} enlaces={nav} />
       <main>
         {bloquesLimpios.map((b) => (
           <BloquePublico key={b.id} bloque={b} contexto={contexto} />
@@ -169,6 +182,48 @@ export function PaginaPublicaShell({
 /** ¿Este botón lleva al portal de empleo? */
 function esEnlaceEmpleo(href?: string): boolean {
   return typeof href === "string" && href.includes("/empleo/");
+}
+
+/**
+ * Manda al portal de reservas todo lo que antes bajaba a la sección de la home,
+ * y quita esa sección de la página.
+ *
+ * Había DOS sitios para reservar —el formulario incrustado en la home y el
+ * portal a pantalla completa—, y el visitante caía en uno o en otro según el
+ * enlace que pulsara. Ahora reservar es un solo sitio: el portal, donde el
+ * formulario se ve entero y sin el ruido del resto de la web.
+ *
+ * Reescribe en vez de tocar los datos guardados: las webs llevan el "#reservas"
+ * grabado desde que se crearon, y las plantillas y el importador siguen
+ * poniéndolo. Traduciéndolo aquí, tanto las webs actuales como las que se creen
+ * mañana apuntan bien sin migrar nada.
+ */
+function reescribirReservas(bloque: Bloque, portal: string): Bloque {
+  // La sección deja de pintarse: su formulario es justo el que ya sirve el
+  // portal, duplicado dentro de un trozo de la home.
+  if (bloque.tipo === "reservas") return { ...bloque, visible: false };
+
+  const destino = (href?: string) => (href === "#reservas" ? portal : href);
+
+  if (bloque.tipo === "hero" && bloque.datos.cta?.href === "#reservas") {
+    return { ...bloque, datos: { ...bloque.datos, cta: { ...bloque.datos.cta, href: portal } } };
+  }
+  if (bloque.tipo === "cta" && bloque.datos.boton?.href === "#reservas") {
+    return { ...bloque, datos: { ...bloque.datos, boton: { ...bloque.datos.boton, href: portal } } };
+  }
+  if (bloque.tipo === "footer" && bloque.datos.columnas?.some((c) => c.items.some((i) => i.href === "#reservas"))) {
+    return {
+      ...bloque,
+      datos: {
+        ...bloque.datos,
+        columnas: bloque.datos.columnas.map((c) => ({
+          ...c,
+          items: c.items.map((i) => ({ ...i, href: destino(i.href) ?? i.href })),
+        })),
+      },
+    };
+  }
+  return bloque;
 }
 
 /**
@@ -259,12 +314,13 @@ function PieLegal({ redes, textoLegal }: { redes?: PaginaContexto["redes"]; text
 function NavPublica({
   logo,
   titulo,
-  hayReservas,
+  hrefReservar,
   enlaces,
 }: {
   logo: string | null;
   titulo: string;
-  hayReservas: boolean;
+  /** Portal de reservas de esta empresa, o null si aún no tiene slug. */
+  hrefReservar: string | null;
   /** Enlaces ya filtrados: solo los que tienen sección detrás. */
   enlaces: Array<{ href: string; label: string }>;
 }) {
@@ -325,9 +381,9 @@ function NavPublica({
             </a>
           ))}
         </nav>
-        {hayReservas ? (
+        {hrefReservar ? (
           <a
-            href="#reservas"
+            href={hrefReservar}
             className="ml-auto rounded-full px-5 py-2 text-sm font-bold uppercase tracking-wider text-black transition-transform hover:scale-105 md:ml-7"
             style={{ backgroundColor: "var(--pw-primario)" }}
           >
