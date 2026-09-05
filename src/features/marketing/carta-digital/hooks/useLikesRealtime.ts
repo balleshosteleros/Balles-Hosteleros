@@ -21,10 +21,15 @@ export function useLikesRealtime(itemIds: string[]): Record<string, number> {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "carta_items" },
         (payload) => {
-          const row = payload.new as { id: string; likes_count: number } | null;
+          const row = payload.new as { id: string; likes_count: number; likes_base?: number | null } | null;
           if (!row || !ids.has(row.id)) return;
           setCounters((prev) =>
-            prev[row.id] === row.likes_count ? prev : { ...prev, [row.id]: row.likes_count },
+            // El contador visible es base + votos: si aquí se guardara solo
+            // `likes_count`, al votar el número CAERÍA de golpe al perder la base.
+            (() => {
+              const total = (row.likes_base ?? 0) + row.likes_count;
+              return prev[row.id] === total ? prev : { ...prev, [row.id]: total };
+            })(),
           );
         },
       )

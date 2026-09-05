@@ -96,7 +96,7 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
   }, [carta.categorias, filtroExcluidos, totalItems]);
 
   const openItemFinal = openItem
-    ? (counters[openItem.id] ?? openItem.likes_count)
+    ? (counters[openItem.id] ?? openItem.likes_base + openItem.likes_count)
     : 0;
 
   const handleSelectCategoria = (id: string) => {
