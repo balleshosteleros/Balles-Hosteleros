@@ -35,9 +35,12 @@ import { CartaTemaCard } from "./CartaTemaCard";
 export function CartaAdminBoard({
   data,
   baseUrl,
+  conDominioPropio = false,
 }: {
   data: CartaAdminData;
   baseUrl: string;
+  /** Con dominio propio la URL va sin el slug: `bacanalmadrid.com/carta`. */
+  conDominioPropio?: boolean;
 }) {
   const auth = useContext(AuthContext);
   const puedeVerAjustes = auth?.puedeVer?.("AJUSTES") ?? false;
@@ -70,7 +73,11 @@ export function CartaAdminBoard({
   }
 
   const slug = data.empresa.carta_slug;
-  const urlPublica = slug ? `${baseUrl}/carta/${slug}` : null;
+  const urlPublica = slug
+    ? conDominioPropio
+      ? `${baseUrl}/carta`
+      : `${baseUrl}/carta/${slug}`
+    : null;
 
   const handleCreateCat = () => {
     if (!nuevaCat.trim()) return;
@@ -115,7 +122,11 @@ export function CartaAdminBoard({
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SlugConfigCard empresa={data.empresa} baseUrl={baseUrl} />
+        <SlugConfigCard
+          empresa={data.empresa}
+          baseUrl={baseUrl}
+          conDominioPropio={conDominioPropio}
+        />
 
         <Card>
           <CardHeader>

@@ -13,9 +13,11 @@ import { normalizarSlug } from "../../services/slug-validator";
 export function SlugConfigCard({
   empresa,
   baseUrl,
+  conDominioPropio = false,
 }: {
   empresa: CartaEmpresaPublica;
   baseUrl: string;
+  conDominioPropio?: boolean;
 }) {
   const [slug, setSlug] = useState(empresa.carta_slug ?? "");
   const [descripcion, setDescripcion] = useState(empresa.carta_descripcion ?? "");
@@ -24,7 +26,11 @@ export function SlugConfigCard({
   const [pending, startTransition] = useTransition();
 
   const cleanSlug = normalizarSlug(slug);
-  const urlPreview = cleanSlug ? `${baseUrl}/carta/${cleanSlug}` : `${baseUrl}/carta/...`;
+  const urlPreview = conDominioPropio
+    ? `${baseUrl}/carta`
+    : cleanSlug
+      ? `${baseUrl}/carta/${cleanSlug}`
+      : `${baseUrl}/carta/...`;
 
   const handleSlug = () => {
     setMsg(null);
@@ -35,7 +41,10 @@ export function SlugConfigCard({
         return;
       }
       setSlug(res.slug);
-      setMsg({ kind: "ok", text: `Slug guardado: /carta/${res.slug}` });
+      setMsg({
+        kind: "ok",
+        text: conDominioPropio ? "Dirección guardada" : `Dirección guardada: /carta/${res.slug}`,
+      });
     });
   };
 

@@ -7,6 +7,7 @@ import { orgChartsPorEmpresa, type AreaType, type OrgNode } from "@/features/dir
 import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { FASES_ORDER } from "@/features/rrhh/data/reclutamiento";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { dominioPublicoDeEmpresa } from "@/features/marketing/pagina-web/services/dominio-empresa";
 
 /**
  * Fecha+hora de un instante UTC en la zona horaria de la empresa (Ajustes →
@@ -559,6 +560,8 @@ export interface EmpleoUrlConfig {
   empleoSlug: string;
   /** Nombre comercial — valor por defecto sugerido para la URL. */
   nombreComercial: string;
+  /** Dominio propio del restaurante, si lo tiene conectado y verificado. */
+  dominioPropio: string | null;
 }
 
 /** Lee la URL de empleo actual de la empresa activa (cae al nombre comercial). */
@@ -577,7 +580,8 @@ export async function getEmpleoUrlConfig(): Promise<EmpleoUrlConfig | null> {
       (data.empleo_slug as string | null) ??
       (data.slug as string | null) ??
       sanitizeEmpleoSlug(nombreComercial);
-    return { empleoSlug, nombreComercial };
+    const dominioPropio = await dominioPublicoDeEmpresa(empresaId);
+    return { empleoSlug, nombreComercial, dominioPropio };
   } catch (err) {
     console.error("[reclutamiento] getEmpleoUrlConfig:", err);
     return null;

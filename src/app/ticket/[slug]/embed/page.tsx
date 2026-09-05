@@ -1,7 +1,7 @@
 /**
  * La tienda de Tickets, para incrustar en la web del restaurante.
  *
- * Misma vista que `/comprar/[slug]`, pero sin cabecera ni fondo propio: se
+ * Misma vista que `/ticket/[slug]`, pero sin cabecera ni fondo propio: se
  * mete dentro de la página como una sección más, igual que el formulario de
  * reservas. Los Tickets van APARTE de las reservas —una cosa es reservar mesa
  * y otra comprar una experiencia por adelantado— pero pueden convivir en la

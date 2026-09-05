@@ -62,10 +62,10 @@ const PUBLIC_PREFIXES = ['/carta', '/sitio-publico', '/api/google/connect', '/ap
   // política de privacidad SIN cuenta, y una redirección al login es motivo de
   // rechazo directo.
   '/software',
-  // Tienda pública de experiencias y bonos (`/comprar/<empresa>`). La abre un
+  // Tienda pública de experiencias y bonos (`/ticket`). La abre un
   // cliente SIN cuenta desde la web del restaurante: exigirle login sería
   // pedirle que se registre en el software de gestión para poder comprar.
-  '/comprar', '/api/tienda-ticket',
+  '/ticket', '/api/tienda-ticket',
   // Los mismos documentos servidos en la raíz de `software.balleshosteleros.com`
   // (`/legal/privacidad`), que es la URL escrita en la pantalla de
   // consentimiento de Google. El rewrite de next.config las manda a
@@ -88,7 +88,7 @@ const RUTAS_PUBLICAS_EN_DOMINIO_CLIENTE = [
   '/carta',
   '/empleo',
   '/reservar',
-  '/comprar',
+  '/ticket',
   '/formacion',
   '/documentacion',
   '/firmar',

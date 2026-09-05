@@ -20,12 +20,15 @@ interface Props {
   empresaNombre: string;
   ofertaId?: string;
   ofertaTitulo?: string;
+  /** Dominio propio del restaurante: si lo hay, el enlace va corto y sobre él. */
+  dominioPropio?: string | null;
 }
 
 export function DialogSnippetEmbed({
   open, onOpenChange,
   empresaSlug, empresaNombre,
   ofertaId, ofertaTitulo,
+  dominioPropio = null,
 }: Props) {
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -34,12 +37,17 @@ export function DialogSnippetEmbed({
     return window.location.origin;
   }, []);
 
+  // Con dominio propio el enlace sale sobre el del restaurante y sin repetir su
+  // nombre. Sin él se usa el dominio desde el que se abre el panel (el software),
+  // donde el slug sigue haciendo falta para saber de qué local es.
   const url = useMemo(() => {
-    if (!origin) return "";
+    const base = dominioPropio || origin;
+    if (!base) return "";
+    if (dominioPropio) return ofertaId ? `${base}/empleo/${ofertaId}` : `${base}/empleo`;
     return ofertaId
-      ? `${origin}/empleo/${empresaSlug}/${ofertaId}`
-      : `${origin}/empleo/${empresaSlug}`;
-  }, [origin, empresaSlug, ofertaId]);
+      ? `${base}/empleo/${empresaSlug}/${ofertaId}`
+      : `${base}/empleo/${empresaSlug}`;
+  }, [origin, empresaSlug, ofertaId, dominioPropio]);
 
   const iframeSnippet = useMemo(() => {
     return `<iframe

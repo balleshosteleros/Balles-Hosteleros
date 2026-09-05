@@ -152,7 +152,7 @@ export function generarBloquesPrototipo(
       texto: d.cartaPublicada
         ? "Siempre actualizada, con precios y alérgenos."
         : "Publica tu carta digital para que tus clientes la vean aquí.",
-      boton: { label: "Ver la carta", href: `/carta/${d.cartaSlug}`, variante: "primary" },
+      boton: { label: "Ver la carta", href: `/carta`, variante: "primary" },
     });
   }
 
@@ -186,7 +186,7 @@ export function generarBloquesPrototipo(
     push("cta", {
       titulo: "Trabaja con nosotros",
       texto: "Consulta nuestras vacantes abiertas y únete al equipo.",
-      boton: { label: "Ver ofertas", href: `/empleo/${d.empleoSlug}`, variante: "primary" },
+      boton: { label: "Ver ofertas", href: `/empleo`, variante: "primary" },
     });
   }
 
@@ -209,11 +209,11 @@ export function generarBloquesPrototipo(
     const columnas: Array<{ titulo: string; items: Array<{ label: string; href: string }> }> = [];
     const navegar: Array<{ label: string; href: string }> = [];
     if (activos.has("carta") && d.cartaSlug) {
-      navegar.push({ label: "Carta", href: `/carta/${d.cartaSlug}` });
+      navegar.push({ label: "Carta", href: `/carta` });
     }
     if (activos.has("reservas")) navegar.push({ label: "Reservar", href: "#reservas" });
     if (activos.has("empleo") && d.empleoSlug) {
-      navegar.push({ label: "Empleo", href: `/empleo/${d.empleoSlug}` });
+      navegar.push({ label: "Empleo", href: `/empleo` });
     }
     if (navegar.length) columnas.push({ titulo: d.nombre, items: navegar });
     if (contacto.length) columnas.push({ titulo: "Contacto", items: contacto });

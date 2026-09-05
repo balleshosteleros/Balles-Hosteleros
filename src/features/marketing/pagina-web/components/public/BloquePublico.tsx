@@ -774,7 +774,7 @@ function CollageCartaPublico({
           <p className="mt-5 max-w-xl text-sm text-white/80 md:text-base">{frase}</p>
         ) : null}
         <a
-          href={`/carta/${slug}`}
+          href={`/carta`}
           className="mt-9 inline-block rounded-full px-10 py-4 text-xs font-bold uppercase tracking-[0.2em] text-black transition-transform hover:scale-105 md:text-sm"
           style={{ backgroundColor: "var(--pw-primario)" }}
         >
@@ -1108,7 +1108,7 @@ function TicketsPublico({
               style={{ backgroundColor: "var(--pw-primario)" }}
             />
             <div className="relative overflow-hidden rounded-[32px] border border-white/60 bg-white/95 p-4 shadow-2xl backdrop-blur md:p-6">
-              <IframeAutoAlto src={`/comprar/${slug}/embed`} titulo="Comprar experiencia" />
+              <IframeAutoAlto src={`/ticket/embed`} titulo="Comprar experiencia" />
             </div>
           </div>
         ) : (
@@ -1177,7 +1177,7 @@ function ReservasPublico({
               />
               <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.04] p-2 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl md:rounded-[34px] md:p-3">
                 <div className="overflow-hidden rounded-[22px] bg-white md:rounded-[26px]">
-                  <IframeAutoAlto src={`/reservar/${slug}/embed`} titulo="Reservar mesa" />
+                  <IframeAutoAlto src={`/reservar/embed`} titulo="Reservar mesa" />
                 </div>
               </div>
             </div>

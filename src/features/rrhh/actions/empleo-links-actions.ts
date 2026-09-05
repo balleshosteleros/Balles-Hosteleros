@@ -9,14 +9,17 @@ import {
   type EmpleoLink,
 } from "@/features/empleo-publico/data/empleo-links";
 import { CODIGO_WEB, ensureWebLink } from "@/features/rrhh/lib/empleo-web-link";
+import { dominioPublicoDeEmpresa } from "@/features/marketing/pagina-web/services/dominio-empresa";
 import type { OrigenCandidatura } from "@/features/rrhh/data/reclutamiento";
 
 async function getCtx() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null, empleoSlug: null };
+  if (!user)
+    return { supabase, user: null, empresaId: null, empleoSlug: null, dominioPropio: null };
   const empresaId = await getEmpresaActivaForUser(supabase, user.id);
   let empleoSlug: string | null = null;
+  let dominioPropio: string | null = null;
   if (empresaId) {
     const { data } = await supabase
       .from("empresas")
@@ -24,13 +27,18 @@ async function getCtx() {
       .eq("id", empresaId)
       .maybeSingle();
     empleoSlug = (data?.empleo_slug as string | null) ?? (data?.slug as string | null) ?? null;
+    dominioPropio = await dominioPublicoDeEmpresa(empresaId);
   }
-  return { supabase, user, empresaId, empleoSlug };
+  return { supabase, user, empresaId, empleoSlug, dominioPropio };
 }
 
 type Row = Record<string, unknown>;
 
-function rowToLink(row: Row, empleoSlug: string | null): EmpleoLink {
+function rowToLink(
+  row: Row,
+  empleoSlug: string | null,
+  dominioPropio: string | null = null,
+): EmpleoLink {
   const codigo = row.codigo as string;
   return {
     id: row.id as string,
@@ -38,7 +46,7 @@ function rowToLink(row: Row, empleoSlug: string | null): EmpleoLink {
     codigo,
     nombre: row.nombre as string,
     origenCategoria: (row.origen_categoria as OrigenCandidatura) ?? "otros",
-    urlGenerada: empleoSlug ? buildEmpleoUrl(empleoSlug, codigo) : "",
+    urlGenerada: empleoSlug ? buildEmpleoUrl(empleoSlug, codigo, dominioPropio) : "",
     activo: row.activo as boolean,
     protegido: (row.protegido as boolean | null) ?? false,
     creadoPor: (row.creado_por as string | null) ?? null,
@@ -49,7 +57,7 @@ function rowToLink(row: Row, empleoSlug: string | null): EmpleoLink {
 
 export async function listEmpleoLinks() {
   try {
-    const { supabase, empresaId, empleoSlug } = await getCtx();
+    const { supabase, empresaId, empleoSlug, dominioPropio } = await getCtx();
     if (!empresaId) return { ok: false, data: [] as EmpleoLink[], error: "Sin empresa" };
     // Garantiza que la empresa siempre tiene su enlace WEB por defecto.
     await ensureWebLink(supabase, empresaId);
@@ -61,7 +69,7 @@ export async function listEmpleoLinks() {
       .order("protegido", { ascending: false })
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return { ok: true, data: (data ?? []).map((r) => rowToLink(r, empleoSlug)) };
+    return { ok: true, data: (data ?? []).map((r) => rowToLink(r, empleoSlug, dominioPropio)) };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
     return { ok: false, data: [] as EmpleoLink[], error: msg };
@@ -83,7 +91,7 @@ export async function createEmpleoLink(input: CreateEmpleoLinkInput) {
     }
     const nombre = input.nombre.trim();
     if (!nombre) return { ok: false, error: "El nombre es obligatorio" };
-    const { supabase, user, empresaId, empleoSlug } = await getCtx();
+    const { supabase, user, empresaId, empleoSlug, dominioPropio } = await getCtx();
     if (!empresaId) return { ok: false, error: "Sin empresa" };
     const { data, error } = await supabase
       .from("empleo_links")
@@ -101,7 +109,7 @@ export async function createEmpleoLink(input: CreateEmpleoLinkInput) {
       throw error;
     }
     revalidatePath("/rrhh/reclutamiento");
-    return { ok: true, data: rowToLink(data, empleoSlug) };
+    return { ok: true, data: rowToLink(data, empleoSlug, dominioPropio) };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
     return { ok: false, error: msg };

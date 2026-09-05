@@ -65,7 +65,7 @@ const PORTALES = [
   { ruta: 'carta', campo: 'carta_slug' },
   { ruta: 'empleo', campo: 'empleo_slug' },
   { ruta: 'reservar', campo: 'slug' },
-  { ruta: 'comprar', campo: 'slug' },
+  { ruta: 'ticket', campo: 'slug' },
 ] as const
 
 async function portalesSinSlug() {
@@ -131,6 +131,68 @@ async function portalesSinSlug() {
   }
 }
 
+/**
+ * Subdominios del software que sirven la web de un cliente, con el dominio
+ * propio al que hay que mandarlos.
+ *
+ * Solo devuelve los que TIENEN dominio propio verificado: redirigir uno que no
+ * lo tenga dejaría a ese restaurante sin web accesible.
+ */
+async function subdominiosSoftwareARedirigir() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return []
+
+  try {
+    const { createClient } = await import('@supabase/supabase-js')
+    const db = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+
+    const { data: doms } = await db
+      .from('paginas_web_dominios')
+      .select('hostname, empresa_id')
+      .eq('estado', 'VERIFICADO')
+    if (!doms?.length) return []
+
+    const porEmpresa = new Map<string, { software: string[]; propios: string[] }>()
+    for (const d of doms) {
+      const host = String(d.hostname ?? '').trim().toLowerCase()
+      const empresaId = d.empresa_id as string | null
+      if (!host || !empresaId) continue
+      if (!porEmpresa.has(empresaId)) porEmpresa.set(empresaId, { software: [], propios: [] })
+      const grupo = porEmpresa.get(empresaId)!
+      if (host.endsWith('.balleshosteleros.com')) grupo.software.push(host)
+      else grupo.propios.push(host)
+    }
+
+    const reglas: Array<{
+      source: string
+      has: Array<{ type: 'host'; value: string }>
+      destination: string
+      permanent: boolean
+    }> = []
+
+    for (const { software, propios } of porEmpresa.values()) {
+      if (!software.length || !propios.length) continue
+      const destinoHost = propios.find((h) => !h.startsWith('www.')) ?? propios[0]
+      for (const host of software) {
+        reglas.push({
+          source: '/:ruta*',
+          has: [{ type: 'host', value: host }],
+          destination: `https://${destinoHost}/:ruta*`,
+          permanent: true,
+        })
+      }
+    }
+
+    return reglas
+  } catch (err) {
+    console.error('[next.config] subdominiosSoftwareARedirigir:', err)
+    return []
+  }
+}
+
 const nextConfig: NextConfig = {
   // Probar la app desde el MÓVIL contra el localhost del Mac.
   //
@@ -192,11 +254,11 @@ const nextConfig: NextConfig = {
             destination: '/sitio-publico',
           },
           {
-            // `carta|reservar|empleo|comprar` quedan FUERA: son portales del
+            // `carta|reservar|empleo|ticket` quedan FUERA: son portales del
             // software, no páginas del CMS. Los sirve `portalesSinSlug()` justo
             // arriba, que les pone el slug de la empresa dueña del dominio.
             source:
-              '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap|carta|reservar|empleo|comprar)[^/.]+)',
+              '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap|carta|reservar|empleo|ticket)[^/.]+)',
             has: [{ type: 'host' as const, value: host }],
             destination: '/sitio-publico/:ruta',
           },
@@ -248,6 +310,39 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // Subdominios del SOFTWARE que servían la web de un cliente
+      // (`bacanal.balleshosteleros.com`). Se cierran: mezclan la marca de la
+      // gestora con la del restaurante en una URL pública, y además duplican en
+      // Google el mismo contenido bajo dos dominios.
+      //
+      // Redirect permanente al dominio propio, no un 404: son las direcciones
+      // que se usaron antes de conectar el dominio real, así que puede quedar
+      // alguna pegada por ahí y tiene que acabar en el sitio bueno. El
+      // permanente es también lo que hace que Google se quede solo con el
+      // dominio del restaurante.
+      ...(await subdominiosSoftwareARedirigir()),
+      // Portales servidos en el dominio del CLIENTE con el nombre del local
+      // repetido en la ruta (`bacanalmadrid.com/carta/bacanal`): sobra, porque
+      // el dominio ya dice de qué local es. Se manda a la forma corta.
+      //
+      // Es un REDIRECT y no un borrado de la ruta: hay QR ya impresos y enlaces
+      // publicados con la forma larga, y tienen que seguir llevando a su sitio.
+      // La ruta `[slug]` se conserva viva por debajo —es la que sirve el rewrite
+      // de `portalesSinSlug()` y la red de seguridad si la BD falla en un build.
+      ...PREVIEW_WEB_HOSTS.flatMap((host) => [
+        {
+          source: '/:ruta(carta|reservar|empleo|ticket)/:slug',
+          has: [{ type: 'host' as const, value: host }],
+          destination: '/:ruta',
+          permanent: false,
+        },
+        {
+          source: '/:ruta(carta|reservar|empleo|ticket)/:slug/:resto+',
+          has: [{ type: 'host' as const, value: host }],
+          destination: '/:ruta/:resto+',
+          permanent: false,
+        },
+      ]),
       // Raíz del subdominio de QR, sin código (alguien teclea el subdominio a
       // pelo): aviso neutro en vez de la pantalla de login del sistema.
       //
@@ -352,14 +447,14 @@ const nextConfig: NextConfig = {
         // Reserva pública en modo embed (PRP-051) — sin chrome del portal.
         // Las rutas /reservar/[slug]/embed y /reservar/[slug]/[keyword]/embed
         // permiten incrustar el flujo en webs externas vía <iframe>.
-        source: '/reservar/:slug/embed',
+        source: '/reservar/:path*/embed',
         headers: [
           { key: 'X-Frame-Options', value: 'ALLOWALL' },
           { key: 'Content-Security-Policy', value: 'frame-ancestors *' },
         ],
       },
       {
-        source: '/reservar/:slug/:keyword/embed',
+        source: '/ticket/:path*/embed',
         headers: [
           { key: 'X-Frame-Options', value: 'ALLOWALL' },
           { key: 'Content-Security-Policy', value: 'frame-ancestors *' },

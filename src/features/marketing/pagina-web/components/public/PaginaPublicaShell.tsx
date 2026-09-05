@@ -88,8 +88,13 @@ export function PaginaPublicaShell({
   // en un sitio o en otro según por dónde entrara. Los enlaces guardados en las
   // webs siguen diciendo "#reservas" (así se crearon), y se reescriben aquí en
   // vez de migrar los datos: cualquier web nueva o importada queda bien sola.
+  //
+  // La ruta va SIN el slug: esta web se sirve siempre en el dominio del propio
+  // restaurante, y ahí `/reservar` ya identifica el local (lo resuelve el
+  // rewrite de `next.config.ts`). Repetir el nombre no aportaba nada y enseñaba
+  // el slug interno en una URL de cara al público.
   const conReservasResuelto = contexto?.empresaSlug
-    ? conEmpleoResuelto.map((b) => reescribirReservas(b, `/reservar/${contexto.empresaSlug}`))
+    ? conEmpleoResuelto.map((b) => reescribirReservas(b, `/reservar`))
     : conEmpleoResuelto;
 
   // Anclas que EXISTEN en esta web. Un botón que apunta a "#mapa" cuando el
@@ -125,7 +130,7 @@ export function PaginaPublicaShell({
   // El botón de reservar de la barra es la acción principal de la web y lleva al
   // portal. Solo falta si la empresa no tiene slug todavía, que es cuando el
   // portal aún no existe.
-  const hrefReservar = contexto?.empresaSlug ? `/reservar/${contexto.empresaSlug}` : null;
+  const hrefReservar = contexto?.empresaSlug ? `/reservar` : null;
   const nav: Array<{ href: string; label: string }> = [];
   // La carta es un portal aparte (/carta/slug); el bloque de la web solo es la
   // llamada. Sin ese bloque, el cliente no quiere enseñar carta.
@@ -137,7 +142,7 @@ export function PaginaPublicaShell({
       (b) => b.tipo === "collage_carta" && b.visible && (b.datos.imagenes?.length ?? 0) > 0,
     ) || visible("menu");
   if (contexto?.empresaSlug && hayCarta) {
-    nav.push({ href: `/carta/${contexto.empresaSlug}`, label: "Carta" });
+    nav.push({ href: `/carta`, label: "Carta" });
   }
   if (visible("mapa")) nav.push({ href: "#mapa", label: "Ubicación" });
   if (visible("footer")) nav.push({ href: "#contacto", label: "Contacto" });
@@ -147,7 +152,7 @@ export function PaginaPublicaShell({
     (b) => b.tipo === "cta" && b.visible && esEnlaceEmpleo(b.datos.boton?.href),
   );
   if (contexto?.empresaSlug && hayLlamadaEmpleo) {
-    nav.push({ href: `/empleo/${contexto.empresaSlug}?o=WEB`, label: "Empleo" });
+    nav.push({ href: `/empleo?o=WEB`, label: "Empleo" });
   }
 
   return (
@@ -181,7 +186,10 @@ export function PaginaPublicaShell({
 
 /** ¿Este botón lleva al portal de empleo? */
 function esEnlaceEmpleo(href?: string): boolean {
-  return typeof href === "string" && href.includes("/empleo/");
+  if (typeof href !== "string") return false;
+  // Reconoce las dos formas: la corta (`/empleo`, `/empleo?o=WEB`) y la larga
+  // con slug, que es la que llevan guardada dentro las webs ya creadas.
+  return href.includes("/empleo/") || href === "/empleo" || href.startsWith("/empleo?");
 }
 
 /**

@@ -77,6 +77,7 @@ export function EnlacesEmpleoSection({ empresaNombre }: Props) {
   // `slugGuardado` = lo que vive en BD (URL que funciona). `slugValor` = lo que se edita.
   const [slugGuardado, setSlugGuardado] = useState("");
   const [slugValor, setSlugValor] = useState("");
+  const [dominioPropio, setDominioPropio] = useState<string | null>(null);
 
   async function refrescar() {
     setLoading(true);
@@ -103,6 +104,7 @@ export function EnlacesEmpleoSection({ empresaNombre }: Props) {
         const inicial = cfg?.empleoSlug || sanitizeSlug(cfg?.nombreComercial ?? empresaNombre);
         setSlugGuardado(inicial);
         setSlugValor(inicial);
+        setDominioPropio(cfg?.dominioPropio ?? null);
       })
       .catch((err) => console.error("[EnlacesEmpleoSection] getEmpleoUrlConfig:", err))
       .finally(() => {
@@ -113,13 +115,26 @@ export function EnlacesEmpleoSection({ empresaNombre }: Props) {
     };
   }, [empresaNombre]);
 
+  // Con dominio propio el enlace va corto y sobre el dominio del restaurante:
+  // es el que se reparte en carteles y redes, y no debe enseñar el dominio del
+  // software. Sin él se cae al dominio del software, donde el slug hace falta.
   const urlSlugGuardada = useMemo(
-    () => (origin && slugGuardado ? `${origin}/empleo/${slugGuardado}` : ""),
-    [origin, slugGuardado],
+    () =>
+      dominioPropio
+        ? `${dominioPropio}/empleo`
+        : origin && slugGuardado
+          ? `${origin}/empleo/${slugGuardado}`
+          : "",
+    [origin, slugGuardado, dominioPropio],
   );
   const urlSlugPreview = useMemo(
-    () => (origin && slugValor ? `${origin}/empleo/${slugValor}` : ""),
-    [origin, slugValor],
+    () =>
+      dominioPropio
+        ? `${dominioPropio}/empleo`
+        : origin && slugValor
+          ? `${origin}/empleo/${slugValor}`
+          : "",
+    [origin, slugValor, dominioPropio],
   );
   const haySlugCambios = slugValor !== slugGuardado;
 

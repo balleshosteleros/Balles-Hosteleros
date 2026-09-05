@@ -18,7 +18,6 @@ import {
   PALABRA_CLAVE_MAX,
   validarPalabraClave,
   buildIframeSnippet,
-  buildEmbedUrl,
   type ReservaLink,
 } from "@/features/sala/data/reserva-links";
 import {
@@ -99,29 +98,21 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
     );
   }
 
-  function copiarIframe(link: ReservaLink, slug: string | null) {
-    if (!slug) {
-      toast.error("La empresa no tiene slug configurado");
+  function copiarIframe(link: ReservaLink) {
+    // El embed se deriva de la URL ya calculada (`urlGenerada`) en vez de
+    // recomponerla desde el slug: con dominio propio la URL es corta y ya no
+    // lleva el nombre dentro, así que no hay slug que extraer de ella.
+    if (!link.urlGenerada) {
+      toast.error("Este enlace todavía no tiene dirección pública");
       return;
     }
-    const url = buildEmbedUrl(slug, link.palabraClave);
+    const url = `${link.urlGenerada.replace(/\/$/, "")}/embed`;
     const snippet = buildIframeSnippet(url);
     navigator.clipboard.writeText(snippet).then(() => {
       setCopiadoIframeId(link.id);
       toast.success("Snippet de iframe copiado");
       setTimeout(() => setCopiadoIframeId((cur) => (cur === link.id ? null : cur)), 1500);
     });
-  }
-
-  function extractEmpresaSlug(link: ReservaLink): string | null {
-    try {
-      const u = new URL(link.urlGenerada);
-      const parts = u.pathname.split("/").filter(Boolean);
-      const idx = parts.indexOf("reservar");
-      return idx >= 0 ? parts[idx + 1] ?? null : null;
-    } catch {
-      return null;
-    }
   }
 
   const palabraValidacion = useMemo(() => {
@@ -296,7 +287,7 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
                     <div className="inline-flex items-center gap-1">
                       <Button
                         size="icon" variant="ghost" className="h-7 w-7"
-                        onClick={() => copiarIframe(l, extractEmpresaSlug(l))}
+                        onClick={() => copiarIframe(l)}
                         title="Copiar snippet de iframe (embed para web)"
                       >
                         {copiadoIframeId === l.id
@@ -355,7 +346,7 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
               )}
               {palabraValidacion?.ok && (
                 <p className="text-xs text-muted-foreground mt-2 break-all">
-                  URL: <code className="text-foreground">.../reservar/&lt;empresa&gt;/{palabraValidacion.valor.toLowerCase()}</code>
+                  URL: <code className="text-foreground">.../reservar/{palabraValidacion.valor.toLowerCase()}</code>
                 </p>
               )}
             </div>

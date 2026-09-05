@@ -131,7 +131,7 @@ export function crearBloquesPlantilla(nombreEmpresa?: string, slugEmpresa?: stri
         // en /empleo/[slug]. El slug real lo pone `crearPagina` al crear la web.
         boton: {
           label: "Ver ofertas de empleo",
-          href: slug ? `/empleo/${slug}?o=WEB` : "",
+          href: slug ? `/empleo?o=WEB` : "",
           variante: "primary",
         },
         imagen_url: FOTO_PENDIENTE,
@@ -165,9 +165,9 @@ export function crearBloquesPlantilla(nombreEmpresa?: string, slugEmpresa?: stri
           {
             titulo: "Navegación",
             items: [
-              { label: "Carta", href: slug ? `/carta/${slug}` : "#carta" },
+              { label: "Carta", href: slug ? `/carta` : "#carta" },
               { label: "Reservar", href: "#reservas" },
-              ...(slug ? [{ label: "Empleo", href: `/empleo/${slug}?o=WEB` }] : []),
+              ...(slug ? [{ label: "Empleo", href: `/empleo?o=WEB` }] : []),
             ],
           },
         ],

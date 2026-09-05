@@ -9,29 +9,43 @@ import {
   validarPalabraClave,
   type ReservaLink,
 } from "@/features/sala/data/reserva-links";
+import { dominioPublicoDeEmpresa } from "@/features/marketing/pagina-web/services/dominio-empresa";
 
 async function getCtx() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null, empresaSlug: null };
+  if (!user)
+    return { supabase, user: null, empresaId: null, empresaSlug: null, dominioPropio: null };
   const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
   let empresaSlug: string | null = null;
+  let dominioPropio: string | null = null;
   if (empresaId) {
     const { data } = await supabase.from("empresas").select("slug").eq("id", empresaId).maybeSingle();
     empresaSlug = (data?.slug as string) ?? null;
+    dominioPropio = await dominioPublicoDeEmpresa(empresaId);
   }
-  return { supabase, user, empresaId, empresaSlug };
+  return { supabase, user, empresaId, empresaSlug, dominioPropio };
 }
 
 type Row = Record<string, unknown>;
 
-function rowToLink(row: Row, empresaSlug: string | null = null, ticketProductoIds: string[] = []): ReservaLink {
+function rowToLink(
+  row: Row,
+  empresaSlug: string | null = null,
+  ticketProductoIds: string[] = [],
+  dominioPropio: string | null = null,
+): ReservaLink {
   const palabraClave = row.palabra_clave as string;
   return {
     id: row.id as string,
     empresaId: row.empresa_id as string,
     palabraClave,
-    urlGenerada: empresaSlug ? buildReservaUrl(empresaSlug, palabraClave) : (row.url_generada as string),
+    // La URL se RECALCULA en cada lectura en vez de servir `url_generada`: así
+    // los enlaces creados antes de conectar el dominio propio salen ya cortos,
+    // sin migrar la columna ni pedirle a nadie que los rehaga.
+    urlGenerada: empresaSlug
+      ? buildReservaUrl(empresaSlug, palabraClave, dominioPropio)
+      : (row.url_generada as string),
     activo: row.activo as boolean,
     creadoPor: (row.creado_por as string | null) ?? null,
     createdAt: row.created_at as string,
@@ -44,7 +58,7 @@ function rowToLink(row: Row, empresaSlug: string | null = null, ticketProductoId
 
 export async function listReservaLinks() {
   try {
-    const { supabase, empresaId, empresaSlug } = await getCtx();
+    const { supabase, empresaId, empresaSlug, dominioPropio } = await getCtx();
     if (!empresaId) return { ok: false, data: [] as ReservaLink[], error: "Sin empresa" };
     const { data, error } = await supabase
       .from("reserva_links")
@@ -71,7 +85,9 @@ export async function listReservaLinks() {
     }
     return {
       ok: true,
-      data: rows.map((row) => rowToLink(row, empresaSlug, pivotMap.get(row.id as string) ?? [])),
+      data: rows.map((row) =>
+        rowToLink(row, empresaSlug, pivotMap.get(row.id as string) ?? [], dominioPropio),
+      ),
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
@@ -92,10 +108,10 @@ export async function createReservaLink(input: string | CreateReservaLinkInput) 
       typeof input === "string" ? { palabraClave: input } : input;
     const v = validarPalabraClave(normalized.palabraClave);
     if (!v.ok) return { ok: false, error: v.error };
-    const { supabase, user, empresaId, empresaSlug } = await getCtx();
+    const { supabase, user, empresaId, empresaSlug, dominioPropio } = await getCtx();
     if (!empresaId) return { ok: false, error: "Sin empresa" };
     if (!empresaSlug) return { ok: false, error: "La empresa no tiene slug configurado" };
-    const url = buildReservaUrl(empresaSlug, v.valor);
+    const url = buildReservaUrl(empresaSlug, v.valor, dominioPropio);
     const vendeTickets = Boolean(normalized.vendeTickets);
     const productoIds = vendeTickets ? (normalized.ticketProductoIds ?? []) : [];
     if (vendeTickets && productoIds.length === 0) {
@@ -127,7 +143,7 @@ export async function createReservaLink(input: string | CreateReservaLinkInput) 
       if (pivot.error) throw pivot.error;
     }
     revalidatePath("/sala/reservas/links");
-    return { ok: true, data: rowToLink(data, empresaSlug, productoIds) };
+    return { ok: true, data: rowToLink(data, empresaSlug, productoIds, dominioPropio) };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
     return { ok: false, error: msg };

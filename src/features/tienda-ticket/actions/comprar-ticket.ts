@@ -207,7 +207,7 @@ export async function comprarTicketAction(
       nombre: input.nombre.trim(),
       telefono: input.telefono?.trim() || undefined,
     },
-    redirectUrl: `${getSiteUrl()}/comprar/${input.empresaSlug}/gracias?compra=${compraId}`,
+    redirectUrl: `${getSiteUrl()}/ticket/${input.empresaSlug}/gracias?compra=${compraId}`,
   });
 
   if (!orden.ok) {

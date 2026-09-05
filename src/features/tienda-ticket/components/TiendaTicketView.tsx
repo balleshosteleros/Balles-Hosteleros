@@ -157,7 +157,7 @@ export function TiendaTicketView({
           email: email.trim(),
           onSuccess() {
             // Pagado: se le lleva a su código y sus instrucciones.
-            window.location.href = `/comprar/${empresaSlug}/gracias?compra=${r.compraId}`;
+            window.location.href = `/ticket/${empresaSlug}/gracias?compra=${r.compraId}`;
           },
           onValidation() {
             setError(null);

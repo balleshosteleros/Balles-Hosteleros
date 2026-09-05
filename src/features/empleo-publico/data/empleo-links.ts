@@ -29,8 +29,20 @@ export function validarCodigo(
   return { ok: true, valor };
 }
 
-/** URL pública del portal de empleo con la atribución de canal. */
-export function buildEmpleoUrl(empleoSlug: string, codigo: string): string {
+/**
+ * URL pública del portal de empleo con la atribución de canal.
+ *
+ * Con dominio propio sale `bacanalmadrid.com/empleo?o=web`: sin el nombre del
+ * local repetido en la ruta y sin la marca de la gestora. Ver
+ * `dominioPublicoDeEmpresa` y `buildReservaUrl` para el porqué.
+ */
+export function buildEmpleoUrl(
+  empleoSlug: string,
+  codigo: string,
+  dominioPropio?: string | null,
+): string {
+  const o = `?o=${codigo.toLowerCase()}`;
+  if (dominioPropio) return `${dominioPropio.replace(/\/$/, "")}/empleo${o}`;
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com";
-  return `${base.replace(/\/$/, "")}/empleo/${empleoSlug}?o=${codigo.toLowerCase()}`;
+  return `${base.replace(/\/$/, "")}/empleo/${empleoSlug}${o}`;
 }
