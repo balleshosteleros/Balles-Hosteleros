@@ -160,6 +160,20 @@
 
 }
 
+/* El CONTENEDOR DE VISTA pinta su fondo, no solo redefine los tokens.
+   Sin esto, una vista de sala cuyo contenido no llegara abajo del todo
+   —Cobros con pocas filas, la configuración— dejaba ver por debajo el fondo
+   CLARO del <body>: media pantalla azul marino y una franja blanca al pie. En
+   la vista normal no se notaba porque el plano llena la pantalla y lo tapaba.
+
+   Va sobre `.sala-tema.flex`, que es como se marcan los tres contenedores de
+   vista (lista+plano, cobros y configuración) y NO los popover de los filtros
+   de columna, que llevan el mismo ámbito para heredar los tokens pero pintan
+   su propio `bg-popover` y no deben estirarse. */
+.sala-tema.flex {
+  background-color: hsl(var(--background));
+}
+
 .sala-tema.sala-oscuro {
   /* Azul marino profundo — no negro puro: mantiene el tinte 220 del software. */
   --background: 220 42% 9%;
