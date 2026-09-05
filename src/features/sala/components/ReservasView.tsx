@@ -20,7 +20,7 @@ import { ahoraEnZona, formatFechaHoraEnZona } from "@/features/empresa/lib/zona-
 import { diaNegocioDe } from "@/features/sala/lib/dia-negocio";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useBloqueoCambioEmpresa } from "@/shared/hooks/useBloqueoCambioEmpresa";
-import { Plus, Search, ChevronLeft, ChevronRight, Check, Move, Map as MapIcon, List as ListIcon, Lock, Table2 } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, Check, Move, Map as MapIcon, List as ListIcon, Lock, Table2, ArrowLeftRight, ArrowRight } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
   () =>
@@ -2456,6 +2456,43 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   );
 }
 
+/**
+ * Mesa dibujada dentro del aviso de solape: el código arriba y quién queda
+ * sentado debajo. Es el dibujo el que explica la opción, por eso no lleva
+ * texto de apoyo. `conflicto` la pinta en ámbar (dos reservas a la vez).
+ */
+function MesaEsquema({
+  codigo,
+  ocupantes,
+  conflicto = false,
+}: {
+  codigo: string;
+  ocupantes: string[];
+  conflicto?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-md border px-2 py-1.5 text-center min-w-0",
+        conflicto
+          ? "border-amber-500/60 bg-amber-500/10"
+          : "border-border bg-muted/40",
+      )}
+    >
+      <div className="font-semibold tabular-nums truncate">{codigo}</div>
+      {ocupantes.length === 0 ? (
+        <div className="text-[11px] italic text-muted-foreground">Libre</div>
+      ) : (
+        ocupantes.map((o, i) => (
+          <div key={`${o}-${i}`} className="text-[11px] text-muted-foreground truncate">
+            {o}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 function mapDbToReserva(row: Record<string, unknown>): Reserva {
   return {
     id: row.id as string,
@@ -2678,7 +2715,6 @@ function PlanoCanvas({
   onWalkIn,
   reservaMoviendo,
   onElegirDestino,
-  onCancelarMover,
   esOscuro,
   encuadre,
 }: {
@@ -2717,7 +2753,6 @@ function PlanoCanvas({
    */
   reservaMoviendo?: Reserva | null;
   onElegirDestino?: (m: Mesa) => void;
-  onCancelarMover?: () => void;
   /** Tema activo de la vista: decide si los pasteles de zona se aclaran u oscurecen. */
   esOscuro: boolean;
   /**
@@ -2866,29 +2901,9 @@ function PlanoCanvas({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden py-3 min-h-0">
-      {/* Barra del modo mover: mientras la reserva está "en la mano" el plano
-          deja de abrir popovers y el siguiente clic elige la mesa destino. */}
-      {moviendo && reservaMoviendo && (
-        <div className="shrink-0 mx-3 mb-2 rounded-md border border-sky-500/50 bg-sky-500/10 px-3 py-2 flex items-center gap-2 text-xs">
-          <Move className="h-4 w-4 shrink-0 text-sky-600 animate-pulse" />
-          <span className="min-w-0 truncate">
-            Moviendo{" "}
-            <span className="font-semibold">
-              {reservaMoviendo.cliente || "WALK IN"} {reservaMoviendo.apellidos}
-            </span>{" "}
-            · {reservaMoviendo.hora.slice(0, 5)} · {reservaMoviendo.comensales} per —
-            pulsa la mesa destino en el plano.
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-[11px] ml-auto shrink-0"
-            onClick={() => onCancelarMover?.()}
-          >
-            Cancelar
-          </Button>
-        </div>
-      )}
+      {/* En el modo mover el plano deja de abrir popovers y el siguiente clic
+          elige la mesa destino. Sin barra de aviso: se ve en el propio plano, y
+          Escape cancela. */}
       <div
         ref={outerRef}
         className={cn(
@@ -6305,7 +6320,6 @@ export function ReservasView() {
               onWalkIn={abrirWalkInEnMesa}
               reservaMoviendo={reservaADesplazar}
               onElegirDestino={elegirMesaDestino}
-              onCancelarMover={cancelarDesplazar}
               esOscuro={esOscuro}
             />
           ) : (
@@ -7367,76 +7381,78 @@ export function ReservasView() {
           </DialogHeader>
           {choqueDesplazar && reservaADesplazar && (
             <div className="space-y-3 text-xs">
-              {/* Sólo lo imprescindible: a quién pisa y hasta qué hora. */}
-              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 divide-y divide-amber-500/20">
-                {choqueDesplazar.choques.map((c) => (
-                  <div key={c.reservaId} className="px-3 py-2 flex items-center justify-between gap-2">
-                    <span className="font-medium truncate">{c.cliente || "WALK IN"}</span>
-                    <span className="shrink-0 tabular-nums text-muted-foreground">
-                      {c.horaInicio}–{c.horaFin} · {c.personas} per · {c.mesa}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              {/* Avisos de aforo. No bloquean: se dicen para que la decisión
-                  se tome sabiendo con qué se va a encontrar sala al montar. */}
-              {(choqueDesplazar.avisoAforo || choqueDesplazar.avisoAforoOtra) && (
-                <div className="space-y-1.5">
-                  {choqueDesplazar.avisoAforo && (
-                    <p className="flex gap-1.5 text-amber-700 dark:text-amber-300">
-                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
-                      <span>{choqueDesplazar.avisoAforo}</span>
-                    </p>
-                  )}
-                  {choqueDesplazar.avisoAforoOtra && (
-                    <p className="flex gap-1.5 text-amber-700 dark:text-amber-300">
-                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
-                      <span>
-                        Al intercambiar:{" "}
-                        {choqueDesplazar.avisoAforoOtra.charAt(0).toLowerCase()}
-                        {choqueDesplazar.avisoAforoOtra.slice(1)}
-                      </span>
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Cada botón dice debajo, en una línea, qué deja sobre la mesa. */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                {choqueDesplazar.permutable && (
-                  <button
-                    type="button"
-                    disabled={guardandoDesplazar}
-                    onClick={() =>
-                      permutarDesplazamiento(
-                        reservaADesplazar,
-                        choqueDesplazar.mesa,
-                        choqueDesplazar.permutable!,
-                      )
-                    }
-                    className="rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2 text-white hover:bg-emerald-700 disabled:opacity-60"
-                  >
-                    <span className="block font-medium">Intercambiar</span>
-                    <span className="block text-[11px] text-emerald-50/80">
-                      Cada una a la mesa de la otra
-                    </span>
-                  </button>
-                )}
+              {/* Esquema, no párrafos: cada opción dibuja cómo quedan las dos
+                  mesas si se elige. Se decide mirando, no leyendo. */}
+              {choqueDesplazar.permutable && (
                 <button
                   type="button"
                   disabled={guardandoDesplazar}
-                  onClick={() => aplicarDesplazamiento(reservaADesplazar, choqueDesplazar.mesa)}
-                  className={cn(
-                    "rounded-md border px-3 py-2 hover:bg-muted disabled:opacity-60",
-                    !choqueDesplazar.permutable && "col-span-2",
-                  )}
+                  onClick={() =>
+                    permutarDesplazamiento(
+                      reservaADesplazar,
+                      choqueDesplazar.mesa,
+                      choqueDesplazar.permutable!,
+                    )
+                  }
+                  className="w-full rounded-lg border-2 border-emerald-600 bg-emerald-500/5 p-3 text-left hover:bg-emerald-500/10 disabled:opacity-60"
                 >
-                  <span className="block font-medium">Mover igualmente</span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    Las dos sobre {choqueDesplazar.mesa.codigo}
-                  </span>
+                  <div className="flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-400">
+                    <ArrowLeftRight className="h-4 w-4 shrink-0" />
+                    Intercambiar
+                  </div>
+                  <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                    <MesaEsquema
+                      codigo={codigosDeMesa(reservaADesplazar.mesaCodigo).join(" + ")}
+                      ocupantes={[choqueDesplazar.permutable.cliente || "WALK IN"]}
+                    />
+                    <ArrowLeftRight className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <MesaEsquema
+                      codigo={choqueDesplazar.mesa.codigo}
+                      ocupantes={[reservaADesplazar.cliente || "WALK IN"]}
+                    />
+                  </div>
+                  {choqueDesplazar.avisoAforoOtra && (
+                    <p className="mt-2 flex gap-1.5 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                      <span>{choqueDesplazar.avisoAforoOtra}</span>
+                    </p>
+                  )}
                 </button>
-              </div>
+              )}
+
+              <button
+                type="button"
+                disabled={guardandoDesplazar}
+                onClick={() => aplicarDesplazamiento(reservaADesplazar, choqueDesplazar.mesa)}
+                className="w-full rounded-lg border p-3 text-left hover:bg-muted disabled:opacity-60"
+              >
+                <div className="flex items-center gap-2 font-semibold">
+                  <Users className="h-4 w-4 shrink-0" />
+                  Mover igualmente
+                </div>
+                <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <MesaEsquema
+                    codigo={codigosDeMesa(reservaADesplazar.mesaCodigo).join(" + ")}
+                    ocupantes={[]}
+                  />
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <MesaEsquema
+                    codigo={choqueDesplazar.mesa.codigo}
+                    conflicto
+                    ocupantes={[
+                      ...choqueDesplazar.choques.map((c) => c.cliente || "WALK IN"),
+                      reservaADesplazar.cliente || "WALK IN",
+                    ]}
+                  />
+                </div>
+                {choqueDesplazar.avisoAforo && (
+                  <p className="mt-2 flex gap-1.5 text-amber-700 dark:text-amber-300">
+                    <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                    <span>{choqueDesplazar.avisoAforo}</span>
+                  </p>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={() => setChoqueDesplazar(null)}
