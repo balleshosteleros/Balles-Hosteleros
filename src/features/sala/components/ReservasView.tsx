@@ -1825,6 +1825,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             <SelectorHoraCuartos
               value={form.hora}
               aviso={horaConflictiva}
+              disabled={turnoCerrado.cerrado}
               onChange={(h) => setForm((p) => ({ ...p, hora: h }))}
             />
           )}
@@ -3342,6 +3343,18 @@ export function ReservasView() {
   const [fechaEdit, setFechaEdit] = useState("");
   const [horaEdit, setHoraEdit] = useState("");
   const [guardandoCuando, setGuardandoCuando] = useState(false);
+  /**
+   * Horas que el horario de la empresa permite para la reserva abierta. Al
+   * editar se ofrecían las 24 horas del día: se podía dejar una reserva a una
+   * hora en la que el local ni siquiera abre, y al caer fuera de su turno
+   * desaparecía del día en el que estaba. Se piden igual que al crear, por
+   * fecha y turno, para que dentro y fuera se ofrezca lo mismo.
+   *
+   * `null` = todavía no se sabe (o no se ha podido calcular): en ese caso no
+   * se limita nada, porque impedir elegir por un fallo de lectura es peor que
+   * dejar elegir de más —el servidor sigue validando al guardar.
+   */
+  const [horasEdit, setHorasEdit] = useState<string[] | null>(null);
   /** Aviso de peligro: la mesa ya está ocupada en esa franja. */
   /**
    * Aviso de mesa ya ocupada. `forzar` solo viene cuando el cambio se puede
@@ -3666,6 +3679,36 @@ export function ReservasView() {
     setFechaEdit(selectedReserva.fecha);
     setHoraEdit(selectedReserva.hora.slice(0, 5));
   }, [selectedReserva]);
+
+  /**
+   * Horas que ofrece la ficha al editar: las del horario de apertura de ESA
+   * fecha y turno, igual que al crear. Se recalculan al mover la fecha, porque
+   * el horario cambia según el día de la semana.
+   */
+  useEffect(() => {
+    if (!selectedReserva || !fechaEdit) {
+      setHorasEdit(null);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      const res = await getDisponibilidadTurno({
+        fecha: fechaEdit,
+        turno: selectedReserva.turno === "CENA" ? "CENA" : "COMIDA",
+        personas: selectedReserva.comensales,
+        zona: null,
+        localId: localId || null,
+        duracionMin: null,
+      });
+      if (cancelado) return;
+      // Un fallo al calcular no bloquea la edición: se deja la hora libre y el
+      // servidor sigue siendo la última barrera al guardar.
+      setHorasEdit(res.ok ? res.data.slots.map((s) => s.hora) : null);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [selectedReserva, fechaEdit, localId]);
 
   /**
    * Tamaños de grupo que ofrece la ficha de edición. Mismo criterio que al
@@ -6620,6 +6663,7 @@ export function ReservasView() {
                     <SelectorHoraCuartos
                       value={horaEdit}
                       disabled={guardandoCuando}
+                      horasPermitidas={horasEdit ?? undefined}
                       onChange={setHoraEdit}
                       onCommit={(h) =>
                         guardarCuando(selectedReserva.id, "hora", h)
