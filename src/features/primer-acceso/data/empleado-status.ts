@@ -34,8 +34,17 @@ export interface EmpleadoStatus {
 
 async function getCtx() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return { supabase, user };
+  // `getUser()` es una llamada de RED en cada carga de página. Si revienta
+  // (timeout, red), la excepción sube desde el layout y tumba la app entera.
+  // Sin usuario resuelto se trata como "no autenticado", que es el camino
+  // seguro y ya está contemplado más abajo.
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    return { supabase, user };
+  } catch (e) {
+    console.error("[guard] getUser falló:", e);
+    return { supabase, user: null };
+  }
 }
 
 export const getEmpleadoGuardStatus = cache(
@@ -49,14 +58,27 @@ export const getEmpleadoGuardStatus = cache(
     // rellenar sus datos indefinidamente. Se piden todas y basta con que UNA esté
     // pendiente (los datos personales son de la persona, no de la empresa: al
     // guardarlos se reflejan en sus fichas espejo).
-    const { data: fichas } = await supabase
-      .from("empleados")
-      .select("perfil_completado")
-      .eq("user_id", user.id);
+    // Blindaje: esto lo llama el LAYOUT (escritorio y móvil), por encima de
+    // cualquier boundary. Si la consulta revienta —timeout de Supabase, red, el
+    // pool ocupado— la excepción sube sin que nada la recoja y tumba la app
+    // entera: el "No se ha podido cargar" del que no se sale ni recargando.
+    //
+    // Ante la duda NO se muestra el asistente: dejar entrar a alguien que ya
+    // tenía sus datos es inofensivo (lo peor, verlo una vez de más); impedirle
+    // entrar y fichar, no. `hasUser` es true porque la sesión SÍ está validada.
+    try {
+      const { data: fichas } = await supabase
+        .from("empleados")
+        .select("perfil_completado")
+        .eq("user_id", user.id);
 
-    if (!fichas || fichas.length === 0) return { shouldShowWizard: false, hasUser: true };
-    const pendiente = fichas.some((f) => !f.perfil_completado);
-    return { shouldShowWizard: pendiente, hasUser: true };
+      if (!fichas || fichas.length === 0) return { shouldShowWizard: false, hasUser: true };
+      const pendiente = fichas.some((f) => !f.perfil_completado);
+      return { shouldShowWizard: pendiente, hasUser: true };
+    } catch (e) {
+      console.error("[guard] getEmpleadoGuardStatus falló — se deja entrar:", e);
+      return { shouldShowWizard: false, hasUser: true };
+    }
   },
 );
 

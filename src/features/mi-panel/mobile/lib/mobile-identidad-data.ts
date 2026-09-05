@@ -49,6 +49,23 @@ const VACIO: MobileIdentidad = {
 };
 
 export async function getMobileIdentidad(): Promise<MobileIdentidad> {
+  // Blindaje: esto lo llama el LAYOUT de /m, así que corre en TODAS las
+  // pantallas de la app y por encima de cualquier boundary. Si una de sus
+  // consultas falla (timeout de Supabase, red, el pool ocupado), la excepción
+  // sube sin que nada la recoja y el empleado se queda sin app entera — el
+  // "No se ha podido cargar" del que no se sale ni recargando.
+  //
+  // La identidad es decorativa (nombre, avatar, icono de empresa en la
+  // cabecera): que falte un rato es molesto; que impida entrar y fichar, no.
+  try {
+    return await identidadInterna();
+  } catch (e) {
+    console.error("[movil] getMobileIdentidad falló — se entra sin identidad:", e);
+    return VACIO;
+  }
+}
+
+async function identidadInterna(): Promise<MobileIdentidad> {
   const supabase = await createClient();
   const {
     data: { user },
