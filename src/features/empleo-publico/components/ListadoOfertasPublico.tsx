@@ -1,5 +1,5 @@
-import Link from "next/link";
-import { MapPin, Clock, Briefcase, ChevronRight, Utensils, Building2, FileText } from "lucide-react";
+import { MapPin, Clock, Briefcase, Utensils, Building2, FileText } from "lucide-react";
+import { OfertaCardLink } from "./OfertaCardLink";
 import type { EmpleoPortal, OfertaPublica } from "../services/empleo-fetch";
 
 const JORNADA_LABEL: Record<string, string> = {
@@ -20,55 +20,42 @@ function ordenarPorOrden(a: OfertaPublica, b: OfertaPublica): number {
 
 function OfertaCard({ o, empleoSlug, canalQuery }: { o: OfertaPublica; empleoSlug: string; canalQuery: string }) {
   return (
-    <Link
-      href={`/empleo/${empleoSlug}/${o.id}${canalQuery}`}
-      className="group relative block overflow-hidden rounded-xl border border-border/60 bg-card/70 backdrop-blur-sm p-4 md:p-5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-[var(--brand-primary)] active:scale-[0.99]"
-    >
-      {/* Relleno con el color de marca al pulsar la vacante */}
-      <span
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-[0.06] group-active:opacity-100"
-        style={{ background: "var(--brand-primary)" }}
-      />
-      <div className="relative flex items-start gap-4">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-lg md:text-xl font-semibold transition-colors group-hover:text-[var(--brand-primary)] group-active:text-[var(--brand-text)]">
-            {o.titulo}
-          </h3>
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground transition-colors group-active:text-[var(--brand-text)]/85">
-            {(o.departamento_nombre || o.categoria) && (
-              <span className="inline-flex items-center gap-1">
-                <Briefcase className="h-3.5 w-3.5" />
-                {o.departamento_nombre ?? o.categoria}
-              </span>
-            )}
-            {o.ubicacion && (
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
-                {o.ubicacion}
-              </span>
-            )}
-            {o.tipo_jornada && (
-              <span className="inline-flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" />
-                {JORNADA_LABEL[o.tipo_jornada] ?? o.tipo_jornada}
-              </span>
-            )}
-            {o.tipo_contrato && (
-              <span className="inline-flex items-center gap-1">
-                <FileText className="h-3.5 w-3.5" />
-                {o.tipo_contrato}
-              </span>
-            )}
-          </div>
-          {o.descripcion && (
-            <p className="mt-3 text-sm text-foreground/80 line-clamp-2 transition-colors group-active:text-[var(--brand-text)]/85">
-              {o.descripcion}
-            </p>
-          )}
-        </div>
-        <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0 transition-transform group-hover:translate-x-1 group-active:text-[var(--brand-text)]" />
+    <OfertaCardLink href={`/empleo/${empleoSlug}/${o.id}${canalQuery}`}>
+      <h3 className="text-lg md:text-xl font-semibold transition-colors group-hover:text-[var(--brand-primary)] group-active:text-[var(--brand-text)]">
+        {o.titulo}
+      </h3>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground transition-colors group-active:text-[var(--brand-text)]/85">
+        {(o.departamento_nombre || o.categoria) && (
+          <span className="inline-flex items-center gap-1">
+            <Briefcase className="h-3.5 w-3.5" />
+            {o.departamento_nombre ?? o.categoria}
+          </span>
+        )}
+        {o.ubicacion && (
+          <span className="inline-flex items-center gap-1">
+            <MapPin className="h-3.5 w-3.5" />
+            {o.ubicacion}
+          </span>
+        )}
+        {o.tipo_jornada && (
+          <span className="inline-flex items-center gap-1">
+            <Clock className="h-3.5 w-3.5" />
+            {JORNADA_LABEL[o.tipo_jornada] ?? o.tipo_jornada}
+          </span>
+        )}
+        {o.tipo_contrato && (
+          <span className="inline-flex items-center gap-1">
+            <FileText className="h-3.5 w-3.5" />
+            {o.tipo_contrato}
+          </span>
+        )}
       </div>
-    </Link>
+      {o.descripcion && (
+        <p className="mt-3 text-sm text-foreground/80 line-clamp-2 transition-colors group-active:text-[var(--brand-text)]/85">
+          {o.descripcion}
+        </p>
+      )}
+    </OfertaCardLink>
   );
 }
 
