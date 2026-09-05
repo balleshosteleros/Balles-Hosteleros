@@ -22,6 +22,14 @@ interface Props {
   cargar: (dias: number) => Promise<
     { ok: true; data: SerieEstadisticas } | { ok: false; error: string }
   >;
+  /**
+   * Contenido extra bajo la gráfica, al que se le pasa el periodo elegido
+   * arriba. Sirve para que el panel de comportamiento de la web (botones,
+   * tiempo, orígenes) hable SIEMPRE del mismo tramo que la gráfica: con dos
+   * selectores separados, los números de la misma pantalla se contradirían.
+   * Los QR no lo usan: no tienen botones dentro.
+   */
+  extra?: (dias: number) => React.ReactNode;
 }
 
 /**
@@ -32,7 +40,7 @@ interface Props {
  * ("cuánta gente entra y cuándo") y mantener dos gráficas distintas acabaría
  * con dos aspectos distintos para el mismo dato.
  */
-export function PanelEstadisticas({ titulo, subtitulo, unidad, cargar }: Props) {
+export function PanelEstadisticas({ titulo, subtitulo, unidad, cargar, extra }: Props) {
   const [dias, setDias] = useState(30);
   const [datos, setDatos] = useState<SerieEstadisticas>(SERIE_VACIA);
   const [cargando, setCargando] = useState(true);
@@ -142,6 +150,8 @@ export function PanelEstadisticas({ titulo, subtitulo, unidad, cargar }: Props) 
               {d.otro > 0 && <Aparato label="Otros" valor={d.otro} />}
             </div>
           )}
+
+          {extra?.(dias)}
         </>
       )}
     </div>

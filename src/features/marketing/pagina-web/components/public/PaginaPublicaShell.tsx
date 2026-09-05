@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Bloque, BrandingSnapshot } from "../../types";
 import { BloquePublico } from "./BloquePublico";
 import { BannerCookies, EnlaceConfigurarCookies } from "./BannerCookies";
+import { MedidorWeb } from "./MedidorWeb";
 
 export interface PaginaContexto {
   empresaId: string | null;
@@ -82,31 +83,23 @@ export function PaginaPublicaShell({
       : b,
   );
 
-  // Reservar es un PORTAL propio (/reservar/slug), como la carta y el empleo, y
-  // no una sección de la home. Antes había las dos cosas: el formulario metido
-  // en un trozo de la página y la página entera, así que el visitante reservaba
-  // en un sitio o en otro según por dónde entrara. Los enlaces guardados en las
-  // webs siguen diciendo "#reservas" (así se crearon), y se reescriben aquí en
-  // vez de migrar los datos: cualquier web nueva o importada queda bien sola.
-  //
-  // La ruta va SIN el slug: esta web se sirve siempre en el dominio del propio
-  // restaurante, y ahí `/reservar` ya identifica el local (lo resuelve el
-  // rewrite de `next.config.ts`). Repetir el nombre no aportaba nada y enseñaba
-  // el slug interno en una URL de cara al público.
+  // El cliente reserva DENTRO de la web, en la ventana incrustada de la sección
+  // de reservas. El botón de la barra lleva además al portal a pantalla
+  // completa, para quien prefiera verlo entero.
   const conReservasResuelto = contexto?.empresaSlug
-    ? conEmpleoResuelto.map((b) => reescribirReservas(b, `/reservar`))
+    ? conEmpleoResuelto.map((b) => reescribirReservas(b))
     : conEmpleoResuelto;
 
   // Anclas que EXISTEN en esta web. Un botón que apunta a "#mapa" cuando el
   // cliente ha quitado el mapa deja al visitante donde estaba, sin que nada se
   // mueva: parece que la web está rota. Aquí se detecta y el botón simplemente
-  // no se pinta. "#reservas" ya no está: lo de arriba lo ha convertido en un
-  // enlace al portal, que existe siempre.
+  // no se pinta.
   const anclasVivas = new Set<string>();
   for (const [tipo, ancla] of [
     ["mapa", "#mapa"],
     ["footer", "#contacto"],
     ["historia", "#historia"],
+    ["reservas", "#reservas"],
   ] as Array<[Bloque["tipo"], string]>) {
     if (visibleEn(conReservasResuelto, tipo)) anclasVivas.add(ancla);
   }
@@ -127,10 +120,14 @@ export function PaginaPublicaShell({
   // pintaban siempre, así que un cliente que quitara el mapa se quedaba con un
   // enlace en la barra que no llevaba a ninguna parte.
   const visible = (tipo: Bloque["tipo"]) => visibleEn(bloquesLimpios, tipo);
-  // El botón de reservar de la barra es la acción principal de la web y lleva al
-  // portal. Solo falta si la empresa no tiene slug todavía, que es cuando el
-  // portal aún no existe.
-  const hrefReservar = contexto?.empresaSlug ? `/reservar` : null;
+  // El botón de reservar de la barra: baja a la ventana de reservas de la propia
+  // web si la sección está puesta, y solo lleva al portal a pantalla completa
+  // cuando esa sección no existe.
+  const hrefReservar = visibleEn(bloquesLimpios, "reservas")
+    ? "#reservas"
+    : contexto?.empresaSlug
+      ? `/reservar`
+      : null;
   const nav: Array<{ href: string; label: string }> = [];
   // La carta es un portal aparte (/carta/slug); el bloque de la web solo es la
   // llamada. Sin ese bloque, el cliente no quiere enseñar carta.
@@ -178,6 +175,9 @@ export function PaginaPublicaShell({
       <PieLegal redes={contexto?.redes ?? null} textoLegal={textoLegal} />
       <BotonWhatsApp url={contexto?.redes?.whatsapp ?? null} />
       <BannerCookies hrefPolitica={hrefPoliticaCookies} />
+      {/* Cuenta los botones que se pulsan y el tiempo de la visita. Sin cookies
+          ni identificadores: solo suma al contador del día de esta página. */}
+      <MedidorWeb paginaId={contexto?.paginaId ?? null} />
       <FuenteMarca nombre={tipografia} />
       <EstilosPublicos />
     </div>
@@ -193,44 +193,25 @@ function esEnlaceEmpleo(href?: string): boolean {
 }
 
 /**
- * Manda al portal de reservas todo lo que antes bajaba a la sección de la home,
- * y quita esa sección de la página.
+ * La sección de reservas se queda en la web, con su ventana para reservar sin
+ * salir de ella.
  *
- * Había DOS sitios para reservar —el formulario incrustado en la home y el
- * portal a pantalla completa—, y el visitante caía en uno o en otro según el
- * enlace que pulsara. Ahora reservar es un solo sitio: el portal, donde el
- * formulario se ve entero y sin el ruido del resto de la web.
- *
- * Reescribe en vez de tocar los datos guardados: las webs llevan el "#reservas"
- * grabado desde que se crearon, y las plantillas y el importador siguen
- * poniéndolo. Traduciéndolo aquí, tanto las webs actuales como las que se creen
- * mañana apuntan bien sin migrar nada.
+ * Se probó a sacarlo fuera —quitar la sección y mandar al portal a pantalla
+ * completa— y se revirtió (Iván, 05-sep-2026): al visitante no se le saca de la
+ * web para reservar.
  */
-function reescribirReservas(bloque: Bloque, portal: string): Bloque {
-  // La sección deja de pintarse: su formulario es justo el que ya sirve el
-  // portal, duplicado dentro de un trozo de la home.
-  if (bloque.tipo === "reservas") return { ...bloque, visible: false };
+function reescribirReservas(bloque: Bloque): Bloque {
+  // La sección de reservas SE MANTIENE: el cliente reserva sin salir de la web,
+  // en la ventana incrustada. Sacarlo fuera a una página aparte se probó y se
+  // descartó (Iván, 05-sep-2026): mandar al visitante fuera de la web para
+  // reservar pierde reservas.
+  //
+  // Los botones que decían "#reservas" siguen bajando a esa sección; solo el
+  // menú y el botón de la barra llevan al portal a pantalla completa, para
+  // quien prefiera verlo entero.
+  if (bloque.tipo === "reservas") return bloque;
 
-  const destino = (href?: string) => (href === "#reservas" ? portal : href);
-
-  if (bloque.tipo === "hero" && bloque.datos.cta?.href === "#reservas") {
-    return { ...bloque, datos: { ...bloque.datos, cta: { ...bloque.datos.cta, href: portal } } };
-  }
-  if (bloque.tipo === "cta" && bloque.datos.boton?.href === "#reservas") {
-    return { ...bloque, datos: { ...bloque.datos, boton: { ...bloque.datos.boton, href: portal } } };
-  }
-  if (bloque.tipo === "footer" && bloque.datos.columnas?.some((c) => c.items.some((i) => i.href === "#reservas"))) {
-    return {
-      ...bloque,
-      datos: {
-        ...bloque.datos,
-        columnas: bloque.datos.columnas.map((c) => ({
-          ...c,
-          items: c.items.map((i) => ({ ...i, href: destino(i.href) ?? i.href })),
-        })),
-      },
-    };
-  }
+  // Los botones se quedan como están: "#reservas" baja a la ventana de la web.
   return bloque;
 }
 

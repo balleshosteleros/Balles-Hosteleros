@@ -224,6 +224,80 @@ export async function crearItem(input: {
   }
 }
 
+/**
+ * Renumera los platos de una categoría a 1, 2, 3… sin huecos.
+ *
+ * El orden lo escribe una persona, y al borrar un plato o mover otro quedaban
+ * saltos ("5 platos, el último con el número 8") que no significan nada y
+ * confunden al siguiente que entra a ordenar. Se llama después de cada cambio.
+ */
+async function compactarOrden(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  empresaId: string,
+  categoriaId: string,
+): Promise<void> {
+  const { data } = await supabase
+    .from("carta_items")
+    .select("id, orden")
+    .eq("empresa_id", empresaId)
+    .eq("categoria_id", categoriaId)
+    .order("orden", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  const filas = (data ?? []) as { id: string; orden: number }[];
+  for (let i = 0; i < filas.length; i++) {
+    const deseado = i + 1;
+    if (filas[i].orden === deseado) continue;
+    await supabase.from("carta_items").update({ orden: deseado }).eq("id", filas[i].id);
+  }
+}
+
+/**
+ * Coloca un plato en la posición pedida dentro de su categoría.
+ *
+ * Se inserta ANTES del que ocupa ese hueco y luego se renumera todo: así el
+ * número que escribe el usuario es literal —"ponme este el 2" lo deja segundo—
+ * en vez de depender de si el destino estaba libre.
+ */
+export async function moverItemAPosicion(itemId: string, posicion: number): Promise<ActionResult> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "Sin empresa." };
+
+    const { data: item } = await supabase
+      .from("carta_items")
+      .select("id, categoria_id")
+      .eq("id", itemId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!item) return { ok: false, error: "Plato no encontrado." };
+
+    const categoriaId = (item as { categoria_id: string }).categoria_id;
+
+    const { data } = await supabase
+      .from("carta_items")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("categoria_id", categoriaId)
+      .order("orden", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    const ids = ((data ?? []) as { id: string }[]).map((r) => r.id).filter((id) => id !== itemId);
+    const destino = Math.min(Math.max(1, Math.trunc(posicion)), ids.length + 1);
+    ids.splice(destino - 1, 0, itemId);
+
+    for (let i = 0; i < ids.length; i++) {
+      await supabase.from("carta_items").update({ orden: i + 1 }).eq("id", ids[i]);
+    }
+
+    revalidar(await getEmpresaSlug(supabase as never, empresaId));
+    return { ok: true };
+  } catch (err) {
+    console.error("[carta][moverItemAPosicion] fatal:", err);
+    return { ok: false, error: friendlyError(err, "moverItemAPosicion") };
+  }
+}
+
 export async function actualizarItem(input: {
   id: string;
   categoriaId?: string;
@@ -237,6 +311,8 @@ export async function actualizarItem(input: {
   visible?: boolean;
   destacado?: boolean;
   orden?: number;
+  /** Arranque visual del contador de "me gusta". No es un voto. */
+  likesBase?: number;
 }): Promise<ActionResult> {
   try {
     const { supabase, empresaId } = await getAppContext();
@@ -255,6 +331,8 @@ export async function actualizarItem(input: {
     if (input.visible !== undefined) patch.visible = input.visible;
     if (input.destacado !== undefined) patch.destacado = input.destacado;
     if (input.orden !== undefined) patch.orden = input.orden;
+    if (input.likesBase !== undefined)
+      patch.likes_base = Math.max(0, Math.trunc(input.likesBase));
 
     const { error } = await supabase
       .from("carta_items")
@@ -281,11 +359,12 @@ export async function borrarItem(id: string): Promise<ActionResult> {
 
     const { data: item } = await supabase
       .from("carta_items")
-      .select("foto_storage_path")
+      .select("foto_storage_path, categoria_id")
       .eq("id", id)
       .eq("empresa_id", empresaId)
       .maybeSingle();
     const storagePath = (item as { foto_storage_path: string | null } | null)?.foto_storage_path;
+    const categoriaId = (item as { categoria_id: string } | null)?.categoria_id;
 
     const { error } = await supabase
       .from("carta_items")
@@ -300,6 +379,9 @@ export async function borrarItem(id: string): Promise<ActionResult> {
       const { error: stErr } = await supabase.storage.from("carta-fotos").remove([storagePath]);
       if (stErr) console.warn("[carta][borrarItem] storage:", stErr.message);
     }
+    // Al quitar un plato queda un hueco en la numeración: se renumera para que
+    // la categoría siga siendo 1, 2, 3… sin saltos.
+    if (categoriaId) await compactarOrden(supabase, empresaId, categoriaId);
     revalidar(await getEmpresaSlug(supabase as never, empresaId));
     return { ok: true };
   } catch (err) {

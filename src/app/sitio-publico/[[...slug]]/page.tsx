@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { resolverHostname } from "@/features/marketing/pagina-web/services/hostname-resolver";
 import { PaginaPublicaShell } from "@/features/marketing/pagina-web/components/public/PaginaPublicaShell";
-import { registrarVisita } from "@/features/marketing/pagina-web/services/visitas";
+import { registrarVisita, esRobot } from "@/features/marketing/pagina-web/services/visitas";
+import { clasificarOrigen, registrarOrigen } from "@/features/marketing/pagina-web/services/analitica";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -25,6 +26,8 @@ function slugDeParams(slug: string[] | undefined): string {
 
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
+  /** `utm_source` de los enlaces propios (el QR de la mesa, una campaña). */
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -73,7 +76,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function PublicCatchAllPage({ params }: PageProps) {
+export default async function PublicCatchAllPage({ params, searchParams }: PageProps) {
   const host = await obtenerHost();
   if (!host) notFound();
   const { slug } = await params;
@@ -83,7 +86,25 @@ export default async function PublicCatchAllPage({ params }: PageProps) {
   // La visita se apunta aquí y no en `generateMetadata`, que Next ejecuta
   // aparte en la misma petición: contar en los dos sitios duplicaría cada
   // visita. Sin `await`: la web no espera a la estadística.
-  void registrarVisita(match.pagina_id, (await headers()).get("user-agent"));
+  const cabeceras = await headers();
+  const userAgent = cabeceras.get("user-agent");
+  void registrarVisita(match.pagina_id, userAgent);
+
+  // De dónde llega la gente. Se lee en el SERVIDOR, del `referer` de la
+  // petición: el navegador solo lo manda en la primera carga, así que hacerlo
+  // desde el cliente perdería el dato en cuanto la página se hidrata.
+  if (!esRobot(userAgent)) {
+    const query = await searchParams;
+    const utm = query?.utm_source;
+    void registrarOrigen(
+      match.pagina_id,
+      clasificarOrigen(
+        cabeceras.get("referer"),
+        typeof utm === "string" ? utm : null,
+        host,
+      ),
+    );
+  }
 
   return (
     <PaginaPublicaShell

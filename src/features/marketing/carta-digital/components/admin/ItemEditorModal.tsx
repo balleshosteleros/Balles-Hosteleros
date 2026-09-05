@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/shared/components/ui/select";
 import { ALERGENOS_UE, type CartaCategoria, type CartaItem, type Alergeno } from "../../types";
-import { crearItem, actualizarItem, borrarItem } from "../../actions/carta-admin-actions";
+import { crearItem, actualizarItem, borrarItem, moverItemAPosicion } from "../../actions/carta-admin-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { FotoUploader } from "./FotoUploader";
 
@@ -46,6 +46,8 @@ export function ItemEditorModal({
   const [categoriaId, setCategoriaId] = useState<string>("");
   const [alergenos, setAlergenos] = useState<Set<Alergeno>>(new Set());
   const [destacado, setDestacado] = useState(false);
+  const [ordenVisual, setOrdenVisual] = useState("");
+  const [likesBase, setLikesBase] = useState("");
   const [visible, setVisible] = useState(true);
   const [fotoUrl, setFotoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,8 @@ export function ItemEditorModal({
       setCategoriaId(item.categoria_id);
       setAlergenos(new Set(item.alergenos));
       setDestacado(item.destacado);
+      setOrdenVisual(String(item.orden ?? ""));
+      setLikesBase(String(item.likes_base ?? ""));
       setVisible(item.visible);
       setFotoUrl(item.foto_url);
     } else {
@@ -99,14 +103,25 @@ export function ItemEditorModal({
         alergenos: Array.from(alergenos),
         destacado,
       };
+      const base = parseInt(likesBase, 10);
       const res = item
         ? await actualizarItem({
             id: item.id,
             categoriaId,
             visible,
+            likesBase: Number.isFinite(base) && base >= 0 ? base : 0,
             ...payload,
           })
         : await crearItem({ categoriaId, ...payload });
+
+      // El orden se aplica aparte: mover uno recoloca a los demás, así que no
+      // puede viajar en el mismo parche que el resto de campos.
+      if (res.ok && item) {
+        const pos = parseInt(ordenVisual, 10);
+        if (Number.isFinite(pos) && pos >= 1 && pos !== item.orden) {
+          await moverItemAPosicion(item.id, pos);
+        }
+      }
       if (!res.ok) {
         setError(res.error);
         return;
@@ -191,6 +206,41 @@ export function ItemEditorModal({
                 className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
               />
             </div>
+
+            {item ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="orden">Orden visual</Label>
+                  <Input
+                    id="orden"
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    value={ordenVisual}
+                    onChange={(e) => setOrdenVisual(e.target.value)}
+                  />
+                  {/* La numeración se recoloca sola: si escribes 2, este pasa a
+                      segundo y los demás corren. Nunca quedan huecos. */}
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Posición en su categoría. El resto se recoloca solo.
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="likesbase">Empezar «me gusta» con</Label>
+                  <Input
+                    id="likesbase"
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    value={likesBase}
+                    onChange={(e) => setLikesBase(e.target.value)}
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Suma al contador de la carta. No cuenta en las estadísticas.
+                  </p>
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-3">
               <div>

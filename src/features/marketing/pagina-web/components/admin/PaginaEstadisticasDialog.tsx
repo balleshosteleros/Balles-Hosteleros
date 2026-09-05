@@ -8,7 +8,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PanelEstadisticas } from "@/features/marketing/estadisticas/components/PanelEstadisticas";
-import { visitasDePaginaWeb } from "@/features/marketing/estadisticas/actions";
+import { PanelComportamiento } from "@/features/marketing/estadisticas/components/PanelComportamiento";
+import {
+  comportamientoDePaginaWeb,
+  visitasDePaginaWeb,
+} from "@/features/marketing/estadisticas/actions";
 
 export interface PaginaResumen {
   id: string;
@@ -17,7 +21,14 @@ export interface PaginaResumen {
   destino?: string | null;
 }
 
-/** Cuánta gente entra en esta página y cuándo. Mismo panel que el de los QR. */
+/**
+ * Cuánta gente entra en esta página, cuándo, qué pulsa y cuánto se queda.
+ *
+ * Arriba, el mismo panel que el de los QR (la gráfica de visitas). Debajo, lo
+ * que solo tiene sentido en una web: los botones que se pulsan, el tiempo medio
+ * y de dónde llega la gente. Los dos leen el periodo del MISMO selector, así
+ * que nunca se contradicen.
+ */
 export function PaginaEstadisticasDialog({
   pagina,
   open,
@@ -34,11 +45,16 @@ export function PaginaEstadisticasDialog({
     [id],
   );
 
+  const cargarComportamiento = useCallback(
+    (dias: number) => comportamientoDePaginaWeb({ id, dias }),
+    [id],
+  );
+
   if (!pagina) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Visitas</DialogTitle>
         </DialogHeader>
@@ -47,6 +63,9 @@ export function PaginaEstadisticasDialog({
           subtitulo={pagina.destino ?? undefined}
           unidad="visitas"
           cargar={cargar}
+          extra={(dias) => (
+            <PanelComportamiento dias={dias} cargar={cargarComportamiento} />
+          )}
         />
       </DialogContent>
     </Dialog>
