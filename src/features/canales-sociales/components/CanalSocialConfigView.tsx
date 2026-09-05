@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Check, Copy, ExternalLink, Info } from "lucide-react";
 import { setCanalSocialActivo } from "@/features/canales-sociales/actions/canal-social-actions";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 import type { CanalSocial } from "@/features/canales-sociales/data/canales-sociales";
 import type { EstadoCanalSocial } from "@/features/canales-sociales/actions/canal-social-actions";
 
@@ -16,6 +18,7 @@ interface Props {
 }
 
 export function CanalSocialConfigView({ canal, estado }: Props) {
+  const { empresaActual } = useEmpresa();
   const [activo, setActivo] = useState(estado.activo);
   const [copiado, setCopiado] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -71,11 +74,15 @@ export function CanalSocialConfigView({ canal, estado }: Props) {
           </div>
         </div>
 
-        {estado.reservas > 0 && (
+        {estado.activoDesde && (
           <p className="text-[11px] text-muted-foreground">
-            {estado.reservas === 1
-              ? "1 reserva recibida por este canal."
-              : `${estado.reservas} reservas recibidas por este canal.`}
+            {estado.reservas === 0
+              ? "Todavía no ha entrado ninguna reserva por el botón."
+              : estado.reservas === 1
+                ? "1 reserva ha entrado por el botón"
+                : `${estado.reservas} reservas han entrado por el botón`}
+            {estado.reservas > 0 &&
+              ` desde el ${formatFechaEnZona(estado.activoDesde, empresaActual?.zonaHoraria)}.`}
           </p>
         )}
       </div>

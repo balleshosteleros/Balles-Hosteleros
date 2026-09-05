@@ -43,8 +43,17 @@ export interface EstadoCanalSocial {
   url: string | null;
   /** URL del formulario embebido, por si lo quiere en su propia web. */
   embedUrl: string | null;
-  /** Reservas ya entradas por este canal. Es la prueba de que funciona. */
+  /**
+   * Reservas entradas por el botón, contadas SOLO desde que se activó el canal.
+   *
+   * ⚠️ No se cuenta el histórico: `INSTAGRAM` y `FACEBOOK` ya venían usándose
+   * como origen en las reservas migradas de CoverManager (318 y 34 reservas de
+   * 2022-2026, apuntadas a mano por el personal). Contarlas aquí haría creer
+   * que el botón trae mesas que en realidad llegaron por mensaje directo.
+   */
   reservas: number;
+  /** Fecha de activación, para poder decir "desde el …". null si nunca se activó. */
+  activoDesde: string | null;
 }
 
 /**
@@ -62,16 +71,25 @@ export async function getEstadoCanalSocial(
   const canal = CANALES_SOCIALES[canalId];
   const { data } = await supabase
     .from("reserva_links")
-    .select("activo")
+    .select("activo, created_at")
     .eq("empresa_id", empresaId)
     .eq("palabra_clave", canal.palabraClave)
     .maybeSingle();
 
-  const { count } = await supabase
-    .from("reservas")
-    .select("id", { count: "exact", head: true })
-    .eq("empresa_id", empresaId)
-    .eq("origen", canal.palabraClave);
+  const activoDesde = (data?.created_at as string | null) ?? null;
+
+  // Sin enlace todavía no hay botón, así que no hay nada que contar. Y con
+  // enlace se cuenta desde su creación: lo anterior es histórico de Cover.
+  let reservas = 0;
+  if (activoDesde) {
+    const { count } = await supabase
+      .from("reservas")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId)
+      .eq("origen", canal.palabraClave)
+      .gte("created_at", activoDesde);
+    reservas = count ?? 0;
+  }
 
   return {
     canalId,
@@ -80,7 +98,8 @@ export async function getEstadoCanalSocial(
     existe: Boolean(data),
     url: empresaSlug ? buildReservaUrl(empresaSlug, canal.palabraClave) : null,
     embedUrl: empresaSlug ? buildEmbedUrl(empresaSlug, canal.palabraClave) : null,
-    reservas: count ?? 0,
+    reservas,
+    activoDesde,
   };
 }
 
