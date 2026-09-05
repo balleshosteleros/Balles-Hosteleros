@@ -146,7 +146,11 @@ export function SelectorOpcion({
               }}
               className={cn(
                 "flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm transition-colors",
-                "hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent",
+                // Al pasar el ratón, un velo del color de la empresa en vez
+                // del gris del sistema: el desplegable se lee como suyo desde
+                // el primer movimiento, no solo al elegir.
+                "hover:bg-[color-mix(in_srgb,var(--brand,#18181b)_12%,white)]",
+                "disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent",
                 activa &&
                   "!bg-[var(--brand,#18181b)] !text-[var(--brand-fg,#fff)] font-semibold hover:!bg-[var(--brand,#18181b)]",
               )}

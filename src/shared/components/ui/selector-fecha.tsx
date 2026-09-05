@@ -215,7 +215,12 @@ export function SelectorFecha({
             row: "mt-1 flex w-full",
             cell: "relative h-9 w-9 p-0 text-center text-sm",
             // Círculo completo: la clave de que no se vean picos en las esquinas.
-            day: "inline-flex h-9 w-9 items-center justify-center rounded-full font-normal text-zinc-700 transition-colors hover:bg-zinc-100",
+            day: cn(
+              "inline-flex h-9 w-9 items-center justify-center rounded-full font-normal text-zinc-700 transition-colors",
+              // Velo del color de la empresa al pasar el ratón, no el gris
+              // del sistema.
+              "hover:bg-[color-mix(in_srgb,var(--brand,#18181b)_12%,white)]",
+            ),
             // El color sale de Imagen de marca (`--brand`), con negro de
             // reserva: cada empresa ve su calendario con su color sin tocar nada.
             day_selected:
