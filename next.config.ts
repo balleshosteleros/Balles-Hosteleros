@@ -140,8 +140,13 @@ async function portalesSinSlug() {
         // Solo en los portales que tienen ficha: en los demás (`carta`,
         // `reservar`, `ticket`) esa ruta no existe y la regla sobraría.
         if ('ficha' in portal && portal.ficha) {
+          // El patrón excluye el propio slug: los rewrites se aplican en
+          // CADENA, así que sin esa exclusión la regla volvía a capturar el
+          // `/empleo/bacanal` que acababa de producir la regla de la raíz y lo
+          // convertía en `/empleo/bacanal/bacanal` — la lista de vacantes
+          // entraba en la ruta de ficha y salía «Oferta no encontrada».
           reglas.push({
-            source: `/${portal.ruta}/:ficha((?!embed$)[^/]+)`,
+            source: `/${portal.ruta}/:ficha((?!embed$|${slug}$)[^/]+)`,
             has: [{ type: 'host', value: dom.hostname }],
             destination: `/${portal.ruta}/${slug}/:ficha`,
           })
