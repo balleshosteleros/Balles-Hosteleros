@@ -38,7 +38,10 @@ const CobrosReservasView = dynamic(
 import { Settings, Sun, Moon, Banknote } from "lucide-react";
 import { useSalaTema } from "@/features/sala/hooks/useSalaTema";
 import { EtiquetasPanel } from "@/features/sala/components/reservas/EtiquetasPanel";
-import { franjasSolapan } from "@/features/sala/lib/reserva-conflicto";
+import {
+  compararReservasPorJornada,
+  franjasSolapan,
+} from "@/features/sala/lib/reserva-conflicto";
 import { esHoraEnCuarto } from "@/features/sala/lib/reserva-cuartos";
 import { SelectorHoraCuartos } from "@/features/sala/components/reservas/SelectorHoraCuartos";
 import {
@@ -55,7 +58,6 @@ import {
   ZONAS_LABELS, zonaLabel, ZONAS_SALA, ESTADO_RESERVA_LABELS, ESTADO_MESA_LABELS, ESTADOS_RESERVA,
   ESTADO_BADGE_CLASS,
   ESTADO_DOT_CLASS,
-  ESTADO_ORDEN_PRIORIDAD,
   ESTADOS_NO_OCUPANTES,
   ESTADOS_NO_ASISTEN,
   TIPO_RESERVA_CATEGORIA_LABELS,
@@ -4548,7 +4550,7 @@ export function ReservasView() {
       const set = new Set(idsDelAviso);
       return reservasTurno
         .filter((r) => set.has(r.id))
-        .sort((a, b) => a.hora.localeCompare(b.hora));
+        .sort(compararReservasPorJornada);
     }
     return reservasTurno.filter(r => {
       const q = busqueda.toLowerCase();
@@ -4560,11 +4562,7 @@ export function ReservasView() {
       // tiene que cazar las dos con la misma opción.
       const matchO = !origenesOcultos.includes(normalizarOrigen(r.origen));
       return matchQ && matchZ && matchE && matchO;
-    }).sort((a, b) => {
-      const horaCmp = a.hora.localeCompare(b.hora);
-      if (horaCmp !== 0) return horaCmp;
-      return ESTADO_ORDEN_PRIORIDAD[a.estado] - ESTADO_ORDEN_PRIORIDAD[b.estado];
-    });
+    }).sort(compararReservasPorJornada);
   }, [reservasTurno, busqueda, zonaCoincide, filtroEstados, origenesOcultos, idsDelAviso]);
 
   const origenesPresentes = useMemo(() => {
@@ -4666,11 +4664,7 @@ export function ReservasView() {
     // mesa y turno, la mesa enseña la que llega antes y el popover las lista
     // de arriba abajo por hora. Todo lo que lee este mapa cuenta con ese orden.
     for (const arr of map.values()) {
-      arr.sort((a, b) => {
-        const h = a.hora.localeCompare(b.hora);
-        if (h !== 0) return h;
-        return ESTADO_ORDEN_PRIORIDAD[a.estado] - ESTADO_ORDEN_PRIORIDAD[b.estado];
-      });
+      arr.sort(compararReservasPorJornada);
     }
     return map;
   }, [reservasTurno, mesasIdsDeReserva]);

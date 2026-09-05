@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   DURACION_RESERVA_DEFAULT_MINUTOS,
+  ESTADO_ORDEN_PRIORIDAD,
   ESTADOS_NO_OCUPANTES,
+  type EstadoReserva,
 } from "@/features/sala/data/reservas";
 
 // Reexport para no romper imports históricos (motor-web-validar, asignacion-mesa).
@@ -73,6 +75,35 @@ export const CORTE_MADRUGADA_MINUTOS = 6 * 60; // 06:00
 export function horaAMinutosJornada(hora: string): number {
   const min = horaAMinutos(hora);
   return min < CORTE_MADRUGADA_MINUTOS ? min + 24 * 60 : min;
+}
+
+/**
+ * Orden en que las reservas LLEGAN a la sala, de la primera a la última.
+ *
+ * El criterio es la JORNADA, no el reloj: el listado ordenaba con
+ * `hora.localeCompare(hora)`, así que "00:30" era menor que "20:00" y la
+ * madrugada —que es el final de la noche— salía en lo alto de la lista, por
+ * delante de las cenas que la habían precedido. Con `horaAMinutosJornada` esa
+ * 00:30 vale 24:30 y cae donde de verdad ocurre: detrás de las 23:45.
+ *
+ * A igualdad de hora manda `ESTADO_ORDEN_PRIORIDAD` (lo vivo antes que lo
+ * cancelado) y, si también empatan, el código de mesa en orden natural, para
+ * que la lista no baile de un refresco a otro: sin este último desempate dos
+ * reservas idénticas en hora y estado quedaban en el orden en que llegaran de
+ * la consulta, que no está garantizado.
+ */
+export function compararReservasPorJornada(
+  a: { hora: string; estado: EstadoReserva; mesaCodigo?: string | null },
+  b: { hora: string; estado: EstadoReserva; mesaCodigo?: string | null },
+): number {
+  const horaCmp = horaAMinutosJornada(a.hora) - horaAMinutosJornada(b.hora);
+  if (horaCmp !== 0) return horaCmp;
+  const estadoCmp =
+    ESTADO_ORDEN_PRIORIDAD[a.estado] - ESTADO_ORDEN_PRIORIDAD[b.estado];
+  if (estadoCmp !== 0) return estadoCmp;
+  return (a.mesaCodigo ?? "").localeCompare(b.mesaCodigo ?? "", undefined, {
+    numeric: true,
+  });
 }
 
 /**
