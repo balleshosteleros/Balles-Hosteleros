@@ -2,10 +2,11 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import {
-  Filter,
-  ArrowUp,
   ArrowDown,
+  ArrowUp,
   ArrowUpDown,
+  Check,
+  Filter,
   Search,
   X,
 } from "lucide-react";
@@ -170,9 +171,13 @@ export function TableColumnHeader({
             </span>
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-64 p-2" align="start">
+        <PopoverContent
+          className="w-[15rem] overflow-hidden rounded-xl border-border/60 bg-popover/95 p-0 text-foreground shadow-xl backdrop-blur-sm"
+          align="start"
+          sideOffset={6}
+        >
           {tieneOrden && (
-            <div className="flex items-center gap-1 pb-2 mb-2 border-b">
+            <div className="flex items-center gap-1 border-b border-border/60 p-1.5">
               <button
                 type="button"
                 onClick={() =>
@@ -183,7 +188,7 @@ export function TableColumnHeader({
                   )
                 }
                 className={cn(
-                  "flex-1 inline-flex items-center justify-center gap-1 text-xs px-2 py-1 rounded hover:bg-muted transition-colors",
+                  "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors hover:bg-muted",
                   ordenActivo &&
                     orden!.direccion === "asc" &&
                     "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -201,7 +206,7 @@ export function TableColumnHeader({
                   )
                 }
                 className={cn(
-                  "flex-1 inline-flex items-center justify-center gap-1 text-xs px-2 py-1 rounded hover:bg-muted transition-colors",
+                  "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors hover:bg-muted",
                   ordenActivo &&
                     orden!.direccion === "desc" &&
                     "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -337,24 +342,24 @@ function ListaFilter({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="p-1.5">
       {opciones.length > 6 && (
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <div className="relative mb-1.5">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar..."
-            className="h-7 pl-7 text-xs"
+            className="h-8 rounded-lg pl-8 text-xs"
           />
         </div>
       )}
 
-      <div className="flex items-center justify-between text-[11px] px-1">
+      <div className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[10px] font-medium">
         <button
           type="button"
           onClick={toggleTodas}
-          className="text-primary hover:underline"
+          className="rounded px-1 py-0.5 text-primary transition-colors hover:bg-primary/10"
         >
           {todasVisiblesSeleccionadas ? "Limpiar todo" : "Seleccionar todo"}
         </button>
@@ -366,23 +371,40 @@ function ListaFilter({
         )}
       </div>
 
-      <div className="space-y-0.5 max-h-52 overflow-y-auto pr-1">
-        {opcionesFiltradas.map((opt) => (
-          <label
-            key={opt}
-            className="flex items-center gap-2 text-sm px-1.5 py-1 rounded hover:bg-muted cursor-pointer select-none font-normal"
-          >
-            <input
-              type="checkbox"
-              checked={seleccionadas.includes(opt)}
-              onChange={(e) => toggle(opt, e.target.checked)}
-              className="rounded accent-primary"
-            />
-            <span className="truncate">{opt}</span>
-          </label>
-        ))}
+      <div className="max-h-56 space-y-px overflow-y-auto pr-0.5">
+        {opcionesFiltradas.map((opt) => {
+          const marcado = seleccionadas.includes(opt);
+          return (
+            <button
+              key={opt}
+              type="button"
+              role="checkbox"
+              aria-checked={marcado}
+              onClick={() => toggle(opt, !marcado)}
+              className={cn(
+                "flex w-full cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] font-normal transition-colors hover:bg-muted",
+                !marcado && "text-muted-foreground",
+              )}
+            >
+              {/* Casilla propia en vez de la del navegador: la nativa no se
+                  puede redondear ni ajustar de tamaño, y se veía distinta en
+                  cada sistema. */}
+              <span
+                className={cn(
+                  "flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border transition-colors",
+                  marcado
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-muted-foreground/40 bg-transparent",
+                )}
+              >
+                {marcado && <Check className="h-3 w-3" strokeWidth={3} />}
+              </span>
+              <span className="truncate">{opt}</span>
+            </button>
+          );
+        })}
         {opcionesFiltradas.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-2">
+          <p className="py-3 text-center text-xs text-muted-foreground">
             Sin opciones
           </p>
         )}
@@ -443,12 +465,12 @@ function NumeroFilter({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 p-2">
       <Select
         value={operador}
         onValueChange={(v) => setOperador(v as typeof operador)}
       >
-        <SelectTrigger className="h-8">
+        <SelectTrigger className="h-8 rounded-lg">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -462,17 +484,17 @@ function NumeroFilter({
         placeholder="Valor..."
         value={valor}
         onChange={(e) => setValor(e.target.value)}
-        className="h-8"
+        className="h-8 rounded-lg"
       />
       <div className="flex gap-1">
-        <Button size="sm" className="flex-1 h-7 text-xs" onClick={aplicar}>
+        <Button size="sm" className="h-7 flex-1 rounded-lg text-xs" onClick={aplicar}>
           Aplicar
         </Button>
         {filtroActivo && (
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-xs"
+            className="h-7 rounded-lg text-xs"
             onClick={limpiar}
           >
             <X className="h-3 w-3" />
@@ -531,7 +553,7 @@ function TextoFilter({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 p-2">
       <Input
         placeholder="Contiene..."
         value={valor}
@@ -539,17 +561,17 @@ function TextoFilter({
         onKeyDown={(e) => {
           if (e.key === "Enter") aplicar();
         }}
-        className="h-8"
+        className="h-8 rounded-lg"
       />
       <div className="flex gap-1">
-        <Button size="sm" className="flex-1 h-7 text-xs" onClick={aplicar}>
+        <Button size="sm" className="h-7 flex-1 rounded-lg text-xs" onClick={aplicar}>
           Aplicar
         </Button>
         {filtroActivo && (
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-xs"
+            className="h-7 rounded-lg text-xs"
             onClick={limpiar}
           >
             <X className="h-3 w-3" />
@@ -604,14 +626,14 @@ function FechaFilter({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 p-2">
       <div>
         <Label className="text-xs text-muted-foreground">Desde</Label>
         <Input
           type="date"
           value={desde}
           onChange={(e) => setDesde(e.target.value)}
-          className="h-8 mt-0.5"
+          className="mt-0.5 h-8 rounded-lg"
         />
       </div>
       <div>
@@ -620,18 +642,18 @@ function FechaFilter({
           type="date"
           value={hasta}
           onChange={(e) => setHasta(e.target.value)}
-          className="h-8 mt-0.5"
+          className="mt-0.5 h-8 rounded-lg"
         />
       </div>
       <div className="flex gap-1">
-        <Button size="sm" className="flex-1 h-7 text-xs" onClick={aplicar}>
+        <Button size="sm" className="h-7 flex-1 rounded-lg text-xs" onClick={aplicar}>
           Aplicar
         </Button>
         {filtroActivo && (
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-xs"
+            className="h-7 rounded-lg text-xs"
             onClick={limpiar}
           >
             <X className="h-3 w-3" />
@@ -678,18 +700,22 @@ function BooleanoFilter({
   }
 
   return (
-    <Select
-      value={valor}
-      onValueChange={(v) => aplicar(v as "todos" | "si" | "no")}
-    >
-      <SelectTrigger className="h-8">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="todos">Todos</SelectItem>
-        <SelectItem value="si">Sí</SelectItem>
-        <SelectItem value="no">No</SelectItem>
-      </SelectContent>
-    </Select>
+    // El panel ya no trae margen propio, así que el control se lo pone aquí
+    // igual que el resto de tipos de filtro; si no, queda pegado al borde.
+    <div className="p-2">
+      <Select
+        value={valor}
+        onValueChange={(v) => aplicar(v as "todos" | "si" | "no")}
+      >
+        <SelectTrigger className="h-8 rounded-lg">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="todos">Todos</SelectItem>
+          <SelectItem value="si">Sí</SelectItem>
+          <SelectItem value="no">No</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
