@@ -861,9 +861,10 @@ export function ClientesView() {
                   <div className="space-y-1.5">
                     <Label htmlFor="cli-telefono" className="flex items-center gap-1.5">
                     Teléfono
-                    {/* País del número: lo primero que hay que saber antes de
-                        llamar o mandar un WhatsApp. */}
-                    <BanderaTelefono telefono={borrador.telefono} conNombre />
+                    {/* Solo la bandera, sin el nombre del país: el prefijo va
+                        justo debajo en su selector y decía lo mismo dos
+                        veces. */}
+                    <BanderaTelefono telefono={borrador.telefono} />
                   </Label>
                     {/* Prefijo pegado al número y elegido de una lista: antes era
                         un campo suelto y a mano, así que la mitad de las fichas

@@ -16,12 +16,9 @@ import { cn } from "@/lib/utils";
 export function BanderaTelefono({
   telefono,
   className,
-  /** Enseña también el nombre del país al lado, no solo la bandera. */
-  conNombre = false,
 }: {
   telefono: string | null | undefined;
   className?: string;
-  conNombre?: boolean;
 }) {
   const pais = paisDeTelefono(telefono);
   if (!pais) return null;
@@ -34,7 +31,6 @@ export function BanderaTelefono({
       <span aria-label={pais.label} role="img">
         {pais.flag}
       </span>
-      {conNombre && <span className="truncate">{pais.label}</span>}
     </span>
   );
 }
