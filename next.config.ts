@@ -63,7 +63,9 @@ const PREVIEW_WEB_HOSTS = Array.from(
  */
 const PORTALES = [
   { ruta: 'carta', campo: 'carta_slug' },
-  { ruta: 'empleo', campo: 'empleo_slug' },
+  // `ficha: true` = dentro del portal hay una página por elemento
+  // (`/empleo/<id-vacante>`), y por tanto necesita su propia regla de reescritura.
+  { ruta: 'empleo', campo: 'empleo_slug', ficha: true },
   { ruta: 'reservar', campo: 'slug' },
   { ruta: 'ticket', campo: 'slug' },
 ] as const
@@ -130,6 +132,20 @@ async function portalesSinSlug() {
           has: [{ type: 'host', value: dom.hostname }],
           destination: `/${portal.ruta}/${slug}/embed`,
         })
+        // Ficha concreta dentro del portal: la vacante en `/empleo/<id>`.
+        // Sin esta regla el `:resto+` de más abajo devolvía `/empleo/<id>`, y
+        // como aquí no había nada que le pusiera el slug, la redirección de
+        // dominio propio tomaba el ID por el nombre del local y lo borraba: el
+        // candidato tocaba una vacante y volvía siempre a la lista (05-sep).
+        // Solo en los portales que tienen ficha: en los demás (`carta`,
+        // `reservar`, `ticket`) esa ruta no existe y la regla sobraría.
+        if ('ficha' in portal && portal.ficha) {
+          reglas.push({
+            source: `/${portal.ruta}/:ficha((?!embed$)[^/]+)`,
+            has: [{ type: 'host', value: dom.hostname }],
+            destination: `/${portal.ruta}/${slug}/:ficha`,
+          })
+        }
       }
     }
 
