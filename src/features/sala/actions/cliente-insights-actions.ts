@@ -150,6 +150,10 @@ export async function getClienteInsights(input: {
             'id, fecha:"fecha_reseña", created_at, rating, rating_comida, rating_servicio, rating_ambiente',
           )
           .eq("empresa_id", empresaId)
+          // Las de GOOGLE quedan fuera a proposito: Google no da el telefono
+          // ni el email de quien reseña, asi que no se pueden atribuir a
+          // nadie. Cuentan en la nota del local, no en la ficha del cliente.
+          .neq("origen", "google")
           .or(orParts.join(","))
           .limit(1000);
         const filas = (data ?? []) as Array<{
