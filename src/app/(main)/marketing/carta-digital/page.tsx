@@ -25,7 +25,7 @@ export default async function CartaDigitalAdminPage() {
       <CartaAdminBoard data={data} baseUrl={baseUrl} conDominioPropio={conDominioPropio} />
       {data.items.length > 0 ? (
         <div className="px-4 sm:px-6">
-          <MetricasLikesPanel items={data.items} />
+          <MetricasLikesPanel empresaId={data.empresa?.id ?? ""} />
         </div>
       ) : null}
     </div>
