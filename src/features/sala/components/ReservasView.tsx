@@ -196,9 +196,10 @@ const LIBRE_RAINBOW = `linear-gradient(135deg, ${COLORES_PASTEL_ZONAS
 /**
  * Paleta de fondo de mesa por estado.
  *  - LIBRE: hereda el color pastel de su zona inline (aclarado en render).
- *  - OCUPADA: alguien sentado (walk-in) → verde oscuro estilo CoverManager.
+ *  - OCUPADA: hay gente SENTADA en ella → verde OSCURO estilo CoverManager.
  *  - RESERVADA: reserva confirmada/reconfirmada pero aún no sentada → verde
- *    claro llamativo, distinto del verde oscuro de OCUPADA.
+ *    CLARO. La diferencia entre los dos es de luminosidad (oscuro = ya están,
+ *    claro = todavía no), que es lo que se lee de lejos y en movimiento.
  *  - TERMINADA: ya han terminado de comer pero siguen en la mesa → ROSA, el
  *    mismo fucsia con el que se marca ese estado en la lista y en la ficha.
  *    Va aparte de OCUPADA a propósito: son los dos únicos estados con gente
@@ -209,13 +210,18 @@ const LIBRE_RAINBOW = `linear-gradient(135deg, ${COLORES_PASTEL_ZONAS
  */
 const mesaBg: Record<string, string> = {
   LIBRE: "",
-  // Los tres estados con color llevan el texto en NEGRO: el nombre de la mesa
-  // y su capacidad son lo que se busca de un vistazo en el plano, y sobre el
-  // lienzo oscuro el texto blanco sobre verde o fucsia no se leia. Los fondos
-  // suben de luminosidad lo justo para que el negro contraste sin perder el
-  // codigo de color de cada estado.
-  OCUPADA: "bg-[#34A85A] hover:bg-[#3CBA66] text-zinc-900",
-  RESERVADA: "bg-[#4ADE80] hover:bg-[#22C55E] text-zinc-900",
+  // El texto de cada mesa va en el color que MAS contraste da contra su fondo:
+  // negro sobre los fondos claros (RESERVADA, TERMINADA) y blanco sobre el
+  // verde oscuro de OCUPADA. El nombre de la mesa y su capacidad son lo que se
+  // busca de un vistazo, asi que mandan ellos sobre el codigo de color.
+  // Los dos verdes se separan A PROPOSITO por LUMINOSIDAD, no por tono: en
+  // movimiento el ojo distingue claro/oscuro mucho antes que dos verdes
+  // vecinos. Antes eran #34A85A y #4ADE80 —los dos verdes medios— y en pleno
+  // servicio no habia forma de saber cual estaba sentada.
+  // OCUPADA va oscuro y con el texto en BLANCO; RESERVADA claro y con el
+  // texto en negro. El contraste del texto refuerza la lectura del estado.
+  OCUPADA: "bg-[#15803D] hover:bg-[#166534] text-white",
+  RESERVADA: "bg-[#86EFAC] hover:bg-[#6EE7A0] text-zinc-900",
   TERMINADA: "bg-[#E879F9] hover:bg-[#D946EF] text-zinc-900",
   // En tema oscuro el negro puro se confundía con el lienzo azul marino: la
   // mesa bloqueada pasa a un gris azulado con borde marcado para seguir
@@ -3057,20 +3063,32 @@ function PlanoCanvas({
                   )}
                   {/* Contra-rotación para mantener el texto legible aunque la mesa esté girada. */}
                   <div
-                    className="relative flex flex-col items-center justify-center leading-tight pointer-events-none"
+                    className="relative flex w-full min-w-0 flex-col items-center justify-center leading-tight pointer-events-none"
                     style={pos.rotation ? { transform: `rotate(${-pos.rotation}deg)` } : undefined}
                   >
-                    <span className="leading-none">{m.codigo}</span>
-                    <span className={cn("text-[9px] font-normal mt-0.5", isLibre ? "text-foreground/70" : "opacity-80")}>
-                      ({m.capacidad}p)
-                    </span>
-                    {firstR && (
-                      <span className={cn("text-[9px] font-normal mt-0.5 truncate max-w-full", isLibre ? "text-foreground/80" : "opacity-90")}>
-                        {firstR.hora}
+                    {/* Tres lineas como mucho: la mesa mas pequeña son 60x60
+                        (48 de alto si es rectangular) y con cuatro no cabia el
+                        texto grande. Con reserva, la capacidad se pega a la
+                        hora en la misma linea y el nombre se queda una entera
+                        para el. */}
+                    <span className="text-[13px] leading-none">{m.codigo}</span>
+                    {firstR ? (
+                      /* La hora va SIN truncar: son cinco cifras fijas y
+                         cortarlas ("14:0…") destruye el dato. La capacidad se
+                         queda detras porque, si algo sobra, es ella. */
+                      <span className={cn("text-[10px] font-medium tabular-nums leading-tight whitespace-nowrap", isLibre ? "text-foreground/75" : "opacity-90")}>
+                        {firstR.hora.slice(0, 5)} · {m.capacidad}p
+                      </span>
+                    ) : (
+                      <span className={cn("text-[10px] font-normal mt-0.5", isLibre ? "text-foreground/70" : "opacity-75")}>
+                        ({m.capacidad}p)
                       </span>
                     )}
+                    {/* El NOMBRE es lo que se busca al cruzar la sala: va al
+                        mismo tamaño que el codigo de mesa y en semibold.
+                        Estaba en 9px y a un metro del monitor no se leia. */}
                     {firstR && (
-                      <span className={cn("text-[9px] font-normal truncate max-w-full", isLibre ? "text-foreground/80" : "opacity-90")}>
+                      <span className={cn("text-[12px] font-semibold leading-tight truncate max-w-full", isLibre ? "text-foreground/90" : "opacity-100")}>
                         {isWalkIn ? "WALK IN" : firstR.cliente}
                       </span>
                     )}
@@ -6222,12 +6240,14 @@ export function ReservasView() {
                                         />
                                       </svg>
                                     )}
-                                    <span className="relative leading-none">{m.codigo}</span>
-                                    <span className={cn("relative text-[9px] font-normal mt-0.5", isLibre ? "text-foreground/70" : "opacity-80")}>
+                                    <span className="relative text-[13px] leading-none">{m.codigo}</span>
+                                    <span className={cn("relative text-[10px] font-normal mt-0.5", isLibre ? "text-foreground/70" : "opacity-75")}>
                                       ({m.capacidad}p)
                                     </span>
+                                    {/* Mismo criterio que en el plano: la hora
+                                        y el nombre se leen de lejos. */}
                                     {firstR && (
-                                      <span className={cn("relative text-[9px] font-normal mt-1 truncate max-w-full", isLibre ? "text-foreground/80" : "opacity-90")}>
+                                      <span className={cn("relative text-[11px] font-semibold mt-1 truncate max-w-full", isLibre ? "text-foreground/90" : "opacity-100")}>
                                         {firstR.hora} {isWalkIn ? "WALK IN" : firstR.cliente}
                                       </span>
                                     )}
