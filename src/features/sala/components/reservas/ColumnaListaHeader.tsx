@@ -72,6 +72,15 @@ export interface ColumnaListaHeaderProps {
    * oscuro. Es el mismo apaño que ya llevan los diálogos de Reservas.
    */
   panelClassName?: string;
+  /**
+   * Cabecera sin rótulo: solo el embudo.
+   *
+   * Para las columnas cuyo nombre ya sobra —la zona se lee debajo de la mesa,
+   * las etiquetas junto al nombre—, donde la palabra solo le robaba ancho a las
+   * de al lado. El filtro y el orden siguen enteros: el rótulo se va al `title`
+   * y el embudo se queda a la vista para que se sepa que ahí se pincha.
+   */
+  soloIcono?: boolean;
 }
 
 export function ColumnaListaHeader({
@@ -90,6 +99,7 @@ export function ColumnaListaHeader({
   align = "left",
   className,
   panelClassName,
+  soloIcono = false,
 }: ColumnaListaHeaderProps) {
   const [busqueda, setBusqueda] = useState("");
 
@@ -166,7 +176,7 @@ export function ColumnaListaHeader({
           )}
           title={`${label} — filtrar y ordenar`}
         >
-          <span className="truncate">{label}</span>
+          {!soloIcono && <span className="truncate">{label}</span>}
           <span className="inline-flex shrink-0 items-center gap-0.5">
             {ordenActivo &&
               (orden!.direccion === "asc" ? (
@@ -176,7 +186,16 @@ export function ColumnaListaHeader({
               ))}
             {filtroActivo && <ListFilter className="h-3 w-3 fill-current" />}
             {!filtroActivo && !ordenActivo && (
-              <ArrowUpDown className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-50" />
+              <ArrowUpDown
+                className={cn(
+                  "h-3 w-3 transition-opacity",
+                  // Sin rótulo el embudo es lo ÚNICO que se ve: si se escondiera
+                  // hasta pasar el ratón, la columna parecería un hueco vacío.
+                  soloIcono
+                    ? "opacity-50 group-hover:opacity-100"
+                    : "opacity-0 group-hover:opacity-50",
+                )}
+              />
             )}
           </span>
         </button>

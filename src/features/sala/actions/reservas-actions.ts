@@ -835,6 +835,52 @@ export async function updateReserva(
     if (updates.hora !== undefined && updates.turno === undefined) {
       dbUpdates.turno = turnoDeHora(updates.hora);
     }
+
+    // ── Cambiar SOLO la zona, con la reserva ya sentada ───────────────────
+    //
+    // Una mesa está en una zona y solo en una: una reserva con la mesa A1 del
+    // Salón no puede estar marcada en Terraza. Antes la zona se escribía tal
+    // cual y la reserva quedaba con mesa de una zona y zona de otra —imposible
+    // en el local, y el plano la pintaba donde no estaba.
+    //
+    // Aquí no se decide por el usuario moviéndole la mesa a ciegas: se rechaza
+    // el cambio y se dice qué hacer. Mover a alguien de sitio se hace eligiendo
+    // la mesa, que es el gesto que sabe si la nueva mesa está libre y cabe.
+    if (
+      updates.zona !== undefined &&
+      updates.mesa === undefined &&
+      updates.localId
+    ) {
+      const { data: actualMesa } = await supabase
+        .from("reservas")
+        .select("mesa")
+        .eq("id", id)
+        .maybeSingle();
+      const mesaActual = ((actualMesa?.mesa as string | null) ?? "").trim();
+
+      if (mesaActual) {
+        const codigoPrincipal = mesaActual.split("+")[0]?.trim() || mesaActual;
+        const { data: mesaRow } = await supabase
+          .from("mesas")
+          .select("zonas(nombre)")
+          .eq("local_id", updates.localId)
+          .eq("codigo", codigoPrincipal)
+          .maybeSingle();
+        const z = mesaRow?.zonas as unknown as
+          | { nombre?: string }
+          | { nombre?: string }[]
+          | null;
+        const zonaDeLaMesa = Array.isArray(z) ? z[0]?.nombre : z?.nombre;
+
+        if (zonaDeLaMesa && zonaDeLaMesa !== updates.zona) {
+          return {
+            ok: false,
+            error: `La mesa ${mesaActual} está en ${zonaDeLaMesa}. Para pasar la reserva a ${updates.zona}, cámbiale la mesa: la zona sale de dónde se sienta.`,
+          };
+        }
+      }
+    }
+
     if (
       updates.mesa !== undefined &&
       updates.zona === undefined &&

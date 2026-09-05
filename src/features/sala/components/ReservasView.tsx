@@ -17,6 +17,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { es } from "date-fns/locale";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ahoraEnZona, formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { diaNegocioDe } from "@/features/sala/lib/dia-negocio";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useBloqueoCambioEmpresa } from "@/shared/hooks/useBloqueoCambioEmpresa";
 import { Plus, Search, ChevronLeft, ChevronRight, Check, Move, Map as MapIcon, List as ListIcon, Lock, Table2 } from "lucide-react";
@@ -296,6 +297,10 @@ function addMonths(iso: string, n: number) {
  * los 34 y se leia "P…". Todas las cabeceras que filtran u ordenan pagan ese
  * peaje; en las demas columnas no se nota porque su texto ya cabe.
  *
+ * HORA sube a 56 por lo mismo: con 46 px la palabra pagaba el peaje de la
+ * flecha y se leia "Hor…". Los 10 px salen del NOMBRE, que sigue teniendo de
+ * sobra; las horas de la celda ("22:45") ya cabian y no cambian.
+ *
  * "Per." necesita 34: con 24 la cabecera se cortaba en "P.". Los 12 px que le
  * faltaban salen de ESTADO, que iba sobrado y además lleva `title`.
  *
@@ -362,7 +367,7 @@ const LISTA_GRID =
   // completo, así que recortarlas no pierde el dato) y lo que sueltan se lo
   // queda el nombre. Los chips que van pegados al nombre (visitas, cupón,
   // reconfirmación) no se cuentan: solo salen en algunas filas.
-  "grid grid-cols-[46px_58px_minmax(0,1fr)_42px_58px_64px_60px_64px] gap-1.5 items-center";
+  "grid grid-cols-[56px_58px_minmax(0,1fr)_42px_58px_64px_60px_64px] gap-1.5 items-center";
 
 /**
  * TIPO de la reserva: cuál de las cuatro es (PRP-082).
@@ -3173,9 +3178,23 @@ export function ReservasView() {
   const fechaPedida = searchParams?.get("fecha") ?? null;
   const fechaPedidaValida =
     fechaPedida && /^\d{4}-\d{2}-\d{2}$/.test(fechaPedida) ? fechaPedida : null;
-  const [fecha, setFecha] = useState(
-    () => fechaPedidaValida ?? new Date().toISOString().split("T")[0],
-  );
+  /**
+   * El día que se abre sale del reloj de la EMPRESA, no del navegador.
+   *
+   * Con `new Date()` la pantalla abría el día del ordenador de quien mira: a
+   * las 01:47 de Indonesia ya es el día siguiente, mientras que en el
+   * restaurante son las 19:47 del día anterior, y sala entraba a un día vacío
+   * pensando que se habían perdido las reservas de la noche.
+   *
+   * Y el día es el de NEGOCIO: hasta las 06:00 se sigue en el servicio de la
+   * noche anterior, que es donde están las mesas que aún tiene puestas.
+   */
+  const hoyNegocio = () => {
+    const { fecha, minutos } = ahoraEnZona(empresaActual.zonaHoraria);
+    const hh = String(Math.floor(minutos / 60)).padStart(2, "0");
+    return diaNegocioDe(fecha, `${hh}:00`);
+  };
+  const [fecha, setFecha] = useState(() => fechaPedidaValida ?? hoyNegocio());
 
   // Y también DESPUÉS del montaje: si ya estabas en esta pantalla, Next reutiliza
   // el componente al navegar y el estado inicial no se vuelve a calcular, así que
@@ -5659,7 +5678,9 @@ export function ReservasView() {
               ordenLabelDesc="Después"
             />
             {/* La celda enseña mesa y zona una sobre otra, así que la cabecera
-                filtra por las dos: la mesa en el rótulo y la zona debajo. */}
+                filtra por las dos. La palabra "Zona" no se escribe: debajo de
+                "Mesa" solo repetía lo que ya dice la celda y estrechaba a las
+                columnas de al lado. Se queda su embudo, que es lo que se usa. */}
             <span className="flex min-w-0 flex-col leading-tight">
               <ColumnaListaHeader
                 label="Mesa"
@@ -5675,6 +5696,7 @@ export function ReservasView() {
               <ColumnaListaHeader
                 label="Zona"
                 campo="zona"
+                soloIcono
                 opciones={opcionesColumna("zona")}
                 seleccionadas={filtrosColumna.zona ?? []}
                 onSeleccionChange={(v) => setFiltroColumna("zona", v)}
@@ -5703,6 +5725,7 @@ export function ReservasView() {
               <ColumnaListaHeader
                 label="Etiquetas"
                 campo="etiquetas"
+                soloIcono
                 opciones={opcionesColumna("etiquetas")}
                 seleccionadas={filtrosColumna.etiquetas ?? []}
                 onSeleccionChange={(v) => setFiltroColumna("etiquetas", v)}
