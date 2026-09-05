@@ -107,11 +107,17 @@ export const ESTADO_ORDEN_PRIORIDAD: Record<EstadoReserva, number> = {
  * desde aquí.
  */
 export const ESTADO_BADGE_CLASS: Record<EstadoReserva, string> = {
-  CONFIRMADA:      "bg-emerald-600/20 text-emerald-400 border-emerald-600/40",
+  // Verde CLARO y hueco: la reserva está dada, pero esa gente todavía no ha
+  // llegado. Es el "aún no" del turno.
+  CONFIRMADA:      "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
   RECONFIRMADA:    "bg-sky-600/20 text-sky-400 border-sky-600/40",
   NO_RECONFIRMADA: "bg-amber-600/20 text-amber-400 border-amber-600/40",
   LISTA_ESPERA:    "bg-violet-600/20 text-violet-400 border-violet-600/40",
-  SENTADA:         "bg-green-700/25 text-green-300 border-green-700/50",
+  // Verde OSCURO y SÓLIDO, como en CoverManager. Es el único estado del turno
+  // que se pinta relleno: en pleno servicio "ya están en la mesa" tiene que
+  // saltar sin leer. Antes era green-700/25 y contra el emerald-600/20 de
+  // CONFIRMADA eran el mismo verde translúcido; en movimiento no se distinguían.
+  SENTADA:         "bg-green-700 text-white border-green-800",
   LIBERADA:        "bg-yellow-600/20 text-yellow-300 border-yellow-600/40",
   // Fucsia: es el unico tono que no choca con ningun otro estado. Antes era
   // cyan y en sala se confundia con el azul de RECONFIRMADA; el gris que se
@@ -122,10 +128,13 @@ export const ESTADO_BADGE_CLASS: Record<EstadoReserva, string> = {
 };
 
 export const ESTADO_DOT_CLASS: Record<EstadoReserva, string> = {
-  CONFIRMADA:      "bg-emerald-500",
+  CONFIRMADA:      "bg-emerald-400",
   RECONFIRMADA:    "bg-sky-500",
   NO_RECONFIRMADA: "bg-amber-500",
   LISTA_ESPERA:    "bg-violet-500",
+  // Verde oscuro frente al claro de CONFIRMADA: mismo criterio que el chip.
+  // green-700 puro se apagaba demasiado contra el lienzo oscuro de sala; -600
+  // mantiene la lectura de "oscuro" sin perder presencia en el punto.
   SENTADA:         "bg-green-600",
   LIBERADA:        "bg-yellow-500",
   TERMINANDO:      "bg-fuchsia-500",
