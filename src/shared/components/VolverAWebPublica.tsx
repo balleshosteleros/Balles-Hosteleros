@@ -80,20 +80,49 @@ export function VolverAWebPublica({
     </>
   );
 
+  // Al PULSAR, el botón se rellena con el color de la empresa (Iván, 06-sep).
+  // El color se toma de la variable de marca que cada portal ya define
+  // —`--brand-primary` en empleo, `--brand` en reservas, `--carta-primario` en
+  // la carta—, con la cadena de respaldo resolviéndose en el propio CSS: así el
+  // componente no necesita saber en cuál de los tres está, y si un portal no
+  // definiera ninguna se queda en el gris de siempre en vez de perder el color.
+  //
+  // Va en `:active` (mientras el dedo/ratón está encima) y no en `:focus`,
+  // porque en móvil el foco se queda pegado después de volver y el botón se
+  // quedaría coloreado sin que nadie lo esté pulsando.
+  const colorMarca =
+    "var(--brand-primary, var(--brand, var(--carta-primario, transparent)))";
+  const colorTextoMarca =
+    "var(--brand-text, var(--brand-fg, var(--carta-sobre-marca, #fff)))";
+
   const clases =
     "inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/35 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-black/55 " +
+    // `active:` pinta el relleno y el texto con la marca; el `!` gana a los
+    // colores que cada portal pasa por `className` (empleo y reservas los
+    // aclaran para su fondo claro).
+    "active:!bg-[var(--volver-marca)] active:!text-[var(--volver-marca-fg)] active:!border-[var(--volver-marca)] " +
     className;
+
+  const estilo = {
+    ["--volver-marca" as string]: colorMarca,
+    ["--volver-marca-fg" as string]: colorTextoMarca,
+  } as React.CSSProperties;
 
   if (modo === "atras") {
     return (
-      <button type="button" onClick={() => window.history.back()} className={clases}>
+      <button
+        type="button"
+        onClick={() => window.history.back()}
+        className={clases}
+        style={estilo}
+      >
         {contenido}
       </button>
     );
   }
 
   return (
-    <a href="/" className={clases}>
+    <a href="/" className={clases} style={estilo}>
       {contenido}
     </a>
   );
