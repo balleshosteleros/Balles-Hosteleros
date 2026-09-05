@@ -1415,11 +1415,16 @@ function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
   // abajo (donde caen texto y botón) que en el centro (donde están las caras).
   return (
     <section className="relative isolate overflow-hidden px-4 py-24 text-center md:py-32">
+      {/* Anclado arriba, no al centro: la sección es una franja ancha y la foto
+          es apaisada, así que `bg-center` recortaba por la mitad y cortaba las
+          caras a la altura de los ojos. En una foto de plantilla lo que importa
+          son las personas, y esas están en el tercio de arriba. */}
       <div
         aria-hidden
-        className="absolute inset-0 -z-10 scale-105 bg-cover bg-center"
+        className="absolute inset-0 -z-10 scale-105 bg-cover"
         style={{
           backgroundImage: `url(${imagenOptimizada(imagen_url, { width: 1800, quality: 78 })})`,
+          backgroundPosition: "center 22%",
           filter: "blur(2px) saturate(112%)",
         }}
       />
