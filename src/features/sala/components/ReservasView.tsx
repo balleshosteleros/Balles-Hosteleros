@@ -278,8 +278,8 @@ function addMonths(iso: string, n: number) {
  * Rejilla de la lista. El panel mide LISTA_ANCHO_PX y el ancho fijo tiene que
  * dejar sitio de verdad al nombre, que es por lo que se busca a la gente en
  * sala. Reparto: hora 46, mesa 58, per. 34, origen 62, tipo 72, estado 68,
- * etiquetas 66, tiempo 52 + 8 huecos de 6 px + 24 de padding = 530 px, y los
- * ~210 px que quedan son para el NOMBRE, que ha de caber con apellido.
+ * tiempo 52 + 7 huecos de 6 px + 24 de padding = 458 px, y los ~210 px que
+ * quedan son para el NOMBRE, que ha de caber con apellido.
  *
  * "Per." necesita 34: con 24 la cabecera se cortaba en "P.". Los 12 px que le
  * faltaban salen de ESTADO, que iba sobrado y además lleva `title`.
@@ -296,10 +296,11 @@ function addMonths(iso: string, n: number) {
  * los dos, bastaba con tocar uno para que los botones dejaran de caer donde
  * empieza el plano.
  *
- * 740 px: con nueve columnas, por debajo de esto el nombre se corta, y el
- * nombre es justo por lo que se busca a la gente en sala.
+ * 668 px: al quitar la columna de Etiquetas (66 px y su hueco) la lista deja
+ * de necesitar ese ancho, y lo que sobra se lo lleva el PLANO, que se escala
+ * solo. El nombre no pierde sitio: sigue siendo la columna elastica.
  */
-const LISTA_ANCHO_PX = 740;
+const LISTA_ANCHO_PX = 668;
 
 /* ---------------------------------------------------------------------------
    DÍA DE NEGOCIO ↔ CALENDARIO
@@ -331,13 +332,14 @@ function formatFechaDiaNegocio(iso: string): string {
 }
 
 const LISTA_GRID =
-  // Hora · Mesa · Nombre · Per · Origen · Tipo · Estado · Etiquetas · Tiempo.
+  // Hora · Mesa · Nombre · Per · Origen · Tipo · Estado · Tiempo.
   // Origen y Tipo suben porque "Cancelación" y los origenes largos se cortaban
   // a media palabra; el resto del ancho se lo queda el NOMBRE, que es el dato
   // por el que se busca a la gente en sala.
   //
-  // Etiquetas se queda con lo justo: son avisos cortos ("alérgico", "VIP") y
-  // el ancho que no necesitan se lo lleva el NOMBRE, que se estaba cortando.
+  // Las etiquetas ya NO tienen columna: van pegadas al telefono, dentro de la
+  // celda del nombre. Son avisos cortos ("alergico", "VIP") que se leen junto a
+  // la persona a la que avisan, y la columna que ocupaban se la queda el NOMBRE.
   //
   // NOMBRE Y APELLIDO ENTEROS es la regla que manda aquí: "Ferran Viñals
   // Carm…" no sirve para cantar una mesa en sala. Las demás columnas se
@@ -345,7 +347,7 @@ const LISTA_GRID =
   // completo, así que recortarlas no pierde el dato) y lo que sueltan se lo
   // queda el nombre. Los chips que van pegados al nombre (visitas, cupón,
   // reconfirmación) no se cuentan: solo salen en algunas filas.
-  "grid grid-cols-[46px_58px_minmax(0,1fr)_34px_62px_72px_68px_minmax(52px,66px)_52px] gap-1.5 items-center";
+  "grid grid-cols-[46px_58px_minmax(0,1fr)_34px_62px_72px_68px_52px] gap-1.5 items-center";
 
 /**
  * TIPO de la reserva: cuál de las cuatro es (PRP-082).
@@ -5517,17 +5519,32 @@ export function ReservasView() {
                 onOrdenChange={setOrdenColumna}
               />
             </span>
-            <ColumnaListaHeader
-              label="Nombre"
-              campo="nombre"
-              opciones={opcionesColumna("nombre")}
-              seleccionadas={filtrosColumna.nombre ?? []}
-              onSeleccionChange={(v) => setFiltroColumna("nombre", v)}
-              ordenable
-              panelClassName={panelTemaSala}
-              orden={ordenColumna}
-              onOrdenChange={setOrdenColumna}
-            />
+            {/* Las etiquetas ya no tienen columna propia (se leen junto al
+                telefono, dentro de esta misma celda), pero su filtro sigue
+                haciendo falta: se queda aqui, en la cabecera de la columna
+                donde ahora se ven. */}
+            <span className="flex min-w-0 items-center gap-2">
+              <ColumnaListaHeader
+                label="Nombre"
+                campo="nombre"
+                opciones={opcionesColumna("nombre")}
+                seleccionadas={filtrosColumna.nombre ?? []}
+                onSeleccionChange={(v) => setFiltroColumna("nombre", v)}
+                ordenable
+                panelClassName={panelTemaSala}
+                orden={ordenColumna}
+                onOrdenChange={setOrdenColumna}
+              />
+              <ColumnaListaHeader
+                label="Etiquetas"
+                campo="etiquetas"
+                opciones={opcionesColumna("etiquetas")}
+                seleccionadas={filtrosColumna.etiquetas ?? []}
+                onSeleccionChange={(v) => setFiltroColumna("etiquetas", v)}
+                colorOpcion={colorOpcionEtiqueta}
+                panelClassName={panelTemaSala}
+              />
+            </span>
             <ColumnaListaHeader
               label="Per"
               campo="comensales"
@@ -5571,18 +5588,6 @@ export function ReservasView() {
               seleccionadas={filtrosColumna.estado ?? []}
               onSeleccionChange={(v) => setFiltroColumna("estado", v)}
               colorOpcion={colorOpcionEstado}
-              ordenable
-              panelClassName={panelTemaSala}
-              orden={ordenColumna}
-              onOrdenChange={setOrdenColumna}
-            />
-            <ColumnaListaHeader
-              label="Etiquetas"
-              campo="etiquetas"
-              opciones={opcionesColumna("etiquetas")}
-              seleccionadas={filtrosColumna.etiquetas ?? []}
-              onSeleccionChange={(v) => setFiltroColumna("etiquetas", v)}
-              colorOpcion={colorOpcionEtiqueta}
               ordenable
               panelClassName={panelTemaSala}
               orden={ordenColumna}
@@ -5706,15 +5711,33 @@ export function ReservasView() {
                             className="shrink-0"
                           />
                         </span>
-                        {r.telefono && (
-                          <span className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
-                            {/* Solo el número, sin bandera y sin prefijo: en el
-                                listado del turno ensuciaban la línea. El país y
-                                el prefijo se ven en la ficha del cliente, que es
-                                donde se miran antes de llamar. */}
-                            <span className="truncate tabular-nums">
-                              {separarPrefijo(r.telefono).numero || r.telefono}
-                            </span>
+                        {/* Telefono y, pegadas a su derecha, las etiquetas: las
+                            de la reserva y las que hereda de la ficha del
+                            cliente, juntas y sin distinguir. A quien esta
+                            sirviendo le da igual donde este apuntado que es
+                            alergico; lo que necesita es verlo junto a la
+                            persona, no en una columna aparte. Sin etiquetas no
+                            se pinta nada: un "—" solo ensuciaria la linea. */}
+                        {(r.telefono || (etiquetasPorReserva[r.id] ?? []).length > 0) && (
+                          <span className="flex min-w-0 flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+                            {r.telefono && (
+                              // Solo el número, sin bandera y sin prefijo: en el
+                              // listado del turno ensuciaban la línea. El país y
+                              // el prefijo se ven en la ficha del cliente, que es
+                              // donde se miran antes de llamar.
+                              <span className="truncate tabular-nums">
+                                {separarPrefijo(r.telefono).numero || r.telefono}
+                              </span>
+                            )}
+                            {(etiquetasPorReserva[r.id] ?? []).map((e) => (
+                              <EtiquetaChip
+                                key={e.id}
+                                nombre={e.nombre}
+                                emoji={e.emoji}
+                                color={e.color}
+                                className="max-w-full shrink-0 truncate"
+                              />
+                            ))}
                           </span>
                         )}
                         {/* Adelanto del comentario: se lee el principio sin
@@ -5738,25 +5761,6 @@ export function ReservasView() {
                       {/* TIEMPO: cuenta atrás (verde), retraso (rojo),
                           ocupación desde la hora de la reserva (azul) o
                           exceso sobre el tiempo de mesa (rojo con icono). */}
-                      {/* Etiquetas: las de la reserva y las que hereda de la
-                          ficha del cliente, juntas y sin distinguir. A quien
-                          está sirviendo le da igual dónde esté apuntado que es
-                          alérgico; lo que necesita es verlo. */}
-                      <span className="flex min-w-0 flex-wrap gap-1">
-                        {(etiquetasPorReserva[r.id] ?? []).length === 0 ? (
-                          <span className="text-muted-foreground">—</span>
-                        ) : (
-                          (etiquetasPorReserva[r.id] ?? []).map((e) => (
-                            <EtiquetaChip
-                              key={e.id}
-                              nombre={e.nombre}
-                              emoji={e.emoji}
-                              color={e.color}
-                              className="max-w-full truncate"
-                            />
-                          ))
-                        )}
-                      </span>
                       <ReservaTiempoCelda
                         reserva={r}
                         ahora={ahoraEmpresa}
