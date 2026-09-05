@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withMetricas } from "@/features/canales-google-rwg/lib/instrumentacion";
 import { resolveEmpresaByPlaceId } from "@/features/canales-google-rwg/lib/booking-server-resolver";
@@ -314,8 +315,14 @@ export const POST = withMetricas("CreateBooking", async (request) => {
   // reserva confirmada del restaurante, así que el cliente recibe el mismo
   // correo que si hubiera reservado por la web. Fire-and-forget: Google espera
   // una respuesta rápida y la reserva ya es válida aunque el correo falle.
-  notificarReservaCreada(reservaId, "GOOGLE_RWG").catch((e) =>
-    console.error("[rwg][CreateBooking] mail CONFIRMACION:", e),
+  // `after()`: el correo se manda tras responder, pero la funcion sigue viva
+  // hasta que termina. Sin el, un `.catch()` suelto se cortaba a media conexion
+  // SMTP cuando Vercel congelaba la instancia, y la reserva quedaba sin correo
+  // y sin rastro (el sello y el historico se escriben DESPUES de enviar).
+  after(
+    notificarReservaCreada(reservaId, "GOOGLE_RWG").catch((e) =>
+      console.error("[rwg][CreateBooking] mail CONFIRMACION:", e),
+    ),
   );
 
   // 9. OK

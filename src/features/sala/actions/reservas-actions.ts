@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   validarTelefono,
@@ -167,6 +168,7 @@ export async function listReservasRango(fechaDesde: string, fechaHasta: string) 
     if (empresaId) query.eq("empresa_id", empresaId);
     const { data, error } = await query;
     if (error) throw error;
+    console.log("[TRAZA-TEMPORAL rango]", { fechaDesde, fechaHasta, empresaId, filas: (data ?? []).length });
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[reservas] listReservasRango:", err);
@@ -1118,13 +1120,18 @@ export async function updateReserva(
     // `esTipoEstado` solo: WALK_IN porque es un ORIGEN (el cliente entró sin
     // reservar) y no hay a quién escribirle, y SENTADA porque al cliente que
     // acabas de sentar en la mesa no se le manda un correo.
-    // No await — un fallo de SMTP no debe romper el UPDATE ya confirmado.
+    // El correo no se espera: un fallo de SMTP no debe romper el UPDATE ya
+    // confirmado. Pero va dentro de `after()`, que mantiene viva la funcion
+    // hasta que termina; con un `.catch()` suelto Vercel podia congelar la
+    // instancia a media conexion SMTP y el correo se perdia sin dejar rastro.
     if (updates.notificarCliente === true && updates.estado) {
       const actor = actorDeSesion(ctx);
       const tipoCorreo = updates.estado as ReservaEmailTipo;
       if (esTipoEstado(tipoCorreo)) {
-        enviarReservaEmail(id, tipoCorreo, { actor }).catch((e) =>
-          console.error(`[reservas] mail ${tipoCorreo}:`, e),
+        after(
+          enviarReservaEmail(id, tipoCorreo, { actor }).catch((e) =>
+            console.error(`[reservas] mail ${tipoCorreo}:`, e),
+          ),
         );
       }
 
@@ -1297,8 +1304,10 @@ export async function notificarReservaCreadaPorEmail(reservaId: string) {
       const leadMs = diasAntes * 24 * 3600 * 1000;
       const porDebajoDelLead = diffMs > 0 && diffMs < leadMs;
       if (activa && porDebajoDelLead && envioInmediato) {
-        enviarReservaEmail(reservaId, "RECONFIRMADA", { actor }).catch((e) =>
-          console.error("[reservas] mail RECONFIRMADA lt-lead:", e),
+        after(
+          enviarReservaEmail(reservaId, "RECONFIRMADA", { actor }).catch((e) =>
+            console.error("[reservas] mail RECONFIRMADA lt-lead:", e),
+          ),
         );
       }
     }

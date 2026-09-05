@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { z } from "zod";
 import {
   validarTelefono,
@@ -777,10 +778,20 @@ export async function crearReservaPublicaAction(
   // por falta de mesa), así que el cliente debe recibir su confirmación igual
   // que si la hubiéramos dado de alta desde Sala.
   //
-  // Fire-and-forget A PROPÓSITO: la reserva YA está creada y es válida. Si el
-  // correo falla (SMTP caído, plantilla desactivada), no se puede deshacer la
-  // reserva ni tiene sentido mostrarle un error al cliente: se registra en log
-  // y el restaurante la ve igualmente en Sala.
+  // El correo no se espera —el cliente no tiene por qué mirar una pantalla
+  // cargando mientras hablamos con el SMTP—, pero SÍ se registra con `after()`
+  // para que la función siga viva hasta que termine.
+  //
+  // Antes era un `.catch()` suelto sin `await`: en Vercel la función puede
+  // congelarse en cuanto devuelve la respuesta, así que la cadena de envío se
+  // cortaba a media conexión con Resend. Como el sello y el histórico se
+  // escriben DESPUÉS de enviar, el corte no dejaba ni correo ni rastro: la
+  // reserva quedaba creada y el cliente sin confirmación, sin ningún error que
+  // mirar. Pasó con 20 reservas en 12 días, unas sí y otras no según cuándo
+  // muriera la instancia.
+  //
+  // `after()` (Next 16) ejecuta el trabajo tras responder al cliente sin
+  // hacerle esperar, y es la plataforma la que garantiza que se complete.
   // ── Correos según lo que le toque hacer al cliente ──────────────────
   //
   // Sin tarjeta      → confirmación normal, como siempre.
@@ -789,13 +800,19 @@ export async function crearReservaPublicaAction(
   // Tarjeta DESPUÉS  → la reserva está firme y la tarjeta se pedirá unos días
   //                    antes (§5.4), así que se le confirma avisándole de eso.
   if (!exigeTarjeta) {
-    notificarReservaCreada(reservaId).catch((e) =>
-      console.error("[reservar-publica] mail CONFIRMACION:", e),
+    after(
+      notificarReservaCreada(reservaId).catch((e) =>
+        console.error("[reservar-publica] mail CONFIRMACION:", e),
+      ),
     );
   } else if (garantiaEnDiferido) {
-    enviarReservaEmail(reservaId, "GARANTIA_PENDIENTE", {
-      actor: { origen: "PORTAL_PUBLICO" },
-    }).catch((e) => console.error("[reservar-publica] mail GARANTIA_PENDIENTE:", e));
+    after(
+      enviarReservaEmail(reservaId, "GARANTIA_PENDIENTE", {
+        actor: { origen: "PORTAL_PUBLICO" },
+      }).catch((e) =>
+        console.error("[reservar-publica] mail GARANTIA_PENDIENTE:", e),
+      ),
+    );
   }
 
   return {

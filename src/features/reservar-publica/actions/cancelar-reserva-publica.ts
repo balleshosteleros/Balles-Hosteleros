@@ -1,5 +1,7 @@
 "use server";
 
+import { after } from "next/server";
+
 /**
  * Cancelación de una reserva por el propio cliente, desde el enlace del correo.
  *
@@ -184,10 +186,15 @@ export async function cancelarReservaPorToken(
       const { enviarReservaEmail } = await import("@/lib/email/reservas/mailer");
       // Lo cancela el propio cliente desde el enlace de su correo: en el
       // histórico consta como PORTAL_PUBLICO, sin firma de empleado.
-      void enviarReservaEmail(r.id as string, "CANCELADA", {
-        actor: { origen: "PORTAL_PUBLICO" },
-      }).catch((e) =>
-        console.error("[cancelar-publica] mail CANCELACION:", e),
+      // `after()` mantiene viva la funcion hasta que el correo sale: con un
+      // `void` suelto, la instancia podia morir a media conexion SMTP y el
+      // cliente se quedaba sin el acuse de su cancelacion.
+      after(
+        enviarReservaEmail(r.id as string, "CANCELADA", {
+          actor: { origen: "PORTAL_PUBLICO" },
+        }).catch((e) =>
+          console.error("[cancelar-publica] mail CANCELACION:", e),
+        ),
       );
     } catch (e) {
       console.error("[cancelar-publica] no se pudo cargar el mailer:", e);

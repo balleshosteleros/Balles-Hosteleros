@@ -7,7 +7,7 @@
  *
  * Seguridad: se comprueba la firma HMAC del cuerpo antes de hacer nada.
  */
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   firmaWebhookValida,
@@ -338,8 +338,12 @@ async function procesarPoliticaReserva(input: {
     //
     // `notificarReservaCreada` es idempotente (marca `email_confirmacion_at`),
     // así que no duplica si el cliente ya volvió de Revolut y se envió allí.
-    notificarReservaCreada(reserva.id as string).catch((e) =>
-      console.error("[revolut][webhook] mail CONFIRMACION:", e),
+    // `after()` mantiene viva la funcion hasta que el correo sale: un webhook
+    // responde enseguida y la instancia podia morir a media conexion SMTP.
+    after(
+      notificarReservaCreada(reserva.id as string).catch((e) =>
+        console.error("[revolut][webhook] mail CONFIRMACION:", e),
+      ),
     );
     return true;
   }

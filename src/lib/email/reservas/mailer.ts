@@ -679,10 +679,47 @@ export async function enviarReservaEmail(
     urlValoracion,
   });
 
+  // La fila del histórico se crea ANTES de enviar: su id es lo que identifica
+  // al correo en el píxel de seguimiento, así que tiene que existir para poder
+  // incrustarlo. Nace sin `enviado_at` —todavía no ha salido— y se completa
+  // abajo cuando el envío confirma.
+  const enviadoAt = new Date().toISOString();
+  const actor = options.actor;
+  const { data: filaEnvio, error: errAlta } = await admin
+    .from("reserva_email_envios")
+    .insert({
+      reserva_id: reservaId,
+      empresa_id: empresaId,
+      tipo,
+      destinatario: email,
+      asunto: subject,
+      usuario_id: actor?.usuarioId ?? null,
+      usuario_nombre: actor?.usuarioNombre ?? null,
+      origen: actor?.origen ?? "AUTOMATICO",
+      enviado_at: enviadoAt,
+    })
+    .select("id")
+    .single();
+  if (errAlta) {
+    console.error("[reservas][mailer] alta del histórico:", errAlta.message);
+  }
+  const envioId = (filaEnvio?.id as string | undefined) ?? null;
+
+  // Píxel de apertura: una imagen de 1x1 que el lector del cliente pide al
+  // abrir el correo. Va al final del cuerpo para que no desplace nada.
+  // Si la fila no se pudo crear, el correo sale igual: mejor sin seguimiento
+  // que sin correo.
+  const htmlFinal = envioId
+    ? html.replace(
+        /<\/body>/i,
+        `<img src="${getSiteUrl()}/api/email/abierto/${envioId}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" /></body>`,
+      )
+    : html;
+
   const res = await sendEmail({
     to: email,
     subject,
-    html,
+    html: htmlFinal,
     text,
     // `brandHeader: false` porque este correo YA pinta su propia cabecera con el
     // isotipo. Pasamos `empresaId` igualmente para dos cosas: que el remitente
@@ -693,6 +730,11 @@ export async function enviarReservaEmail(
   });
 
   if (!res.ok) {
+    // El correo no salió: se borra la fila que se había creado para el píxel.
+    // Dejarla haría creer en la ficha que al cliente se le escribió.
+    if (envioId) {
+      await admin.from("reserva_email_envios").delete().eq("id", envioId);
+    }
     if (!res.configured) {
       return { ok: false, error: "SMTP no configurado" };
     }
@@ -702,7 +744,6 @@ export async function enviarReservaEmail(
   // Auditoría: el timestamp en `reservas` da la idempotencia (que el cron no
   // reenvíe) y el histórico guarda la traza completa con su autor. El
   // timestamp se machaca en cada reenvío; el histórico, no.
-  const enviadoAt = new Date().toISOString();
   if (auditCol) {
     await admin
       .from("reservas")
@@ -710,22 +751,17 @@ export async function enviarReservaEmail(
       .eq("id", reservaId);
   }
 
-  // El correo YA salió: si el registro falla, no se puede deshacer el envío ni
-  // tiene sentido devolver error. Se traza y se sigue.
-  const actor = options.actor;
-  const { error: errHist } = await admin.from("reserva_email_envios").insert({
-    reserva_id: reservaId,
-    empresa_id: empresaId,
-    tipo,
-    destinatario: email,
-    asunto: subject,
-    usuario_id: actor?.usuarioId ?? null,
-    usuario_nombre: actor?.usuarioNombre ?? null,
-    origen: actor?.origen ?? "AUTOMATICO",
-    enviado_at: enviadoAt,
-  });
-  if (errHist) {
-    console.error("[reservas][mailer] histórico de envío:", errHist.message);
+  // El cuerpo se guarda CON el píxel dentro, que es lo que de verdad se envió.
+  // El visor lo quita al pintarlo: si no, abrir el correo desde la ficha
+  // contaría como una apertura del cliente.
+  if (envioId) {
+    const { error: errCuerpo } = await admin
+      .from("reserva_email_envios")
+      .update({ cuerpo_html: htmlFinal })
+      .eq("id", envioId);
+    if (errCuerpo) {
+      console.error("[reservas][mailer] guardar cuerpo:", errCuerpo.message);
+    }
   }
 
   return { ok: true, transport: res.transport };

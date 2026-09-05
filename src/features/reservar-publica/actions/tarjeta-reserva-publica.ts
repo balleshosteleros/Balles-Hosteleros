@@ -1,5 +1,7 @@
 "use server";
 
+import { after } from "next/server";
+
 /**
  * Paso de tarjeta del portal de reservas (PRP-082 fase 2).
  *
@@ -423,8 +425,13 @@ export async function confirmarPagoTarjeta(token: string): Promise<
     // alta la retuvo a propósito para no decir "confirmada" mientras al
     // cliente aún le quedaba pagar.
     if (confirmada) {
-      notificarReservaCreada(r.id as string).catch((e) =>
-        console.error("[tarjeta-reserva] mail CONFIRMACION:", e),
+      // `after()` mantiene viva la funcion hasta que el correo sale: sin el,
+      // la instancia podia congelarse a media conexion SMTP y el cliente se
+      // quedaba sin confirmacion despues de haber pagado.
+      after(
+        notificarReservaCreada(r.id as string).catch((e) =>
+          console.error("[tarjeta-reserva] mail CONFIRMACION:", e),
+        ),
       );
     }
 

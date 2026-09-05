@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, Mail, MessageCircle, Smartphone } from "lucide-react";
+import { ChevronDown, Eye, Mail, MessageCircle, Smartphone } from "lucide-react";
 
 import {
   Collapsible,
@@ -12,9 +12,16 @@ import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
+  getReservaEmailCuerpo,
   listReservaEmailEnvios,
   type ReservaEmailEnvio,
 } from "@/features/sala/actions/reserva-email-envios-actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { RESERVA_EMAIL_TIPO_LABELS } from "@/lib/seeds/reserva-email-plantillas";
 import {
   listMensajeriaEnvios,
@@ -36,6 +43,8 @@ interface LineaComunicacion {
   /** Solo en WhatsApp y SMS: el correo no informa de la entrega. */
   estado: string | null;
   fallido: boolean;
+  /** Solo en correo: cuándo se abrió, o null si no consta. */
+  abiertoAt: string | null;
 }
 
 const TIPO_MENSAJERIA_LABEL: Record<string, string> = {
@@ -99,6 +108,31 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
     lineas: LineaComunicacion[];
   } | null>(null);
   const [abierto, setAbierto] = useState(false);
+  // Correo que se está viendo en el visor. `cargando` mientras llega el cuerpo,
+  // para que el diálogo abra al instante y no parezca que no responde.
+  const [viendo, setViendo] = useState<{
+    titulo: string;
+    destinatario: string | null;
+    html: string | null;
+    cargando: boolean;
+  } | null>(null);
+
+  async function verCorreo(linea: LineaComunicacion) {
+    const envioId = linea.id.replace(/^correo-/, "");
+    setViendo({
+      titulo: linea.titulo,
+      destinatario: linea.destinatario,
+      html: null,
+      cargando: true,
+    });
+    const res = await getReservaEmailCuerpo(envioId);
+    setViendo({
+      titulo: linea.titulo,
+      destinatario: linea.destinatario,
+      html: res.ok ? (res.html ?? null) : null,
+      cargando: false,
+    });
+  }
 
   useEffect(() => {
     let vigente = true;
@@ -121,6 +155,7 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
           enviadoAt: e.enviadoAt,
           estado: null,
           fallido: false,
+          abiertoAt: e.abiertoAt,
         })),
         ...mensajes.data.map((m): LineaComunicacion => ({
           id: `msg-${m.id}`,
@@ -131,6 +166,7 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
           enviadoAt: m.enviadoAt,
           estado: ESTADO_LABEL[m.estado] ?? m.estado,
           fallido: m.estado === "FALLIDO",
+          abiertoAt: null,
         })),
       ].sort((a, b) => b.enviadoAt.localeCompare(a.enviadoAt));
 
@@ -201,8 +237,7 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
                 Enviado por{" "}
                 <span className="font-medium text-foreground">{e.autor}</span>
                 {e.destinatario ? ` · ${e.destinatario}` : ""}
-                {/* El estado solo se pinta en WhatsApp y SMS: del correo no
-                    sabemos si llegó, y decir "enviado" daría a entender que sí. */}
+                {/* En WhatsApp y SMS, el estado de entrega que da la pasarela. */}
                 {e.estado && (
                   <>
                     {" · "}
@@ -211,12 +246,77 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
                     </span>
                   </>
                 )}
+                {/* En correo, si el cliente lo ha abierto. Lo marca el píxel
+                    del propio correo: que conste es señal de que llegó a un
+                    buzón real. */}
+                {e.via === "CORREO" && (
+                  <>
+                    {" · "}
+                    <span
+                      className={cn(
+                        e.abiertoAt
+                          ? "font-medium text-emerald-600 dark:text-emerald-400"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {e.abiertoAt ? "Abierto" : "Sin abrir"}
+                    </span>
+                  </>
+                )}
               </div>
+              {/* Ver el correo tal cual le llegó al cliente. Solo en correo:
+                  de WhatsApp y SMS no se guarda cuerpo. */}
+              {e.via === "CORREO" && (
+                <button
+                  type="button"
+                  onClick={() => void verCorreo(e)}
+                  className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  <Eye className="h-3 w-3 shrink-0" />
+                  Ver correo
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
       </CollapsibleContent>
+
+      {/* Visor del correo. El HTML va dentro de un iframe con `sandbox`: es
+          contenido con estilos propios (tablas, anchos fijos, colores) que
+          fuera de un marco se comería el diseño de la ficha, y el sandbox
+          impide que ejecute nada. */}
+      <Dialog open={viendo !== null} onOpenChange={(v) => !v && setViendo(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              {viendo?.titulo}
+              {viendo?.destinatario ? (
+                <span className="ml-2 font-normal text-muted-foreground">
+                  {viendo.destinatario}
+                </span>
+              ) : null}
+            </DialogTitle>
+          </DialogHeader>
+          {viendo?.cargando ? (
+            <p className="py-8 text-center text-xs text-muted-foreground">
+              Cargando…
+            </p>
+          ) : viendo?.html ? (
+            <iframe
+              title="Correo enviado al cliente"
+              sandbox=""
+              srcDoc={viendo.html}
+              className="h-[70vh] w-full rounded-md border border-border bg-white"
+            />
+          ) : (
+            <p className="py-8 text-center text-xs text-muted-foreground">
+              De este correo no se guardó una copia: se envió antes de que el
+              software empezara a guardarlas.
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
     </Collapsible>
   );
 }
