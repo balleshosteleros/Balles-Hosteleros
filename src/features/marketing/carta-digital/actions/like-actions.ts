@@ -12,6 +12,16 @@ import type { ToggleLikeResult } from "../types";
 const DEVICE_ID_RE = /^[a-zA-Z0-9_-]{8,128}$/;
 
 /**
+ * Días que dura un "me gusta" antes de poder repetirse.
+ *
+ * Quien vuelve al restaurante puede volver a votar su plato: el contador mide
+ * así lo que se sigue pidiendo, no solo quién pasó por aquí una vez. Dentro del
+ * plazo el corazón funciona como interruptor —se puede retirar—; pasado el
+ * plazo, el mismo dispositivo suma otro voto.
+ */
+const DIAS_VIGENCIA = 15;
+
+/**
  * Lo que ve el comensal: el arranque configurado más los votos reales.
  * `likes_base` no es un voto —no se guarda en `carta_item_likes`— así que las
  * estadísticas siguen contando solo lo que ha pulsado gente de verdad.
@@ -38,7 +48,7 @@ export async function toggleLike(itemId: string, deviceId: string): Promise<Togg
 
     const { data: existente, error: selErr } = await supabase
       .from("carta_item_likes")
-      .select("id")
+      .select("id, created_at")
       .eq("item_id", itemId)
       .eq("device_id", deviceId)
       .maybeSingle();
@@ -48,11 +58,24 @@ export async function toggleLike(itemId: string, deviceId: string): Promise<Togg
       return { ok: false, error: "Error consultando like.", codigo: "ERROR" };
     }
 
-    if (existente) {
+    // Un voto vale 15 días. Pasado ese plazo el mismo cliente puede volver a
+    // votar en su siguiente visita: cuenta como voto nuevo, no como retirada.
+    const previo = existente as { id: string; created_at: string } | null;
+    const caducado =
+      !!previo &&
+      Date.now() - new Date(previo.created_at).getTime() > DIAS_VIGENCIA * 86_400_000;
+
+    if (caducado) {
+      // Se limpia el viejo para que el insert de abajo no choque con la clave
+      // única (item + dispositivo) y el voto quede con fecha de hoy.
+      await supabase.from("carta_item_likes").delete().eq("id", previo!.id);
+    }
+
+    if (previo && !caducado) {
       const { error: delErr } = await supabase
         .from("carta_item_likes")
         .delete()
-        .eq("id", (existente as { id: string }).id);
+        .eq("id", previo.id);
       if (delErr) {
         console.error("[like] del:", delErr.message);
         return { ok: false, error: "No se pudo retirar el like.", codigo: "ERROR" };
@@ -120,10 +143,14 @@ export async function getLikesDelDevice(deviceId: string, itemIds: string[]): Pr
   try {
     if (!deviceId || !DEVICE_ID_RE.test(deviceId) || itemIds.length === 0) return [];
     const supabase = createAnonClient();
+    // Solo los votos vigentes pintan el corazón: uno caducado ya no cuenta como
+    // "tuyo", y si siguiera marcado el cliente no vería que puede votar de nuevo.
+    const desde = new Date(Date.now() - DIAS_VIGENCIA * 86_400_000).toISOString();
     const { data, error } = await supabase
       .from("carta_item_likes")
       .select("item_id")
       .eq("device_id", deviceId)
+      .gte("created_at", desde)
       .in("item_id", itemIds);
     if (error) {
       console.error("[like] getDevice:", error.message);
