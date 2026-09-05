@@ -2574,8 +2574,6 @@ function PlanoCanvas({
   zonas,
   decoraciones,
   salaTieneZonas,
-  selectedMesaId,
-  selectedReservaMesaId,
   mesasResaltadasIds,
   onHoverMesa,
   onSelectMesa,
@@ -2599,12 +2597,10 @@ function PlanoCanvas({
   zonas: ZonaReal[];
   decoraciones: SalaDecoracion[];
   salaTieneZonas: boolean;
-  selectedMesaId: string | null;
-  selectedReservaMesaId: string | null;
   /**
-   * Mesas de la reserva que el raton tiene encima en la lista. Es un conjunto
-   * porque una reserva puede ocupar VARIAS mesas (las uniones se guardan como
-   * "M1+M2"): se resaltan todas a la vez.
+   * Mesas señaladas con el raton, sea sobre el plano o sobre la lista. Es un
+   * conjunto porque una reserva puede ocupar VARIAS mesas (las uniones se
+   * guardan como "M1+M2"): se resaltan todas a la vez.
    */
   mesasResaltadasIds: Set<string>;
   /**
@@ -2913,10 +2909,12 @@ function PlanoCanvas({
                     "sala-mesa absolute flex flex-col items-center justify-center text-[11px] font-semibold border-2 transition-all cursor-pointer px-1 overflow-hidden",
                     mesaBg[estado] ?? "",
                     isLibre ? "text-foreground border-foreground/40" : "border-white/10",
-                    (selectedReservaMesaId === m.id ||
-                      selectedMesaId === m.id ||
-                      mesasResaltadasIds.has(m.id)) &&
-                      "!border-red-500 ring-2 ring-red-500 z-20",
+                    // Recuadro rojo SOLO mientras el raton esta encima: ni al
+                    // abrir la ficha de una reserva ni al elegir una mesa se
+                    // queda marcada. Al mover el raton se enciende unicamente
+                    // la mesa que se esta señalando.
+                    mesasResaltadasIds.has(m.id) &&
+                      "!border-red-500 ring-4 ring-red-500 z-20",
                     moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
                     destinoInvalido && "opacity-40 cursor-not-allowed",
                   )}
@@ -4101,10 +4099,17 @@ export function ReservasView() {
   );
 
   const mesasResaltadasIds = useMemo(() => {
-    if (!reservaHoverId) return new Set<string>();
-    const r = reservasResueltas.find((x) => x.id === reservaHoverId);
-    return mesasIdsDeReserva(r ?? null);
-  }, [reservaHoverId, reservasResueltas, mesasIdsDeReserva]);
+    const ids = new Set<string>();
+    // Raton encima de una mesa del plano: se marca esa mesa y solo esa.
+    if (mesaHoverId) ids.add(mesaHoverId);
+    // Raton encima de una fila del listado: se marcan sus mesas (una union
+    // ocupa dos, y las dos tienen que encenderse).
+    if (reservaHoverId) {
+      const r = reservasResueltas.find((x) => x.id === reservaHoverId);
+      for (const id of mesasIdsDeReserva(r ?? null)) ids.add(id);
+    }
+    return ids;
+  }, [mesaHoverId, reservaHoverId, reservasResueltas, mesasIdsDeReserva]);
 
   /**
    * Camino INVERSO: reservas que se encienden en el listado porque el raton
@@ -5838,8 +5843,6 @@ export function ReservasView() {
               zonas={zonasSalaActual}
               decoraciones={decoracionesSalaActual}
               salaTieneZonas={zonasSalaActual.length > 0}
-              selectedMesaId={selectedMesa?.id ?? null}
-              selectedReservaMesaId={selectedReserva?.mesaId ?? null}
               mesasResaltadasIds={mesasResaltadasIds}
               onHoverMesa={setMesaHoverId}
               onSelectMesa={handleSelectMesa}
@@ -5935,10 +5938,11 @@ export function ReservasView() {
                                       "relative overflow-hidden h-20 rounded-md flex flex-col items-center justify-center text-[11px] font-bold shadow-sm border-2 transition-all cursor-pointer px-1",
                                       mesaBg[estado] ?? "",
                                       isLibre ? "text-foreground border-foreground/40" : "border-white/10",
-                                      (selectedReserva?.mesaId === m.id ||
-                                        selectedMesa?.id === m.id ||
-                                        mesasResaltadasIds.has(m.id)) &&
-                                        "!border-red-500 ring-2 ring-red-500 z-20",
+                                      // Igual que en el plano: el rojo es solo
+                                      // del raton, no se queda pegado al abrir
+                                      // una reserva ni al elegir una mesa.
+                                      mesasResaltadasIds.has(m.id) &&
+                                        "!border-red-500 ring-4 ring-red-500 z-20",
                                       moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
                                       destinoInvalido && "opacity-40 cursor-not-allowed",
                                     )}
