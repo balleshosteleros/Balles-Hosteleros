@@ -12,6 +12,7 @@ import {
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHoraEnZona, minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
+import { cn } from "@/shared/lib/utils";
 import { BigClockButton } from "./BigClockButton";
 import { reproducirAvisoFichaje } from "../lib/aviso-fichaje";
 
@@ -29,6 +30,14 @@ interface Ventana {
   salidasMin: number[];
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
+  /**
+   * Cortesía REAL para fichar (distinta de la del pop-up): pasados estos
+   * minutos desde la hora del turno el servidor ya RECHAZA el fichaje. Es el
+   * instante en que la cuenta atrás pasa a rojo y el aviso cambia de "ficha" a
+   * "se te ha pasado", para no invitar a pulsar un botón que va a fallar.
+   */
+  margenDespuesMin: number;
+  permitirFueraHorario: boolean;
   avisoSonido: boolean;
   avisoVibracion: boolean;
   /** Zona horaria en la que están entradaMin/salidaMin (PRP-069). */
@@ -45,12 +54,13 @@ function calcularDebe(
   estado: Estado,
   trabajando: boolean,
   nowMin: number,
-): { debeEntrada: boolean; debeSalida: boolean } {
+): { debeEntrada: boolean; debeSalida: boolean; objetivoMin: number | null } {
   const tiene = ventana?.tieneHorario ?? false;
   const mAntes = ventana?.popupMargenAntesMin ?? 15;
   const mDespues = ventana?.popupMargenDespuesMin ?? 15;
   let debeEntrada = false;
   let debeSalida = false;
+  let objetivoMin: number | null = null;
   if (tiene) {
     // TURNO PARTIDO: hay que avisar en CADA entrada del día (las que haya),
     // no solo en la primera.
@@ -60,9 +70,10 @@ function calcularDebe(
         : ventana?.entradaMin != null
           ? [ventana.entradaMin]
           : [];
-    debeEntrada =
-      estado === "sin-fichar" &&
-      inicios.some((ini) => dentroVentana(nowMin, ini, mAntes, mDespues));
+    const iniActivo =
+      inicios.find((ini) => dentroVentana(nowMin, ini, mAntes, mDespues)) ?? null;
+    debeEntrada = estado === "sin-fichar" && iniActivo != null;
+    if (debeEntrada) objetivoMin = iniActivo;
     // Igual que la entrada: hay que avisar en CADA salida del día. Quien
     // encadena dos empresas (una acaba a las 23:30, la otra empieza ahí) tiene
     // dos cierres, y mirando solo el último no se avisaba del primero.
@@ -72,10 +83,24 @@ function calcularDebe(
         : ventana?.salidaMin != null
           ? [ventana.salidaMin]
           : [];
-    debeSalida =
-      trabajando && finales.some((fin) => dentroVentana(nowMin, fin, mAntes, mDespues));
+    const finActivo =
+      finales.find((fin) => dentroVentana(nowMin, fin, mAntes, mDespues)) ?? null;
+    debeSalida = trabajando && finActivo != null;
+    if (debeSalida) objetivoMin = finActivo;
   }
-  return { debeEntrada, debeSalida };
+  return { debeEntrada, debeSalida, objetivoMin };
+}
+
+/**
+ * Cuenta atrás en MM:SS. Negativo = ya pasó la hora, con un menos delante
+ * ("-02:15" = dos minutos y cuarto de retraso).
+ */
+function formatoCuentaAtras(segundos: number): string {
+  const signo = segundos < 0 ? "-" : "";
+  const abs = Math.abs(segundos);
+  const m = Math.floor(abs / 60);
+  const sec = abs % 60;
+  return `${signo}${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
 function deriveEstado(f: MiFichajeHoy | null): Estado {
@@ -129,6 +154,7 @@ export function MobileFichajeProvider() {
   const [pospuestoHasta, setPospuestoHasta] = useState<number | null>(null);
   const [nowMin, setNowMin] = useState<number>(() => minutosAhoraEnZona());
   const [, setTick] = useState(0);
+  const [, setSegundoTick] = useState(0);
 
   const estado = deriveEstado(fichaje);
   const trabajando = estado === "trabajando" || estado === "pausa";
@@ -152,6 +178,8 @@ export function MobileFichajeProvider() {
       salidasMin: v.salidasMin,
       popupMargenAntesMin: v.popupMargenAntesMin,
       popupMargenDespuesMin: v.popupMargenDespuesMin,
+      margenDespuesMin: v.margenDespuesMin,
+      permitirFueraHorario: v.permitirFueraHorario,
       avisoSonido: v.avisoSonido,
       avisoVibracion: v.avisoVibracion,
       zonaHoraria: v.zonaHoraria,
@@ -288,11 +316,53 @@ export function MobileFichajeProvider() {
   const elapsed = entradaMs ? Date.now() - entradaMs : 0;
 
   // ── ¿Toca fichar ahora? Según la config de Ajustes RRHH → Fichajes ────────
-  const { debeEntrada, debeSalida } = calcularDebe(ventana, estado, trabajando, nowMin);
+  const { debeEntrada, debeSalida, objetivoMin } = calcularDebe(
+    ventana,
+    estado,
+    trabajando,
+    nowMin,
+  );
   const debeFichar = debeEntrada || debeSalida;
 
   const pospuesto = pospuestoHasta != null && Date.now() < pospuestoHasta;
   const mostrarFichar = debeFichar && !pospuesto;
+
+  // Segundero de la cuenta atrás: el tick lento de 20 s vale para decidir SI se
+  // muestra el aviso, pero no para un contador que baja segundo a segundo.
+  useEffect(() => {
+    if (!mostrarFichar) return;
+    const i = setInterval(() => setSegundoTick((t) => t + 1), 1000);
+    return () => clearInterval(i);
+  }, [mostrarFichar]);
+
+  // Segundos con signo hasta la hora del turno (negativo = ya pasó). Se calcula
+  // con segundos reales en la zona de la EMPRESA, no con `nowMin`, que solo
+  // tiene resolución de minuto.
+  const restanteSeg = (() => {
+    if (objetivoMin == null) return null;
+    const tz = ventana?.zonaHoraria ?? "Europe/Madrid";
+    const [h, m, sec] = new Date()
+      .toLocaleTimeString("en-GB", { timeZone: tz, hour12: false })
+      .split(":")
+      .map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    const ahoraSeg = h * 3600 + m * 60 + (Number.isFinite(sec) ? sec : 0);
+    let d = objetivoMin * 60 - ahoraSeg;
+    // Circular sobre 24 h (turnos que cruzan medianoche).
+    if (d > 43200) d -= 86400;
+    if (d < -43200) d += 86400;
+    return d;
+  })();
+
+  // "Tarde" NO es pasarse un segundo de la hora: dentro de la cortesía (5 min
+  // en BACANAL/HABANA) el fichaje se acepta y se redondea a la hora del turno.
+  // El rojo salta cuando esa cortesía se agota, que es cuando el servidor ya
+  // rechaza y la única vía es la solicitud. Con `permitirFueraHorario` no hay
+  // hora límite, así que nunca se marca tarde.
+  const llegaTarde =
+    restanteSeg != null &&
+    !ventana?.permitirFueraHorario &&
+    restanteSeg < -(ventana?.margenDespuesMin ?? 0) * 60;
 
   const posponer = () => setPospuestoHasta(Date.now() + POSPONER_MS);
 
@@ -327,7 +397,13 @@ export function MobileFichajeProvider() {
             <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted" />
             <div className="flex items-center justify-between px-5">
               <h2 className="text-lg font-semibold">
-                {debeSalida ? "¿Fichar salida?" : "¿Fichar entrada?"}
+                {llegaTarde
+                  ? debeSalida
+                    ? "Se te ha pasado la salida"
+                    : "Se te ha pasado el fichaje"
+                  : debeSalida
+                    ? "¿Fichar salida?"
+                    : "¿Fichar entrada?"}
               </h2>
               <button
                 onClick={posponer}
@@ -337,10 +413,42 @@ export function MobileFichajeProvider() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="px-5 pt-1 text-sm text-muted-foreground">
-              {debeSalida
-                ? "Es tu hora de salida. Registra tu salida para cerrar la jornada."
-                : "Es tu hora de entrada. Registra tu entrada para empezar la jornada."}
+            {/* Cuenta atrás: baja hasta 00:00 en verde y sigue en negativo y en
+                rojo una vez agotada la cortesía. El corte no es estético: a
+                partir de ahí el servidor rechaza el fichaje, así que el aviso
+                deja de pedir que fiches y explica qué hacer. */}
+            {restanteSeg != null && (
+              <div className="flex flex-col items-center px-5 pt-3">
+                <span
+                  className={cn(
+                    "text-5xl font-bold leading-none tabular-nums",
+                    llegaTarde ? "text-rose-600" : "text-emerald-600",
+                  )}
+                >
+                  {formatoCuentaAtras(restanteSeg)}
+                </span>
+                <span
+                  className={cn(
+                    "mt-1 text-xs font-medium uppercase tracking-wider",
+                    llegaTarde ? "text-rose-600" : "text-muted-foreground",
+                  )}
+                >
+                  {llegaTarde ? "Vas tarde" : debeSalida ? "Para tu salida" : "Para tu entrada"}
+                </span>
+              </div>
+            )}
+
+            <p
+              className={cn(
+                "px-5 pt-3 text-sm",
+                llegaTarde ? "text-rose-600" : "text-muted-foreground",
+              )}
+            >
+              {llegaTarde
+                ? "Ya se ha pasado tu hora de fichaje y llegas tarde. Si has asistido, tendrás que fichar por solicitud para que tu responsable lo valide."
+                : debeSalida
+                  ? "Es tu hora de salida. Registra tu salida para cerrar la jornada."
+                  : "Es tu hora de entrada. Registra tu entrada para empezar la jornada."}
             </p>
             <BigClockButton
               fichajeId={debeSalida ? fichaje?.id ?? null : null}
