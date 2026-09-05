@@ -18,6 +18,10 @@ import { getDiasVacacionesAnio } from "@/features/rrhh/actions/calendario-config
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
+  getHorarioDia,
+  getDiasConHorarioAsignado,
+} from "@/features/rrhh/utils/horario-empleado";
+import {
   calcularSaldoVacaciones,
   ESTADOS_QUE_GASTAN,
   type SolicitudParaSaldo,
@@ -94,5 +98,212 @@ export async function getMisCondicionesContrato(): Promise<{
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[mis-condiciones] getMisCondicionesContrato:", msg);
     return { ok: false, data: null, error: msg };
+  }
+}
+
+/* ─── SALARIO Y HORARIO REALES ────────────────────────────────────────────
+ *
+ * Antes la vista adivinaba el puesto buscando su nombre dentro del nombre y el
+ * correo del trabajador. Con los datos reales eso dejaba a 20 de 21 empleados
+ * viendo "Pendiente" pese a tener la ficha completa, y acertaba solo por
+ * casualidad en quien se llamaba como su puesto. Peor: alguien apellidado
+ * "Sala" habría visto el salario de un puesto ajeno. Aquí el salario sale de
+ * las condiciones pactadas del empleado y, si no las tiene, del puesto de su
+ * ficha; nunca de una coincidencia de texto.
+ */
+
+/** Un día del horario semanal. `tramos` vacío = libra ese día. */
+export interface DiaHorario {
+  /** ISO yyyy-mm-dd. */
+  fecha: string;
+  /** L, M, X, J, V, S, D. */
+  letra: string;
+  /** "17:00–00:30" o "8 h" (flexible). Vacío si libra. */
+  tramos: string[];
+  /** false = libra; true = le toca trabajar. */
+  trabaja: boolean;
+}
+
+export interface MisCondicionesSalario {
+  /** Bruto mensual en euros. null si su puesto aún no lo tiene cargado. */
+  salarioBruto: number | null;
+  jornadaContrato: string | null;
+  horasSemanales: number | null;
+  diasLibres: number | null;
+  /** De dónde sale: sus condiciones pactadas o la plantilla del puesto. */
+  origen: "empleado" | "puesto" | null;
+}
+
+export interface MisCondicionesHorario {
+  /** Lunes a domingo de la semana en curso. Vacío = no tiene horario asignado. */
+  dias: DiaHorario[];
+  /** Lunes de la semana mostrada (ISO). */
+  desde: string | null;
+}
+
+/**
+ * Salario del empleado en la empresa activa. Prioridad:
+ *   1. `empleado_condiciones` vigente  → lo pactado con ÉL.
+ *   2. `puesto_salarios` de su puesto  → la plantilla del puesto de su ficha.
+ * Si el puesto no tiene salario cargado devuelve null: "sin dato" no es 0 €.
+ */
+export async function getMiSalario(): Promise<{
+  ok: boolean;
+  data: MisCondicionesSalario | null;
+  error?: string;
+}> {
+  try {
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId || !empresaId) return { ok: false, data: null, error: "No autenticado" };
+
+    const { data: emp } = await supabase
+      .from("empleados")
+      .select("id, puesto")
+      .eq("user_id", userId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!emp) return { ok: true, data: null };
+
+    // 1) Lo pactado con el empleado (incluye promociones: la fila vigente).
+    const { data: cond } = await supabase
+      .from("empleado_condiciones")
+      .select("salario_bruto, jornada_contrato, horas_semanales, dias_libres")
+      .eq("empleado_id", emp.id as string)
+      .eq("empresa_id", empresaId)
+      .is("vigente_hasta", null)
+      .maybeSingle();
+
+    const num = (v: unknown): number | null =>
+      v === null || v === undefined ? null : Number(v);
+
+    if (cond && num(cond.salario_bruto) !== null && Number(cond.salario_bruto) > 0) {
+      return {
+        ok: true,
+        data: {
+          salarioBruto: num(cond.salario_bruto),
+          jornadaContrato: (cond.jornada_contrato as string | null) ?? null,
+          horasSemanales: num(cond.horas_semanales),
+          diasLibres: num(cond.dias_libres),
+          origen: "empleado",
+        },
+      };
+    }
+
+    // 2) La plantilla del puesto que figura en su ficha (nivel más bajo).
+    const puestoNombre = (emp.puesto as string | null) ?? null;
+    if (!puestoNombre) return { ok: true, data: null };
+
+    const { data: puesto } = await supabase
+      .from("puestos")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("nombre", puestoNombre)
+      .maybeSingle();
+    if (!puesto) return { ok: true, data: null };
+
+    const { data: sal } = await supabase
+      .from("puesto_salarios")
+      .select("salario_bruto, jornada_contrato, horas_semanales, dias_libres")
+      .eq("empresa_id", empresaId)
+      .eq("puesto_id", puesto.id as string)
+      .order("nivel")
+      .limit(1)
+      .maybeSingle();
+    if (!sal) return { ok: true, data: null };
+
+    return {
+      ok: true,
+      data: {
+        salarioBruto: num(sal.salario_bruto),
+        jornadaContrato: (sal.jornada_contrato as string | null) ?? null,
+        horasSemanales: num(sal.horas_semanales),
+        diasLibres: num(sal.dias_libres),
+        origen: "puesto",
+      },
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[mis-condiciones] getMiSalario:", msg);
+    return { ok: false, data: null, error: msg };
+  }
+}
+
+/**
+ * Horario REAL de la semana en curso, resuelto con el mismo motor que usa RRHH
+ * (`getHorarioDia`): turnos directos y patrones rotativos, con su vigencia.
+ * El horario teórico del puesto está vacío en toda la base, así que lo que se
+ * enseña son sus turnos de verdad, no una plantilla sin rellenar.
+ *
+ * La semana arranca el lunes del día de HOY en la zona de la empresa, no la del
+ * navegador: un empleado que abre la app de madrugada sigue viendo su semana.
+ */
+export async function getMiHorarioSemana(): Promise<{
+  ok: boolean;
+  data: MisCondicionesHorario;
+  error?: string;
+}> {
+  const vacio: MisCondicionesHorario = { dias: [], desde: null };
+  try {
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId || !empresaId) return { ok: false, data: vacio, error: "No autenticado" };
+
+    const { data: emp } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!emp) return { ok: true, data: vacio };
+    const empleadoId = emp.id as string;
+
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+    const hoy = hoyEnZona(tz);
+
+    // Lunes de esta semana. getUTCDay(): 0=domingo → el lunes queda a 6 días.
+    const d = new Date(`${hoy}T00:00:00Z`);
+    const desplazamiento = (d.getUTCDay() + 6) % 7;
+    d.setUTCDate(d.getUTCDate() - desplazamiento);
+    const lunes = d.toISOString().split("T")[0];
+    const fechas: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const x = new Date(`${lunes}T00:00:00Z`);
+      x.setUTCDate(x.getUTCDate() + i);
+      fechas.push(x.toISOString().split("T")[0]);
+    }
+    const domingo = fechas[6];
+
+    // Días con horario ASIGNADO: distingue "libra" de "no tiene horario".
+    const cubiertos = await getDiasConHorarioAsignado(
+      supabase,
+      empresaId,
+      empleadoId,
+      lunes,
+      domingo,
+    );
+    if (cubiertos.size === 0) return { ok: true, data: { dias: [], desde: lunes } };
+
+    const LETRAS = ["L", "M", "X", "J", "V", "S", "D"];
+    const dias: DiaHorario[] = [];
+    for (let i = 0; i < 7; i++) {
+      const fecha = fechas[i];
+      if (!cubiertos.has(fecha)) continue;
+      const h = await getHorarioDia(supabase, empresaId, empleadoId, fecha);
+      const tramos: string[] = [];
+      let trabaja = false;
+      if (h.tipo === "fijo" && h.tramos.length > 0) {
+        trabaja = true;
+        for (const tr of h.tramos) tramos.push(`${tr.inicio}–${tr.fin}`);
+      } else if (h.tipo === "flexible" && h.objetivoHoras > 0) {
+        trabaja = true;
+        tramos.push(`${h.objetivoHoras} h`);
+      }
+      dias.push({ fecha, letra: LETRAS[i], tramos, trabaja });
+    }
+
+    return { ok: true, data: { dias, desde: lunes } };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[mis-condiciones] getMiHorarioSemana:", msg);
+    return { ok: false, data: vacio, error: msg };
   }
 }

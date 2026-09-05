@@ -1,13 +1,17 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { type PuestoSalarial } from "@/features/rrhh/data/puestos";
-import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
-import { getMisCondicionesContrato, type MisCondicionesContrato } from "@/features/mi-panel/actions/mis-condiciones-actions";
+import {
+  getMisCondicionesContrato,
+  getMiSalario,
+  getMiHorarioSemana,
+  type MisCondicionesContrato,
+  type MisCondicionesSalario,
+  type MisCondicionesHorario,
+} from "@/features/mi-panel/actions/mis-condiciones-actions";
 import {
   Calendar,
   CalendarCheck,
@@ -15,38 +19,23 @@ import {
   ClipboardCheck,
   ClipboardX,
   Wallet,
-  Coins,
-  PiggyBank,
+  Clock,
+  CalendarDays,
+  Loader2,
 } from "lucide-react";
 
+/** Importe en euros con coma decimal: 1.600,00 €. */
 const eur = (n: number) =>
   n.toLocaleString("es-ES", {
     style: "currency",
     currency: "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 
-function buscarPuestoUsuario(
-  puestos: PuestoSalarial[],
-  nombre: string,
-  email: string,
-  roles: string[],
-): PuestoSalarial | null {
-  if (!puestos.length) return null;
-  const haystack = `${nombre} ${email} ${roles.join(" ")}`.toLowerCase();
-  return (
-    puestos.find((p) =>
-      haystack.includes(p.puesto.toLowerCase()) ||
-      haystack.includes(p.departamento.toLowerCase()),
-    ) ?? null
-  );
-}
-
-function parseDiasVacaciones(texto: string): number {
-  const m = texto.match(/\d+/);
-  return m ? parseInt(m[0], 10) : 30;
-}
+/** Número con coma decimal, sin ceros colgando: 37,5 h / 40 h. */
+const horas = (n: number) =>
+  `${n.toLocaleString("es-ES", { maximumFractionDigits: 2 })} h`;
 
 interface DatosGenerales {
   vacacionesAno: number;
@@ -55,6 +44,7 @@ interface DatosGenerales {
   fechaAlta: string | null;
   fechaBaja: string | null;
   tipoJornada: string | null;
+  puesto: string | null;
 }
 
 /** dd/mm/aaaa, o «—» si el dato aún no consta en su ficha. */
@@ -65,53 +55,67 @@ function fmtFecha(iso: string | null): string {
 }
 
 export function MisCondicionesView() {
-  const { profile, user, roles } = useAuth();
   const { empresaActual } = useEmpresa();
-  const nombreCompleto = [profile?.nombre, profile?.apellidos].filter(Boolean).join(" ") || "—";
-  const email = profile?.email || user?.email || "—";
-
-  const [puestos, setPuestos] = useState<PuestoSalarial[]>([]);
-  useEffect(() => {
-    let activo = true;
-    listPuestosEmpresa().then((res) => { if (activo) setPuestos(res.puestos); });
-    return () => { activo = false; };
-  }, [empresaActual.id]);
-
-  const puesto = useMemo(
-    () => buscarPuestoUsuario(puestos, nombreCompleto, email, roles),
-    [puestos, nombreCompleto, email, roles],
-  );
 
   const [contrato, setContrato] = useState<MisCondicionesContrato | null>(null);
+  const [salario, setSalario] = useState<MisCondicionesSalario | null>(null);
+  const [horario, setHorario] = useState<MisCondicionesHorario | null>(null);
+  const [cargando, setCargando] = useState(true);
+
   useEffect(() => {
     let activo = true;
-    getMisCondicionesContrato().then((res) => {
-      if (activo) setContrato(res.data);
-    });
-    return () => { activo = false; };
+    setCargando(true);
+    Promise.all([getMisCondicionesContrato(), getMiSalario(), getMiHorarioSemana()])
+      .then(([c, s, h]) => {
+        if (!activo) return;
+        setContrato(c.data);
+        setSalario(s.data);
+        setHorario(h.data);
+      })
+      .finally(() => {
+        if (activo) setCargando(false);
+      });
+    return () => {
+      activo = false;
+    };
   }, [empresaActual.id]);
 
-  // Mientras carga se muestran los días de la empresa por defecto, nunca un
-  // saldo inventado: los valores reales llegan con la ficha del empleado.
+  if (cargando) {
+    return (
+      <div className="p-4 md:p-6 max-w-4xl mx-auto">
+        <Card className="p-10 flex items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </Card>
+      </div>
+    );
+  }
+
   const generales: DatosGenerales = {
-    vacacionesAno: contrato?.vacacionesAno ?? (puesto ? parseDiasVacaciones(puesto.vacaciones) : 30),
+    vacacionesAno: contrato?.vacacionesAno ?? 0,
     vacacionesRestantes: contrato?.vacacionesRestantes ?? 0,
     fechaAlta: contrato?.fechaAlta ?? null,
     fechaBaja: contrato?.fechaBaja ?? null,
     tipoJornada: contrato?.tipoJornada ?? null,
+    puesto: contrato?.puesto ?? null,
   };
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
       <GeneralesCard datos={generales} />
-      <SalarioCard puesto={puesto} />
-      <HorarioCard puesto={puesto} />
+      <SalarioCard salario={salario} />
+      <HorarioCard horario={horario} />
     </div>
   );
 }
 
 function GeneralesCard({ datos }: { datos: DatosGenerales }) {
   const items = [
+    {
+      label: "Puesto",
+      value: datos.puesto ?? "—",
+      icon: FileSignature,
+      tone: "text-violet-600 bg-violet-500/10",
+    },
     {
       label: "Vacaciones al año",
       value: `${datos.vacacionesAno} días`,
@@ -141,8 +145,8 @@ function GeneralesCard({ datos }: { datos: DatosGenerales }) {
     {
       label: "Jornada",
       value: datos.tipoJornada ?? "—",
-      icon: FileSignature,
-      tone: "text-violet-600 bg-violet-500/10",
+      icon: Clock,
+      tone: "text-sky-600 bg-sky-500/10",
       badge: !!datos.tipoJornada,
     },
   ];
@@ -186,33 +190,34 @@ function GeneralesCard({ datos }: { datos: DatosGenerales }) {
   );
 }
 
-function SalarioCard({ puesto }: { puesto: PuestoSalarial | null }) {
-  const items = puesto
-    ? [
-        {
-          label: "Salario bruto",
-          value: `${eur(puesto.salarioBruto)} / mes`,
-          icon: Wallet,
-          tone: "text-emerald-600 bg-emerald-500/10",
-        },
-        {
-          label: "Jornada",
-          value: puesto.jornadaContrato || "—",
-          icon: Coins,
-          tone: "text-amber-600 bg-amber-500/10",
-        },
-        {
-          label: "Horas / semana",
-          value: `${puesto.horasSemanales}h`,
-          icon: PiggyBank,
-          tone: "text-sky-600 bg-sky-500/10",
-        },
-      ]
-    : [
-        { label: "Salario bruto", value: "Pendiente", icon: Wallet, tone: "text-emerald-600 bg-emerald-500/10" },
-        { label: "Jornada", value: "Pendiente", icon: Coins, tone: "text-amber-600 bg-amber-500/10" },
-        { label: "Horas / semana", value: "Pendiente", icon: PiggyBank, tone: "text-sky-600 bg-sky-500/10" },
-      ];
+/**
+ * Salario BRUTO mensual del empleado. Sale de sus condiciones pactadas, y en su
+ * defecto del puesto de su ficha. Si no hay cifra cargada se dice que falta por
+ * publicar: 0 € sería afirmar que no cobra.
+ */
+function SalarioCard({ salario }: { salario: MisCondicionesSalario | null }) {
+  const bruto = salario?.salarioBruto ?? null;
+  const items = [
+    {
+      label: "Salario bruto",
+      value: bruto !== null ? `${eur(bruto)} / mes` : "—",
+      icon: Wallet,
+      tone: "text-emerald-600 bg-emerald-500/10",
+    },
+    {
+      label: "Horas por semana",
+      value: salario?.horasSemanales != null ? horas(salario.horasSemanales) : "—",
+      icon: Clock,
+      tone: "text-sky-600 bg-sky-500/10",
+    },
+    {
+      label: "Días libres",
+      value:
+        salario?.diasLibres != null ? `${salario.diasLibres} / semana` : "—",
+      icon: CalendarDays,
+      tone: "text-amber-600 bg-amber-500/10",
+    },
+  ];
 
   return (
     <Card className="p-4 md:p-5">
@@ -235,75 +240,61 @@ function SalarioCard({ puesto }: { puesto: PuestoSalarial | null }) {
           </div>
         ))}
       </dl>
-      {!puesto && (
+      {bruto === null && (
         <p className="text-[11px] text-muted-foreground mt-3 text-center">
-          Las cifras se mostrarán cuando RRHH publique tu ficha laboral.
+          Tu salario aparecerá aquí cuando RRHH lo publique.
         </p>
       )}
     </Card>
   );
 }
 
-function HorarioCard({ puesto }: { puesto: PuestoSalarial | null }) {
-  if (!puesto) {
-    return (
-      <Card className="p-4 md:p-5">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-          Horario
-        </h3>
-        <p className="text-sm text-muted-foreground text-center py-6">
-          Tu horario se mostrará cuando RRHH publique tu ficha laboral.
-        </p>
-      </Card>
-    );
-  }
+/**
+ * Horario REAL de la semana en curso (turnos y patrones del empleado), no el
+ * horario teórico del puesto: ese está vacío en toda la base.
+ */
+function HorarioCard({ horario }: { horario: MisCondicionesHorario | null }) {
+  const dias = horario?.dias ?? [];
 
   return (
     <Card className="p-4 md:p-5">
       <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-        Horario
+        Horario de esta semana
       </h3>
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-        {puesto.horarioSemanal.map((h) => {
-          const libre = h.turno === "LIBRE";
-          return (
+
+      {dias.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">
+          Aún no tienes turnos asignados esta semana.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+          {dias.map((d) => (
             <div
-              key={h.dia}
+              key={d.fecha}
               className={`rounded-lg border p-3 flex flex-col items-center text-center ${
-                libre ? "bg-muted/40" : "bg-card"
+                d.trabaja ? "bg-card" : "bg-muted/40"
               }`}
             >
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {h.dia}
+                {d.letra}
               </p>
-              <div className="mt-2 min-h-[2rem] flex items-center justify-center">
-                {libre ? (
-                  <Badge variant="secondary" className="bg-muted text-muted-foreground">
-                    LIBRE
-                  </Badge>
+              <div className="mt-2 min-h-[2rem] flex flex-col items-center justify-center gap-0.5">
+                {d.trabaja ? (
+                  d.tramos.map((t) => (
+                    <span key={t} className="text-sm font-semibold leading-tight">
+                      {t}
+                    </span>
+                  ))
                 ) : (
-                  <span className="text-sm font-semibold leading-tight">{h.turno}</span>
+                  <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                    Libre
+                  </Badge>
                 )}
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div className="rounded-lg border p-3">
-          <p className="text-xs text-muted-foreground">Horas semanales</p>
-          <p className="text-lg font-bold mt-0.5">{puesto.horasSemanales}h</p>
+          ))}
         </div>
-        <div className="rounded-lg border p-3">
-          <p className="text-xs text-muted-foreground">Días libres</p>
-          <p className="text-lg font-bold mt-0.5">{puesto.diasLibres} / semana</p>
-        </div>
-        <div className="rounded-lg border p-3">
-          <p className="text-xs text-muted-foreground">Jornada de contrato</p>
-          <p className="text-lg font-bold mt-0.5">{puesto.jornadaContrato}</p>
-        </div>
-      </div>
+      )}
     </Card>
   );
 }
