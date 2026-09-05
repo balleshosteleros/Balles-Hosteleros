@@ -310,12 +310,18 @@ export function MobileFichajeProvider() {
     }
   };
 
-  if (!cargado || !habilitado) return null;
-
+  // ── ¿Toca fichar ahora? Según la config de Ajustes RRHH → Fichajes ────────
+  //
+  // TODO ESTO VA ANTES DEL `return null`, y el useEffect de abajo también.
+  // Puse el segundero DESPUÉS del return condicional y eso rompe la primera
+  // regla de los hooks: en los renders en que el provider devolvía null se
+  // ejecutaban 8 hooks y en los demás 9. React aborta con el error #310
+  // ("cambió el número de hooks") y, como el provider vive en el layout de /m,
+  // se llevaba por delante la app entera: el "No se ha podido cargar" del que
+  // no se salía ni recargando. Un hook nunca puede quedar detrás de un return.
   const entradaMs = fichaje?.horaEntrada ? new Date(fichaje.horaEntrada).getTime() : null;
   const elapsed = entradaMs ? Date.now() - entradaMs : 0;
 
-  // ── ¿Toca fichar ahora? Según la config de Ajustes RRHH → Fichajes ────────
   const { debeEntrada, debeSalida, objetivoMin } = calcularDebe(
     ventana,
     estado,
@@ -325,7 +331,7 @@ export function MobileFichajeProvider() {
   const debeFichar = debeEntrada || debeSalida;
 
   const pospuesto = pospuestoHasta != null && Date.now() < pospuestoHasta;
-  const mostrarFichar = debeFichar && !pospuesto;
+  const mostrarFichar = cargado && habilitado && debeFichar && !pospuesto;
 
   // Segundero de la cuenta atrás: el tick lento de 20 s vale para decidir SI se
   // muestra el aviso, pero no para un contador que baja segundo a segundo.
@@ -387,6 +393,10 @@ export function MobileFichajeProvider() {
     const m = pendiente % 60;
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   })();
+
+
+  // Ya no quedan hooks por delante: aquí sí se puede salir sin pintar nada.
+  if (!cargado || !habilitado) return null;
 
   return (
     <>
