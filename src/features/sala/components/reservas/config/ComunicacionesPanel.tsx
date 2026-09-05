@@ -80,6 +80,12 @@ const HORAS_VALORACION: { valor: number; etiqueta: string }[] = [
   { valor: 168, etiqueta: "1 semana" },
 ];
 
+/** Horas en punto a las que puede salir la peticion de valoracion. */
+const HORAS_DIA: string[] = Array.from(
+  { length: 24 },
+  (_, h) => `${String(h).padStart(2, "0")}:00`,
+);
+
 /**
  * Qué puede preguntar la encuesta de valoración. Cada empresa enciende solo lo
  * que valora: HABANA, por ejemplo, nunca ha puntuado la cocina. La nota general
@@ -427,10 +433,36 @@ export function ComunicacionesPanel() {
                         después de la reserva
                       </Label>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-muted-foreground">
+                        A las
+                      </Label>
+                      <Select
+                        value={config.valoracionEmailHoraEnvio}
+                        onValueChange={(v) =>
+                          actualizarRecordatorio({ valoracionEmailHoraEnvio: v })
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HORAS_DIA.map((h) => (
+                            <SelectItem key={h} value={h}>
+                              {h}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Label className="text-xs text-muted-foreground">
+                        (hora del restaurante)
+                      </Label>
+                    </div>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Este plazo se aplica a todas las reservas de la empresa.
-                      Solo se pide valoración a quien vino y dejó su email, una
-                      sola vez por reserva.
+                      Sale una vez al día, a esa hora, con las reservas que ya
+                      han cumplido el plazo. Solo se pide valoración a quien
+                      vino y dejó su email, una sola vez por reserva. Los
+                      walk-in no reciben: no son reservas de cliente.
                     </p>
 
                     <div className="pt-1 space-y-2 border-t border-border">

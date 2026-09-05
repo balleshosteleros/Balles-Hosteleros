@@ -529,6 +529,12 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   // Es la única regla: se aplica igual a toda reserva de cualquier cliente.
   valoracionEmailActivo: boolean;
   valoracionEmailHorasDespues: number;
+  /**
+   * Hora local ("HH:MM") a la que sale la peticion. Es PROPIA, no la de la
+   * reconfirmacion: colgarla de aquella dejaba sin correo a los locales que la
+   * tienen puesta a otra hora.
+   */
+  valoracionEmailHoraEnvio: string;
   // Qué se le pregunta al cliente. No todos los restaurantes valoran lo mismo:
   // HABANA nunca ha puntuado la cocina. La nota global se pregunta siempre.
   valoracionPideCocina: boolean;

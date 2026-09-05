@@ -117,11 +117,16 @@ interface ConfigEmpresa {
   reconfirmacion_hora_envio: string | null;
   valoracion_email_activo: boolean;
   valoracion_email_horas_despues: number;
+  /** Hora local ("HH:MM") a la que se pide la valoracion del dia anterior. */
+  valoracion_email_hora_envio: string | null;
 }
 
 interface ReservaPendiente {
   id: string;
   empresa_id: string;
+  cliente_id: string | null;
+  /** Dia civil del restaurante ("AAAA-MM-DD"). */
+  fecha: string;
 }
 
 export async function GET(request: Request) {
@@ -146,7 +151,7 @@ export async function GET(request: Request) {
   const { data: configs, error: errCfg } = await supabase
     .from("empresa_reservas_config")
     .select(
-      "empresa_id, recordatorio_activo, recordatorio_horas_antes, reconfirmacion_activa, reconfirmacion_dias_antes, reconfirmacion_hora_envio, valoracion_email_activo, valoracion_email_horas_despues",
+      "empresa_id, recordatorio_activo, recordatorio_horas_antes, reconfirmacion_activa, reconfirmacion_dias_antes, reconfirmacion_hora_envio, valoracion_email_activo, valoracion_email_horas_despues, valoracion_email_hora_envio",
     );
   if (errCfg) {
     return NextResponse.json({ ok: false, error: errCfg.message }, { status: 500 });
@@ -314,11 +319,15 @@ export async function GET(request: Request) {
     // para todas sus reservas por igual.
     if (c.valoracion_email_activo) {
       try {
-        // Misma hora que la reconfirmación y por el mismo motivo: la fija la
-        // EMPRESA en su hora local, no el reloj del servidor. Sin esto, con el
-        // cron pasando cada hora, la petición salía a cualquier hora — a las
-        // 3 de la madrugada al que cenó anteayer.
-        const horaEnvioV = horaEnvioDeConfig(c.reconfirmacion_hora_envio);
+        // Hora PROPIA, no la de la reconfirmación. La fija la EMPRESA en su
+        // hora local, no el reloj del servidor: sin eso, con el cron pasando
+        // cada hora, la petición salía a cualquier hora — a las 3 de la
+        // madrugada al que cenó anteayer.
+        //
+        // Colgarla de la reconfirmación dejaba sin correo a los locales que la
+        // tienen a otra hora: solo se enviaba en ESE minuto, así que sus
+        // comensales del día anterior no recibían nada nunca.
+        const horaEnvioV = horaEnvioDeConfig(c.valoracion_email_hora_envio);
         if (!esSuHora(minutosDiaEnZona(ahora, tz), horaEnvioV)) {
           continue;
         }
@@ -349,8 +358,15 @@ export async function GET(request: Request) {
           ),
           auditCol: "email_valoracion_at",
           tz,
+          // El que entro sin reservar no recibe: no es una reserva de cliente.
+          excluirWalkin: true,
         });
-        for (const r of pendientesV) {
+        // No se le pide dos veces lo mismo: quien ya valoro esa comida en
+        // Cover (historico migrado, cruzado por cliente y dia que comio) se
+        // queda fuera. Sin esto, al recuperar dias atrasados le llegaria un
+        // correo pidiendole una valoracion que ya dio.
+        const sinValorar = await descartarYaValoradas(supabase, pendientesV);
+        for (const r of sinValorar) {
           const res = await enviarReservaEmail(r.id, "SOLICITUD_VALORACION", {
             actor: { origen: "AUTOMATICO" },
           });
@@ -403,6 +419,37 @@ async function avisarPorMensajeria(
   }
 }
 
+/**
+ * Quita de la lista las reservas cuya comida YA fue valorada.
+ *
+ * Se cruza por cliente + dia de la comida (`fecha_sesion` de la reseña), que es
+ * como quedo enlazado el historico de Cover. Ante un fallo de BD no se filtra
+ * nada: es preferible arriesgar un correo de mas que perder la tirada entera.
+ */
+async function descartarYaValoradas(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  reservas: ReservaPendiente[],
+): Promise<ReservaPendiente[]> {
+  const conCliente = reservas.filter((r) => r.cliente_id);
+  if (conCliente.length === 0) return reservas;
+  const { data, error } = await supabase
+    .from("resenas")
+    .select("cliente_id, fecha_sesion")
+    .in("cliente_id", [...new Set(conCliente.map((r) => r.cliente_id as string))])
+    .not("fecha_sesion", "is", null);
+  if (error) return reservas;
+  const yaValorada = new Set(
+    (data ?? []).map(
+      (v: { cliente_id: string; fecha_sesion: string }) =>
+        `${v.cliente_id}|${v.fecha_sesion}`,
+    ),
+  );
+  return reservas.filter(
+    (r) => !r.cliente_id || !yaValorada.has(`${r.cliente_id}|${r.fecha}`),
+  );
+}
+
 async function buscarPendientes(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
@@ -415,6 +462,12 @@ async function buscarPendientes(
       | "email_recordatorio_at"
       | "email_reconfirmacion_at"
       | "email_valoracion_at";
+    /**
+     * Deja fuera al que entro sin reservar. Un walk-in no es una reserva de
+     * cliente: se apunta en la puerta, casi nunca deja ficha ni correo, y sus
+     * datos no cuentan como historial de nadie.
+     */
+    excluirWalkin?: boolean;
     /** Zona horaria de los ajustes de la empresa (config_operativa.zonaHoraria). */
     tz: string;
   },
@@ -433,16 +486,17 @@ async function buscarPendientes(
   const fechaDesde = diaEnZona(new Date(args.desde.getTime() - DIA_MS), args.tz);
   const fechaHasta = diaEnZona(new Date(args.hasta.getTime() + DIA_MS), args.tz);
 
-  const { data, error } = await supabase
+  let q = supabase
     .from("reservas")
-    .select("id, empresa_id, fecha, hora, cliente_email")
+    .select("id, empresa_id, fecha, hora, cliente_email, cliente_id")
     .eq("empresa_id", args.empresaId)
     .in("estado", args.estados)
     .is(args.auditCol, null)
     .gte("fecha", fechaDesde)
     .lte("fecha", fechaHasta)
-    .not("cliente_email", "is", null)
-    .limit(MAX_POR_TIRADA);
+    .not("cliente_email", "is", null);
+  if (args.excluirWalkin) q = q.neq("origen", "WALKIN");
+  const { data, error } = await q.limit(MAX_POR_TIRADA);
   // Un fallo de BD no es "no hay nada que enviar": propagamos para que la
   // respuesta del cron no diga `ok` habiendo perdido la tirada entera.
   if (error) throw error;
@@ -457,6 +511,8 @@ async function buscarPendientes(
       dentroVentana.push({
         id: r.id as string,
         empresa_id: r.empresa_id as string,
+        cliente_id: (r.cliente_id as string | null) ?? null,
+        fecha,
       });
     }
   }
