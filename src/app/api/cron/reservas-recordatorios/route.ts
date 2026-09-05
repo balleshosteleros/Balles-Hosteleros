@@ -243,8 +243,24 @@ export async function GET(request: Request) {
           new Date(ahora.getTime() + diasAntes * 24 * 3600 * 1000),
           tz,
         );
-        const desdeR = new Date(zonaLocalAUtcISO(diaObjetivo, "00:00", tz));
-        const hastaR = new Date(desdeR.getTime() + 24 * 60 * 60 * 1000);
+        // La ventana empieza AHORA, no en el día objetivo.
+        //
+        // Antes cubría solo ese día [00:00, 24:00), y una reserva que se
+        // quedaba sin su petición —porque el envío inmediato murió a media
+        // conexión SMTP— ya no la recuperaba nadie: al día siguiente el cron
+        // miraba el día de después y la dejaba atrás para siempre. En Sala
+        // aparecía como CONFIRMADA, indistinguible de las que sí habían sido
+        // preguntadas, y nadie sabía que a ese cliente no se le había escrito.
+        //
+        // Barriendo desde ahora hasta el final del día objetivo entran también
+        // las rezagadas de hoy. No se duplica nada: `is(auditCol, null)`
+        // descarta las que ya tienen su correo, y el filtro por estado deja
+        // fuera las que ya respondieron.
+        const hastaR = new Date(
+          new Date(zonaLocalAUtcISO(diaObjetivo, "00:00", tz)).getTime() +
+            24 * 60 * 60 * 1000,
+        );
+        const desdeR = ahora;
         const pendientesR = await buscarPendientes(supabase, {
           empresaId: c.empresa_id,
           desde: desdeR,

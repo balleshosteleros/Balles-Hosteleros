@@ -211,11 +211,24 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   }
 
   try {
+    // Timeouts explícitos. Sin ellos nodemailer espera indefinidamente: se han
+    // visto envíos de 30-35 s contra Resend (frente a 1-2 s lo normal) que
+    // agotaban la vida de la función serverless y cortaban lo que venía
+    // detrás —el sello, el histórico y la reconfirmación—, dejando al cliente
+    // sin correo y sin rastro del fallo.
+    //
+    // Con un tope, un SMTP lento falla RÁPIDO y en voz alta: `sendEmail`
+    // devuelve el error, se traza, y quien llama puede reintentar. Es
+    // preferible a quedarse colgado hasta que la plataforma corte por su
+    // cuenta, que es justo lo que no deja rastro.
     const transporter = nodemailer.createTransport({
       host: cfg.host,
       port: cfg.port,
       secure: cfg.secure,
       auth: { user: cfg.user, pass: cfg.pass },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
     const info = await transporter.sendMail({
       from: fromName

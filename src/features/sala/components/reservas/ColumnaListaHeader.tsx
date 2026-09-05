@@ -77,12 +77,30 @@ export function ColumnaListaHeader({
     );
   }
 
+  /**
+   * Sin filtro se ven TODAS las casillas marcadas, no vacías.
+   *
+   * El filtro se usa casi siempre para quitar una o dos cosas ("todo menos las
+   * canceladas"), y con las casillas vacías había que marcar las cinco que sí
+   * se querían para lograrlo. Enseñándolas marcadas —que es además lo que se
+   * está viendo en la lista— basta con desmarcar la que sobra.
+   *
+   * Por dentro no cambia nada: la lista vacía sigue significando "sin filtro".
+   * Al desmarcar la primera se guardan todas MENOS esa; y si se acaban
+   * desmarcando todas, se vuelve a dejar vacío en vez de esconder la lista
+   * entera, que no le sirve a nadie.
+   */
   function alternar(valor: string, marcado: boolean) {
-    onSeleccionChange!(
-      marcado
-        ? [...seleccionadas, valor]
-        : seleccionadas.filter((v) => v !== valor),
-    );
+    if (!filtroActivo) {
+      // Primera vez que se toca: se parte de todas y se quita la desmarcada.
+      onSeleccionChange!(marcado ? opciones : opciones.filter((v) => v !== valor));
+      return;
+    }
+    const siguiente = marcado
+      ? [...seleccionadas, valor]
+      : seleccionadas.filter((v) => v !== valor);
+    // Todas marcadas y todas desmarcadas son lo mismo: no filtrar.
+    onSeleccionChange!(siguiente.length === opciones.length ? [] : siguiente);
   }
 
   return (
@@ -172,8 +190,8 @@ export function ColumnaListaHeader({
             <div className="flex items-center justify-between px-1 text-[11px] normal-case tracking-normal">
               <span className="text-muted-foreground">
                 {filtroActivo
-                  ? `${seleccionadas.length} seleccionad${seleccionadas.length === 1 ? "a" : "as"}`
-                  : "Sin filtrar"}
+                  ? `${seleccionadas.length} de ${opciones.length}`
+                  : "Todas"}
               </span>
               {filtroActivo && (
                 <button
@@ -194,7 +212,7 @@ export function ColumnaListaHeader({
                 >
                   <input
                     type="checkbox"
-                    checked={seleccionadas.includes(opt)}
+                    checked={!filtroActivo || seleccionadas.includes(opt)}
                     onChange={(e) => alternar(opt, e.target.checked)}
                     className="rounded accent-primary"
                   />

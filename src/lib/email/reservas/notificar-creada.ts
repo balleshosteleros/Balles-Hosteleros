@@ -48,6 +48,13 @@ export async function notificarReservaCreada(
     if (!res.ok) {
       console.error(`[reservas][notificarReservaCreada] ${tipoBienvenida}:`, res.error);
     }
+    // OJO: a partir de aquí NO se corta aunque la confirmación fallara. La
+    // reconfirmación es un correo independiente —le pide al cliente que diga
+    // si viene— y su envío no puede quedar a merced de que el anterior saliera.
+    // Cuando iba encadenada, un SMTP lento en la confirmación se llevaba por
+    // delante la reconfirmación de reservas que sí tenían su confirmación
+    // enviada, y en Sala aparecían como CONFIRMADA sin que nadie les hubiera
+    // preguntado nada.
 
     if (!r?.fecha || !r?.hora || !r?.empresa_id) return { ok: res.ok };
 
