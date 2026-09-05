@@ -535,7 +535,7 @@ export function ReservaPublicaForm({
             ? "mx-auto w-full max-w-3xl"
             : // En móvil manda el ancho de siempre; a partir de tablet la
               // tarjeta se ensancha para las dos columnas.
-              "max-w-md md:max-w-3xl mx-auto pb-[max(env(safe-area-inset-bottom),1.5rem)]"
+              "max-w-md min-[700px]:max-w-3xl mx-auto pb-[max(env(safe-area-inset-bottom),1.5rem)]"
         }
       >
         {/* Vuelta a la web del restaurante: el portal es una página entera, no
@@ -630,7 +630,7 @@ export function ReservaPublicaForm({
               quién la hace a la derecha, para que todo entre en una pantalla
               sin bajar. En móvil no hay ancho: una sola columna, en el mismo
               orden de siempre. */}
-          <div className="grid gap-4 md:grid-cols-2 md:gap-5 md:items-start">
+          <div className="grid gap-4 min-[700px]:grid-cols-2 min-[700px]:gap-5 min-[700px]:items-start">
             {/* COLUMNA 1 — qué reservas: comensales → fecha → hora → zona.
                 Las personas van primero porque la disponibilidad depende de
                 cuánta gente viene. */}

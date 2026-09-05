@@ -111,7 +111,9 @@ export function SelectorFecha({
   // Con desplegables de año (nacimiento) tampoco: ahí se salta por año.
   const [pantallaAncha, setPantallaAncha] = React.useState(false);
   React.useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
+    // Se mide el ANCHO REAL donde vive el calendario: dentro del iframe de la
+    // web la ventana es ancha pero el hueco no, y dos meses no caben.
+    const mq = window.matchMedia("(min-width: 700px)");
     const aplicar = () => setPantallaAncha(mq.matches);
     aplicar();
     mq.addEventListener("change", aplicar);

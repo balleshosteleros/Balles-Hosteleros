@@ -1169,7 +1169,10 @@ function ReservasPublico({
                —halo de color, cristal difuminado y sombra— envolvía la ventana
                en un recuadro enorme que ocupaba media pantalla y hacía que
                pareciera otra página metida dentro, en vez de una sección más. */
-            <div className="mx-auto mt-10 w-full max-w-xl">
+            /* En ordenador se ensancha para que el formulario quepa a dos
+               columnas dentro del iframe: con `max-w-xl` (576px) se quedaba
+               por debajo del corte de tablet y salía en vertical. */
+            <div className="mx-auto mt-10 w-full max-w-xl md:max-w-3xl">
               <div className="overflow-hidden rounded-2xl bg-white">
                 <IframeAutoAlto src={`/reservar/embed`} titulo="Reservar mesa" />
               </div>
