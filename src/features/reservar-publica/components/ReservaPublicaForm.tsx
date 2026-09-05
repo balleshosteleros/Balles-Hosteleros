@@ -752,6 +752,10 @@ export function ReservaPublicaForm({
             )}
           </div>
 
+            </div>
+
+            {/* COLUMNA 2 — quién reserva: nombre, teléfono, correo y el cupón. */}
+            <div className="space-y-4">
           {/* Datos de contacto */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -894,7 +898,12 @@ export function ReservaPublicaForm({
               )}
             </div>
           )}
+            </div>
+          </div>
 
+          {/* Consentimientos y botón: fuera de las columnas y centrados, porque
+              cierran la reserva entera, no una de las dos mitades. */}
+          <div className="mx-auto w-full max-w-md space-y-3 md:pt-1">
           <label className="flex items-start gap-2 text-[11px] leading-snug text-zinc-500">
             <input
               type="checkbox"
@@ -945,6 +954,7 @@ export function ReservaPublicaForm({
           {queFalta && (
             <p className="text-center text-xs text-amber-700 mt-2">{queFalta}</p>
           )}
+          </div>
         </form>
 
         {/* Va justo debajo de la tarjeta: separado del todo parecía el pie
