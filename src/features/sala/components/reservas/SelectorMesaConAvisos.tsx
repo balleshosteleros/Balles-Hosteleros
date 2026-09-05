@@ -6,9 +6,9 @@
  * Antes de elegir mesa hay que ver de un golpe cuáles sirven y cuáles no. Cada
  * mesa lleva su diagnóstico delante del código:
  *
- *   ✅  vale: cabe el grupo y está libre a esa hora.
- *   ⏰  choca por HORARIO: ya tiene reserva en esa franja (se pisaría).
- *   👥  choca por AFORO: el grupo no encaja en su capacidad.
+ *   ✅  disponible ahora: cabe el grupo y está libre a esa hora.
+ *   ⏰  horario reservado: ya tiene reserva en esa franja (se pisaría).
+ *   👥  límite personas: el grupo no encaja en su capacidad.
  *   ⏰👥 los dos problemas a la vez.
  *
  * Son dos diagnósticos independientes a propósito: una mesa puede estar
@@ -117,9 +117,14 @@ export function SelectorMesaConAvisos({
         })}
       </select>
       {hayAvisos && (
-        <p className="text-[10px] text-muted-foreground">
-          ✅ disponible · ⏰ ya reservada a esa hora · 👥 el grupo no encaja
-        </p>
+        // Leyenda en columna y de dos palabras por icono: en línea seguida
+        // ocupaba todo el ancho y partía en varias filas según el idioma del
+        // navegador. Apilada se lee de un vistazo y no mueve lo de abajo.
+        <ul className="space-y-0.5 text-[10px] leading-tight text-muted-foreground">
+          <li>✅ disponible ahora</li>
+          <li>⏰ horario reservado</li>
+          <li>👥 límite personas</li>
+        </ul>
       )}
     </div>
   );

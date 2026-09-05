@@ -182,10 +182,19 @@ export const ESTADO_RESERVA_LABELS: Record<EstadoReserva, string> = {
   CANCELADA:       "Cancelada",
 };
 
-export const ESTADO_MESA_LABELS: Record<EstadoMesa, string> = {
+/**
+ * Cómo se lee el estado de una mesa EN EL PLANO.
+ *
+ * "TERMINADA" no es un estado de la mesa en base de datos (`EstadoMesa` solo
+ * tiene cuatro): es el que se deriva en la vista cuando la gente sentada ya ha
+ * terminado. Vive aquí porque la leyenda del plano y el selector de mesa leen
+ * este mismo mapa, y sin la etiqueta el recuadro rosa salía sin nombre.
+ */
+export const ESTADO_MESA_LABELS: Record<EstadoMesa | "TERMINADA", string> = {
   LIBRE: "Libre",
   OCUPADA: "Sentada",
   RESERVADA: "Reservada",
+  TERMINADA: "Terminada",
   BLOQUEADA: "Bloqueada",
 };
 
@@ -778,44 +787,3 @@ export function origenLabel(origen: string | null | undefined): string {
   return labelOrigen(normalizarOrigen(origen));
 }
 
-/** Milisegundos que tiene un día entero. */
-const MS_POR_DIA = 24 * 60 * 60 * 1000;
-
-/**
- * Días ENTEROS transcurridos entre dos instantes.
- *
- * Cuenta bloques completos de 24 horas, no cambios de fecha en el calendario:
- * una reserva hecha ayer a las 23:00 y mirada hoy a las 09:00 lleva 0 días,
- * no 1, porque no han pasado 24 horas. Se trunca siempre hacia abajo.
- *
- * Al contar tiempo real y no días de calendario, el resultado no depende de la
- * zona horaria: da igual desde dónde se mire.
- *
- * Devuelve `null` si la fecha no es válida, y 0 si el instante es futuro (una
- * reserva no puede haberse creado dentro de un rato).
- */
-export function diasEnterosTranscurridos(
-  iso: string | null | undefined,
-  ahora: number = Date.now(),
-): number | null {
-  if (!iso) return null;
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return null;
-  const transcurrido = ahora - t;
-  if (transcurrido < 0) return 0;
-  return Math.floor(transcurrido / MS_POR_DIA);
-}
-
-/**
- * "Hoy" / "Hace 1 día" / "Hace 5 días", según los días enteros pasados.
- * Devuelve "" si la fecha no es válida.
- */
-export function etiquetaDiasTranscurridos(
-  iso: string | null | undefined,
-  ahora: number = Date.now(),
-): string {
-  const dias = diasEnterosTranscurridos(iso, ahora);
-  if (dias === null) return "";
-  if (dias === 0) return "Hoy";
-  return `Hace ${dias} ${dias === 1 ? "día" : "días"}`;
-}

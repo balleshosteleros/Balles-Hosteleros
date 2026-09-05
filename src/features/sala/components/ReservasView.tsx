@@ -13,11 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { es } from "date-fns/locale";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ahoraEnZona, formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useBloqueoCambioEmpresa } from "@/shared/hooks/useBloqueoCambioEmpresa";
-import { Plus, Search, ChevronLeft, ChevronRight, ListFilter, Check, Move, Map as MapIcon, List as ListIcon, Lock } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, Check, Move, Map as MapIcon, List as ListIcon, Lock, Table2 } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
   () =>
@@ -55,7 +57,7 @@ import { CalendarDays, Grid3X3, Users, LayoutGrid, AlertTriangle, Clock, Mail, C
 import {
   SAMPLE_MESAS,
   Mesa, Reserva, EstadoReserva, ZonaSala, TurnoReserva,
-  ZONAS_LABELS, zonaLabel, ZONAS_SALA, ESTADO_RESERVA_LABELS, ESTADO_MESA_LABELS, ESTADOS_RESERVA,
+  zonaLabel, ESTADO_RESERVA_LABELS, ESTADO_MESA_LABELS, ESTADOS_RESERVA,
   ESTADO_BADGE_CLASS,
   ESTADO_DOT_CLASS,
   ESTADOS_NO_OCUPANTES,
@@ -66,7 +68,6 @@ import {
   DURACION_RESERVA_DEFAULT_MINUTOS,
   DURACION_RESERVA_OPCIONES,
   formatearDuracionReserva,
-  etiquetaDiasTranscurridos,
   origenLabel,
   esReservaWalkIn,
   RESERVA_NOMBRE_MAX_CHARS,
@@ -74,7 +75,7 @@ import {
   RESERVA_APELLIDOS_MAX_CHARS,
   MAX_COMENSALES_SIN_REGLA,
 } from "@/features/sala/data/reservas";
-import { labelOrigen, normalizarOrigen, ORIGENES_ALTA_SALA } from "@/features/sala/data/origenes";
+import { labelOrigen, ORIGENES_ALTA_SALA } from "@/features/sala/data/origenes";
 import {
   PREFIJOS_TELEFONO,
   PREFIJO_POR_DEFECTO,
@@ -82,7 +83,6 @@ import {
   componerTelefono,
   paisDeTelefono,
 } from "@/features/sala/data/prefijos-telefono";
-import { BanderaTelefono } from "@/features/sala/components/clientes/BanderaTelefono";
 import { ReservaEstadoBadge, ReservaEstadoDot } from "@/features/sala/components/reservas/ReservaEstadoBadge";
 import { EtiquetaChip } from "@/features/sala/components/reservas/config/EtiquetaChip";
 import {
@@ -113,9 +113,7 @@ import {
 import {
   COLORES_PASTEL_ZONAS,
   type Sala as SalaConfig,
-  type LocalMin,
   type Zona as ZonaReal,
-  type Plano as PlanoConfig,
   type PlanoMesaPosicion,
   type PlanoEncuadre,
   type SalaDecoracion,
@@ -198,12 +196,19 @@ const LIBRE_RAINBOW = `linear-gradient(135deg, ${COLORES_PASTEL_ZONAS
  *  - OCUPADA: alguien sentado (walk-in) → verde oscuro estilo CoverManager.
  *  - RESERVADA: reserva confirmada/reconfirmada pero aún no sentada → verde
  *    claro llamativo, distinto del verde oscuro de OCUPADA.
+ *  - TERMINADA: ya han terminado de comer pero siguen en la mesa → ROSA, el
+ *    mismo fucsia con el que se marca ese estado en la lista y en la ficha.
+ *    Va aparte de OCUPADA a propósito: son los dos únicos estados con gente
+ *    sentada, y para sala no es lo mismo una mesa comiendo que una a punto de
+ *    quedar libre —es la que se prepara para el siguiente pase—. Antes las dos
+ *    salían del mismo verde oscuro y no había forma de distinguirlas.
  *  - BLOQUEADA: negro.
  */
 const mesaBg: Record<string, string> = {
   LIBRE: "",
   OCUPADA: "bg-[#1F6F3E] hover:bg-[#22783F] text-white",
   RESERVADA: "bg-[#4ADE80] hover:bg-[#22C55E] text-zinc-900",
+  TERMINADA: "bg-[#C026D3] hover:bg-[#A21CAF] text-white",
   // En tema oscuro el negro puro se confundía con el lienzo azul marino: la
   // mesa bloqueada pasa a un gris azulado con borde marcado para seguir
   // leyéndose como "apagada" sin desaparecer del plano.
@@ -270,10 +275,14 @@ function addMonths(iso: string, n: number) {
  * estado tiene sitio suficiente para leerse entero sin recortarse.
  */
 /**
- * Rejilla de la lista. El panel mide 620 px: el ancho fijo tiene que dejar
- * sitio de verdad al nombre, que es por lo que se busca a la gente en sala.
- * Reparto: hora 50, mesa 62, per 26, origen 56, estado 86, tiempo 58 + 6
- * huecos de 6 px + 24 de padding = 398 px, y el resto es para el nombre.
+ * Rejilla de la lista. El panel mide LISTA_ANCHO_PX y el ancho fijo tiene que
+ * dejar sitio de verdad al nombre, que es por lo que se busca a la gente en
+ * sala. Reparto: hora 46, mesa 58, per. 34, origen 62, tipo 72, estado 68,
+ * etiquetas 66, tiempo 52 + 8 huecos de 6 px + 24 de padding = 530 px, y los
+ * ~210 px que quedan son para el NOMBRE, que ha de caber con apellido.
+ *
+ * "Per." necesita 34: con 24 la cabecera se cortaba en "P.". Los 12 px que le
+ * faltaban salen de ESTADO, que iba sobrado y además lleva `title`.
  *
  * La columna TIEMPO va la última: es un dato que se mira de reojo (cuánto
  * falta, cuánto se retrasa, cuánto lleva sentada), no uno que se lea en cada
@@ -292,6 +301,35 @@ function addMonths(iso: string, n: number) {
  */
 const LISTA_ANCHO_PX = 740;
 
+/* ---------------------------------------------------------------------------
+   DÍA DE NEGOCIO ↔ CALENDARIO
+   ---------------------------------------------------------------------------
+   La fecha de una reserva es un DÍA ("2026-09-05"), no un instante, así que se
+   convierte a mano y NUNCA con `new Date("2026-09-05")`: esa forma la lee como
+   UTC y en España se pinta el día anterior a partir de cierta hora. Se arma el
+   Date con año/mes/día sueltos, que es hora local, y se deshace igual.
+   --------------------------------------------------------------------------- */
+
+/** "2026-09-05" → Date local de ese día. `undefined` si no es una fecha. */
+function fechaDesdeDiaNegocio(iso: string): Date | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso ?? "").trim());
+  if (!m) return undefined;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/** Date → "2026-09-05", con los números del calendario local. */
+function aDiaNegocio(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/** "2026-09-05" → "05/09/2026". Día/mes/año, el formato del software. */
+function formatFechaDiaNegocio(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso ?? "").trim());
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+
 const LISTA_GRID =
   // Hora · Mesa · Nombre · Per · Origen · Tipo · Estado · Etiquetas · Tiempo.
   // Origen y Tipo suben porque "Cancelación" y los origenes largos se cortaban
@@ -300,7 +338,14 @@ const LISTA_GRID =
   //
   // Etiquetas se queda con lo justo: son avisos cortos ("alérgico", "VIP") y
   // el ancho que no necesitan se lo lleva el NOMBRE, que se estaba cortando.
-  "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_72px_92px_86px_minmax(64px,88px)_58px] gap-1.5 items-center";
+  //
+  // NOMBRE Y APELLIDO ENTEROS es la regla que manda aquí: "Ferran Viñals
+  // Carm…" no sirve para cantar una mesa en sala. Las demás columnas se
+  // aprietan a lo justo de su texto (todas llevan `title` con el valor
+  // completo, así que recortarlas no pierde el dato) y lo que sueltan se lo
+  // queda el nombre. Los chips que van pegados al nombre (visitas, cupón,
+  // reconfirmación) no se cuentan: solo salen en algunas filas.
+  "grid grid-cols-[46px_58px_minmax(0,1fr)_34px_62px_72px_68px_minmax(52px,66px)_52px] gap-1.5 items-center";
 
 /**
  * TIPO de la reserva: cuál de las cuatro es (PRP-082).
@@ -372,11 +417,28 @@ function StatusDot({ estado }: { estado: EstadoReserva }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  compacto,
+}: {
+  label: string;
+  children: React.ReactNode;
+  /** Alineado con un campo de 28 px de alto y en letra pequeña, para las filas
+      donde el dato va al lado de un desplegable y no debe pesar más que él. */
+  compacto?: boolean;
+}) {
   return (
     <div>
       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</Label>
-      <p className="font-medium text-sm">{children}</p>
+      <p
+        className={cn(
+          "font-medium",
+          compacto ? "flex h-7 items-center truncate text-xs" : "text-sm",
+        )}
+      >
+        {children}
+      </p>
     </div>
   );
 }
@@ -512,7 +574,7 @@ function ReservaQuickPopover({
               onClick={() => onWalkIn(mesa)}
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
-              Sentar walk-in
+              Walk-in
             </Button>
           )}
         </div>
@@ -2387,170 +2449,6 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
   };
 }
 
-function FiltroEstadosDropdown({
-  seleccionados,
-  onChange,
-}: {
-  seleccionados: EstadoReserva[];
-  onChange: (e: EstadoReserva[]) => void;
-}) {
-  const toggle = (e: EstadoReserva) => {
-    onChange(
-      seleccionados.includes(e)
-        ? seleccionados.filter((x) => x !== e)
-        : [...seleccionados, e],
-    );
-  };
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 px-2.5">
-          <ListFilter className="h-3.5 w-3.5" />
-          Estados
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-2" align="start">
-        <div className="flex items-center justify-between px-1 pb-1.5 mb-1.5 border-b">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Estados
-          </span>
-          <div className="flex gap-1">
-            <button
-              type="button"
-              onClick={() => onChange(ESTADOS_RESERVA)}
-              className="text-[10px] text-primary hover:underline"
-            >
-              Todos
-            </button>
-            <span className="text-[10px] text-muted-foreground">·</span>
-            <button
-              type="button"
-              onClick={() => onChange([])}
-              className="text-[10px] text-muted-foreground hover:underline"
-            >
-              Ninguno
-            </button>
-          </div>
-        </div>
-        <div className="max-h-[300px] overflow-y-auto space-y-0.5">
-          {ESTADOS_RESERVA.map((e) => {
-            const checked = seleccionados.includes(e);
-            return (
-              <button
-                key={e}
-                type="button"
-                onClick={() => toggle(e)}
-                className={cn(
-                  "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left",
-                  checked && "bg-muted/60",
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-4 h-4 rounded border flex items-center justify-center shrink-0",
-                    checked
-                      ? "bg-primary border-primary text-primary-foreground"
-                      : "border-border",
-                  )}
-                >
-                  {checked && <Check className="h-3 w-3" />}
-                </span>
-                <ReservaEstadoDot estado={e} className="w-2 h-2 shrink-0" />
-                <span className="truncate">{ESTADO_RESERVA_LABELS[e]}</span>
-              </button>
-            );
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/**
- * Filtro de ORIGEN. Mismo botón, mismo desplegable y mismo funcionamiento que
- * Estados: selección MÚLTIPLE con "Todos · Ninguno" y casillas cuadradas. Antes
- * era de selección única (o uno, o todos), así que no se podían ver dos
- * orígenes a la vez y se comportaba distinto que el filtro de al lado.
- */
-function FiltroOrigenDropdown({
-  ocultos,
-  origenes,
-  onChange,
-}: {
-  /** Orígenes DESMARCADOS. Lo que no está aquí se ve. */
-  ocultos: string[];
-  origenes: string[];
-  onChange: (v: string[]) => void;
-}) {
-  const toggle = (o: string) => {
-    onChange(ocultos.includes(o) ? ocultos.filter((x) => x !== o) : [...ocultos, o]);
-  };
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 px-2.5">
-          <ListFilter className="h-3.5 w-3.5" />
-          Origen
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-2" align="start">
-        <div className="flex items-center justify-between px-1 pb-1.5 mb-1.5 border-b">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Origen
-          </span>
-          <div className="flex gap-1">
-            <button
-              type="button"
-              onClick={() => onChange([])}
-              className="text-[10px] text-primary hover:underline"
-            >
-              Todos
-            </button>
-            <span className="text-[10px] text-muted-foreground">·</span>
-            <button
-              type="button"
-              onClick={() => onChange(origenes)}
-              className="text-[10px] text-muted-foreground hover:underline"
-            >
-              Ninguno
-            </button>
-          </div>
-        </div>
-        <div className="max-h-[300px] overflow-y-auto space-y-0.5">
-          {origenes.map((o) => {
-            const checked = !ocultos.includes(o);
-            return (
-              <button
-                key={o}
-                type="button"
-                onClick={() => toggle(o)}
-                className={cn(
-                  "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left",
-                  checked && "bg-muted/60",
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-4 h-4 rounded border flex items-center justify-center shrink-0",
-                    checked
-                      ? "bg-primary border-primary text-primary-foreground"
-                      : "border-border",
-                  )}
-                >
-                  {checked && <Check className="h-3 w-3" />}
-                </span>
-                <span className="truncate">{labelOrigen(o)}</span>
-              </button>
-            );
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 /** Indicador global de cabecera en vista mes: personas + mesas de un turno. */
 function KpiTurnoMes({
   icono,
@@ -2582,297 +2480,6 @@ function KpiTurnoMes({
   );
 }
 
-function FiltroSalasDropdown({
-  salas,
-  salaActualId,
-  onSelect,
-}: {
-  salas: SalaConfig[];
-  salaActualId: string;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 px-2.5">
-          <ListFilter className="h-3.5 w-3.5" />
-          Salas
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-2" align="start">
-        <div className="flex items-center justify-between px-1 pb-1.5 mb-1.5 border-b">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Salas
-          </span>
-        </div>
-        <div className="max-h-[300px] overflow-y-auto space-y-0.5">
-          {salas.length === 0 ? (
-            <p className="px-2 py-3 text-xs text-muted-foreground italic text-center">
-              No hay salas creadas
-            </p>
-          ) : (
-            salas.map((s) => {
-              const checked = s.id === salaActualId;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => onSelect(s.id)}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left",
-                    checked && "bg-muted/60",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "w-4 h-4 rounded border flex items-center justify-center shrink-0",
-                      checked
-                        ? "bg-primary border-primary text-primary-foreground"
-                        : "border-border",
-                    )}
-                  >
-                    {checked && <Check className="h-3 w-3" />}
-                  </span>
-                  <span className="truncate flex-1">{s.nombre}</span>
-                  {s.esPrincipal && (
-                    <span className="text-amber-500 shrink-0" title="Sala principal">★</span>
-                  )}
-                </button>
-              );
-            })
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function FiltroLocalesDropdown({
-  locales,
-  localActualId,
-  onSelect,
-}: {
-  locales: LocalMin[];
-  localActualId: string;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 px-2.5">
-          <ListFilter className="h-3.5 w-3.5" />
-          Locales
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-2" align="start">
-        <div className="flex items-center justify-between px-1 pb-1.5 mb-1.5 border-b">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Locales
-          </span>
-        </div>
-        <div className="max-h-[300px] overflow-y-auto space-y-0.5">
-          {locales.length === 0 ? (
-            <p className="px-2 py-3 text-xs text-muted-foreground italic text-center">
-              No hay locales
-            </p>
-          ) : (
-            locales.map((l) => {
-              const checked = l.id === localActualId;
-              return (
-                <button
-                  key={l.id}
-                  type="button"
-                  onClick={() => onSelect(l.id)}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left",
-                    checked && "bg-muted/60",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "w-4 h-4 rounded border flex items-center justify-center shrink-0",
-                      checked
-                        ? "bg-primary border-primary text-primary-foreground"
-                        : "border-border",
-                    )}
-                  >
-                    {checked && <Check className="h-3 w-3" />}
-                  </span>
-                  <span className="truncate flex-1">{l.nombre}</span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function FiltroPlanosDropdown({
-  planos,
-  planoActualId,
-  onSelect,
-}: {
-  planos: PlanoConfig[];
-  planoActualId: string;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 px-2.5">
-          <ListFilter className="h-3.5 w-3.5" />
-          Planos
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-2" align="start">
-        <div className="flex items-center justify-between px-1 pb-1.5 mb-1.5 border-b">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Planos
-          </span>
-        </div>
-        <div className="max-h-[300px] overflow-y-auto space-y-0.5">
-          {planos.length === 0 ? (
-            <p className="px-2 py-3 text-xs text-muted-foreground italic text-center">
-              No hay planos creados
-            </p>
-          ) : (
-            planos.map((p) => {
-              const checked = p.id === planoActualId;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => onSelect(p.id)}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left",
-                    checked && "bg-muted/60",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "w-4 h-4 rounded border flex items-center justify-center shrink-0",
-                      checked
-                        ? "bg-primary border-primary text-primary-foreground"
-                        : "border-border",
-                    )}
-                  >
-                    {checked && <Check className="h-3 w-3" />}
-                  </span>
-                  <span className="truncate flex-1">{p.nombre}</span>
-                  {p.esPrincipal && (
-                    <span className="text-amber-500 shrink-0" title="Plano principal">★</span>
-                  )}
-                </button>
-              );
-            })
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-interface ZonaItem {
-  id: string;
-  label: string;
-  color?: string;
-  matchKey: string;
-}
-
-function FiltroZonasDropdown({
-  items,
-  seleccionados,
-  onChange,
-}: {
-  items: ZonaItem[];
-  seleccionados: string[];
-  onChange: (ids: string[]) => void;
-}) {
-  const toggle = (id: string) => {
-    onChange(
-      seleccionados.includes(id)
-        ? seleccionados.filter((x) => x !== id)
-        : [...seleccionados, id],
-    );
-  };
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 px-2.5">
-          <ListFilter className="h-3.5 w-3.5" />
-          Zonas
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-2" align="start">
-        <div className="flex items-center justify-between px-1 pb-1.5 mb-1.5 border-b">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Zonas
-          </span>
-          <div className="flex gap-1">
-            <button
-              type="button"
-              onClick={() => onChange(items.map((i) => i.id))}
-              className="text-[10px] text-primary hover:underline"
-            >
-              Todas
-            </button>
-            <span className="text-[10px] text-muted-foreground">·</span>
-            <button
-              type="button"
-              onClick={() => onChange([])}
-              className="text-[10px] text-muted-foreground hover:underline"
-            >
-              Ninguna
-            </button>
-          </div>
-        </div>
-        <div className="max-h-[300px] overflow-y-auto space-y-0.5">
-          {items.length === 0 ? (
-            <div className="px-2 py-1.5 text-xs text-muted-foreground italic">
-              Esta sala aún no tiene zonas.
-            </div>
-          ) : (
-            items.map((z) => {
-              const checked = seleccionados.includes(z.id);
-              return (
-                <button
-                  key={z.id}
-                  type="button"
-                  onClick={() => toggle(z.id)}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left",
-                    checked && "bg-muted/60",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "w-4 h-4 rounded border flex items-center justify-center shrink-0",
-                      checked
-                        ? "bg-primary border-primary text-primary-foreground"
-                        : "border-border",
-                    )}
-                  >
-                    {checked && <Check className="h-3 w-3" />}
-                  </span>
-                  {z.color && (
-                    <span
-                      className="inline-block h-3 w-3 rounded shrink-0 border"
-                      style={{ backgroundColor: z.color }}
-                    />
-                  )}
-                  <span className="truncate">{z.label}</span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 /** Dimensiones por defecto. Coinciden con SalaPlanoEditor. */
 const PLANO_MESA_SIZE = 60;
@@ -3516,12 +3123,10 @@ export function ReservasView() {
   const [idsDelAviso, setIdsDelAviso] = useState<string[] | null>(null);
   /** Sube al cobrar o perdonar para que el aviso se recalcule y la línea desaparezca. */
   const [refrescoAvisosCobro, setRefrescoAvisosCobro] = useState(0);
-  const [filtroEstados, setFiltroEstados] = useState<EstadoReserva[]>(ESTADOS_RESERVA);
   // Orígenes DESMARCADOS. Se guarda lo oculto y no lo visible porque el catálogo
   // de orígenes es ABIERTO: Marketing crea campañas nuevas sin tocar código, y
   // con una lista de "marcados" cualquier origen nuevo nacería invisible y sus
   // reservas desaparecerían del listado sin que nadie entienda por qué.
-  const [origenesOcultos, setOrigenesOcultos] = useState<string[]>([]);
   /**
    * Filtros de la CABECERA de la lista, uno por columna: `{ campo: valores }`.
    *
@@ -3705,8 +3310,6 @@ export function ReservasView() {
   const [salasLocalTodas, setSalasLocalTodas] = useState<SalaConfig[]>([]);
   const [salaActualId, setSalaActualId] = useState<string>("");
   const [navDirSala, setNavDirSala] = useState<1 | -1>(1);
-  const [locales, setLocales] = useState<LocalMin[]>([]);
-  const [planosLocal, setPlanosLocal] = useState<PlanoConfig[]>([]);
   const [planoActualId, setPlanoActualId] = useState<string>("");
   const [planoSalas, setPlanoSalas] = useState<Record<string, string[]>>({});
   const [zonasReales, setZonasReales] = useState<ZonaReal[]>([]);
@@ -3714,7 +3317,6 @@ export function ReservasView() {
   const [decoracionesPlano, setDecoracionesPlano] = useState<SalaDecoracion[]>([]);
   const [mesasMeta, setMesasMeta] = useState<Map<string, MesaMeta>>(new Map());
   const [posicionesRefresh, setPosicionesRefresh] = useState(0);
-  const [zonaIdsSel, setZonaIdsSel] = useState<string[]>(ZONAS_SALA);
   // Permite ocultar el listado de reservas o el mapa para que el otro ocupe todo el ancho.
   const [panelOculto, setPanelOculto] = useState<"ninguno" | "lista" | "mapa">("ninguno");
   // Vista del panel derecho: "mapa" (plano editor) o "listado" (zonas agrupadas, vista común a todas las empresas).
@@ -3768,11 +3370,9 @@ export function ReservasView() {
         // cuente como un cambio pendiente y vuelva a pedirlo todo.
         localCargadoRef.current = `${empresaActual.id}|${d.localId}|${posicionesRefresh}`;
       }
-      setLocales(d.locales);
       setSalasLocalTodas(d.salas);
       const salaPrincipal = d.salas.find((s) => s.esPrincipal) ?? d.salas[0];
       setSalaActualId(salaPrincipal?.id ?? "");
-      setPlanosLocal(d.planos);
       setPlanoSalas(d.planoSalas);
       const planoPrincipal = d.planos.find((p) => p.esPrincipal) ?? d.planos[0];
       setPlanoActualId(planoPrincipal?.id ?? "");
@@ -3889,56 +3489,6 @@ export function ReservasView() {
     [decoracionesPlano, salaActualId],
   );
 
-  // Zonas que alimentan el filtro del LISTADO. Con el listado separado por sala
-  // son las de la sala visible; con el listado unificado (por defecto) son las
-  // de todas las salas del plano, porque si no las reservas de las demás salas
-  // no encontrarían su zona y el filtro las tiraría de la lista.
-  const zonasFiltroListado = useMemo(() => {
-    if (listadoPorSala) return zonasSalaActual;
-    const salasOK = new Set(salasLocal.map((s) => s.id));
-    return zonasReales.filter((z) => salasOK.has(z.salaId));
-  }, [listadoPorSala, zonasSalaActual, zonasReales, salasLocal]);
-
-  // Items que alimentan el dropdown de zonas: reales si existen, si no fallback legacy.
-  const zonaItems = useMemo(() => {
-    if (zonasFiltroListado.length > 0) {
-      // Dos salas distintas pueden tener una zona con el mismo nombre. Como el
-      // filtro casa por NOMBRE, las agrupamos en una sola entrada del desplegable.
-      const porNombre = new Map<string, { id: string; label: string; color: string | undefined; matchKey: string }>();
-      for (const z of zonasFiltroListado) {
-        const matchKey = z.nombre.toUpperCase();
-        if (porNombre.has(matchKey)) continue;
-        porNombre.set(matchKey, { id: matchKey, label: z.nombre, color: z.colorPastel, matchKey });
-      }
-      return Array.from(porNombre.values());
-    }
-    return ZONAS_SALA.map((z) => ({
-      id: z,
-      label: ZONAS_LABELS[z],
-      color: undefined as string | undefined,
-      matchKey: z,
-    }));
-  }, [zonasFiltroListado]);
-
-  // Cada vez que cambian los items (sala distinta), reset a "todas seleccionadas"
-  useEffect(() => {
-    setZonaIdsSel(zonaItems.map((i) => i.id));
-  }, [zonaItems]);
-
-
-  const zonaMatchSet = useMemo(() => {
-    const ids = new Set(zonaIdsSel);
-    return new Set(zonaItems.filter((i) => ids.has(i.id)).map((i) => i.matchKey));
-  }, [zonaItems, zonaIdsSel]);
-
-  const zonaCoincide = useCallback(
-    (zonaStr: string | "" | null | undefined) => {
-      if (!zonaStr) return true;
-      const up = zonaStr.toUpperCase();
-      return zonaMatchSet.has(up) || zonaMatchSet.has(zonaStr);
-    },
-    [zonaMatchSet],
-  );
 
   useEffect(() => {
     if (!selectedReserva) { setSelectedInsights(null); return; }
@@ -4644,17 +4194,13 @@ export function ReservasView() {
     const filtradas = reservasTurno.filter(r => {
       const q = busqueda.toLowerCase();
       const matchQ = !q || r.cliente.toLowerCase().includes(q) || r.apellidos.toLowerCase().includes(q) || r.telefono.includes(q);
-      const matchZ = zonaCoincide(r.zona);
-      const matchE = filtroEstados.includes(r.estado);
-      // Se compara la CLAVE normalizada, no el texto crudo de BD: conviven
-      // filas antiguas con "telefono" y nuevas con "TELEFONO", y el filtro
-      // tiene que cazar las dos con la misma opción.
-      const matchO = !origenesOcultos.includes(normalizarOrigen(r.origen));
       // Columnas: se combinan con Y; dentro de cada una, los valores con O.
+      // Estado y origen se filtran DESDE SU COLUMNA, como el resto: los dos
+      // botones de la barra que hacían lo mismo ya no existen.
       const matchC = columnasFiltradas.every(([campo, valores]) =>
         valoresDeColumna(r, campo).some((v) => valores.includes(v)),
       );
-      return matchQ && matchZ && matchE && matchO && matchC;
+      return matchQ && matchC;
     });
 
     if (!ordenColumna) return filtradas.sort(compararReservasPorJornada);
@@ -4681,9 +4227,6 @@ export function ReservasView() {
   }, [
     reservasTurno,
     busqueda,
-    zonaCoincide,
-    filtroEstados,
-    origenesOcultos,
     idsDelAviso,
     filtrosColumna,
     ordenColumna,
@@ -4704,13 +4247,10 @@ export function ReservasView() {
       const base = reservasTurno.filter((r) => {
         const q = busqueda.toLowerCase();
         const matchQ = !q || r.cliente.toLowerCase().includes(q) || r.apellidos.toLowerCase().includes(q) || r.telefono.includes(q);
-        const matchZ = zonaCoincide(r.zona);
-        const matchE = filtroEstados.includes(r.estado);
-        const matchO = !origenesOcultos.includes(normalizarOrigen(r.origen));
-        const matchC = otras.every(([c, valores]) =>
+          const matchC = otras.every(([c, valores]) =>
           valoresDeColumna(r, c).some((v) => valores.includes(v)),
         );
-        return matchQ && matchZ && matchE && matchO && matchC;
+        return matchQ && matchC;
       });
       const set = new Set<string>();
       base.forEach((r) => valoresDeColumna(r, campo).forEach((v) => set.add(v)));
@@ -4724,22 +4264,10 @@ export function ReservasView() {
     [
       reservasTurno,
       busqueda,
-      zonaCoincide,
-      filtroEstados,
-      origenesOcultos,
-      filtrosColumna,
+        filtrosColumna,
       valoresDeColumna,
     ],
   );
-
-  const origenesPresentes = useMemo(() => {
-    // Claves normalizadas, no valores crudos: si no, el mismo canal escrito de
-    // dos formas ofrecía dos opciones idénticas que filtraban media lista cada
-    // una. Se ordena por la etiqueta, que es lo que el usuario lee.
-    const set = new Set<string>();
-    reservasDia.forEach(r => { if (r.origen) set.add(normalizarOrigen(r.origen)); });
-    return Array.from(set).sort((a, b) => labelOrigen(a).localeCompare(labelOrigen(b), "es"));
-  }, [reservasDia]);
 
   // Mesas de la SALA activa: el canvas recibía todas las del local mientras las
   // zonas sí venían filtradas, así que dos salas con una zona del mismo nombre
@@ -4840,13 +4368,17 @@ export function ReservasView() {
     if (mesasBloqueadasIds.has(m.id)) return "BLOQUEADA";
     const rs = reservasActivasPorMesa.get(m.id);
     if (!rs || rs.length === 0) return "LIBRE";
-    // OCUPADA = hay gente SENTADA en ella (o terminando). Antes se miraba
-    // WALK_IN, que es el ORIGEN de la reserva: una mesa con un walk-in que
-    // todavia no se habia sentado ya salia ocupada, y una con un cliente
-    // sentado que SI habia reservado salia como si estuviera libre de gente.
-    if (rs.some(r => r.estado === "SENTADA" || r.estado === "TERMINANDO")) {
-      return "OCUPADA";
-    }
+    // OCUPADA = hay gente SENTADA en ella. Antes se miraba WALK_IN, que es el
+    // ORIGEN de la reserva: una mesa con un walk-in que todavia no se habia
+    // sentado ya salia ocupada, y una con un cliente sentado que SI habia
+    // reservado salia como si estuviera libre de gente.
+    //
+    // SENTADA manda sobre TERMINADA cuando la mesa se comparte: mientras quede
+    // alguien comiendo, la mesa no esta terminando de nada.
+    if (rs.some(r => r.estado === "SENTADA")) return "OCUPADA";
+    // TERMINADA: han acabado pero siguen ahi. Se pinta en rosa, aparte del
+    // verde de OCUPADA, porque es la mesa que esta a punto de quedar libre.
+    if (rs.some(r => r.estado === "TERMINANDO")) return "TERMINADA";
     return "RESERVADA";
   };
 
@@ -5652,21 +5184,17 @@ export function ReservasView() {
                 }} />
             </DialogContent>
           </Dialog>
-          {/* Siempre visible, como Estados. Antes se escondía en los días sin
-              reservas con origen: el botón desaparecía y reaparecía solo,
-              moviendo de sitio a todos los de al lado al cambiar de día. */}
-          <FiltroOrigenDropdown
-            ocultos={origenesOcultos}
-            origenes={origenesPresentes}
-            onChange={setOrigenesOcultos}
-          />
-          <FiltroEstadosDropdown
-            seleccionados={filtroEstados}
-            onChange={setFiltroEstados}
-          />
+          {/* Solo la lupa dentro del recuadro, sin la palabra "Buscar...": el
+              icono ya dice lo que hace y el texto ocupaba casi todo el campo.
+              El nombre sigue en `aria-label` para quien navega con lector. */}
           <div className="relative w-[130px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input placeholder="Buscar..." className="pl-8 h-8 text-xs" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+            <Input
+              aria-label="Buscar reservas"
+              className="pl-8 h-8 text-xs"
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+            />
           </div>
         </div>
 
@@ -5675,23 +5203,58 @@ export function ReservasView() {
             las zonas de todas las salas, así que no se mueven al cambiar de
             sala ni de zona, solo al cambiar de plano o de local. */}
         <div className={cn("flex gap-1 items-center", vista !== "dia" && "invisible pointer-events-none")} aria-hidden={vista !== "dia"} inert={vista !== "dia"}>
-          {(["COMIDA", "CENA"] as const).map(t => (
-            <Button key={t} size="sm" variant={turno === t ? "default" : "outline"} className={cn("text-xs h-8 px-2.5", turno === t && "font-bold")} onClick={() => setTurno(t)}>
-              {t}
-            </Button>
-          ))}
+          {/* SOLO EL ICONO, y en color: sol para la comida y luna para la
+              cena, los mismos que ya identifican los dos turnos en la vista
+              mes. Son dos botones que se pulsan todo el día y con la palabra
+              entera ocupaban el doble. El turno elegido va relleno, así que
+              se sigue viendo cuál está activo; el nombre queda en el texto
+              emergente y en `aria-label`. */}
+          {(["COMIDA", "CENA"] as const).map(t => {
+            const esComida = t === "COMIDA";
+            const nombre = esComida ? "Comida" : "Cena";
+            const Icono = esComida ? Sun : Moon;
+            const activo = turno === t;
+            return (
+              <Button
+                key={t}
+                size="sm"
+                variant={activo ? "default" : "outline"}
+                className="size-8 p-0"
+                title={nombre}
+                aria-label={nombre}
+                aria-pressed={activo}
+                onClick={() => setTurno(t)}
+              >
+                <Icono
+                  className={cn(
+                    "size-4",
+                    // Sobre el relleno del botón activo el color de marca no
+                    // contrasta: ahí el icono va del color del propio botón.
+                    activo
+                      ? "text-primary-foreground"
+                      : esComida
+                        ? "text-amber-500"
+                        : "text-indigo-400",
+                  )}
+                />
+              </Button>
+            );
+          })}
           <div
             className="ml-1 inline-flex items-center gap-2.5 h-8 px-2.5 rounded-md border border-input bg-background text-xs font-semibold"
             title={`${turno === "COMIDA" ? "Comida" : "Cena"} · ${fecha} · total del plano completo`}
           >
+            {/* En color, como los KPI del mes: en gris los dos iconos se
+                confundían entre sí y con el resto de la barra. Verde las
+                personas, azul las mesas. */}
             <span className="inline-flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5 text-muted-foreground" />
+              <Users className="h-3.5 w-3.5 text-emerald-500" />
               <span className="tabular-nums">{cubiertosReservados}</span>
               <span className="text-muted-foreground">/</span>
               <span className="tabular-nums">{capacidadTotal}</span>
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <LayoutGrid className="h-3.5 w-3.5 text-muted-foreground" />
+              <LayoutGrid className="h-3.5 w-3.5 text-sky-500" />
               <span className="tabular-nums">{mesasOcupadas}</span>
               <span className="text-muted-foreground">/</span>
               <span className="tabular-nums">{mesasPlano.length}</span>
@@ -5723,10 +5286,6 @@ export function ReservasView() {
             aria-hidden={vista !== "dia"}
             inert={vista !== "dia"}
           >
-            <FiltroLocalesDropdown locales={locales} localActualId={localId} onSelect={setLocalId} />
-            <FiltroPlanosDropdown planos={planosLocal} planoActualId={planoActualId} onSelect={setPlanoActualId} />
-            <FiltroSalasDropdown salas={salasLocal} salaActualId={salaActualId} onSelect={setSalaActualId} />
-            <FiltroZonasDropdown items={zonaItems} seleccionados={zonaIdsSel} onChange={setZonaIdsSel} />
           </div>
 
         <div className="flex items-center gap-1.5">
@@ -6276,7 +5835,7 @@ export function ReservasView() {
               mesas={mesasActivas}
               posiciones={posicionesPlano}
               mesasMeta={mesasMeta}
-              zonas={zonasSalaActual.filter((z) => zonaMatchSet.has(z.nombre.toUpperCase()))}
+              zonas={zonasSalaActual}
               decoraciones={decoracionesSalaActual}
               salaTieneZonas={zonasSalaActual.length > 0}
               selectedMesaId={selectedMesa?.id ?? null}
@@ -6327,7 +5886,6 @@ export function ReservasView() {
                 </div>
               ) : (
                 zonasSalaActual
-                  .filter((z) => zonaMatchSet.has(z.nombre.toUpperCase()))
                   .map((zona) => {
                     const mesasZona = mesasActivas
                       .filter((m) => (m.zona as unknown as string) === zona.nombre.toUpperCase())
@@ -6530,7 +6088,7 @@ export function ReservasView() {
                   leian como lo mismo. */}
               <div className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border bg-muted/25 p-2.5">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Esta reserva
+                  Ficha de la reserva
                 </h3>
 
                 {/* Tarjeta de la reserva (PRP-082): estado y cobro. Va aquí
@@ -6564,24 +6122,52 @@ export function ReservasView() {
                   }}
                 />
                 <div className="grid grid-cols-2 gap-2">
+                  {/* CUÁNDO y CUÁNTO, todo en una fila: fecha, hora, personas y
+                      duración. Son los cuatro datos que se cambian sobre la
+                      marcha ("vienen dos más", "llegan media hora tarde"), así
+                      que van juntos y en pequeño arriba del todo, en vez de
+                      repartidos por la ficha con la duración al final. */}
+                  <div className="col-span-2 grid grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.9fr)_minmax(0,0.9fr)] items-start gap-2">
                   {/* Fecha y hora editables: mover una reserva era el caso
                       más común y no se podía hacer desde aquí. */}
-                  <div>
+                  <div className="min-w-0">
                     <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
                       Fecha
                     </Label>
-                    <Input
-                      type="date"
-                      className="h-8 text-sm font-medium"
-                      disabled={guardandoCuando}
-                      value={fechaEdit}
-                      onChange={(e) => setFechaEdit(e.target.value)}
-                      onBlur={() =>
-                        guardarCuando(selectedReserva.id, "fecha", fechaEdit)
-                      }
-                    />
+                    {/* CALENDARIO, no campo de texto. El `<input type="date">`
+                        deja teclear dentro y su formato lo pone el navegador
+                        (mm/dd/yyyy en un Chrome en inglés), así que la misma
+                        reserva se leía distinta según el equipo. Aquí la fecha
+                        se ELIGE: no hay forma de escribir letras ni un día que
+                        no exista, y siempre se ve día/mes/año. */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          disabled={guardandoCuando}
+                          className="h-7 w-full justify-start px-1.5 text-xs font-medium"
+                        >
+                          {formatFechaDiaNegocio(fechaEdit) || "Elegir"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={fechaDesdeDiaNegocio(fechaEdit)}
+                          onSelect={(d) => {
+                            if (!d) return;
+                            const iso = aDiaNegocio(d);
+                            setFechaEdit(iso);
+                            guardarCuando(selectedReserva.id, "fecha", iso);
+                          }}
+                          locale={es}
+                          weekStartsOn={1}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
                       Hora
                     </Label>
@@ -6608,17 +6194,12 @@ export function ReservasView() {
                       </p>
                     )}
                   </div>
-                  {/* El turno NO se elige: sale de la hora. Se enseña para que
-                      se vea en qué mapa cae, pero no es un campo que se toque. */}
-                  <Field label="Turno">
-                    {selectedReserva.turno === "CENA" ? "Cena" : "Comida"}
-                  </Field>
                   {/* Comensales: editable. Antes era solo lectura y la única
                       forma de corregir "somos dos más" era borrar la reserva y
                       volver a crearla. */}
-                  <div>
+                  <div className="min-w-0">
                     <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                      Comensales
+                      Personas
                     </Label>
                     {/* Desplegable con el tope de Configuración → Límites
                         ("tamaño máximo por reserva"), igual que al crear: el
@@ -6634,19 +6215,65 @@ export function ReservasView() {
                         guardarComensales(selectedReserva.id, n);
                       }}
                     >
-                      <SelectTrigger className="h-8 text-sm font-medium">
+                      <SelectTrigger className="h-7 px-1.5 text-xs font-medium">
                         <SelectValue />
                       </SelectTrigger>
+                      {/* Solo la cifra: la palabra ya está en el rótulo
+                          PERSONAS de encima, y repetirla dentro dejaba el
+                          campo tan justo que el valor salía cortado ("2…"). */}
                       <SelectContent>
                         {opcionesComensalesEdit.map((n) => (
                           <SelectItem key={n} value={String(n)}>
-                            {n} {n === 1 ? "persona" : "personas"}
+                            {n}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <Field label="Zona">{zonaLabel(selectedReserva.zona ? String(selectedReserva.zona) : null)}</Field>
+                  {/* DURACIÓN (antes "Tiempo de mesa", al final de la ficha):
+                      es cuánto ocupa, así que va con la hora a la que empieza.
+                      Arranca en el valor por defecto de la empresa y se amplía
+                      sobre la marcha —mesa que se alarga— sin tocar la
+                      configuración. */}
+                  <div className="min-w-0">
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Duración
+                    </Label>
+                    <Select
+                      value={duracionEdit}
+                      disabled={guardandoDuracion}
+                      onValueChange={(v) => {
+                        setDuracionEdit(v);
+                        guardarDuracion(selectedReserva.id, v);
+                      }}
+                    >
+                      <SelectTrigger className="h-7 px-1.5 text-xs font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DURACION_RESERVA_OPCIONES.map((o) => (
+                          <SelectItem key={o.minutos} value={String(o.minutos)}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  </div>
+                  {/* DÓNDE se sienta: turno, zona y mesa en una sola fila,
+                      justo debajo del cuándo. Turno y zona no se tocan (salen
+                      de la hora y de la mesa), así que van en pequeño y le
+                      dejan el sitio a la mesa, que sí se cambia. */}
+                  <div className="col-span-2 grid grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)_minmax(0,1.5fr)] items-start gap-2">
+                    {/* El turno NO se elige: sale de la hora. Se enseña para
+                        que se vea en qué mapa cae, pero no es un campo que se
+                        toque. */}
+                    <Field label="Turno" compacto>
+                      {selectedReserva.turno === "CENA" ? "Cena" : "Comida"}
+                    </Field>
+                    <Field label="Zona" compacto>
+                      {zonaLabel(selectedReserva.zona ? String(selectedReserva.zona) : null)}
+                    </Field>
                   {/* Mesa EDITABLE. Antes era solo lectura y para moverla
                       había que abrir el salón, aunque el cambio fuese "pásala
                       a la 12". El desplegable trae todas las mesas del local
@@ -6656,78 +6283,80 @@ export function ReservasView() {
                       Una reserva sobre una UNIÓN ("M1+M2") no se toca desde
                       aquí: el desplegable da una sola mesa y elegir una
                       soltaría la otra sin decirlo. Para eso está el salón. */}
-                  <div className="col-span-2">
+                  <div className="min-w-0">
                     <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Mesa
                     </Label>
-                    {esReservaUnion ? (
-                      <p className="text-sm font-medium">
-                        {(selectedReserva.mesaCodigo ?? "")
-                          .split("+")
-                          .map((c) => c.trim())
-                          .join(" + ")}{" "}
-                        <span className="text-[10px] font-normal text-muted-foreground">
-                          (unión: cámbiala desde el salón)
-                        </span>
-                      </p>
-                    ) : (
-                      <SelectorMesaConAvisos
-                        value={mesaIdReservaAbierta}
-                        onChange={(mesaId) => {
-                          const m = mesas.find((x) => x.id === mesaId);
-                          guardarMesasReserva(
-                            selectedReserva.id,
-                            m ? m.codigo : "",
-                            false,
-                          );
-                        }}
-                        mesas={mesasParaReservaAbierta}
-                        estadoPorMesa={estadoMesasReservaAbierta}
-                        placeholder="— Sin asignar —"
-                      />
-                    )}
+                    {/* Misma fila en LOS DOS casos —mesa suelta o unión—: a la
+                        izquierda qué mesa es y a la derecha el recuadro para
+                        ir al salón. La unión llevaba el botón a lo ancho
+                        debajo, así que la ficha se veía distinta según la
+                        reserva que abrieras. */}
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        {esReservaUnion ? (
+                          <p className="flex h-8 items-center gap-1.5 text-sm font-medium">
+                            <span className="truncate">
+                              {(selectedReserva.mesaCodigo ?? "")
+                                .split("+")
+                                .map((c) => c.trim())
+                                .join(" + ")}
+                            </span>
+                            {/* La unión no se toca desde un desplegable: daría
+                                una sola mesa y elegir una soltaría la otra sin
+                                decirlo. Se dice dónde se cambia. */}
+                            <span className="shrink-0 text-[10px] font-normal text-muted-foreground">
+                              (unión)
+                            </span>
+                          </p>
+                        ) : (
+                          <SelectorMesaConAvisos
+                            value={mesaIdReservaAbierta}
+                            onChange={(mesaId) => {
+                              const m = mesas.find((x) => x.id === mesaId);
+                              guardarMesasReserva(
+                                selectedReserva.id,
+                                m ? m.codigo : "",
+                                false,
+                              );
+                            }}
+                            mesas={mesasParaReservaAbierta}
+                            estadoPorMesa={estadoMesasReservaAbierta}
+                            placeholder="— Sin asignar —"
+                          />
+                        )}
+                      </div>
+                      {/* Reasignar mesas a mano: abre el salón con las de la
+                          reserva ya marcadas en rojo y deja añadir o quitar
+                          las que haga falta cuando el grupo crece o mengua.
+
+                          Cuadrado y solo con el icono de la mesa: el rótulo
+                          "Unir mesas" se comía el ancho del desplegable de al
+                          lado y además se quedaba corto —desde aquí también se
+                          cambia de mesa o se suelta una, no solo unir—. Lleva
+                          `title` y `aria-label` para que se sepa qué hace. */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="size-7 shrink-0 p-0"
+                        title="Modificar las mesas de la reserva"
+                        aria-label="Modificar las mesas de la reserva"
+                        onClick={() => abrirEditorMesas(selectedReserva)}
+                      >
+                        <Table2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
                   </div>
                 </div>
-                {/* Reasignar mesas a mano: abre el salón con las de la reserva
-                    ya marcadas en rojo y deja añadir o quitar las que haga
-                    falta cuando el grupo crece o mengua. */}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 w-full gap-1.5 text-xs"
-                  onClick={() => abrirEditorMesas(selectedReserva)}
-                >
-                  <MapIcon className="h-3.5 w-3.5" />
-                  Abrir salón (unir mesas)
-                </Button>
                 <div className="flex items-center gap-2">
                   <Label className="text-muted-foreground text-xs">Estado actual</Label>
                   <ReservaEstadoBadge estado={selectedReserva.estado} />
                 </div>
-                {/* Tiempo de ocupación de la mesa. Arranca en el valor por defecto
-                    de la empresa y se puede ampliar en cualquier momento sobre la
-                    marcha (mesa que se alarga), sin tocar la configuración. */}
-                <div className="pt-2 border-t space-y-1.5">
-                  <Label className="text-muted-foreground text-xs">Tiempo de mesa</Label>
-                  <Select
-                    value={duracionEdit}
-                    disabled={guardandoDuracion}
-                    onValueChange={(v) => {
-                      setDuracionEdit(v);
-                      guardarDuracion(selectedReserva.id, v);
-                    }}
-                  >
-                    <SelectTrigger className="h-8 text-xs w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DURACION_RESERVA_OPCIONES.map((o) => (
-                        <SelectItem key={o.minutos} value={String(o.minutos)}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* El desplegable de duración vive arriba, con la hora. Aquí
+                    queda solo su CONSECUENCIA: hasta qué hora se ocupa la
+                    mesa, que es lo que se mira para saber si entra otro pase. */}
+                <div>
                   {(() => {
                     const efectiva =
                       selectedReserva.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null;
@@ -6774,31 +6403,6 @@ export function ReservasView() {
                     {comentarioEdit.length}/{RESERVA_COMENTARIO_MAX_CHARS}
                   </p>
                 </div>
-                {/* Cuándo se PIDIÓ la mesa, que no es cuándo es la reserva: dice
-                    con cuánta antelación llegó. Informativo, nunca editable.
-                    Se pinta en la zona de la empresa, no en la del navegador de
-                    quien mira, y los días son enteros (24 h cumplidas): una
-                    reserva de ayer a las 23:00 vista hoy a las 9:00 sigue
-                    poniendo "hoy", porque no ha pasado un día completo. */}
-                {selectedReserva.createdAt && (
-                  <div className="pt-2 border-t space-y-0.5">
-                    <Label className="text-muted-foreground text-xs">
-                      Reserva hecha el
-                    </Label>
-                    <p className="text-sm font-medium">
-                      {formatFechaHoraEnZona(
-                        selectedReserva.createdAt,
-                        empresaActual.zonaHoraria,
-                      )}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {etiquetaDiasTranscurridos(
-                        selectedReserva.createdAt,
-                        tickAhora,
-                      )}
-                    </p>
-                  </div>
-                )}
                 {/* Datos del Ticket. Todo de solo lectura: el tipo de reserva,
                     el código y el dinero quedan congelados desde el canje (lo
                     impide también la base de datos, no solo esta pantalla). */}
@@ -6955,13 +6559,10 @@ export function ReservasView() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="flex items-center gap-1.5 text-muted-foreground text-xs">
-                      Teléfono
-                      {/* Solo la bandera, sin el nombre del país: el prefijo
-                          va justo debajo en su selector y decía lo mismo dos
-                          veces. */}
-                      <BanderaTelefono telefono={clienteEdit.telefono} />
-                    </Label>
+                    {/* Sin bandera junto al rótulo: el selector de prefijo que
+                        va justo debajo ya la lleva en cada opción, así que era
+                        el mismo dato dos veces en dos renglones seguidos. */}
+                    <Label className="text-muted-foreground text-xs">Teléfono</Label>
                     {/* El prefijo se elige de la lista y el número se escribe
                         al lado, pero se guardan juntos: la ficha no puede
                         quedar con un número al que nadie sabe a qué país
@@ -7019,9 +6620,6 @@ export function ReservasView() {
                     />
                   </div>
                 </div>
-                <p className="text-[10px] text-muted-foreground">
-                  Al guardar, los datos se actualizan en la ficha del cliente y en todas sus reservas.
-                </p>
 
                 {/* Actividad DEL CLIENTE: los cambios de sus datos, se hayan
                     hecho aquí o desde su ficha. Va junto a los campos que la

@@ -260,6 +260,24 @@
    Aquí se corrige dentro del ámbito de sala: superficie un punto por encima de
    la barra, texto claro explícito y borde visible. No se toca el botón global.
    --------------------------------------------------------------------------- */
+/* Color de texto BASE del ámbito de sala.
+
+   Los diálogos de Reservas (editor de mesas, confirmaciones…) se pintan en un
+   PORTAL colgado de <body>, fuera del contenedor de la vista. Se les pone
+   `.sala-tema .sala-oscuro` a mano para que los tokens lleguen, y así el fondo
+   sale azul marino (`bg-background`), pero el TEXTO no: ni `DialogContent` ni
+   `DialogTitle` fijan color, así que lo heredaban del <body>, que es del tema
+   CLARO del resto del software. Resultado: título casi negro sobre azul marino
+   —"Mesas de la reserva" no se leía—. Los botones sí se veían porque ya tenían
+   la regla de abajo, lo que despistaba aún más.
+
+   Se fija el color en el propio ámbito y hereda todo lo de dentro: título,
+   párrafos y cualquier texto que no ponga color propio. */
+.sala-tema,
+.sala-oscuro {
+  color: hsl(var(--foreground));
+}
+
 .sala-oscuro button,
 .sala-oscuro [role="combobox"],
 .sala-oscuro [role="tab"] {

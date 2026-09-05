@@ -168,7 +168,6 @@ export async function listReservasRango(fechaDesde: string, fechaHasta: string) 
     if (empresaId) query.eq("empresa_id", empresaId);
     const { data, error } = await query;
     if (error) throw error;
-    console.log("[TRAZA-TEMPORAL rango]", { fechaDesde, fechaHasta, empresaId, filas: (data ?? []).length });
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[reservas] listReservasRango:", err);

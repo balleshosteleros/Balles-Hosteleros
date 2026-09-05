@@ -184,11 +184,6 @@ export function EtiquetasPanel({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-1.5">
-        {visibles.length === 0 && (
-          <span className="text-xs text-muted-foreground italic">
-            Sin etiquetas.
-          </span>
-        )}
         {visibles.map(({ etiqueta, origen }) => (
           <span
             key={`${origen}-${etiqueta.id}`}

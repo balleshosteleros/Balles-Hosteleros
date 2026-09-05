@@ -9,19 +9,28 @@
  * existe forma de escribir una fuera de la cuadrícula.
  *
  * Dos desplegables (hora y minuto) en vez de uno solo con las ~96 horas del
- * día: una lista de 96 elementos obliga a hacer scroll para llegar a las 21:45,
- * y era parte de lo que hacía que el selector se viera descuadrado y con
- * huecos. Aquí siempre son 24 + 4 opciones, y los dos controles ocupan
- * exactamente el ancho disponible sin dejar espacios muertos.
+ * día: una lista de 96 elementos obliga a hacer scroll para llegar a las 21:45.
+ * Aquí siempre son 24 + 4 opciones, y van DENTRO DEL MISMO RECUADRO para que
+ * se lean como el dato único que son.
  */
 
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { MINUTOS_VALIDOS_RESERVA } from "@/features/sala/lib/reserva-cuartos";
 
+/**
+ * Los dos desplegables van dentro de UN SOLO recuadro: hora y minuto son un
+ * único dato ("22:30"), y con dos cajas separadas se leían como dos campos
+ * distintos. El borde y el fondo los pone el contenedor; cada `select` va
+ * desnudo dentro, sin borde ni fondo propios.
+ */
+const CLASE_CAJA =
+  "flex h-7 items-center rounded-md border border-input bg-background px-1 " +
+  "focus-within:ring-1 focus-within:ring-ring";
+
 const CLASE_SELECT =
-  "h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-1.5 text-xs " +
-  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring " +
+  "h-full min-w-0 flex-1 border-0 bg-transparent px-0.5 text-xs " +
+  "focus:outline-none focus-visible:outline-none " +
   "disabled:cursor-not-allowed disabled:opacity-50";
 
 export interface SelectorHoraCuartosProps {
@@ -98,13 +107,13 @@ export function SelectorHoraCuartos({
   };
 
   return (
-    <div className={cn("flex items-center gap-1", className)}>
+    <div className={cn(CLASE_CAJA, aviso && "border-amber-500", className)}>
       <select
         aria-label="Hora"
         disabled={disabled}
         value={hh}
         onChange={(e) => emitir(e.target.value, mm)}
-        className={cn(CLASE_SELECT, aviso && "border-amber-500")}
+        className={CLASE_SELECT}
       >
         {!requerido && <option value="">--</option>}
         {horas.map((h) => (
@@ -113,13 +122,13 @@ export function SelectorHoraCuartos({
           </option>
         ))}
       </select>
-      <span className="text-xs text-muted-foreground">:</span>
+      <span className="shrink-0 text-xs text-muted-foreground">:</span>
       <select
         aria-label="Minutos"
         disabled={disabled || !hh}
         value={mm}
         onChange={(e) => emitir(hh, e.target.value)}
-        className={cn(CLASE_SELECT, aviso && "border-amber-500")}
+        className={CLASE_SELECT}
       >
         {!mm && <option value="">--</option>}
         {MINUTOS_VALIDOS_RESERVA.map((m) => (
