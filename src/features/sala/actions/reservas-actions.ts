@@ -824,7 +824,9 @@ export async function updateReserva(
     if (updates.hora !== undefined) dbUpdates.hora = updates.hora;
     if (updates.personas !== undefined) dbUpdates.personas = updates.personas;
     if (updates.mesa !== undefined) dbUpdates.mesa = updates.mesa;
-    if (updates.zona !== undefined) dbUpdates.zona = updates.zona;
+    // La zona NO se escribe aquí: se resuelve más abajo contra la mesa, que es
+    // de donde sale. Escribirla tal cual permitía guardar una reserva con mesa
+    // de un sitio y zona de otro, que en el local no existe.
 
     // Turno y zona NO se editan a mano: se deducen de la hora y de la mesa, que
     // es lo que de verdad se cambia. Si se movía una reserva de las 14:00 a las
@@ -832,87 +834,114 @@ export async function updateReserva(
     // revés). Lo mismo al cambiarla de mesa: conservaba la zona de la mesa
     // anterior. Se recalculan aquí, en el único punto por el que pasan todos
     // los cambios, para que no puedan quedar descuadrados.
-    if (updates.hora !== undefined && updates.turno === undefined) {
+    // El turno se deduce SIEMPRE de la hora, venga o no en el update. Antes
+    // bastaba con mandar un turno para que se escribiera tal cual: una reserva
+    // de las 00:00 pasaba a COMIDA sin mover la hora y quedaba con turno de
+    // comida y horario de madrugada, que en la sala no existe. Al caer en el
+    // turno equivocado desaparecía del día en que de verdad estaba.
+    if (updates.hora !== undefined) {
       dbUpdates.turno = turnoDeHora(updates.hora);
     }
 
-    // ── Cambiar SOLO la zona, con la reserva ya sentada ───────────────────
+    // ── Zona y mesa, siempre de acuerdo ──────────────────────────────────
     //
-    // Una mesa está en una zona y solo en una: una reserva con la mesa A1 del
-    // Salón no puede estar marcada en Terraza. Antes la zona se escribía tal
-    // cual y la reserva quedaba con mesa de una zona y zona de otra —imposible
-    // en el local, y el plano la pintaba donde no estaba.
+    // Una mesa está en una zona y solo en una: la zona SALE de la mesa, igual
+    // que el turno sale de la hora. Nunca se guarda lo que venga en `zona`
+    // sin contrastarlo, porque así se colaban reservas con mesa del Salón y
+    // zona Terraza —imposible en el local— que el plano pintaba donde no
+    // estaban.
     //
-    // Aquí no se decide por el usuario moviéndole la mesa a ciegas: se rechaza
-    // el cambio y se dice qué hacer. Mover a alguien de sitio se hace eligiendo
-    // la mesa, que es el gesto que sabe si la nueva mesa está libre y cabe.
-    if (
-      updates.zona !== undefined &&
-      updates.mesa === undefined &&
-      updates.localId
-    ) {
-      const { data: actualMesa } = await supabase
-        .from("reservas")
-        .select("mesa")
-        .eq("id", id)
-        .maybeSingle();
-      const mesaActual = ((actualMesa?.mesa as string | null) ?? "").trim();
+    // Se resuelve contra la mesa RESULTANTE: la que trae el update si cambia,
+    // y si no, la que la reserva ya tiene. Vale para las dos direcciones:
+    // cambiar la mesa arrastra su zona, y cambiar la zona a secas se rechaza
+    // diciendo que se mueva por la mesa —el gesto que sí sabe si la nueva está
+    // libre y si cabe—.
+    if (updates.zona !== undefined || updates.mesa !== undefined) {
+      const mesaResultante =
+        updates.mesa !== undefined
+          ? (updates.mesa ?? "").trim()
+          : await (async () => {
+              const { data } = await supabase
+                .from("reservas")
+                .select("mesa")
+                .eq("id", id)
+                .maybeSingle();
+              return ((data?.mesa as string | null) ?? "").trim();
+            })();
 
-      if (mesaActual) {
-        const codigoPrincipal = mesaActual.split("+")[0]?.trim() || mesaActual;
-        const { data: mesaRow } = await supabase
-          .from("mesas")
-          .select("zonas(nombre)")
-          .eq("local_id", updates.localId)
-          .eq("codigo", codigoPrincipal)
-          .maybeSingle();
-        const z = mesaRow?.zonas as unknown as
-          | { nombre?: string }
-          | { nombre?: string }[]
-          | null;
-        const zonaDeLaMesa = Array.isArray(z) ? z[0]?.nombre : z?.nombre;
+      if (!mesaResultante) {
+        // Sin mesa no hay zona que derivar: la zona es entonces una intención
+        // —en qué parte del local se le quiere sentar— y se guarda tal cual.
+        if (updates.zona !== undefined) dbUpdates.zona = updates.zona;
+        else if (updates.mesa !== undefined) dbUpdates.zona = null;
+      } else {
+        // Una unión se graba como "M1+M2" y ese texto no es el código de
+        // ninguna mesa: la zona se resuelve por la PRIMERA del conjunto, que es
+        // a la que se ancla la reserva.
+        const codigoPrincipal =
+          mesaResultante.split("+")[0]?.trim() || mesaResultante;
 
-        if (zonaDeLaMesa && zonaDeLaMesa !== updates.zona) {
-          return {
-            ok: false,
-            error: `La mesa ${mesaActual} está en ${zonaDeLaMesa}. Para pasar la reserva a ${updates.zona}, cámbiale la mesa: la zona sale de dónde se sienta.`,
-          };
+        let zonaDeLaMesa: string | null = null;
+        if (updates.localId) {
+          const { data: mesaRow } = await supabase
+            .from("mesas")
+            .select("zonas(nombre)")
+            .eq("local_id", updates.localId)
+            .eq("codigo", codigoPrincipal)
+            .maybeSingle();
+          const z = mesaRow?.zonas as unknown as
+            | { nombre?: string }
+            | { nombre?: string }[]
+            | null;
+          zonaDeLaMesa = (Array.isArray(z) ? z[0]?.nombre : z?.nombre) ?? null;
+        }
+
+        if (zonaDeLaMesa) {
+          // Pedir una zona que no es la de su mesa se rechaza: se dice qué
+          // hacer en vez de mover a nadie de sitio por su cuenta.
+          if (updates.zona !== undefined && updates.zona !== zonaDeLaMesa) {
+            return {
+              ok: false,
+              error: `La mesa ${mesaResultante} está en ${zonaDeLaMesa}. Para pasar la reserva a ${updates.zona}, cámbiale la mesa: la zona sale de dónde se sienta.`,
+            };
+          }
+          dbUpdates.zona = zonaDeLaMesa;
+        } else if (updates.zona !== undefined) {
+          // La mesa no resuelve zona (sin `localId`, o mesa fuera de catálogo).
+          // Se guarda lo pedido: es mejor el dato que da el usuario que dejar
+          // la reserva con la zona vieja de otra mesa.
+          dbUpdates.zona = updates.zona;
         }
       }
     }
 
-    if (
-      updates.mesa !== undefined &&
-      updates.zona === undefined &&
-      updates.localId
-    ) {
-      const codigoMesa = (updates.mesa ?? "").trim();
-      if (!codigoMesa) {
-        // Se ha quitado la mesa: sin mesa no hay zona que deducir.
-        dbUpdates.zona = null;
-      } else {
-        // Una unión se graba como "M1+M2" y ese texto no es el código de
-        // ninguna mesa: buscarlo tal cual no devolvía fila y la reserva se
-        // quedaba con la zona de la mesa anterior. La zona se resuelve por la
-        // PRIMERA mesa del conjunto, que es a la que se ancla la reserva.
-        const codigoPrincipal = codigoMesa.split("+")[0]?.trim() || codigoMesa;
-        const { data: mesaRow } = await supabase
-          .from("mesas")
-          .select("zonas(nombre)")
-          .eq("local_id", updates.localId)
-          .eq("codigo", codigoPrincipal)
-          .maybeSingle();
-        const z = mesaRow?.zonas as unknown as
-          | { nombre?: string }
-          | { nombre?: string }[]
-          | null;
-        const nombreZona = Array.isArray(z) ? z[0]?.nombre : z?.nombre;
-        // Si la mesa no resuelve zona, se deja la que hubiera: es mejor
-        // conservar el dato anterior que vaciarlo por un fallo de lectura.
-        if (nombreZona) dbUpdates.zona = nombreZona;
+    // Un turno suelto (sin hora) NO se escribe tal cual: se recalcula contra la
+    // hora que la reserva ya tiene. Cambiar el turno a mano dejando la hora
+    // quieta es lo que descolocaba reservas de madrugada al turno de comida.
+    if (updates.turno !== undefined && updates.hora === undefined) {
+      const { data: actualHora } = await supabase
+        .from("reservas")
+        .select("hora")
+        .eq("id", id)
+        .maybeSingle();
+      const hora = actualHora?.hora as string | undefined;
+      if (hora) {
+        const turnoReal = turnoDeHora(hora);
+        // Pedir el turno contrario al de su hora se RECHAZA, no se ignora en
+        // silencio: si no, el desplegable volvía solo a su sitio y parecía
+        // estropeado. Mismo criterio que la zona con la mesa: se dice qué hay
+        // que mover —la hora— en vez de decidirlo por sala.
+        if (updates.turno !== turnoReal) {
+          const pedido = updates.turno === "CENA" ? "cena" : "comida";
+          const suyo = turnoReal === "CENA" ? "cena" : "comida";
+          return {
+            ok: false,
+            error: `A las ${hora.slice(0, 5)} es ${suyo}. Para pasarla a ${pedido}, cámbiale la hora: el turno sale de a qué hora viene.`,
+          };
+        }
+        dbUpdates.turno = turnoReal;
       }
     }
-    if (updates.turno !== undefined) dbUpdates.turno = updates.turno;
     if (updates.estado !== undefined) dbUpdates.estado = updates.estado;
     if (updates.notas !== undefined) dbUpdates.notas = recortarComentario(updates.notas);
     // Igual que en el alta: se guarda la clave normalizada y nunca vacía. Un
@@ -1388,3 +1417,149 @@ export async function enviarReservaEmailManual(
   return { ok: false, error: res.error };
 }
 
+
+/**
+ * Intercambiar las mesas de DOS reservas: la que se está moviendo se va a la
+ * mesa de la otra, y la otra se queda con la que deja la primera.
+ *
+ * Va en una sola acción, y no como dos `updateReserva` seguidos, por lo que
+ * pasa entre medias: al escribir la primera las dos reservas comparten mesa, y
+ * el bloqueo de solape —que existe justo para eso— tumbaba el segundo update
+ * dejando a las dos sentadas encima. Aquí la comprobación de solape sobra: las
+ * mesas ya estaban ocupadas por estas mismas dos reservas, solo cambian de mano.
+ *
+ * Un intercambio puede pisar a TERCEROS (otra reserva más tarde en la mesa de
+ * destino). Eso se avisa en pantalla antes de llegar aquí y se decide en sala;
+ * este servidor no vuelve a juzgarlo.
+ */
+export async function intercambiarMesasReservas(params: {
+  /** Reserva que se mueve (la abierta en la ficha). */
+  reservaId: string;
+  /** Reserva que ocupa la mesa de destino y recibe la mesa de la primera. */
+  otraReservaId: string;
+  /** Mesas que pasa a tener la reserva movida ("M5" o "M5+M6"). */
+  mesaDestino: string;
+  /** Mesas que pasa a tener la otra reserva. "" si la primera no tenía mesa. */
+  mesaOrigen: string;
+  localId?: string | null;
+}) {
+  try {
+    const ctx = await getContext();
+    const { supabase, empresaId } = ctx;
+    if (!empresaId) return { ok: false, error: "Sin empresa activa." };
+    if (params.reservaId === params.otraReservaId) {
+      return { ok: false, error: "No se puede intercambiar una reserva consigo misma." };
+    }
+
+    // Las dos reservas tienen que ser de la empresa activa. La RLS acota a las
+    // empresas del usuario, no a la ACTIVA: sin este filtro, alguien de
+    // BACANAL+HABANA podría mover por id una reserva de la otra empresa.
+    const { data: filas, error: errLeer } = await supabase
+      .from("reservas")
+      .select("id, mesa, zona")
+      .eq("empresa_id", empresaId)
+      .in("id", [params.reservaId, params.otraReservaId]);
+    if (errLeer) throw errLeer;
+    if (!filas || filas.length !== 2) {
+      return { ok: false, error: "Alguna de las dos reservas ya no existe." };
+    }
+
+    /** Zona de un conjunto de mesas, por la PRIMERA: es a la que se ancla. */
+    const zonaDeMesa = async (codigoMesa: string): Promise<string | null> => {
+      const codigo = codigoMesa.split("+")[0]?.trim();
+      if (!codigo || !params.localId) return null;
+      const { data } = await supabase
+        .from("mesas")
+        .select("zonas(nombre)")
+        .eq("local_id", params.localId)
+        .eq("codigo", codigo)
+        .maybeSingle();
+      const z = data?.zonas as unknown as
+        | { nombre?: string }
+        | { nombre?: string }[]
+        | null;
+      const nombre = Array.isArray(z) ? z[0]?.nombre : z?.nombre;
+      return nombre ?? null;
+    };
+
+    const [zonaDestino, zonaOrigen] = await Promise.all([
+      zonaDeMesa(params.mesaDestino),
+      params.mesaOrigen ? zonaDeMesa(params.mesaOrigen) : Promise.resolve(null),
+    ]);
+
+    const previoPorId = new Map(
+      filas.map((f) => [f.id as string, f as { mesa: string | null; zona: string | null }]),
+    );
+
+    const cambios: {
+      id: string;
+      mesa: string;
+      zona: string | null;
+    }[] = [
+      { id: params.reservaId, mesa: params.mesaDestino, zona: zonaDestino },
+      { id: params.otraReservaId, mesa: params.mesaOrigen, zona: zonaOrigen },
+    ];
+
+    // Las dos escrituras van seguidas y sin comprobar solape: entre una y otra
+    // las reservas comparten mesa a propósito, y ese estado intermedio es el
+    // que hay que dejar pasar para que el intercambio pueda existir.
+    for (const c of cambios) {
+      const dbUpdates: Record<string, unknown> = {
+        mesa: c.mesa,
+        updated_at: new Date().toISOString(),
+      };
+      // La zona solo se toca si se ha podido resolver: es mejor conservar el
+      // dato anterior que vaciarlo por una lectura que no devolvió fila.
+      if (c.zona) dbUpdates.zona = c.zona;
+      else if (!c.mesa) dbUpdates.zona = null;
+
+      const { error } = await supabase
+        .from("reservas")
+        .update(dbUpdates)
+        .eq("id", c.id)
+        .eq("empresa_id", empresaId);
+      if (error) throw error;
+    }
+
+    // Actividad: una fila por reserva y campo que cambia de verdad, con las
+    // mismas palabras que el resto del historial. Nunca rompe el intercambio:
+    // ya está hecho y no se deshace por un fallo del registro.
+    const filasHist = cambios.flatMap((c) => {
+      const previo = previoPorId.get(c.id);
+      return (
+        [
+          ["mesa", previo?.mesa, c.mesa],
+          ["zona", previo?.zona, c.zona],
+        ] as const
+      )
+        .map(([campo, antes, ahora]) => ({
+          campo,
+          anterior: normalizarValorActividad(antes),
+          nuevo: normalizarValorActividad(ahora),
+        }))
+        .filter((f) => f.anterior !== f.nuevo)
+        .map((f) => ({
+          empresa_id: empresaId,
+          reserva_id: c.id,
+          campo: f.campo,
+          valor_anterior: f.anterior,
+          valor_nuevo: f.nuevo,
+          usuario_id: ctx.usuarioId,
+          usuario_nombre: ctx.nombre,
+          origen: "MANUAL",
+        }));
+    });
+    if (filasHist.length > 0) {
+      const { error: errHist } = await supabase
+        .from("reserva_historial")
+        .insert(filasHist);
+      if (errHist) console.error("[reservas] actividad intercambio:", errHist.message);
+    }
+
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = mensajeDeError(err) ?? "Error al intercambiar las mesas.";
+    console.error("[reservas] intercambiarMesasReservas:", msg, err);
+    return { ok: false, error: friendlyError(msg) };
+  }
+}
