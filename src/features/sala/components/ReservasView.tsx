@@ -162,6 +162,10 @@ import {
 import { AvisoCobrosBanner } from "@/features/sala/components/reservas/AvisoCobrosBanner";
 import { CobroPoliticaBloque } from "@/features/sala/components/reservas/CobroPoliticaBloque";
 import { ReservaTiempoCelda } from "@/features/sala/components/reservas/ReservaTiempoCelda";
+import {
+  ColumnaListaHeader,
+  type OrdenLista,
+} from "@/features/sala/components/reservas/ColumnaListaHeader";
 import { calcularTiempoReserva, minutosHastaReserva } from "@/features/sala/lib/reserva-tiempo";
 import { ClienteReservasBadge } from "@/features/sala/components/reservas/ClienteReservasBadge";
 import { ReservaExternalBadge } from "@/features/sala/components/reservas/ReservaExternalBadge";
@@ -3518,6 +3522,35 @@ export function ReservasView() {
   // con una lista de "marcados" cualquier origen nuevo nacería invisible y sus
   // reservas desaparecerían del listado sin que nadie entienda por qué.
   const [origenesOcultos, setOrigenesOcultos] = useState<string[]>([]);
+  /**
+   * Filtros de la CABECERA de la lista, uno por columna: `{ campo: valores }`.
+   *
+   * Los valores son el MISMO TEXTO que se lee en la celda (la mesa "M4", la
+   * zona "Terraza", "Cancelación", "Confirmada"…), no la clave de BD: el
+   * filtro se marca mirando la columna, así que las opciones tienen que ser lo
+   * que ahí se ve. Columna sin nada marcado = columna sin filtrar; varias
+   * columnas se combinan con Y y, dentro de una, los valores con O.
+   */
+  const [filtrosColumna, setFiltrosColumna] = useState<Record<string, string[]>>({});
+  /**
+   * Orden de la lista pedido desde una columna. En `null` manda el orden
+   * natural del servicio (hora y, a igualdad, prioridad de estado), que es el
+   * que necesita quien está en sala.
+   */
+  const [ordenColumna, setOrdenColumna] = useState<OrdenLista>(null);
+  /** Marca o desmarca valores de UNA columna sin tocar las demás. */
+  const setFiltroColumna = useCallback((campo: string, valores: string[]) => {
+    setFiltrosColumna((prev) => {
+      // La columna sin nada marcado se borra del objeto en vez de quedarse con
+      // una lista vacía: así "sin filtrar" es una sola cosa y no dos.
+      if (valores.length === 0) {
+        if (!(campo in prev)) return prev;
+        const { [campo]: _quitado, ...resto } = prev;
+        return resto;
+      }
+      return { ...prev, [campo]: valores };
+    });
+  }, []);
   const [cfgReservas, setCfgReservas] = useState<EmpresaReservasConfig | null>(null);
   /** Reglas de aforo con vigencia (cupo / tamaño máximo por reserva). */
   const [reglasReservas, setReglasReservas] = useState<EmpresaReservasRegla[]>([]);
@@ -4544,6 +4577,57 @@ export function ReservasView() {
     }
     return ids;
   }, [mesaHoverId, reservasTurno, mesasIdsDeReserva]);
+  /**
+   * Texto de una reserva en una columna concreta: lo MISMO que se lee en la
+   * celda. Es la fuente única del filtro por columna —de aquí salen tanto las
+   * casillas que se ofrecen como la comparación al filtrar—, así que una
+   * opción marcada no puede dejar de casar con su propia fila.
+   *
+   * Etiquetas devuelve varias: basta con que UNA coincida, igual que en el
+   * resto de tablas del software con columnas multivalor.
+   */
+  const valoresDeColumna = useCallback(
+    (r: Reserva, campo: string): string[] => {
+      switch (campo) {
+        case "hora":
+          return [r.hora.slice(0, 5)];
+        case "mesa": {
+          const mesa = r.mesaId ? mesaPorId.get(r.mesaId) : undefined;
+          return [mesa?.codigo ?? "—"];
+        }
+        case "zona":
+          return [zonaLabel(r.zona ? String(r.zona) : null) || "—"];
+        case "nombre":
+          return [`${r.cliente || "WALK IN"} ${r.apellidos ?? ""}`.trim()];
+        case "comensales":
+          return [String(r.comensales)];
+        case "origen":
+          return [origenLabel(r.origen)];
+        case "tipo":
+          return [
+            TIPO_RESERVA_CORTO[
+              tipoDeReserva({
+                esTicket: r.esTicket,
+                tieneGarantia: r.tieneGarantia,
+                garantiaImporte: r.garantiaImporte,
+                tieneCancelacion: r.tieneCancelacion,
+                cancelacionImporte: r.cancelacionImporte,
+              })
+            ],
+          ];
+        case "estado":
+          return [ESTADO_RESERVA_LABELS[r.estado]];
+        case "etiquetas": {
+          const etqs = etiquetasPorReserva[r.id] ?? [];
+          return etqs.length === 0 ? ["—"] : etqs.map((e) => e.nombre);
+        }
+        default:
+          return [];
+      }
+    },
+    [mesaPorId, etiquetasPorReserva],
+  );
+
   const reservasFiltradas = useMemo(() => {
     // Señaladas desde el aviso: se enseñan esas y solo esas.
     if (idsDelAviso && idsDelAviso.length > 0) {
@@ -4552,7 +4636,12 @@ export function ReservasView() {
         .filter((r) => set.has(r.id))
         .sort(compararReservasPorJornada);
     }
-    return reservasTurno.filter(r => {
+    // Solo las columnas con algo marcado: una lista vacía es "sin filtrar" y
+    // no debe descartar ninguna fila.
+    const columnasFiltradas = Object.entries(filtrosColumna).filter(
+      ([, valores]) => valores.length > 0,
+    );
+    const filtradas = reservasTurno.filter(r => {
       const q = busqueda.toLowerCase();
       const matchQ = !q || r.cliente.toLowerCase().includes(q) || r.apellidos.toLowerCase().includes(q) || r.telefono.includes(q);
       const matchZ = zonaCoincide(r.zona);
@@ -4561,9 +4650,87 @@ export function ReservasView() {
       // filas antiguas con "telefono" y nuevas con "TELEFONO", y el filtro
       // tiene que cazar las dos con la misma opción.
       const matchO = !origenesOcultos.includes(normalizarOrigen(r.origen));
-      return matchQ && matchZ && matchE && matchO;
-    }).sort(compararReservasPorJornada);
-  }, [reservasTurno, busqueda, zonaCoincide, filtroEstados, origenesOcultos, idsDelAviso]);
+      // Columnas: se combinan con Y; dentro de cada una, los valores con O.
+      const matchC = columnasFiltradas.every(([campo, valores]) =>
+        valoresDeColumna(r, campo).some((v) => valores.includes(v)),
+      );
+      return matchQ && matchZ && matchE && matchO && matchC;
+    });
+
+    if (!ordenColumna) return filtradas.sort(compararReservasPorJornada);
+
+    // Orden pedido desde una columna. Los números (comensales) se comparan
+    // como números y no como texto, o "10" quedaría antes que "2"; el resto
+    // por su texto en español, que es lo que se lee en la celda.
+    const { campo, direccion } = ordenColumna;
+    const signo = direccion === "asc" ? 1 : -1;
+    return [...filtradas].sort((a, b) => {
+      if (campo === "comensales") {
+        const cmp = a.comensales - b.comensales;
+        if (cmp !== 0) return signo * cmp;
+        return compararReservasPorJornada(a, b);
+      }
+      const va = valoresDeColumna(a, campo).join(", ");
+      const vb = valoresDeColumna(b, campo).join(", ");
+      const cmp = va.localeCompare(vb, "es");
+      if (cmp !== 0) return signo * cmp;
+      // A igualdad, el orden natural del servicio: sin esto las filas empatadas
+      // (todas las "Confirmada", p. ej.) salían desordenadas por hora.
+      return compararReservasPorJornada(a, b);
+    });
+  }, [
+    reservasTurno,
+    busqueda,
+    zonaCoincide,
+    filtroEstados,
+    origenesOcultos,
+    idsDelAviso,
+    filtrosColumna,
+    ordenColumna,
+    valoresDeColumna,
+  ]);
+
+  /**
+   * Opciones de cada columna: los valores REALES de las reservas que ya han
+   * pasado por el resto de filtros de la vista, sin repetir. Se calculan
+   * ignorando el filtro de la propia columna —si no, al marcar un valor
+   * desaparecerían los demás y no se podría añadir un segundo.
+   */
+  const opcionesColumna = useCallback(
+    (campo: string): string[] => {
+      const otras = Object.entries(filtrosColumna).filter(
+        ([c, valores]) => c !== campo && valores.length > 0,
+      );
+      const base = reservasTurno.filter((r) => {
+        const q = busqueda.toLowerCase();
+        const matchQ = !q || r.cliente.toLowerCase().includes(q) || r.apellidos.toLowerCase().includes(q) || r.telefono.includes(q);
+        const matchZ = zonaCoincide(r.zona);
+        const matchE = filtroEstados.includes(r.estado);
+        const matchO = !origenesOcultos.includes(normalizarOrigen(r.origen));
+        const matchC = otras.every(([c, valores]) =>
+          valoresDeColumna(r, c).some((v) => valores.includes(v)),
+        );
+        return matchQ && matchZ && matchE && matchO && matchC;
+      });
+      const set = new Set<string>();
+      base.forEach((r) => valoresDeColumna(r, campo).forEach((v) => set.add(v)));
+      const lista = Array.from(set);
+      // Los comensales se ordenan por su número, no como cadena.
+      if (campo === "comensales") {
+        return lista.sort((a, b) => Number(a) - Number(b));
+      }
+      return lista.sort((a, b) => a.localeCompare(b, "es"));
+    },
+    [
+      reservasTurno,
+      busqueda,
+      zonaCoincide,
+      filtroEstados,
+      origenesOcultos,
+      filtrosColumna,
+      valoresDeColumna,
+    ],
+  );
 
   const origenesPresentes = useMemo(() => {
     // Claves normalizadas, no valores crudos: si no, el mismo canal escrito de
@@ -5703,14 +5870,112 @@ export function ReservasView() {
           panelOculto === "ninguno" ? { width: LISTA_ANCHO_PX } : undefined
         }>
           <div className={cn(LISTA_GRID, "px-3 py-2 text-[10px] font-semibold text-muted-foreground border-b bg-muted/30 uppercase tracking-wider")}>
-            <span className="truncate">Hora</span>
-            <span className="truncate">Mesa</span>
-            <span className="truncate">Nombre</span>
-            <span className="truncate text-center">Per</span>
-            <span className="truncate">Origen</span>
-            <span className="truncate">Tipo</span>
-            <span className="truncate">Estado</span>
-            <span className="truncate">Etiquetas</span>
+            {/* Cada columna filtra y ordena desde su propia cabecera, como en
+                el resto de tablas del software: se pincha en la columna que se
+                quiere acotar, no en un botón aparte. */}
+            <ColumnaListaHeader
+              label="Hora"
+              campo="hora"
+              opciones={opcionesColumna("hora")}
+              seleccionadas={filtrosColumna.hora ?? []}
+              onSeleccionChange={(v) => setFiltroColumna("hora", v)}
+              ordenable
+              orden={ordenColumna}
+              onOrdenChange={setOrdenColumna}
+              ordenLabelAsc="Antes"
+              ordenLabelDesc="Después"
+            />
+            {/* La celda enseña mesa y zona una sobre otra, así que la cabecera
+                filtra por las dos: la mesa en el rótulo y la zona debajo. */}
+            <span className="flex min-w-0 flex-col leading-tight">
+              <ColumnaListaHeader
+                label="Mesa"
+                campo="mesa"
+                opciones={opcionesColumna("mesa")}
+                seleccionadas={filtrosColumna.mesa ?? []}
+                onSeleccionChange={(v) => setFiltroColumna("mesa", v)}
+                ordenable
+                orden={ordenColumna}
+                onOrdenChange={setOrdenColumna}
+              />
+              <ColumnaListaHeader
+                label="Zona"
+                campo="zona"
+                opciones={opcionesColumna("zona")}
+                seleccionadas={filtrosColumna.zona ?? []}
+                onSeleccionChange={(v) => setFiltroColumna("zona", v)}
+                ordenable
+                orden={ordenColumna}
+                onOrdenChange={setOrdenColumna}
+                className="text-[9px] font-normal"
+              />
+            </span>
+            <ColumnaListaHeader
+              label="Nombre"
+              campo="nombre"
+              opciones={opcionesColumna("nombre")}
+              seleccionadas={filtrosColumna.nombre ?? []}
+              onSeleccionChange={(v) => setFiltroColumna("nombre", v)}
+              ordenable
+              orden={ordenColumna}
+              onOrdenChange={setOrdenColumna}
+            />
+            <ColumnaListaHeader
+              label="Per"
+              campo="comensales"
+              opciones={opcionesColumna("comensales")}
+              seleccionadas={filtrosColumna.comensales ?? []}
+              onSeleccionChange={(v) => setFiltroColumna("comensales", v)}
+              ordenable
+              orden={ordenColumna}
+              onOrdenChange={setOrdenColumna}
+              ordenLabelAsc="Menos"
+              ordenLabelDesc="Más"
+              align="center"
+            />
+            <ColumnaListaHeader
+              label="Origen"
+              campo="origen"
+              opciones={opcionesColumna("origen")}
+              seleccionadas={filtrosColumna.origen ?? []}
+              onSeleccionChange={(v) => setFiltroColumna("origen", v)}
+              ordenable
+              orden={ordenColumna}
+              onOrdenChange={setOrdenColumna}
+            />
+            <ColumnaListaHeader
+              label="Tipo"
+              campo="tipo"
+              opciones={opcionesColumna("tipo")}
+              seleccionadas={filtrosColumna.tipo ?? []}
+              onSeleccionChange={(v) => setFiltroColumna("tipo", v)}
+              ordenable
+              orden={ordenColumna}
+              onOrdenChange={setOrdenColumna}
+            />
+            <ColumnaListaHeader
+              label="Estado"
+              campo="estado"
+              opciones={opcionesColumna("estado")}
+              seleccionadas={filtrosColumna.estado ?? []}
+              onSeleccionChange={(v) => setFiltroColumna("estado", v)}
+              ordenable
+              orden={ordenColumna}
+              onOrdenChange={setOrdenColumna}
+            />
+            <ColumnaListaHeader
+              label="Etiquetas"
+              campo="etiquetas"
+              opciones={opcionesColumna("etiquetas")}
+              seleccionadas={filtrosColumna.etiquetas ?? []}
+              onSeleccionChange={(v) => setFiltroColumna("etiquetas", v)}
+              ordenable
+              orden={ordenColumna}
+              onOrdenChange={setOrdenColumna}
+            />
+            {/* Tiempo no filtra ni ordena: es una cuenta atrás que cambia sola
+                cada minuto, así que un valor marcado dejaría de casar con su
+                fila al instante. Para ordenar por tiempo está Hora. */}
             <span className="truncate text-center">Tiempo</span>
           </div>
           <div className="relative flex-1 overflow-y-auto">
@@ -6692,9 +6957,10 @@ export function ReservasView() {
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5 text-muted-foreground text-xs">
                       Teléfono
-                      {/* País del número, con su bandera: lo primero que hay
-                          que saber antes de llamar a alguien. */}
-                      <BanderaTelefono telefono={clienteEdit.telefono} conNombre />
+                      {/* Solo la bandera, sin el nombre del país: el prefijo
+                          va justo debajo en su selector y decía lo mismo dos
+                          veces. */}
+                      <BanderaTelefono telefono={clienteEdit.telefono} />
                     </Label>
                     {/* El prefijo se elige de la lista y el número se escribe
                         al lado, pero se guardan juntos: la ficha no puede
