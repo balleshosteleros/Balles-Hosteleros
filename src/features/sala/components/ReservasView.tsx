@@ -7362,20 +7362,12 @@ export function ReservasView() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
               <AlertTriangle className="h-4 w-4" />
-              Esa mesa ya está ocupada a esa hora
+              {choqueDesplazar?.mesa.codigo} ya está ocupada
             </DialogTitle>
           </DialogHeader>
           {choqueDesplazar && reservaADesplazar && (
             <div className="space-y-3 text-xs">
-              <p className="text-muted-foreground">
-                Mover{" "}
-                <span className="font-medium text-foreground">
-                  {reservaADesplazar.cliente || "WALK IN"} {reservaADesplazar.apellidos}
-                </span>{" "}
-                ({reservaADesplazar.hora.slice(0, 5)} · {reservaADesplazar.comensales} per) a la
-                mesa <span className="font-medium text-foreground">{choqueDesplazar.mesa.codigo}</span>{" "}
-                pisaría {choqueDesplazar.choques.length === 1 ? "esta reserva" : "estas reservas"}:
-              </p>
+              {/* Sólo lo imprescindible: a quién pisa y hasta qué hora. */}
               <div className="rounded-md border border-amber-500/40 bg-amber-500/5 divide-y divide-amber-500/20">
                 {choqueDesplazar.choques.map((c) => (
                   <div key={c.reservaId} className="px-3 py-2 flex items-center justify-between gap-2">
@@ -7389,7 +7381,7 @@ export function ReservasView() {
               {/* Avisos de aforo. No bloquean: se dicen para que la decisión
                   se tome sabiendo con qué se va a encontrar sala al montar. */}
               {(choqueDesplazar.avisoAforo || choqueDesplazar.avisoAforoOtra) && (
-                <div className="space-y-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
+                <div className="space-y-1.5">
                   {choqueDesplazar.avisoAforo && (
                     <p className="flex gap-1.5 text-amber-700 dark:text-amber-300">
                       <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
@@ -7400,7 +7392,7 @@ export function ReservasView() {
                     <p className="flex gap-1.5 text-amber-700 dark:text-amber-300">
                       <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
                       <span>
-                        Si se intercambian:{" "}
+                        Al intercambiar:{" "}
                         {choqueDesplazar.avisoAforoOtra.charAt(0).toLowerCase()}
                         {choqueDesplazar.avisoAforoOtra.slice(1)}
                       </span>
@@ -7409,41 +7401,11 @@ export function ReservasView() {
                 </div>
               )}
 
-              {/* Qué hace cada botón, con nombres reales: se lee antes de
-                  pulsar, que es cuando importa. */}
-              <p className="text-muted-foreground">
-                {choqueDesplazar.permutable ? (
-                  <>
-                    <span className="font-medium text-foreground">Intercambiar</span>{" "}
-                    cambia a las dos de sitio —{" "}
-                    {choqueDesplazar.permutable.cliente || "WALK IN"} pasa a{" "}
-                    {codigosDeMesa(reservaADesplazar.mesaCodigo).join(" + ")}.{" "}
-                    <span className="font-medium text-foreground">Mover igualmente</span>{" "}
-                    deja a las dos reservas sobre {choqueDesplazar.mesa.codigo}.
-                  </>
-                ) : (
-                  "Si la mueves igualmente, las dos quedarán sobre la misma mesa a la vez."
-                )}
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => setChoqueDesplazar(null)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={guardandoDesplazar}
-                  onClick={() => aplicarDesplazamiento(reservaADesplazar, choqueDesplazar.mesa)}
-                >
-                  Mover igualmente
-                </Button>
+              {/* Cada botón dice debajo, en una línea, qué deja sobre la mesa. */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
                 {choqueDesplazar.permutable && (
-                  <Button
-                    size="sm"
+                  <button
+                    type="button"
                     disabled={guardandoDesplazar}
                     onClick={() =>
                       permutarDesplazamiento(
@@ -7452,11 +7414,36 @@ export function ReservasView() {
                         choqueDesplazar.permutable!,
                       )
                     }
+                    className="rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2 text-white hover:bg-emerald-700 disabled:opacity-60"
                   >
-                    Intercambiar
-                  </Button>
+                    <span className="block font-medium">Intercambiar</span>
+                    <span className="block text-[11px] text-emerald-50/80">
+                      Cada una a la mesa de la otra
+                    </span>
+                  </button>
                 )}
+                <button
+                  type="button"
+                  disabled={guardandoDesplazar}
+                  onClick={() => aplicarDesplazamiento(reservaADesplazar, choqueDesplazar.mesa)}
+                  className={cn(
+                    "rounded-md border px-3 py-2 hover:bg-muted disabled:opacity-60",
+                    !choqueDesplazar.permutable && "col-span-2",
+                  )}
+                >
+                  <span className="block font-medium">Mover igualmente</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Las dos sobre {choqueDesplazar.mesa.codigo}
+                  </span>
+                </button>
               </div>
+              <button
+                type="button"
+                onClick={() => setChoqueDesplazar(null)}
+                className="w-full text-center text-muted-foreground hover:text-foreground"
+              >
+                Cancelar
+              </button>
             </div>
           )}
         </DialogContent>
