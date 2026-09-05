@@ -51,6 +51,14 @@ const AJUSTES_STORAGE_KEY = "balles_ajustes_v1";
  * para las server actions.
  */
 const EMPRESA_ACTIVA_SLUG_KEY = "bh_empresa_activa_slug";
+/**
+ * Marca de "ya intenté armar la cookie de empresa en esta pestaña".
+ *
+ * Va en sessionStorage y no en una ref porque tiene que SOBREVIVIR a la
+ * recarga: el bucle que tumbaba la app era precisamente rearmar → refrescar →
+ * montar de cero → la ref vuelve a false → rearmar otra vez.
+ */
+const REARMADO_COOKIE_KEY = "bh_empresa_rearmada";
 
 // Roles legados que detectamos en localStorage para descartar el snapshot
 // y volver a sembrar desde defaults / Supabase.
@@ -308,8 +316,34 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
           // hasta que el navegador tiraba la pestaña ("This page couldn't load").
           // Le tocaba a quien tiene DOS empresas, que es cuando la cookie puede
           // no casar con la empresa de la ficha.
-          if (elegida.dbId && !rearmadoCookie.current) {
+          // El `useRef` NO basta como guardia: solo sobrevive dentro de una
+          // misma carga. Si tras el refresh la cookie sigue sin casar, el
+          // navegador monta el contexto DE CERO, el ref vuelve a false y se
+          // rearma otra vez… y otra: recarga sola cada ~21 s hasta que la
+          // pestaña se cae ("No se ha podido cargar"). Le toca a quien tiene
+          // DOS empresas, que es justo cuando la cookie puede no casar.
+          //
+          // La marca va en sessionStorage, que SÍ sobrevive a la recarga y se
+          // borra al cerrar la pestaña. Un solo intento de rearmado por
+          // pestaña: si no funciona, se sigue con la empresa elegida en el
+          // cliente (que es la correcta) sin volver a refrescar. Peor es
+          // dejar al empleado fuera de la app.
+          let yaRearmado = rearmadoCookie.current;
+          if (!yaRearmado && typeof window !== "undefined") {
+            try {
+              yaRearmado =
+                window.sessionStorage.getItem(REARMADO_COOKIE_KEY) === elegida.dbId;
+            } catch {
+              // sessionStorage bloqueado (modo privado): queda el ref.
+            }
+          }
+          if (elegida.dbId && !yaRearmado) {
             rearmadoCookie.current = true;
+            try {
+              window.sessionStorage.setItem(REARMADO_COOKIE_KEY, elegida.dbId);
+            } catch {
+              // ignore
+            }
             // Copia local para que el cliente Supabase mande `x-bh-empresa`.
             setEmpresaActivaCliente(elegida.dbId);
             setEmpresaActiva(elegida.dbId)
