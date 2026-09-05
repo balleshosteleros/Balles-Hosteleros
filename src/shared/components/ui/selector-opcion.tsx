@@ -29,6 +29,11 @@ export interface OpcionSelector {
   nota?: string;
   /** Emoji o bandera delante del texto. */
   prefijo?: string;
+  /**
+   * Título de sección bajo el que se agrupa ("Comida", "Cena"). Las opciones
+   * se pintan en el orden recibido y la cabecera sale al cambiar de grupo.
+   */
+  grupo?: string;
 }
 
 export interface SelectorOpcionProps {
@@ -43,6 +48,8 @@ export interface SelectorOpcionProps {
   className?: string;
   /** Ancho del panel. Por defecto, el del propio disparador. */
   anchoPanel?: string;
+  /** Estilo del disparador: lo usa el borde teñido de marca al elegir. */
+  style?: React.CSSProperties;
   /** Color de la opción elegida. Sin él, negro. */
   colorMarca?: string | null;
   colorMarcaTexto?: string | null;
@@ -58,6 +65,7 @@ export function SelectorOpcion({
   placeholder = "Seleccione una opción",
   className,
   anchoPanel,
+  style,
   colorMarca,
   colorMarcaTexto,
   "aria-label": ariaLabel,
@@ -74,6 +82,7 @@ export function SelectorOpcion({
           type="button"
           disabled={disabled}
           aria-label={ariaLabel}
+          style={style}
           className={cn(
             "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 text-left text-sm text-zinc-900",
             "transition-colors hover:border-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -116,11 +125,18 @@ export function SelectorOpcion({
           } as React.CSSProperties
         }
       >
-        {opciones.map((o) => {
+        {opciones.map((o, i) => {
           const activa = o.value === value;
+          // Cabecera solo al cambiar de sección, no en cada opción.
+          const abreGrupo = !!o.grupo && o.grupo !== opciones[i - 1]?.grupo;
           return (
+            <React.Fragment key={o.value}>
+              {abreGrupo ? (
+                <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                  {o.grupo}
+                </p>
+              ) : null}
             <button
-              key={o.value}
               type="button"
               disabled={o.disabled}
               onClick={() => {
@@ -144,6 +160,7 @@ export function SelectorOpcion({
               </span>
               {activa ? <Check className="h-4 w-4 shrink-0" aria-hidden /> : null}
             </button>
+            </React.Fragment>
           );
         })}
       </PopoverContent>

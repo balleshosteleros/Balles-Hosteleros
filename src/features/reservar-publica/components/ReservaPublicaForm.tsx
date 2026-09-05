@@ -709,6 +709,7 @@ export function ReservaPublicaForm({
                 horaSeleccionada={hora}
                 onSelect={setHora}
                 accent={accent}
+                onAccent={onAccent}
                 onObligatoriosChange={setObligatorios}
                 horaPermitida={filtroHoraTicket}
               />
@@ -956,14 +957,14 @@ export function ReservaPublicaForm({
           {queFalta && (
             <p className="text-center text-xs text-amber-700 mt-2">{queFalta}</p>
           )}
+
+          {/* Justo bajo el botón: es la promesa que se lee al ir a pulsarlo.
+              Al pie de la página quedaba lejos y parecía el pie de la web. */}
+          <p className="text-center text-[11px] text-zinc-400">
+            Confirmación inmediata · {empresaNombre}
+          </p>
           </div>
         </form>
-
-        {/* Va justo debajo de la tarjeta: separado del todo parecía el pie
-            de la web, no la coletilla de la reserva. */}
-        <footer className="text-center mt-2 text-[11px] text-zinc-400">
-          <p>Confirmación inmediata · {empresaNombre}</p>
-        </footer>
       </div>
 
     </main>

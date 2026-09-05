@@ -10,15 +10,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SelectorOpcion } from "@/components/ui/selector-opcion";
+import { cn } from "@/lib/utils";
 import {
   listarDisponibilidadPublicaAction,
   type SlotPublico,
@@ -43,6 +36,8 @@ interface Props {
   horaSeleccionada: string | null;
   onSelect: (hora: string) => void;
   accent: string;
+  /** Color del texto sobre `accent`. */
+  onAccent?: string;
   /** Campos que la empresa exige además de los fijos (email / teléfono). */
   onObligatoriosChange?: (o: CamposObligatoriosPublico) => void;
   /**
@@ -61,6 +56,7 @@ export function SelectorDisponibilidad({
   onSelect,
   horaPermitida,
   accent,
+  onAccent = "#ffffff",
   onObligatoriosChange,
 }: Props) {
   const [slotsCrudos, setSlotsCrudos] = useState<SlotPublico[]>([]);
@@ -146,51 +142,40 @@ export function SelectorDisponibilidad({
 
   return (
     <div className="space-y-1.5">
-      <Select value={horaSeleccionada || undefined} onValueChange={onSelect}>
-        <SelectTrigger
-          className="h-12 rounded-xl border-zinc-200 bg-white text-base data-[placeholder]:text-zinc-400 sm:h-11 sm:text-sm"
-          style={horaSeleccionada ? { borderColor: accent } : undefined}
-        >
-          <SelectValue placeholder="Elige una hora" />
-        </SelectTrigger>
-        <SelectContent className="max-h-72">
-          {grupos.map((g) => (
-            <SelectGroup key={g.clave}>
-              <SelectLabel className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                {g.titulo}
-              </SelectLabel>
-              {g.items.map((s) => (
-                <SelectItem
-                  key={`${g.clave}-${s.hora}`}
-                  value={s.hora}
-                  disabled={!s.disponible}
-                  className="tabular-nums"
-                >
-                  {s.hora}
-                  {/*
-                    La cena cruza la medianoche: tras las 23:45 la lista sigue
-                    en 00:00, 00:15… y el número "se da la vuelta". Está bien
-                    ordenada, pero leída de corrido parece descolocada, y el
-                    cliente no sabe si esas horas son de esta noche o de la
-                    anterior. Con la coletilla se lee de un vistazo que son la
-                    madrugada siguiente, que es la misma noche de servicio.
-                  */}
-                  {esMadrugada(s.hora) ? (
-                    <span className="ml-2 text-xs text-zinc-500">
-                      (madrugada)
-                    </span>
-                  ) : null}
-                  {!s.disponible ? (
-                    <span className="ml-2 text-xs text-zinc-400">
-                      {s.motivo ?? "Completo"}
-                    </span>
-                  ) : null}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          ))}
-        </SelectContent>
-      </Select>
+      <SelectorOpcion
+        value={horaSeleccionada || ""}
+        onChange={onSelect}
+        placeholder="Elige una hora"
+        colorMarca={accent}
+        colorMarcaTexto={onAccent}
+        className={cn(
+          "h-12 rounded-xl border-zinc-200 bg-white text-base sm:h-11 sm:text-sm",
+          "tabular-nums",
+        )}
+        // El campo se tiñe del color de la empresa en cuanto hay hora elegida.
+        style={horaSeleccionada ? { borderColor: accent } : undefined}
+        opciones={grupos.flatMap((g) =>
+          g.items.map((s) => ({
+            value: s.hora,
+            label: s.hora,
+            grupo: g.titulo,
+            disabled: !s.disponible,
+            /*
+              La cena cruza la medianoche: tras las 23:45 la lista sigue en
+              00:00, 00:15… y el número "se da la vuelta". Está bien ordenada,
+              pero leída de corrido parece descolocada, y el cliente no sabe si
+              esas horas son de esta noche o de la anterior. Con la coletilla se
+              lee de un vistazo que son la madrugada siguiente, que es la misma
+              noche de servicio.
+            */
+            nota: !s.disponible
+              ? (s.motivo ?? "Completo")
+              : esMadrugada(s.hora)
+                ? "(madrugada)"
+                : undefined,
+          })),
+        )}
+      />
     </div>
   );
 }

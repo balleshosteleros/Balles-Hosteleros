@@ -7,6 +7,7 @@ import { es } from "date-fns/locale";
 
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SelectorOpcion } from "@/components/ui/selector-opcion";
 import { formatearFechaEs } from "@/shared/lib/fecha";
 
 /**
@@ -83,6 +84,9 @@ export function SelectorFecha({
   "aria-label": ariaLabel,
 }: SelectorFechaProps) {
   const [abierto, setAbierto] = React.useState(false);
+  // Mes que se está mostrando. Hace falta controlarlo para que los
+  // desplegables propios de mes y año puedan moverlo.
+  const [mesVisible, setMesVisible] = React.useState<Date | undefined>(undefined);
 
   const seleccionada = isoADate(value);
   const desde = isoADate(min);
@@ -162,9 +166,10 @@ export function SelectorFecha({
           // Con rango largo (nacimientos) el desplegable de año evita
           // recorrer el calendario mes a mes. Con rango corto no aporta y
           // ensucia: bastan las flechas.
-          captionLayout={conDesplegables ? "dropdown-buttons" : "buttons"}
-          fromYear={desde?.getFullYear()}
-          toYear={hasta?.getFullYear()}
+          // Los desplegables nativos de react-day-picker son `<select>` del
+          // sistema: se sustituyen por los nuestros en `components.Caption`.
+          month={mesVisible ?? mesInicial}
+          onMonthChange={setMesVisible}
           onSelect={(dia) => {
             if (!dia) return;
             onChange(dateAIso(dia));
@@ -222,9 +227,106 @@ export function SelectorFecha({
           components={{
             IconLeft: () => <ChevronLeft className="h-4 w-4" />,
             IconRight: () => <ChevronRight className="h-4 w-4" />,
+            // Cabecera con NUESTROS desplegables cuando el rango abarca años
+            // (nacimiento). Los del calendario son `<select>` del sistema:
+            // listas diminutas del navegador, incómodas de acertar.
+            ...(conDesplegables
+              ? {
+                  Caption: ({ displayMonth }: { displayMonth: Date }) => (
+                    <CabeceraMesAno
+                      mes={displayMonth}
+                      desde={desde}
+                      hasta={hasta}
+                      onCambio={setMesVisible}
+                      colorMarca={colorMarca}
+                      colorMarcaTexto={colorMarcaTexto}
+                    />
+                  ),
+                }
+              : {}),
           }}
         />
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Nombres de los meses en español, para el desplegable propio. */
+const MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+/**
+ * Cabecera del calendario con mes y año en NUESTROS desplegables.
+ *
+ * Los que trae react-day-picker son `<select>` nativos: listas del sistema,
+ * estrechas y difíciles de acertar cuando hay cien años que recorrer. Estos
+ * son los mismos que el resto del formulario, con el color de la empresa.
+ */
+function CabeceraMesAno({
+  mes,
+  desde,
+  hasta,
+  onCambio,
+  colorMarca,
+  colorMarcaTexto,
+}: {
+  mes: Date;
+  desde?: Date;
+  hasta?: Date;
+  onCambio: (d: Date) => void;
+  colorMarca?: string | null;
+  colorMarcaTexto?: string | null;
+}) {
+  const anoActual = mes.getFullYear();
+  const anoMin = desde?.getFullYear() ?? anoActual - 100;
+  const anoMax = hasta?.getFullYear() ?? anoActual;
+
+  // Años del más reciente al más antiguo: en una fecha de nacimiento se busca
+  // mucho más cerca de hoy que de hace un siglo.
+  const anos = React.useMemo(() => {
+    const lista: number[] = [];
+    for (let a = anoMax; a >= anoMin; a--) lista.push(a);
+    return lista;
+  }, [anoMin, anoMax]);
+
+  // Un mes fuera del rango no se ofrece (p. ej. los posteriores a hoy en el
+  // año en curso: nadie ha nacido el mes que viene).
+  const mesFueraDeRango = (i: number) => {
+    const primero = new Date(anoActual, i, 1);
+    const ultimo = new Date(anoActual, i + 1, 0);
+    if (desde && ultimo < desde) return true;
+    if (hasta && primero > hasta) return true;
+    return false;
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 px-1 pb-1 pt-1">
+      <SelectorOpcion
+        value={String(mes.getMonth())}
+        onChange={(v) => onCambio(new Date(anoActual, Number(v), 1))}
+        aria-label="Mes"
+        opciones={MESES.map((nombre, i) => ({
+          value: String(i),
+          label: nombre,
+          disabled: mesFueraDeRango(i),
+        }))}
+        anchoPanel="w-44"
+        colorMarca={colorMarca}
+        colorMarcaTexto={colorMarcaTexto}
+        className="h-9 flex-1"
+      />
+      <SelectorOpcion
+        value={String(anoActual)}
+        onChange={(v) => onCambio(new Date(Number(v), mes.getMonth(), 1))}
+        aria-label="Año"
+        opciones={anos.map((a) => ({ value: String(a), label: String(a) }))}
+        anchoPanel="w-32"
+        colorMarca={colorMarca}
+        colorMarcaTexto={colorMarcaTexto}
+        className="h-9 w-28 shrink-0"
+      />
+    </div>
   );
 }
