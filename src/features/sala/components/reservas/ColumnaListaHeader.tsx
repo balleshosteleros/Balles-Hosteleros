@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, ListFilter, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,14 @@ export type OrdenLista = {
   direccion: OrdenListaDireccion;
 } | null;
 
+/**
+ * Color del punto de una opción. Se admiten las dos formas que ya existen en
+ * Reservas sin obligar a convertir ninguna: los estados tienen su clase de
+ * Tailwind (`ESTADO_DOT_CLASS`) y las etiquetas un color libre en hexadecimal
+ * guardado por el usuario.
+ */
+export type ColorOpcion = { clase?: string; hex?: string } | null | undefined;
+
 export interface ColumnaListaHeaderProps {
   label: string;
   /** Sin campo, la columna es solo un rótulo (ni filtro ni orden). */
@@ -33,6 +41,13 @@ export interface ColumnaListaHeaderProps {
   opciones?: string[];
   seleccionadas?: string[];
   onSeleccionChange?: (valores: string[]) => void;
+  /**
+   * Punto de color de cada opción. Sin esto la columna filtra igual, solo que
+   * en blanco y negro: es para las columnas donde el color ES el dato —el
+   * estado y las etiquetas se reconocen en sala por su tono antes que por su
+   * nombre—, así que la casilla enseña el mismo punto que la fila.
+   */
+  colorOpcion?: (valor: string) => ColorOpcion;
   ordenable?: boolean;
   orden?: OrdenLista;
   onOrdenChange?: (orden: OrdenLista) => void;
@@ -40,6 +55,14 @@ export interface ColumnaListaHeaderProps {
   ordenLabelDesc?: string;
   align?: "left" | "center";
   className?: string;
+  /**
+   * Clases del panel. La lista vive dentro del ámbito de tema de Reservas
+   * (`.sala-tema` / `.sala-oscuro`), pero el panel se pinta en un PORTAL
+   * colgado de <body>, fuera de ese contenedor: sin repetirle las clases
+   * saldría con el tema CLARO del resto del software aunque la sala esté en
+   * oscuro. Es el mismo apaño que ya llevan los diálogos de Reservas.
+   */
+  panelClassName?: string;
 }
 
 export function ColumnaListaHeader({
@@ -48,6 +71,7 @@ export function ColumnaListaHeader({
   opciones = [],
   seleccionadas = [],
   onSeleccionChange,
+  colorOpcion,
   ordenable = false,
   orden = null,
   onOrdenChange,
@@ -55,6 +79,7 @@ export function ColumnaListaHeader({
   ordenLabelDesc = "Z→A",
   align = "left",
   className,
+  panelClassName,
 }: ColumnaListaHeaderProps) {
   const [busqueda, setBusqueda] = useState("");
 
@@ -131,9 +156,18 @@ export function ColumnaListaHeader({
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-60 p-2" align="start">
+      <PopoverContent
+        // `text-foreground` explícito: dentro del portal el texto se hereda del
+        // <body>, que es del tema claro, y en oscuro salía casi negro.
+        className={cn(
+          "w-[15rem] overflow-hidden rounded-xl border-border/60 bg-popover/95 p-0 text-foreground shadow-xl backdrop-blur-sm",
+          panelClassName,
+        )}
+        align="start"
+        sideOffset={6}
+      >
         {tieneOrden && (
-          <div className="mb-2 flex items-center gap-1 border-b pb-2">
+          <div className="flex items-center gap-1 border-b border-border/60 p-1.5">
             <button
               type="button"
               onClick={() =>
@@ -144,7 +178,7 @@ export function ColumnaListaHeader({
                 )
               }
               className={cn(
-                "inline-flex flex-1 items-center justify-center gap-1 rounded px-2 py-1 text-xs transition-colors hover:bg-muted",
+                "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium normal-case tracking-normal transition-colors hover:bg-muted",
                 ordenActivo &&
                   orden!.direccion === "asc" &&
                   "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -162,7 +196,7 @@ export function ColumnaListaHeader({
                 )
               }
               className={cn(
-                "inline-flex flex-1 items-center justify-center gap-1 rounded px-2 py-1 text-xs transition-colors hover:bg-muted",
+                "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium normal-case tracking-normal transition-colors hover:bg-muted",
                 ordenActivo &&
                   orden!.direccion === "desc" &&
                   "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -174,20 +208,20 @@ export function ColumnaListaHeader({
         )}
 
         {tieneFiltro && (
-          <div className="space-y-2">
+          <div className="p-1.5">
             {opciones.length > 6 && (
-              <div className="relative">
-                <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <div className="relative mb-1.5">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   placeholder="Buscar..."
-                  className="h-7 pl-7 text-xs"
+                  className="h-8 rounded-lg pl-8 text-xs normal-case tracking-normal"
                 />
               </div>
             )}
 
-            <div className="flex items-center justify-between px-1 text-[11px] normal-case tracking-normal">
+            <div className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[10px] font-medium normal-case tracking-normal">
               <span className="text-muted-foreground">
                 {filtroActivo
                   ? `${seleccionadas.length} de ${opciones.length}`
@@ -197,30 +231,62 @@ export function ColumnaListaHeader({
                 <button
                   type="button"
                   onClick={() => onSeleccionChange!([])}
-                  className="text-primary hover:underline"
+                  className="rounded px-1 py-0.5 text-primary transition-colors hover:bg-primary/10"
                 >
                   Limpiar
                 </button>
               )}
             </div>
 
-            <div className="max-h-52 space-y-0.5 overflow-y-auto pr-1">
-              {opcionesVisibles.map((opt) => (
-                <label
-                  key={opt}
-                  className="flex cursor-pointer select-none items-center gap-2 rounded px-1.5 py-1 text-sm font-normal normal-case tracking-normal hover:bg-muted"
-                >
-                  <input
-                    type="checkbox"
-                    checked={!filtroActivo || seleccionadas.includes(opt)}
-                    onChange={(e) => alternar(opt, e.target.checked)}
-                    className="rounded accent-primary"
-                  />
-                  <span className="truncate">{opt}</span>
-                </label>
-              ))}
+            <div className="max-h-56 space-y-px overflow-y-auto pr-0.5">
+              {opcionesVisibles.map((opt) => {
+                const marcado = !filtroActivo || seleccionadas.includes(opt);
+                const color = colorOpcion?.(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={marcado}
+                    onClick={() => alternar(opt, !marcado)}
+                    className={cn(
+                      "flex w-full cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] font-normal normal-case tracking-normal transition-colors hover:bg-muted",
+                      !marcado && "text-muted-foreground",
+                    )}
+                  >
+                    {/* Casilla propia en vez del checkbox del navegador: el
+                        nativo no se puede redondear ni ajustar de tamaño y en
+                        oscuro se pintaba blanco de sistema. */}
+                    <span
+                      className={cn(
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border transition-colors",
+                        marcado
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-muted-foreground/40 bg-transparent",
+                      )}
+                    >
+                      {marcado && <Check className="h-3 w-3" strokeWidth={3} />}
+                    </span>
+                    {/* Punto del color con el que la fila enseña ese valor. */}
+                    {color && (
+                      <span
+                        className={cn(
+                          // Sin borde: el punto se lee por su color y cualquier
+                          // anillo fijo falla en uno de los dos temas —en
+                          // oscuro un trazo negro hunde los tonos ya apagados
+                          // (CANCELADA), y en claro uno blanco no se ve.
+                          "h-2.5 w-2.5 shrink-0 rounded-full",
+                          color.clase,
+                        )}
+                        style={color.hex ? { backgroundColor: color.hex } : undefined}
+                      />
+                    )}
+                    <span className="truncate">{opt}</span>
+                  </button>
+                );
+              })}
               {opcionesVisibles.length === 0 && (
-                <p className="py-2 text-center text-xs normal-case tracking-normal text-muted-foreground">
+                <p className="py-3 text-center text-xs normal-case tracking-normal text-muted-foreground">
                   Sin opciones
                 </p>
               )}

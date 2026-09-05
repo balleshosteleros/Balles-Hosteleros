@@ -4274,6 +4274,46 @@ export function ReservasView() {
     ],
   );
 
+  /**
+   * Color del punto de cada opción del filtro de columna.
+   *
+   * Solo lo llevan Estado y Etiquetas, que son las dos columnas donde el color
+   * ES el dato: en sala se reconoce una cancelada por el rojo antes que por
+   * leer la palabra, así que el desplegable tiene que enseñar el MISMO punto
+   * que la fila. Se resuelve del texto de la opción a su valor porque las
+   * opciones del filtro son ya el rótulo que se lee en la celda.
+   */
+  const colorOpcionEstado = useCallback((valor: string) => {
+    const estado = ESTADOS_RESERVA.find(
+      (e) => ESTADO_RESERVA_LABELS[e] === valor,
+    );
+    return estado ? { clase: ESTADO_DOT_CLASS[estado] } : null;
+  }, []);
+
+  /**
+   * Las etiquetas no tienen paleta fija: cada una guarda su color, así que el
+   * punto se pinta con ese hexadecimal. El "—" de las reservas sin etiqueta no
+   * es una etiqueta y por eso no lleva punto.
+   */
+  const colorOpcionEtiqueta = useCallback(
+    (valor: string) => {
+      for (const etqs of Object.values(etiquetasPorReserva)) {
+        const e = etqs.find((x) => x.nombre === valor);
+        if (e?.color) return { hex: e.color };
+      }
+      return null;
+    },
+    [etiquetasPorReserva],
+  );
+
+  /**
+   * Clases de tema para los desplegables de las cabeceras. Se pintan en un
+   * portal colgado de <body>, fuera del contenedor de la vista, así que sin
+   * repetírselas saldrían con el tema claro del resto del software aunque la
+   * sala esté en oscuro.
+   */
+  const panelTemaSala = cn("sala-tema", esOscuro && "sala-oscuro");
+
   // Mesas de la SALA activa: el canvas recibía todas las del local mientras las
   // zonas sí venían filtradas, así que dos salas con una zona del mismo nombre
   // mezclaban sus mesas en el plano.
@@ -5445,6 +5485,7 @@ export function ReservasView() {
               seleccionadas={filtrosColumna.hora ?? []}
               onSeleccionChange={(v) => setFiltroColumna("hora", v)}
               ordenable
+              panelClassName={panelTemaSala}
               orden={ordenColumna}
               onOrdenChange={setOrdenColumna}
               ordenLabelAsc="Antes"
@@ -5460,6 +5501,7 @@ export function ReservasView() {
                 seleccionadas={filtrosColumna.mesa ?? []}
                 onSeleccionChange={(v) => setFiltroColumna("mesa", v)}
                 ordenable
+                panelClassName={panelTemaSala}
                 orden={ordenColumna}
                 onOrdenChange={setOrdenColumna}
               />
@@ -5470,6 +5512,7 @@ export function ReservasView() {
                 seleccionadas={filtrosColumna.zona ?? []}
                 onSeleccionChange={(v) => setFiltroColumna("zona", v)}
                 ordenable
+                panelClassName={panelTemaSala}
                 orden={ordenColumna}
                 onOrdenChange={setOrdenColumna}
               />
@@ -5481,6 +5524,7 @@ export function ReservasView() {
               seleccionadas={filtrosColumna.nombre ?? []}
               onSeleccionChange={(v) => setFiltroColumna("nombre", v)}
               ordenable
+              panelClassName={panelTemaSala}
               orden={ordenColumna}
               onOrdenChange={setOrdenColumna}
             />
@@ -5491,6 +5535,7 @@ export function ReservasView() {
               seleccionadas={filtrosColumna.comensales ?? []}
               onSeleccionChange={(v) => setFiltroColumna("comensales", v)}
               ordenable
+              panelClassName={panelTemaSala}
               orden={ordenColumna}
               onOrdenChange={setOrdenColumna}
               ordenLabelAsc="Menos"
@@ -5504,6 +5549,7 @@ export function ReservasView() {
               seleccionadas={filtrosColumna.origen ?? []}
               onSeleccionChange={(v) => setFiltroColumna("origen", v)}
               ordenable
+              panelClassName={panelTemaSala}
               orden={ordenColumna}
               onOrdenChange={setOrdenColumna}
             />
@@ -5514,6 +5560,7 @@ export function ReservasView() {
               seleccionadas={filtrosColumna.tipo ?? []}
               onSeleccionChange={(v) => setFiltroColumna("tipo", v)}
               ordenable
+              panelClassName={panelTemaSala}
               orden={ordenColumna}
               onOrdenChange={setOrdenColumna}
             />
@@ -5523,7 +5570,9 @@ export function ReservasView() {
               opciones={opcionesColumna("estado")}
               seleccionadas={filtrosColumna.estado ?? []}
               onSeleccionChange={(v) => setFiltroColumna("estado", v)}
+              colorOpcion={colorOpcionEstado}
               ordenable
+              panelClassName={panelTemaSala}
               orden={ordenColumna}
               onOrdenChange={setOrdenColumna}
             />
@@ -5533,7 +5582,9 @@ export function ReservasView() {
               opciones={opcionesColumna("etiquetas")}
               seleccionadas={filtrosColumna.etiquetas ?? []}
               onSeleccionChange={(v) => setFiltroColumna("etiquetas", v)}
+              colorOpcion={colorOpcionEtiqueta}
               ordenable
+              panelClassName={panelTemaSala}
               orden={ordenColumna}
               onOrdenChange={setOrdenColumna}
             />
