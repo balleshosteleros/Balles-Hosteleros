@@ -11,6 +11,16 @@ import type { ToggleLikeResult } from "../types";
 
 const DEVICE_ID_RE = /^[a-zA-Z0-9_-]{8,128}$/;
 
+/**
+ * Lo que ve el comensal: el arranque configurado más los votos reales.
+ * `likes_base` no es un voto —no se guarda en `carta_item_likes`— así que las
+ * estadísticas siguen contando solo lo que ha pulsado gente de verdad.
+ */
+function totalVisible(item: { likes_count: number; likes_base?: number | null } | null): number {
+  if (!item) return 0;
+  return (item.likes_base ?? 0) + (item.likes_count ?? 0);
+}
+
 async function obtenerIpHash(): Promise<string | null> {
   const h = await headers();
   const fwd = h.get("x-forwarded-for");
@@ -49,13 +59,13 @@ export async function toggleLike(itemId: string, deviceId: string): Promise<Togg
       }
       const { data: item } = await supabase
         .from("carta_items")
-        .select("likes_count")
+        .select("likes_count, likes_base")
         .eq("id", itemId)
         .maybeSingle();
       return {
         ok: true,
         liked: false,
-        likesCount: (item as { likes_count: number } | null)?.likes_count ?? 0,
+        likesCount: totalVisible(item),
       };
     }
 
@@ -76,13 +86,13 @@ export async function toggleLike(itemId: string, deviceId: string): Promise<Togg
         // race: ya existe
         const { data: item } = await supabase
           .from("carta_items")
-          .select("likes_count")
+          .select("likes_count, likes_base")
           .eq("id", itemId)
           .maybeSingle();
         return {
           ok: true,
           liked: true,
-          likesCount: (item as { likes_count: number } | null)?.likes_count ?? 0,
+          likesCount: totalVisible(item),
         };
       }
       console.error("[like] ins:", insErr.message);
@@ -91,14 +101,14 @@ export async function toggleLike(itemId: string, deviceId: string): Promise<Togg
 
     const { data: item } = await supabase
       .from("carta_items")
-      .select("likes_count")
+      .select("likes_count, likes_base")
       .eq("id", itemId)
       .maybeSingle();
 
     return {
       ok: true,
       liked: true,
-      likesCount: (item as { likes_count: number } | null)?.likes_count ?? 0,
+      likesCount: totalVisible(item),
     };
   } catch (err) {
     console.error("[like] fatal:", err);

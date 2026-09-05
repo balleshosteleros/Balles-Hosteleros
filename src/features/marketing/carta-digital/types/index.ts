@@ -63,6 +63,11 @@ export type CartaItem = {
   visible: boolean;
   destacado: boolean;
   likes_count: number;
+  /**
+   * Arranque configurable que se SUMA al contador visible. No es un voto: las
+   * estadísticas se calculan solo sobre los "me gusta" reales.
+   */
+  likes_base: number;
   created_at: string;
   updated_at: string;
 };

@@ -27,11 +27,14 @@ export function ItemCard({
   likes,
   liked,
   onOpen,
+  onLike,
 }: {
   item: CartaItem;
   likes: number;
   liked: boolean;
   onOpen: () => void;
+  /** Votar desde la propia tarjeta, sin abrir la ficha. */
+  onLike?: () => void;
 }) {
   // Precio 0 = el plato no se cobra aparte (va dentro de un menú cerrado).
   // Pintar "0,00 €" hacía pensar que era gratis; mejor no pintar nada y dejar
@@ -44,7 +47,17 @@ export function ItemCard({
       type="button"
       onClick={onOpen}
       className="group relative flex w-full flex-col overflow-hidden rounded-2xl text-left transition-all duration-500 ease-out hover:-translate-y-1 active:scale-[0.99]"
-      style={{ backgroundColor: "var(--carta-superficie)" }}
+      style={{
+        backgroundColor: "var(--carta-superficie)",
+        // Los más vendidos llevan filete del color de marca: en una rejilla de
+        // fotos, la estrella sola se pierde; el borde recorta la tarjeta entera.
+        border: item.destacado
+          ? "1.5px solid color-mix(in srgb, var(--carta-acento) 62%, transparent)"
+          : "1.5px solid transparent",
+        boxShadow: item.destacado
+          ? "0 0 0 1px color-mix(in srgb, var(--carta-acento) 18%, transparent)"
+          : undefined,
+      }}
     >
       {/* ── Foto ────────────────────────────────────────────────────── */}
       <div
@@ -96,23 +109,35 @@ export function ItemCard({
         ) : null}
 
         {item.destacado ? (
+          // Estrella + rótulo: la estrella sola no dice por qué está ahí.
           <span
-            className="absolute left-2.5 top-2.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/35 shadow-[0_2px_8px_rgba(0,0,0,0.4)] ring-1 ring-white/25 backdrop-blur-md"
-            title="Plato destacado"
+            className="absolute left-2.5 top-2.5 inline-flex items-center gap-1.5 rounded-full bg-black/45 py-1 pl-1.5 pr-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.4)] ring-1 ring-white/25 backdrop-blur-md"
+            title="Uno de los más pedidos"
           >
             <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" strokeWidth={1.5} />
+            <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-white">
+              Best seller
+            </span>
           </span>
         ) : null}
 
-        {likes > 0 || liked ? (
-          <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/35 px-2 py-1 shadow-[0_2px_8px_rgba(0,0,0,0.35)] ring-1 ring-white/20 backdrop-blur-md">
+        {/* Corazón SIEMPRE visible, no solo cuando ya hay votos: si aparece al
+            recibir el primero, nadie sabe que se puede votar y no llega nunca.
+            El contador va al lado para que se vea de un vistazo qué gusta. */}
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={liked ? "Quitar me gusta" : "Me gusta"}
+          onClick={(e) => { e.stopPropagation(); onLike?.(); }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onLike?.(); } }}
+          className="absolute right-2.5 top-2.5 inline-flex cursor-pointer items-center gap-1 rounded-full bg-black/35 px-2 py-1 shadow-[0_2px_8px_rgba(0,0,0,0.35)] ring-1 ring-white/20 backdrop-blur-md transition-transform active:scale-90"
+        >
             <Heart
-              className={`h-3 w-3 text-white ${liked ? "fill-current" : ""}`}
+              className={`h-3 w-3 transition-colors ${liked ? "fill-current text-rose-400" : "text-white"}`}
               strokeWidth={2}
             />
             <span className="text-[10px] font-semibold tabular-nums text-white">{likes}</span>
-          </span>
-        ) : null}
+        </span>
       </div>
 
       {/* ── Texto ───────────────────────────────────────────────────── */}

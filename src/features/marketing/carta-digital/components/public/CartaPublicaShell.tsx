@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CartaPublica, CartaItem, Alergeno, FamiliaCarta } from "../../types";
 import { buildCartaTheme, themeToCssVars, googleFontsHref } from "../../lib/theme";
 import { useDeviceId } from "../../hooks/useDeviceId";
-import { getLikesDelDevice } from "../../actions/like-actions";
+import { getLikesDelDevice, toggleLike } from "../../actions/like-actions";
 import { useLikesRealtime } from "../../hooks/useLikesRealtime";
 import { HeaderRestaurante } from "./HeaderRestaurante";
 import { CategoriaSidebar } from "./CategoriaSidebar";
@@ -107,6 +107,19 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
     }
   };
 
+  /**
+   * Votar desde la propia tarjeta, sin abrir la ficha. Se pinta el corazón al
+   * instante y se corrige con lo que responda el servidor: esperar a la red
+   * para un gesto tan pequeño hace que parezca que no ha funcionado.
+   */
+  const handleLikeRapido = async (item: CartaItem) => {
+    if (!deviceId) return;
+    const yaEstaba = likedSet.has(item.id);
+    handleToggleLocalLike(item.id, !yaEstaba);
+    const r = await toggleLike(item.id, deviceId);
+    if (!r.ok) handleToggleLocalLike(item.id, yaEstaba);
+  };
+
   const handleToggleLocalLike = (itemId: string, liked: boolean) => {
     setLikedSet((prev) => {
       const next = new Set(prev);
@@ -147,6 +160,7 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
                 counters={counters}
                 likedSet={likedSet}
                 onOpen={setOpenItem}
+                onLike={handleLikeRapido}
               />
             </div>
           </div>

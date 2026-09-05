@@ -43,6 +43,7 @@ interface ItemRow {
   visible: boolean;
   destacado: boolean;
   likes_count: number;
+  likes_base: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -125,6 +126,7 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
     visible: r.visible,
     destacado: r.destacado,
     likes_count: r.likes_count,
+    likes_base: r.likes_base ?? 0,
     created_at: r.created_at,
     updated_at: r.updated_at,
   }));

@@ -20,7 +20,8 @@ export const ItemList = forwardRef<HTMLDivElement, {
   counters: Record<string, number>;
   likedSet: Set<string>;
   onOpen: (item: CartaItem) => void;
-}>(function ItemList({ categorias, filtroExcluidos, counters, likedSet, onOpen }, ref) {
+  onLike: (item: CartaItem) => void;
+}>(function ItemList({ categorias, filtroExcluidos, counters, likedSet, onOpen, onLike }, ref) {
   return (
     <div ref={ref} className="flex flex-col gap-14">
       {categorias.map((cat) => {
@@ -41,9 +42,10 @@ export const ItemList = forwardRef<HTMLDivElement, {
                   <ItemCard
                     key={item.id}
                     item={item}
-                    likes={counters[item.id] ?? item.likes_count}
+                    likes={counters[item.id] ?? item.likes_base + item.likes_count}
                     liked={likedSet.has(item.id)}
                     onOpen={() => onOpen(item)}
+                    onLike={() => onLike(item)}
                   />
                 ))}
               </div>
