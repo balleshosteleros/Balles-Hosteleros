@@ -85,10 +85,21 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
     startTransition(() => router.refresh());
   });
 
+  // `cargada` distingue "aún no sé" de "ya sé y no hay horario". Sin esta
+  // marca, un fallo al leer la ventana dejaba `ventana` en null y el botón se
+  // quedaba VERDE para siempre (la regla "mientras carga no se apaga" no
+  // llegaba a caducar nunca). En la duda es mejor apagarlo: el servidor va a
+  // rechazar igual, y un botón verde que falla al pulsarlo engaña más.
+  const [ventanaCargada, setVentanaCargada] = useState(false);
   const cargarVentana = useCallback(() => {
-    getMiVentanaFichajeHoy().then((v) => {
-      if (v.ok) setVentana(v);
-    });
+    getMiVentanaFichajeHoy()
+      .then((v) => {
+        // `ok:false` es no-poder-saber (sin sesión, error de consulta): se trata
+        // como "sin horario", que es lo que el servidor aplicará de todas formas.
+        setVentana(v.ok ? v : null);
+      })
+      .catch(() => setVentana(null))
+      .finally(() => setVentanaCargada(true));
   }, []);
 
   useEffect(() => {
@@ -133,7 +144,11 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
   const motivoApagado: "sin-turno" | "fuera-de-turno" | null = (() => {
     // Mientras carga no se apaga: apagar y encender a los 300 ms es peor que
     // esperar. Una vez cerrada la jornada tampoco aplica (el botón ya es gris).
-    if (!ventana || estado === "completado") return null;
+    if (estado === "completado") return null;
+    // Aún no se sabe: no se apaga (parpadear a gris y volver es peor).
+    if (!ventanaCargada) return null;
+    // Ya se sabe, y no hay ventana que valga: sin horario.
+    if (!ventana) return "sin-turno";
     // Salir siempre se puede: quien está dentro tiene que poder cerrar, aunque
     // se le haya pasado la hora (si no, la jornada queda abierta para siempre).
     if (estado === "trabajando" || estado === "pausa") return null;
