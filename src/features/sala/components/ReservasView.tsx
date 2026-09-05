@@ -85,7 +85,7 @@ import {
   componerTelefono,
   paisDeTelefono,
 } from "@/features/sala/data/prefijos-telefono";
-import { ReservaEstadoBadge, ReservaEstadoDot } from "@/features/sala/components/reservas/ReservaEstadoBadge";
+import { ReservaEstadoDot } from "@/features/sala/components/reservas/ReservaEstadoBadge";
 import { EtiquetaChip } from "@/features/sala/components/reservas/config/EtiquetaChip";
 import {
   listEtiquetasEfectivasDeReservas,
@@ -423,32 +423,6 @@ function StatusDot({ estado }: { estado: EstadoReserva }) {
         {ESTADO_RESERVA_LABELS[estado]}
       </span>
     </span>
-  );
-}
-
-function Field({
-  label,
-  children,
-  compacto,
-}: {
-  label: string;
-  children: React.ReactNode;
-  /** Alineado con un campo de 28 px de alto y en letra pequeña, para las filas
-      donde el dato va al lado de un desplegable y no debe pesar más que él. */
-  compacto?: boolean;
-}) {
-  return (
-    <div>
-      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</Label>
-      <p
-        className={cn(
-          "font-medium",
-          compacto ? "flex h-7 items-center truncate text-xs" : "text-sm",
-        )}
-      >
-        {children}
-      </p>
-    </div>
   );
 }
 
@@ -3301,6 +3275,17 @@ export function ReservasView() {
    */
   const [reservasPorCliente, setReservasPorCliente] = useState<Record<string, number>>({});
   const [guardandoDuracion, setGuardandoDuracion] = useState(false);
+  /**
+   * Turno y zona editables desde la ficha.
+   *
+   * Los dos SALEN SOLOS —el turno de la hora, la zona de la mesa— y en el 99 %
+   * de las reservas eso acierta. Pero sala necesita poder corregirlos: una
+   * comida que se alarga hasta la cena, o un grupo al que se le cambia de zona
+   * sin moverle todavia la mesa. Antes eran texto fijo y la unica salida era
+   * borrar la reserva y rehacerla.
+   */
+  const [guardandoTurno, setGuardandoTurno] = useState(false);
+  const [guardandoZona, setGuardandoZona] = useState(false);
   // Fecha y hora editables desde la ficha. Cambiar la hora recalcula el turno
   // en el servidor (y con el, en que mapa sale la reserva), asi que aqui solo
   // se manda el dato nuevo y se recarga.
@@ -4817,6 +4802,68 @@ export function ReservasView() {
   };
 
   /**
+   * Cambia el TURNO de la reserva a mano.
+   *
+   * Normalmente lo pone la hora, y se deja en paz. Se toca cuando la hora cae
+   * en la frontera y el local sabe mejor que la regla de que servicio es esa
+   * mesa: una comida de sobremesa larga que ya cuenta como cena. Al guardar se
+   * recarga el dia porque la reserva cambia de mapa.
+   */
+  const guardarTurno = async (id: string, valor: TurnoReserva) => {
+    if (valor === selectedReserva?.turno) return;
+
+    setGuardandoTurno(true);
+    const res = await updateReserva(id, { turno: valor });
+    setGuardandoTurno(false);
+
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo cambiar el turno.");
+      return;
+    }
+
+    setSelectedReserva((prev) =>
+      prev && prev.id === id ? { ...prev, turno: valor } : prev,
+    );
+    setActividadVersion((v) => v + 1);
+    toast.success(valor === "CENA" ? "Pasa a cena" : "Pasa a comida");
+    void loadReservas(fecha);
+  };
+
+  /**
+   * Cambia la ZONA de la reserva a mano.
+   *
+   * La zona sale de la mesa, asi que cambiarla NO mueve a nadie de sitio: sirve
+   * para las reservas que aun no tienen mesa, donde dice en que parte del local
+   * se les quiere sentar. Si la reserva ya tiene mesa, el servidor vuelve a
+   * derivar la zona de esa mesa en cuanto se toque, y manda la mesa.
+   */
+  const guardarZona = async (id: string, valor: string) => {
+    if (valor === (selectedReserva?.zona ?? "")) return;
+
+    setGuardandoZona(true);
+    const res = await updateReserva(id, { zona: valor });
+    setGuardandoZona(false);
+
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo cambiar la zona.");
+      return;
+    }
+
+    // `Reserva.zona` conserva el enum antiguo de zonas fijas, pero las zonas
+    // reales son las del catalogo de la empresa y llevan su propio id. El dato
+    // que manda es el del servidor —que ya lo ha guardado—, aqui solo se
+    // refleja para que la ficha no siga enseñando la zona vieja.
+    setSelectedReserva((prev) =>
+      prev && prev.id === id
+        ? { ...prev, zona: valor as Reserva["zona"] }
+        : prev,
+    );
+    setActividadVersion((v) => v + 1);
+    toast.success(`Zona: ${zonaLabel(valor)}`);
+    void loadReservas(fecha);
+  };
+
+  /**
    * Guarda los datos del cliente de la ficha. Un solo botón para los cuatro
    * campos, y el cambio se propaga a la ficha del cliente y a todas sus
    * reservas: el mismo cliente no puede quedar con dos teléfonos distintos.
@@ -6295,6 +6342,36 @@ export function ReservasView() {
                       marcha ("vienen dos más", "llegan media hora tarde"), así
                       que van juntos y en pequeño arriba del todo, en vez de
                       repartidos por la ficha con la duración al final. */}
+                  {/* ESTADO. Es el dato que más se toca de una reserva —llega,
+                      se sienta, no aparece— así que va ARRIBA con el resto, no
+                      en una rejilla de nueve botones al final de la ficha que
+                      obligaba a bajar cada vez. Desplegable: los nueve estados
+                      caben en una línea y se ve de un vistazo en cuál está. */}
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Estado
+                    </Label>
+                    <Select
+                      value={selectedReserva.estado}
+                      onValueChange={(v) =>
+                        cambiarEstadoReserva(selectedReserva.id, v as EstadoReserva)
+                      }
+                    >
+                      <SelectTrigger className="h-7 px-1.5 text-xs font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ESTADOS_RESERVA.map((e) => (
+                          <SelectItem key={e} value={e}>
+                            <span className="flex items-center gap-1.5">
+                              <ReservaEstadoDot estado={e} className="h-2 w-2" />
+                              {ESTADO_RESERVA_LABELS[e]}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="col-span-2 grid grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.9fr)_minmax(0,0.9fr)] items-start gap-2">
                   {/* Fecha y hora editables: mover una reserva era el caso
                       más común y no se podía hacer desde aquí. */}
@@ -6432,16 +6509,67 @@ export function ReservasView() {
                       justo debajo del cuándo. Turno y zona no se tocan (salen
                       de la hora y de la mesa), así que van en pequeño y le
                       dejan el sitio a la mesa, que sí se cambia. */}
-                  <div className="col-span-2 grid grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)_minmax(0,1.5fr)] items-start gap-2">
-                    {/* El turno NO se elige: sale de la hora. Se enseña para
-                        que se vea en qué mapa cae, pero no es un campo que se
-                        toque. */}
-                    <Field label="Turno" compacto>
-                      {selectedReserva.turno === "CENA" ? "Cena" : "Comida"}
-                    </Field>
-                    <Field label="Zona" compacto>
-                      {zonaLabel(selectedReserva.zona ? String(selectedReserva.zona) : null)}
-                    </Field>
+                  <div className="col-span-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-start gap-2">
+                    {/* Turno y zona SE PUEDEN CAMBIAR. Los dos salen solos —el
+                        turno de la hora, la zona de la mesa— y casi siempre
+                        aciertan, pero sala tiene que poder corregirlos sin
+                        rehacer la reserva: una comida que se alarga y ya es
+                        cena, o decir en qué parte del local se quiere sentar a
+                        alguien que aún no tiene mesa. */}
+                    <div className="min-w-0">
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Turno
+                      </Label>
+                      <Select
+                        value={selectedReserva.turno === "CENA" ? "CENA" : "COMIDA"}
+                        disabled={guardandoTurno}
+                        onValueChange={(v) =>
+                          guardarTurno(selectedReserva.id, v as TurnoReserva)
+                        }
+                      >
+                        <SelectTrigger className="h-7 px-1.5 text-xs font-medium">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="COMIDA">Comida</SelectItem>
+                          <SelectItem value="CENA">Cena</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="min-w-0">
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Zona
+                      </Label>
+                      <Select
+                        value={selectedReserva.zona ? String(selectedReserva.zona) : ""}
+                        disabled={guardandoZona || zonasSalaActual.length === 0}
+                        onValueChange={(v) => guardarZona(selectedReserva.id, v)}
+                      >
+                        <SelectTrigger className="h-7 px-1.5 text-xs font-medium">
+                          <SelectValue placeholder="Sin zona" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {/* La zona guardada puede no estar en la sala que se
+                              está mirando (reserva de otro salón): se añade a
+                              mano para que la ficha no la enseñe vacía. */}
+                          {(() => {
+                            const zonaActual = selectedReserva.zona
+                              ? String(selectedReserva.zona)
+                              : "";
+                            const ids = zonasSalaActual.map((z) => z.id);
+                            const todas =
+                              zonaActual && !ids.includes(zonaActual)
+                                ? [zonaActual, ...ids]
+                                : ids;
+                            return todas.map((z) => (
+                              <SelectItem key={z} value={z}>
+                                {zonaLabel(z)}
+                              </SelectItem>
+                            ));
+                          })()}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   {/* Mesa EDITABLE. Antes era solo lectura y para moverla
                       había que abrir el salón, aunque el cambio fuese "pásala
                       a la 12". El desplegable trae todas las mesas del local
@@ -6460,8 +6588,12 @@ export function ReservasView() {
                         ir al salón. La unión llevaba el botón a lo ancho
                         debajo, así que la ficha se veía distinta según la
                         reserva que abrieras. */}
-                    <div className="flex items-start gap-2">
-                      <div className="min-w-0 flex-1">
+                    {/* El boton del salon NO resta ancho: va superpuesto al
+                        borde derecho de la celda. Antes se llevaba su parte de
+                        la fila y el desplegable de la mesa quedaba mas estrecho
+                        que los de arriba, asi que la columna no cuadraba. */}
+                    <div className="relative">
+                      <div className="min-w-0 pr-9">
                         {esReservaUnion ? (
                           <p className="flex h-8 items-center gap-1.5 text-sm font-medium">
                             <span className="truncate">
@@ -6506,7 +6638,7 @@ export function ReservasView() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="size-7 shrink-0 p-0"
+                        className="absolute right-0 top-0 size-7 shrink-0 p-0"
                         title="Modificar las mesas de la reserva"
                         aria-label="Modificar las mesas de la reserva"
                         onClick={() => abrirEditorMesas(selectedReserva)}
@@ -6516,10 +6648,6 @@ export function ReservasView() {
                     </div>
                   </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label className="text-muted-foreground text-xs">Estado actual</Label>
-                  <ReservaEstadoBadge estado={selectedReserva.estado} />
                 </div>
                 {/* El desplegable de duración vive arriba, con la hora. Aquí
                     queda solo su CONSECUENCIA: hasta qué hora se ocupa la
@@ -6567,9 +6695,6 @@ export function ReservasView() {
                     }
                     onBlur={() => void guardarComentario(selectedReserva.id)}
                   />
-                  <p className="text-right text-[10px] text-muted-foreground">
-                    {comentarioEdit.length}/{RESERVA_COMENTARIO_MAX_CHARS}
-                  </p>
                 </div>
                 {/* Datos del Ticket. Todo de solo lectura: el tipo de reserva,
                     el código y el dinero quedan congelados desde el canje (lo
@@ -6637,13 +6762,11 @@ export function ReservasView() {
                     </div>
                   </div>
                 )}
+                {/* Los avisos de la reserva (nota, reconfirmacion, duplicada)
+                    ya se leen en su fila de la lista: repetirlos aqui solo
+                    llenaba la ficha. Se queda la insignia del canal, que dice
+                    de donde vino la reserva y no se ve en ningun otro sitio. */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <ReservaFlagsChips
-                    reserva={selectedReserva}
-                    insights={selectedInsights}
-                    duplicadas={duplicadasPorReserva.get(selectedReserva.id)}
-                    size="md"
-                  />
                   <ReservaExternalBadge reserva={selectedReserva} />
                 </div>
                 {/* Correos y actividad de ESTA reserva: viven en la columna de
@@ -6657,26 +6780,6 @@ export function ReservasView() {
                     key={actividadVersion}
                     reservaId={selectedReserva.id}
                   />
-                </div>
-                <div className="space-y-2 pt-2 border-t">
-                  <Label className="text-muted-foreground text-xs">Cambiar a</Label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {ESTADOS_RESERVA.map((e) => (
-                      <Button
-                        key={e}
-                        size="sm"
-                        variant="outline"
-                        className={cn(
-                          "text-[10px] h-7 px-2 justify-start gap-1.5",
-                          e === selectedReserva.estado && "ring-1 ring-primary",
-                        )}
-                        onClick={() => cambiarEstadoReserva(selectedReserva.id, e)}
-                      >
-                        <ReservaEstadoDot estado={e} className="w-2 h-2" />
-                        <span className="truncate">{ESTADO_RESERVA_LABELS[e]}</span>
-                      </Button>
-                    ))}
-                  </div>
                 </div>
               </div>
 
