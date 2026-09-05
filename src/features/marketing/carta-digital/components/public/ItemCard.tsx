@@ -70,7 +70,10 @@ export function ItemCard({
             alt={item.nombre}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 300px"
-            className="object-cover transition-transform duration-[900ms] ease-out group-hover:scale-[1.07]"
+            // El recorte se ancla ARRIBA, no al centro: en foto de plato la
+            // comida vive en la mitad superior y el centro suele caer en el
+            // mantel, así que centrar cortaba justo lo que se quiere enseñar.
+            className="object-cover object-[center_35%] transition-transform duration-[900ms] ease-out group-hover:scale-[1.07]"
           />
         ) : (
           // Sin foto: un lienzo de marca vacío. NO se repite aquí el nombre
