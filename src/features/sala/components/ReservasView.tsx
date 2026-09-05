@@ -40,6 +40,7 @@ const CobrosReservasView = dynamic(
 import { Settings, Sun, Moon, Banknote } from "lucide-react";
 import { useSalaTema } from "@/features/sala/hooks/useSalaTema";
 import { EtiquetasPanel } from "@/features/sala/components/reservas/EtiquetasPanel";
+import { FichaClienteEstadisticas } from "@/features/sala/components/reservas/FichaClienteEstadisticas";
 import {
   compararReservasPorJornada,
   franjasSolapan,
@@ -6681,23 +6682,12 @@ export function ReservasView() {
                 </h3>
 
                 {/* Fiabilidad de un vistazo: si falla mucho, se decide aquí si
-                    se le guarda la mesa. */}
-                <div className="grid grid-cols-4 gap-2 rounded-md border bg-muted/30 p-2.5">
-                  {[
-                    // "Reservas" va primero: es el total del que salen las
-                    // demás cifras. Visitas son las que cumplió, y no-shows y
-                    // canceladas, las que no.
-                    { valor: selectedInsights?.reservasTotal ?? 0, label: "Reservas" },
-                    { valor: selectedInsights?.visitasTotal ?? 0, label: "Visitas" },
-                    { valor: selectedInsights?.noShows ?? 0, label: "No shows" },
-                    { valor: selectedInsights?.canceladas ?? 0, label: "Canceladas" },
-                  ].map((s) => (
-                    <div key={s.label} className="text-center">
-                      <div className="text-base font-semibold leading-none">{s.valor}</div>
-                      <div className="mt-1 text-[10px] text-muted-foreground">{s.label}</div>
-                    </div>
-                  ))}
-                </div>
+                    se le guarda la mesa. Cada cifra abre su detalle al pasar
+                    el ratón por encima. */}
+                <FichaClienteEstadisticas
+                  insights={selectedInsights}
+                  zonaHoraria={empresaActual.zonaHoraria}
+                />
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">

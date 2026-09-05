@@ -328,6 +328,37 @@ export interface Reserva {
 }
 
 // --- INSIGHTS DE CLIENTE (computados al abrir detalle de reserva) ---
+/**
+ * Una reserva del historial del cliente, en corto: lo justo para reconocerla
+ * al pasar el raton por una de las cifras de su ficha.
+ */
+export interface ClienteInsightReserva {
+  id: string;
+  /** "AAAA-MM-DD" (dia de calendario, sin zona: es un `date` de BD). */
+  fecha: string;
+  /** "HH:MM". */
+  hora: string;
+  personas: number;
+  estado: EstadoReserva;
+}
+
+/**
+ * Una valoracion del cliente, en corto: cuando la dejo y con que nota. La nota
+ * es la MEDIA de lo que puntuo (comida, servicio y ambiente), o la global
+ * cuando la reseña vino de fuera sin desglose.
+ */
+export interface ClienteInsightValoracion {
+  id: string;
+  /** Instante en que se dejo la valoracion (`timestamptz`, hay que zonificar). */
+  fecha: string | null;
+  /** Media de 1 a 5, o `null` si la reseña llego sin puntuacion. */
+  nota: number | null;
+  /** Notas por area, cuando las trae. */
+  comida: number | null;
+  servicio: number | null;
+  ambiente: number | null;
+}
+
 export interface ClienteInsights {
   clienteId: string | null;
   visitasTotal: number;
@@ -345,7 +376,23 @@ export interface ClienteInsights {
    * justamente en la diferencia entre las dos cifras.
    */
   reservasTotal: number;
+  /**
+   * DETALLE detras de cada cifra, para el desplegable de la ficha: pasar el
+   * raton por "No shows" tiene que enseñar CUALES fueron, no solo cuantos.
+   * Vienen de mas reciente a mas antigua y estan recortadas: la ficha enseña
+   * un resumen, no el historial entero.
+   */
+  detalle: {
+    reservas: ClienteInsightReserva[];
+    visitas: ClienteInsightReserva[];
+    noShows: ClienteInsightReserva[];
+    canceladas: ClienteInsightReserva[];
+    valoraciones: ClienteInsightValoracion[];
+  };
 }
+
+/** Tope de filas que se enseñan en el desplegable de cada cifra. */
+export const CLIENTE_INSIGHT_DETALLE_MAX = 8;
 
 /** Convención para detectar reservas creadas por un Channel Manager. */
 export const CHANNEL_MANAGER_ORIGEN_PREFIX = "channel-";

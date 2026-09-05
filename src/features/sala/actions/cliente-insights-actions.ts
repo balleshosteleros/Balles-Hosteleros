@@ -3,7 +3,13 @@
 import { createClient, getUsuarioActual } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ClienteInsights } from "@/features/sala/data/reservas";
+import {
+  CLIENTE_INSIGHT_DETALLE_MAX,
+  type ClienteInsightReserva,
+  type ClienteInsightValoracion,
+  type ClienteInsights,
+  type EstadoReserva,
+} from "@/features/sala/data/reservas";
 
 function normalizeTelefono(t: string): string {
   return t.replace(/[^\d+]/g, "");
@@ -34,6 +40,13 @@ export async function getClienteInsights(input: {
     noShows: 0,
     canceladas: 0,
     reservasTotal: 0,
+    detalle: {
+      reservas: [],
+      visitas: [],
+      noShows: [],
+      canceladas: [],
+      valoraciones: [],
+    },
   };
 
   try {
@@ -72,33 +85,109 @@ export async function getClienteInsights(input: {
       }
     }
 
-    let visitasTotal = 0;
+    // Se traen las reservas del cliente UNA vez y de ahi salen las cuatro
+    // cifras y sus listas. Antes eran cuatro consultas que solo contaban, y el
+    // desplegable necesita saber CUALES son, no solo cuantas.
+    type FilaReserva = {
+      id: string;
+      fecha: string;
+      hora: string | null;
+      personas: number | null;
+      estado: string;
+    };
+    let historial: FilaReserva[] = [];
     if (clienteId) {
-      const hoy = new Date().toISOString().slice(0, 10);
-      const { count } = await supabase
+      const { data } = await supabase
         .from("reservas")
-        .select("id", { count: "exact", head: true })
+        .select("id, fecha, hora, personas, estado")
         .eq("empresa_id", empresaId)
         .eq("cliente_id", clienteId)
-        .lt("fecha", hoy)
-        .not("estado", "in", "(CANCELADA,NO_SHOW)");
-      visitasTotal = count ?? 0;
+        .order("fecha", { ascending: false })
+        .order("hora", { ascending: false })
+        // Tope explicito: PostgREST corta en 1000 filas sin avisar, y un
+        // historial mas largo que eso no cabe en una ficha de todos modos.
+        .limit(1000);
+      historial = (data ?? []) as FilaReserva[];
     }
+
+    const aResumen = (r: FilaReserva): ClienteInsightReserva => ({
+      id: r.id,
+      fecha: r.fecha,
+      hora: (r.hora ?? "").slice(0, 5),
+      personas: r.personas ?? 0,
+      estado: r.estado as EstadoReserva,
+    });
+
+    const hoy = new Date().toISOString().slice(0, 10);
+    // Visita = reserva ya pasada a la que no falto. Mismo criterio que
+    // `listClientesEnriquecidos`, para que las dos pantallas digan lo mismo.
+    const visitas = historial.filter(
+      (r) => r.fecha < hoy && r.estado !== "CANCELADA" && r.estado !== "NO_SHOW",
+    );
+    const visitasTotal = visitas.length;
 
     // 2) Reseñas del mismo cliente en la empresa actual.
     // resenas no tiene FK a clientes_sala; matchea por telefono/email.
+    // Las reseñas se enlazan por `cliente_id`: es la unica via que funciona.
+    // Teléfono y email quedan de respaldo para las pocas que llegan sin ficha
+    // enlazada (las de fuera vienen sin contacto: emparejar por ahi devolvia
+    // cero siempre, y la ficha decia que el cliente nunca habia valorado).
     let visitasConValoracion = 0;
-    if (telNorm || emailNorm) {
+    let valoraciones: ClienteInsightValoracion[] = [];
+    {
       const orParts: string[] = [];
+      if (clienteId) orParts.push(`cliente_id.eq.${clienteId}`);
       if (telNorm) orParts.push(`telefono.eq.${telNorm}`);
       if (emailNorm) orParts.push(`email.eq.${emailNorm}`);
       if (orParts.length > 0) {
-        const { count } = await supabase
+        const { data } = await supabase
           .from("resenas")
-          .select("id", { count: "exact", head: true })
+          .select(
+            // `fecha_reseña` lleva eñe: hay que entrecomillarla y darle un
+            // alias ASCII, o el parser del cliente no la reconoce. Por lo
+            // mismo no se puede ordenar por ella en la consulta; se ordena
+            // despues en memoria.
+            'id, fecha:"fecha_reseña", created_at, rating, rating_comida, rating_servicio, rating_ambiente',
+          )
           .eq("empresa_id", empresaId)
-          .or(orParts.join(","));
-        visitasConValoracion = count ?? 0;
+          .or(orParts.join(","))
+          .limit(1000);
+        const filas = (data ?? []) as Array<{
+          id: string;
+          fecha: string | null;
+          created_at: string | null;
+          rating: number | null;
+          rating_comida: number | null;
+          rating_servicio: number | null;
+          rating_ambiente: number | null;
+        }>;
+        visitasConValoracion = filas.length;
+        valoraciones = filas.map((r) => {
+          // La NOTA de una valoracion es la media de lo que puntuo por areas.
+          // Las reseñas que llegan de fuera (Google) no traen desglose: en ese
+          // caso vale la global, que es la unica nota que existe.
+          const partes = [r.rating_comida, r.rating_servicio, r.rating_ambiente].filter(
+            (n): n is number => typeof n === "number",
+          );
+          const media =
+            partes.length > 0
+              ? partes.reduce((a, b) => a + b, 0) / partes.length
+              : typeof r.rating === "number"
+                ? r.rating
+                : null;
+          return {
+            id: r.id,
+            // `fecha_reseña` es cuando la dejo; `created_at`, cuando entro en
+            // el sistema. Se prefiere la primera y la segunda es el respaldo.
+            fecha: r.fecha ?? r.created_at ?? null,
+            nota: media,
+            comida: r.rating_comida ?? null,
+            servicio: r.rating_servicio ?? null,
+            ambiente: r.rating_ambiente ?? null,
+          };
+        });
+        // De la mas reciente a la mas antigua: la ficha enseña las ultimas.
+        valoraciones.sort((a, b) => (b.fecha ?? "").localeCompare(a.fecha ?? ""));
       }
     }
 
@@ -125,40 +214,15 @@ export async function getClienteInsights(input: {
     // 4) Fiabilidad del cliente en ESTA empresa: cuántas veces no apareció y
     // cuántas canceló. Es lo que decide en el momento si se le guarda la mesa
     // o se le pide garantía.
-    let noShows = 0;
-    let canceladas = 0;
-    // Total de reservas: sin filtrar por estado ni por fecha. Responde "cuántas
-    // veces ha reservado", que no es lo mismo que cuántas veces ha venido.
-    let reservasTotal = 0;
-    // Se usa el `clienteId` RESUELTO, no el de entrada: cuando la reserva se
-    // identifica por teléfono o email (sin ficha enlazada todavía), el de
-    // entrada viene vacío y el historial de plantones salía siempre a cero,
-    // que es justo lo contrario de lo que sala necesita saber.
-    if (clienteId) {
-      const [resNo, resCan] = await Promise.all([
-        supabase
-          .from("reservas")
-          .select("id", { count: "exact", head: true })
-          .eq("empresa_id", empresaId)
-          .eq("cliente_id", clienteId)
-          .eq("estado", "NO_SHOW"),
-        supabase
-          .from("reservas")
-          .select("id", { count: "exact", head: true })
-          .eq("empresa_id", empresaId)
-          .eq("cliente_id", clienteId)
-          .eq("estado", "CANCELADA"),
-      ]);
-      noShows = resNo.count ?? 0;
-      canceladas = resCan.count ?? 0;
-
-      const { count: totalCount } = await supabase
-        .from("reservas")
-        .select("id", { count: "exact", head: true })
-        .eq("empresa_id", empresaId)
-        .eq("cliente_id", clienteId);
-      reservasTotal = totalCount ?? 0;
-    }
+    // Fiabilidad en ESTA empresa: cuantas veces no aparecio y cuantas cancelo.
+    // Sale del mismo historial ya cargado, sin volver a preguntar a la BD.
+    const noShowsFilas = historial.filter((r) => r.estado === "NO_SHOW");
+    const canceladasFilas = historial.filter((r) => r.estado === "CANCELADA");
+    const noShows = noShowsFilas.length;
+    const canceladas = canceladasFilas.length;
+    // Total de reservas: sin filtrar por estado ni por fecha. Responde "cuantas
+    // veces ha reservado", que no es lo mismo que cuantas veces ha venido.
+    const reservasTotal = historial.length;
 
     return {
       clienteId,
@@ -169,6 +233,13 @@ export async function getClienteInsights(input: {
       noShows,
       canceladas,
       reservasTotal,
+      detalle: {
+        reservas: historial.slice(0, CLIENTE_INSIGHT_DETALLE_MAX).map(aResumen),
+        visitas: visitas.slice(0, CLIENTE_INSIGHT_DETALLE_MAX).map(aResumen),
+        noShows: noShowsFilas.slice(0, CLIENTE_INSIGHT_DETALLE_MAX).map(aResumen),
+        canceladas: canceladasFilas.slice(0, CLIENTE_INSIGHT_DETALLE_MAX).map(aResumen),
+        valoraciones: valoraciones.slice(0, CLIENTE_INSIGHT_DETALLE_MAX),
+      },
     };
   } catch (err) {
     console.error("[cliente-insights] get:", err);
