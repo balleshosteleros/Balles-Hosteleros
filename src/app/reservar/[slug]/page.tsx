@@ -25,7 +25,7 @@ async function fetchEmpresaBySlug(slug: string): Promise<EmpresaMarca | null> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("empresas")
-    .select("id, nombre, slug, logo_url, color, color_secundario, color_texto, config_operativa")
+    .select("id, nombre, slug, logo_url, isotipo_url, color, color_secundario, color_texto, config_operativa")
     .eq("slug", slug)
     .maybeSingle();
   if (!data) return null;
@@ -33,7 +33,10 @@ async function fetchEmpresaBySlug(slug: string): Promise<EmpresaMarca | null> {
     id: data.id as string,
     nombre: data.nombre as string,
     slug: data.slug as string,
-    logoUrl: (data.logo_url as string | null) ?? null,
+    // El ISOTIPO manda: el logotipo lleva el nombre dentro y duplicaba el
+    // nombre del restaurante en la cabecera. Si no hay isotipo, cae al logo.
+    logoUrl:
+      ((data.isotipo_url as string | null) || (data.logo_url as string | null)) ?? null,
     color: (data.color as string | null) ?? null,
     colorSecundario: (data.color_secundario as string | null) ?? null,
     colorTexto: (data.color_texto as string | null) ?? null,

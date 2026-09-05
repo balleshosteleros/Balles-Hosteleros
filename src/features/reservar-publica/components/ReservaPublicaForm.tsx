@@ -23,6 +23,7 @@ import { validarCuponPublicoAction } from "@/features/reservar-publica/actions/v
 import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
 import type { ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
 import { SelectorDisponibilidad } from "@/features/reservar-publica/components/SelectorDisponibilidad";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 import {
   listarGruposZonasPublica,
   type GrupoZonaPublico,
@@ -122,6 +123,13 @@ export function ReservaPublicaForm({
   // Se calcula una sola vez: es la misma zona en servidor y en cliente, así que
   // el valor coincide y no rompe la hidratación.
   const hoyLocal = useMemo(() => hoyEnZona(zonaHoraria), [zonaHoraria]);
+  // Nacimiento: 110 años de margen acotan el desplegable de año, y el
+  // calendario abre por 1995 en vez de por hoy (nadie nace esta semana).
+  const nacimientoMin = useMemo(
+    () => `${Number(hoyLocal.slice(0, 4)) - 110}-01-01`,
+    [hoyLocal],
+  );
+  const nacimientoMesPorDefecto = "1995-01-01";
   const [fecha, setFecha] = useState(hoyLocal);
   // Sin hora por defecto: la elige el cliente entre las que están realmente
   // abiertas (antes se fijaba "21:00" a ciegas y podía no existir ese pase).
@@ -661,14 +669,15 @@ export function ReservaPublicaForm({
                 <Calendar className="h-3.5 w-3.5" />
                 Fecha *
               </Label>
-              <Input
+              <SelectorFecha
                 id="fecha"
-                type="date"
                 value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
+                onChange={setFecha}
                 min={hoyLocal}
                 required
-                className="mt-1 h-10 w-full min-w-0 max-w-full appearance-none rounded-lg border-zinc-200 bg-white px-3 text-sm"
+                colorMarca={accent}
+                colorMarcaTexto={onAccent}
+                className="mt-1 border-zinc-200 bg-white"
               />
               {fechaFueraDelTicket && (
                 <p className="mt-1 text-[11px] text-amber-700">
@@ -807,14 +816,19 @@ export function ReservaPublicaForm({
                 <Calendar className="h-3.5 w-3.5" />
                 Nacimiento{obligatorios.fechaNacimiento ? " *" : ""}
               </Label>
-              <Input
+              <SelectorFecha
                 id="nacimiento"
-                type="date"
                 value={fechaNacimiento}
-                onChange={(e) => setFechaNacimiento(e.target.value)}
+                onChange={setFechaNacimiento}
                 required={obligatorios.fechaNacimiento}
+                min={nacimientoMin}
                 max={hoyLocal}
-                className="mt-1 h-10 w-full min-w-0 appearance-none rounded-lg border-zinc-200 px-3 text-sm"
+                // Sin esto el calendario abre por hoy y hay que retroceder
+                // treinta y tantos años a mano.
+                mesPorDefecto={nacimientoMesPorDefecto}
+                colorMarca={accent}
+                colorMarcaTexto={onAccent}
+                className="mt-1 border-zinc-200"
               />
             </div>
 
