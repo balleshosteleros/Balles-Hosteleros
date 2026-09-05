@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { resolverHostname } from "@/features/marketing/pagina-web/services/hostname-resolver";
 import { PaginaPublicaShell } from "@/features/marketing/pagina-web/components/public/PaginaPublicaShell";
+import { registrarVisita } from "@/features/marketing/pagina-web/services/visitas";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -78,6 +79,11 @@ export default async function PublicCatchAllPage({ params }: PageProps) {
   const { slug } = await params;
   const match = await resolverHostname(host, slugDeParams(slug));
   if (!match) notFound();
+
+  // La visita se apunta aquí y no en `generateMetadata`, que Next ejecuta
+  // aparte en la misma petición: contar en los dos sitios duplicaría cada
+  // visita. Sin `await`: la web no espera a la estadística.
+  void registrarVisita(match.pagina_id, (await headers()).get("user-agent"));
 
   return (
     <PaginaPublicaShell
