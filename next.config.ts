@@ -121,6 +121,15 @@ async function portalesSinSlug() {
           has: [{ type: 'host', value: dom.hostname }],
           destination: `/${portal.ruta}/${slug}`,
         })
+        // Vista incrustada: la que va DENTRO de la web del restaurante, sin
+        // logo ni cabecera. Necesita su propia regla porque la de arriba solo
+        // cubre la ruta raíz, y sin ella `/reservar/embed` tomaba "embed" por
+        // el nombre del local.
+        reglas.push({
+          source: `/${portal.ruta}/embed`,
+          has: [{ type: 'host', value: dom.hostname }],
+          destination: `/${portal.ruta}/${slug}/embed`,
+        })
       }
     }
 
@@ -329,15 +338,21 @@ const nextConfig: NextConfig = {
       // publicados con la forma larga, y tienen que seguir llevando a su sitio.
       // La ruta `[slug]` se conserva viva por debajo —es la que sirve el rewrite
       // de `portalesSinSlug()` y la red de seguridad si la BD falla en un build.
+      //
+      // `embed` queda FUERA (el `(?!embed$)`): es la vista incrustada dentro de
+      // la web del propio restaurante, no una URL que nadie teclee. Sin esa
+      // exclusión, `/reservar/<local>/embed` se redirigía a `/reservar/embed`,
+      // donde "embed" se tomaba por el nombre del local y acababa sirviendo el
+      // portal ENTERO —con logo y "Volver a la web"— dentro de la ventana.
       ...PREVIEW_WEB_HOSTS.flatMap((host) => [
         {
-          source: '/:ruta(carta|reservar|empleo|ticket)/:slug',
+          source: '/:ruta(carta|reservar|empleo|ticket)/:slug((?!embed$)[^/]+)',
           has: [{ type: 'host' as const, value: host }],
           destination: '/:ruta',
           permanent: false,
         },
         {
-          source: '/:ruta(carta|reservar|empleo|ticket)/:slug/:resto+',
+          source: '/:ruta(carta|reservar|empleo|ticket)/:slug((?!embed$)[^/]+)/:resto+',
           has: [{ type: 'host' as const, value: host }],
           destination: '/:ruta/:resto+',
           permanent: false,

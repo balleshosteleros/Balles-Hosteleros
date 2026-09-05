@@ -24,6 +24,7 @@ import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInput
 import type { ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
 import { SelectorDisponibilidad } from "@/features/reservar-publica/components/SelectorDisponibilidad";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorOpcion } from "@/components/ui/selector-opcion";
 import {
   listarGruposZonasPublica,
   type GrupoZonaPublico,
@@ -621,10 +622,15 @@ export function ReservaPublicaForm({
             />
           ) : null}
 
-          {/* Bloque "qué reservas": comensales → fecha → hora. Agrupado en un
-              panel para separarlo visualmente de los datos de contacto.
-              Las personas van primero porque la disponibilidad depende de
-              cuánta gente viene. */}
+          {/* DOS COLUMNAS en tablet y ordenador: la reserva a la izquierda y
+              quién la hace a la derecha, para que todo entre en una pantalla
+              sin bajar. En móvil no hay ancho: una sola columna, en el mismo
+              orden de siempre. */}
+          <div className="grid gap-4 md:grid-cols-2 md:gap-5 md:items-start">
+            {/* COLUMNA 1 — qué reservas: comensales → fecha → hora → zona.
+                Las personas van primero porque la disponibilidad depende de
+                cuánta gente viene. */}
+            <div className="space-y-4">
           <div className="rounded-xl border border-zinc-200/70 bg-zinc-50/70 p-3 space-y-3">
             <div>
               <Label className="text-xs font-medium text-zinc-600 flex items-center gap-1.5">
@@ -635,21 +641,21 @@ export function ReservaPublicaForm({
                   cuántos admite el restaurante. El tope sale de Configuración
                   → Límites (tamaño máximo por reserva, mesa o combinación de
                   mesas), así que nunca se ofrece un número que se rechazaría. */}
-              <select
-                value={personas}
-                onChange={(e) => setPersonas(Number(e.target.value))}
+              <SelectorOpcion
+                value={String(personas)}
+                onChange={(v) => setPersonas(Number(v))}
                 aria-label="Personas"
                 // Con un ticket por persona el número lo fija lo que pagó: si
                 // pudiera subirlo, entrarían más comensales de los abonados.
                 disabled={ticketCanje?.porPersona === true}
-                className="mt-1 h-10 w-full min-w-0 max-w-full appearance-none rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-500"
-              >
-                {opcionesPersonas.map((n) => (
-                  <option key={n} value={n}>
-                    {n} {n === 1 ? "persona" : "personas"}
-                  </option>
-                ))}
-              </select>
+                opciones={opcionesPersonas.map((n) => ({
+                  value: String(n),
+                  label: `${n} ${n === 1 ? "persona" : "personas"}`,
+                }))}
+                colorMarca={accent}
+                colorMarcaTexto={onAccent}
+                className="mt-1 border-zinc-200 bg-white"
+              />
               {ticketCanje?.porPersona ? (
                 <p className="mt-1 text-[11px] text-zinc-500">
                   Tu ticket cubre {ticketCanje.unidades}{" "}
@@ -715,26 +721,27 @@ export function ReservaPublicaForm({
                   <MapPin className="h-3.5 w-3.5" />
                   Zonas *
                 </Label>
-                <select
+                {/* Sin iconos: al cliente le basta el nombre de la zona y, si
+                    ya no le queda sitio a esa hora, la nota "(Zona completa)"
+                    en gris sobre la opción apagada. */}
+                <SelectorOpcion
                   id="zona"
                   value={grupoZonaId}
-                  onChange={(e) => setGrupoZonaId(e.target.value)}
+                  onChange={setGrupoZonaId}
                   disabled={cargandoZonas}
-                  className="w-full h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                >
-                  <option value="">
-                    {cargandoZonas ? "Comprobando disponibilidad…" : "Seleccione la zona"}
-                  </option>
-                  {/* Sin iconos: al cliente le basta el nombre de la zona y,
-                      si ya no le queda sitio a esa hora, la marca "(Zona
-                      completa)" en gris del propio option deshabilitado. */}
-                  {zonasVisibles.map((g) => (
-                    <option key={g.id} value={g.id} disabled={!g.disponible}>
-                      {g.nombre}
-                      {g.disponible ? "" : " (Zona completa)"}
-                    </option>
-                  ))}
-                </select>
+                  placeholder={
+                    cargandoZonas ? "Comprobando disponibilidad…" : "Seleccione la zona"
+                  }
+                  opciones={zonasVisibles.map((g) => ({
+                    value: g.id,
+                    label: g.nombre,
+                    disabled: !g.disponible,
+                    nota: g.disponible ? undefined : "(Zona completa)",
+                  }))}
+                  colorMarca={accent}
+                  colorMarcaTexto={onAccent}
+                  className="border-zinc-200 bg-white"
+                />
                 {!cargandoZonas && hora && gruposZonas.every((g) => !g.disponible) && (
                   <p className="mt-1.5 text-xs text-red-600">
                     No queda sitio para {personas}{" "}
@@ -781,19 +788,25 @@ export function ReservaPublicaForm({
             {/* Prefijo aparte: un numero extranjero sin el suyo queda
                 inservible para llamar o mandar un SMS. */}
             <div className="mt-1.5 flex gap-2">
-              <select
+              <SelectorOpcion
                 value={telefonoPrefijo}
-                onChange={(e) => setTelefonoPrefijo(e.target.value)}
+                onChange={setTelefonoPrefijo}
                 disabled={enviando}
                 aria-label="Prefijo del país"
-                className="h-10 w-24 shrink-0 rounded-lg border border-zinc-200 bg-white px-2 text-sm"
-              >
-                {PREFIJOS_TELEFONO.map((p) => (
-                  <option key={p.prefijo} value={p.prefijo} title={p.label}>
-                    {p.flag} {p.prefijo}
-                  </option>
-                ))}
-              </select>
+                opciones={PREFIJOS_TELEFONO.map((p) => ({
+                  value: p.prefijo,
+                  label: p.prefijo,
+                  prefijo: p.flag,
+                  // El campo es estrecho, pero en la lista abierta cabe el
+                  // nombre del país: "🇪🇸 +34 España".
+                  nota: p.label,
+                }))}
+                // El campo va estrecho; la lista necesita sitio para el país.
+                anchoPanel="w-64"
+                colorMarca={accent}
+                colorMarcaTexto={onAccent}
+                className="w-24 shrink-0 border-zinc-200 bg-white px-2"
+              />
               <Input
                 id="telefono"
                 type="tel"

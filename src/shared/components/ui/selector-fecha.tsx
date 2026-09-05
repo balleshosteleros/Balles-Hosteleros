@@ -102,6 +102,19 @@ export function SelectorFecha({
     ...(hasta ? [{ after: hasta }] : []),
   ];
 
+  // En ordenador sobra ancho: se enseñan DOS meses en horizontal para elegir
+  // el finde que viene sin pasar de mes. En móvil no cabe y va uno vertical.
+  // Con desplegables de año (nacimiento) tampoco: ahí se salta por año.
+  const [pantallaAncha, setPantallaAncha] = React.useState(false);
+  React.useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const aplicar = () => setPantallaAncha(mq.matches);
+    aplicar();
+    mq.addEventListener("change", aplicar);
+    return () => mq.removeEventListener("change", aplicar);
+  }, []);
+  const meses = pantallaAncha && !conDesplegables ? 2 : 1;
+
   return (
     <Popover open={abierto} onOpenChange={setAbierto}>
       <PopoverTrigger asChild>
@@ -157,10 +170,12 @@ export function SelectorFecha({
             onChange(dateAIso(dia));
             setAbierto(false);
           }}
+          numberOfMonths={meses}
           showOutsideDays
           className="p-3"
           classNames={{
-            months: "flex flex-col",
+            // Dos meses van uno al lado del otro; uno solo, en columna.
+            months: meses > 1 ? "flex flex-row gap-5" : "flex flex-col",
             month: "space-y-3",
             caption: cn(
               "relative flex items-center pt-1 pb-1",
@@ -183,6 +198,8 @@ export function SelectorFecha({
             nav: "flex items-center",
             nav_button:
               "inline-flex h-7 w-7 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-30",
+            // Con dos meses las flechas van en los extremos del conjunto, no
+            // sobre cada mes: react-day-picker las pinta una sola vez.
             nav_button_previous: conDesplegables ? "" : "absolute left-1",
             nav_button_next: conDesplegables ? "" : "absolute right-1",
             table: "w-full border-collapse",

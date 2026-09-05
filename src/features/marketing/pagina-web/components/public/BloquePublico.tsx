@@ -1165,20 +1165,13 @@ function ReservasPublico({
 
         {modo === "portal_propio" ? (
           slug ? (
-            /* Tarjeta con esquinas muy redondeadas y cristal difuminado: el
-               formulario deja de ser un recuadro pegado y se integra en la web. */
-            <div className="relative mt-14">
-              {/* Halo de marca difuminado detrás de la tarjeta: despega el
-                  formulario del fondo sin dibujarle un borde duro. */}
-              <div
-                aria-hidden
-                className="pointer-events-none absolute -inset-6 rounded-[44px] opacity-[0.18] blur-3xl"
-                style={{ backgroundColor: "var(--pw-primario)" }}
-              />
-              <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.04] p-2 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl md:rounded-[34px] md:p-3">
-                <div className="overflow-hidden rounded-[22px] bg-white md:rounded-[26px]">
-                  <IframeAutoAlto src={`/reservar/embed`} titulo="Reservar mesa" />
-                </div>
+            /* Solo el formulario, al ancho justo. El marco grueso de antes
+               —halo de color, cristal difuminado y sombra— envolvía la ventana
+               en un recuadro enorme que ocupaba media pantalla y hacía que
+               pareciera otra página metida dentro, en vez de una sección más. */
+            <div className="mx-auto mt-10 w-full max-w-xl">
+              <div className="overflow-hidden rounded-2xl bg-white">
+                <IframeAutoAlto src={`/reservar/embed`} titulo="Reservar mesa" />
               </div>
             </div>
           ) : (
