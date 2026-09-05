@@ -366,8 +366,14 @@ const nextConfig: NextConfig = {
       // donde "embed" se tomaba por el nombre del local y acababa sirviendo el
       // portal ENTERO —con logo y "Volver a la web"— dentro de la ventana.
       ...PREVIEW_WEB_HOSTS.flatMap((host) => [
+        // Los UUID quedan FUERA: en `empleo` la forma corta de una vacante es
+        // `/empleo/<id>`, así que ese segmento NO es el nombre del local. Sin
+        // esta exclusión la redirección se comía el id —se ejecuta antes que
+        // los rewrites— y el candidato que tocaba una vacante volvía siempre a
+        // la lista, sin poder apuntarse (05-sep).
         {
-          source: '/:ruta(carta|reservar|empleo|ticket)/:slug((?!embed$)[^/]+)',
+          source:
+            '/:ruta(carta|reservar|empleo|ticket)/:slug((?!embed$|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$)[^/]+)',
           has: [{ type: 'host' as const, value: host }],
           destination: '/:ruta',
           permanent: false,
