@@ -50,20 +50,15 @@ seguramente porque se envió desde un buzón que nadie miraba. Google contesta p
 correo, y si pide un dato más y nadie responde, la solicitud se cierra sola sin
 avisar.
 
-**Datos que te va a pedir, ya preparados para copiar:**
+**👉 Las respuestas están todas escritas, campo por campo, en
+`GOOGLE_RESERVAS_FORMULARIO_RELLENADO.md`.** El formulario está en inglés y son
+28 campos: ahí tienes cada uno con lo que hay que poner, listo para copiar.
 
-| Campo | Qué poner |
-|---|---|
-| Empresa | Balles Hosteleros |
-| Web | `https://software.balleshosteleros.com` |
-| País | España |
-| Sector | Restaurantes |
-| Tipo de integración | Reservas de restaurante (end-to-end) |
-| Nº de locales | 2 (BACANAL y HABANA) |
-| ¿Software propio o de terceros? | Propio |
-
-Si pregunta si somos el restaurante o un proveedor de software: **las dos
-cosas** — tenemos software propio y lo usamos en nuestros propios locales.
+Resumen de lo que se responde: nos presentamos como **Merchant/Chain** (somos el
+propio restaurante, no un intermediario) con **2 locales reales**, BACANAL y
+HABANA. Es la verdad y es lo que cumple el requisito que Google de verdad
+verifica: relación contractual directa con todos los locales del feed — siendo
+nuestros, se cumple por propiedad.
 
 **Apunta el número de caso que te dé Google** y añádelo abajo en este documento.
 
