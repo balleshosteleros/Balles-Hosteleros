@@ -284,9 +284,14 @@ function addMonths(iso: string, n: number) {
 /**
  * Rejilla de la lista. El panel mide LISTA_ANCHO_PX y el ancho fijo tiene que
  * dejar sitio de verdad al nombre, que es por lo que se busca a la gente en
- * sala. Reparto: hora 46, mesa 58, per. 34, origen 62, tipo 72, estado 68,
- * tiempo 52 + 7 huecos de 6 px + 24 de padding = 458 px, y los ~210 px que
+ * sala. Reparto: hora 46, mesa 58, per. 34, origen 62, tipo 66, estado 62,
+ * tiempo 64 + 7 huecos de 6 px + 24 de padding = 458 px, y los ~210 px que
  * quedan son para el NOMBRE, que ha de caber con apellido.
+ *
+ * TIEMPO sube a 64 porque una mesa muy pasada de hora marca "+08:00" y en 52
+ * se cortaba en "+08…", justo el dato que la columna existe para dar. Los 12
+ * px salen de TIPO y ESTADO, que iban sobrados: sus valores son cortos
+ * ("Gratis", "Sentada") y ademas los dos llevan `title` con el texto entero.
  *
  * "Per." necesita 34: con 24 la cabecera se cortaba en "P.". Los 12 px que le
  * faltaban salen de ESTADO, que iba sobrado y además lleva `title`.
@@ -354,7 +359,7 @@ const LISTA_GRID =
   // completo, así que recortarlas no pierde el dato) y lo que sueltan se lo
   // queda el nombre. Los chips que van pegados al nombre (visitas, cupón,
   // reconfirmación) no se cuentan: solo salen en algunas filas.
-  "grid grid-cols-[46px_58px_minmax(0,1fr)_34px_62px_72px_68px_52px] gap-1.5 items-center";
+  "grid grid-cols-[46px_58px_minmax(0,1fr)_34px_62px_66px_62px_64px] gap-1.5 items-center";
 
 /**
  * TIPO de la reserva: cuál de las cuatro es (PRP-082).

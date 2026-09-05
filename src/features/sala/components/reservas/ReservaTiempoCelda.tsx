@@ -1,6 +1,5 @@
 "use client";
 
-import { TimerOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Reserva } from "@/features/sala/data/reservas";
 import {
@@ -40,11 +39,9 @@ export function ReservaTiempoCelda({
       )}
       title={t.detalle}
     >
-      {/* Pasada la duración prevista aparece el icono junto a la hora: la mesa
-          ya debería estar libre y eso hay que verlo sin leer el número. */}
-      {t.fase === "EXCEDIDA" && (
-        <TimerOff className="size-3 shrink-0" aria-label="Tiempo de mesa superado" />
-      )}
+      {/* Pasarse del tiempo de mesa se dice con el ROJO y con el "+", que ya
+          se ven de un vistazo. El icono de reloj tachado que iba delante solo
+          robaba ancho a la cifra, que es el dato, y la dejaba cortada. */}
       <span className="truncate">{t.texto}</span>
     </span>
   );
