@@ -674,14 +674,12 @@ export function ReservaPublicaForm({
                   <option value="">
                     {cargandoZonas ? "Comprobando disponibilidad…" : "Seleccione la zona"}
                   </option>
-                  {/* Mismo criterio de iconos que el selector de mesa del back
-                      office: ✅ cuando la zona vale para ese grupo durante todo
-                      el intervalo pedido, ⏰ cuando ya no le queda sitio a esa
-                      hora. El cliente no elige mesa, así que aquí el diagnóstico
-                      es por zona. */}
+                  {/* Sin iconos: al cliente le basta el nombre de la zona y,
+                      si ya no le queda sitio a esa hora, la marca "(Zona
+                      completa)" en gris del propio option deshabilitado. */}
                   {zonasVisibles.map((g) => (
                     <option key={g.id} value={g.id} disabled={!g.disponible}>
-                      {g.disponible ? "✅" : "⏰"} {g.nombre}
+                      {g.nombre}
                       {g.disponible ? "" : " (Zona completa)"}
                     </option>
                   ))}

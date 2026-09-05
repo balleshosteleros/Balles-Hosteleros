@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import {
   Plus,
+  BarChart3,
   Globe,
   LayoutTemplate,
   Pencil,
@@ -49,6 +50,7 @@ import {
 import { listarPaginas, borrarPagina } from "../../actions/paginas-actions";
 import { NuevaPaginaModal } from "./NuevaPaginaModal";
 import { GenerarLegalesDialog } from "./GenerarLegalesDialog";
+import { PaginaEstadisticasDialog } from "./PaginaEstadisticasDialog";
 import type { PaginaWeb, PaginaWebEstado } from "../../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -81,6 +83,7 @@ export function PaginasListView() {
   // compatibilidad, pero ya no se ofrece como acción.
   const [confirmar, setConfirmar] = useState<{ id: string; nombre: string } | null>(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [verStats, setVerStats] = useState<{ id: string; nombre: string } | null>(null);
 
   // El `finally` no es opcional: sin él, cualquier excepción (red caída,
   // sesión caducada, error del servidor) dejaba la pantalla girando el spinner
@@ -332,6 +335,15 @@ export function PaginasListView() {
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="Ver las visitas"
+                        onClick={() => setVerStats({ id: p.id, nombre: p.nombre })}
+                      >
+                        <BarChart3 className="h-4 w-4" />
+                      </Button>
                       <Link href={`/marketing/pagina-web/${p.id}`}>
                         <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar">
                           <Pencil className="h-4 w-4" />
@@ -353,6 +365,14 @@ export function PaginasListView() {
           </TableBody>
         </Table>
       </Card>
+
+      <PaginaEstadisticasDialog
+        pagina={verStats}
+        open={verStats !== null}
+        onOpenChange={(v) => {
+          if (!v) setVerStats(null);
+        }}
+      />
 
       <NuevaPaginaModal open={nuevaOpen} onOpenChange={setNuevaOpen} onCreated={cargar} />
 

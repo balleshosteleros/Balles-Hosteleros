@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { Ban, CheckCircle2, Pencil, Plus, QrCode } from "lucide-react";
+import { Ban, BarChart3, CheckCircle2, Pencil, Plus, QrCode } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -34,6 +34,7 @@ import {
 import type { CodigoQr } from "../../types";
 import { QrDescargaDialog } from "./QrDescargaDialog";
 import { QrFormDialog } from "./QrFormDialog";
+import { QrEstadisticasDialog } from "./QrEstadisticasDialog";
 
 /** Debe coincidir con `hostQr()` del servidor. */
 const BASE_QR =
@@ -55,6 +56,7 @@ export function QrListView() {
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<CodigoQr | null>(null);
   const [verQr, setVerQr] = useState<CodigoQr | null>(null);
+  const [verStats, setVerStats] = useState<CodigoQr | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -269,6 +271,15 @@ export function QrListView() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
+                        title="Ver los escaneos"
+                        onClick={() => setVerStats(p)}
+                      >
+                        <BarChart3 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
                         title="Editar"
                         onClick={() => {
                           setEditando(p);
@@ -303,6 +314,14 @@ export function QrListView() {
         onOpenChange={setFormOpen}
         qr={editando}
         onGuardado={() => void cargar()}
+      />
+
+      <QrEstadisticasDialog
+        qr={verStats}
+        open={verStats !== null}
+        onOpenChange={(v) => {
+          if (!v) setVerStats(null);
+        }}
       />
 
       <QrDescargaDialog
