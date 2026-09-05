@@ -114,6 +114,12 @@ export interface CtaDatos {
    * se trabaja, que es lo que de verdad convence a quien busca empleo.
    */
   imagen_url?: string;
+  /**
+   * Altura del recorte de `imagen_url`, en % desde arriba (0-100). La sección
+   * es una franja ancha: sin esto el recorte va al centro y corta las caras.
+   * Se sube o se baja según dónde esté la gente en cada foto. Por defecto 30.
+   */
+  foco_y?: number;
 }
 
 export interface FormularioCampo {

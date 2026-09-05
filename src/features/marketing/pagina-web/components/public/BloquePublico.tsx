@@ -1350,7 +1350,7 @@ function TestimoniosPublico({
 }
 
 function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
-  const { titulo, texto, boton, imagen_url } = bloque.datos;
+  const { titulo, texto, boton, imagen_url, foco_y } = bloque.datos;
 
   // Los colores salen del tema de la empresa (--pw-primario). Antes eran negro
   // fijo sobre `bg-muted/30`: en una web de fondo oscuro, el botón secundario
@@ -1415,16 +1415,16 @@ function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
   // abajo (donde caen texto y botón) que en el centro (donde están las caras).
   return (
     <section className="relative isolate overflow-hidden px-4 py-24 text-center md:py-32">
-      {/* Anclado arriba, no al centro: la sección es una franja ancha y la foto
-          es apaisada, así que `bg-center` recortaba por la mitad y cortaba las
-          caras a la altura de los ojos. En una foto de plantilla lo que importa
-          son las personas, y esas están en el tercio de arriba. */}
+      {/* La sección es una franja ancha y la foto apaisada, así que el recorte
+          decide qué se ve. `bg-center` cortaba a la gente por los ojos. La
+          altura sale de `foco_y` (0-100, % desde arriba) para que cada foto se
+          encuadre donde estén sus caras; 30% es un punto medio razonable. */}
       <div
         aria-hidden
         className="absolute inset-0 -z-10 scale-105 bg-cover"
         style={{
           backgroundImage: `url(${imagenOptimizada(imagen_url, { width: 1800, quality: 78 })})`,
-          backgroundPosition: "center 22%",
+          backgroundPosition: `center ${foco_y ?? 30}%`,
           filter: "blur(2px) saturate(112%)",
         }}
       />
