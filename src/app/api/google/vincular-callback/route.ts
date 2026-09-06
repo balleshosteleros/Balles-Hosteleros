@@ -30,6 +30,13 @@ type UserInfo = {
   email?: string;
   name?: string;
   picture?: string;
+  /**
+   * "Hosted domain": solo viene si la cuenta pertenece a un Google Workspace,
+   * y trae el dominio de esa organización. En una cuenta de Google normal
+   * (Gmail / Google One) no viene. Es como sabemos, sin preguntar a nadie, si
+   * hay que ofrecer las Unidades compartidas — que solo existen en Workspace.
+   */
+  hd?: string;
 };
 
 /**
@@ -148,6 +155,8 @@ export async function GET(request: Request) {
   response.cookies.set("g_email", email, META_COOKIE_OPTS);
   response.cookies.set("g_picture", info.picture ?? "", META_COOKIE_OPTS);
   response.cookies.set("g_name", info.name ?? "", META_COOKIE_OPTS);
+  // Dominio de Workspace, o vacío si es una cuenta de Google normal.
+  response.cookies.set("g_hd", info.hd ?? "", META_COOKIE_OPTS);
 
   const previas = await readAccountsFor(user.id);
   const actualizadas = upsertAccount(previas, {

@@ -11,8 +11,10 @@ import { googleFetchAuto } from "@/lib/google/api";
  *   - "Mi unidad"          → sus propios archivos
  *   - "Compartido conmigo" → carpetas que la empresa le comparte
  *
- * No hay "Unidades compartidas": son exclusivas de Google Workspace y aquí se
- * usa Google One.
+ * Las "Unidades compartidas" solo existen en cuentas de Google Workspace. No se
+ * le pregunta a nadie qué tipo de cuenta tiene: si Google las devuelve, se
+ * navegan igual que el resto; si no, la pantalla es exactamente la misma sin
+ * ellas. Ver `/api/google/drive/secciones`.
  *
  * SOLO LECTURA. Este endpoint jamás escribe en Drive.
  */
@@ -83,20 +85,22 @@ export async function GET(request: Request) {
   const raiz = searchParams.get("raiz"); // "mi-unidad" | "compartido"
   const pageToken = searchParams.get("pageToken");
 
-  // Sin destino concreto: devolvemos las dos secciones para pintar el inicio.
+  // Sin destino concreto no hay nada que listar: las secciones disponibles las
+  // sirve `/api/google/drive/secciones`, que sabe si la cuenta es de Workspace.
   if (!folderId && !raiz) {
-    return NextResponse.json({
-      raices: [
-        { clave: "mi-unidad", nombre: "Mi unidad" },
-        { clave: "compartido", nombre: "Compartido conmigo" },
-      ],
-    });
+    return NextResponse.json({ items: [] });
   }
+
+  // Raíz de una unidad compartida: `raiz=unidad:<driveId>`.
+  const driveId = raiz?.startsWith("unidad:") ? raiz.slice(7) : null;
 
   // `q` de Drive: qué pedimos según dónde estemos.
   let q: string;
   if (folderId) {
     q = `'${folderId}' in parents and trashed = false`;
+  } else if (driveId) {
+    // En una unidad compartida la raíz se nombra con el id de la propia unidad.
+    q = `'${driveId}' in parents and trashed = false`;
   } else if (raiz === "compartido") {
     q = "sharedWithMe = true and trashed = false";
   } else {
@@ -108,12 +112,16 @@ export async function GET(request: Request) {
   url.searchParams.set("fields", CAMPOS);
   url.searchParams.set("pageSize", "200");
   url.searchParams.set("orderBy", "folder,name");
-  // `supportsAllDrives` es inofensivo y basta para que los accesos directos a
-  // unidades compartidas se resuelvan. NO ponemos `includeItemsFromAllDrives`:
-  // Google exige acompanarlo de `corpora=allDrives` y, en cuentas Google One
-  // (que es lo que usamos aqui, no Workspace), esa combinacion se responde con
-  // 400 y la carpeta no llega a listarse nunca.
   url.searchParams.set("supportsAllDrives", "true");
+  if (driveId) {
+    // Dentro de una unidad compartida hay que decirle a Google en cuál mira.
+    url.searchParams.set("driveId", driveId);
+    url.searchParams.set("corpora", "drive");
+    url.searchParams.set("includeItemsFromAllDrives", "true");
+  }
+  // Fuera de ahi NO ponemos `includeItemsFromAllDrives`: Google exige
+  // acompanarlo de `corpora` y, en cuentas de Google normales, esa combinacion
+  // se responde con 400 y la carpeta no llega a listarse nunca.
   if (pageToken) url.searchParams.set("pageToken", pageToken);
 
   const { data, needsReauth, status } = await googleFetchAuto<{
