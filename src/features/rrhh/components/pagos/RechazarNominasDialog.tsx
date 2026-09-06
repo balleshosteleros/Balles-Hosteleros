@@ -22,7 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertTriangle, Undo2 } from "lucide-react";
+import { Loader2, AlertTriangle, Undo2, Check } from "lucide-react";
 import { MOTIVO_MIN_CARACTERES } from "@/features/rrhh/lib/nominas-rechazo";
 
 interface Props {
@@ -33,7 +33,7 @@ interface Props {
   /** Nº de nóminas que se van a eliminar al devolver. */
   nominasEnMes: number;
   enviando: boolean;
-  onConfirmar: (motivo: string) => void;
+  onConfirmar: (motivo: string, que: { nominas: boolean; segurosSociales: boolean }) => void;
 }
 
 /** Ejemplos para que RRHH no se quede en blanco ante el cuadro vacío. */
@@ -51,10 +51,16 @@ export function RechazarNominasDialog({
   onConfirmar,
 }: Props) {
   const [motivo, setMotivo] = useState("");
+  // QUÉ se devuelve. Se revisan por separado: es normal que los seguros
+  // sociales estén bien y las nóminas no, y devolver lo correcto obligaría a la
+  // gestoría a resubir lo que ya estaba bien.
+  const [devolverNominas, setDevolverNominas] = useState(true);
+  const [devolverSs, setDevolverSs] = useState(true);
 
   const limpio = motivo.trim();
   const faltan = MOTIVO_MIN_CARACTERES - limpio.length;
-  const valido = limpio.length >= MOTIVO_MIN_CARACTERES;
+  const algoElegido = devolverNominas || devolverSs;
+  const valido = limpio.length >= MOTIVO_MIN_CARACTERES && algoElegido;
 
   const cerrar = (v: boolean) => {
     if (enviando) return;
@@ -74,12 +80,58 @@ export function RechazarNominasDialog({
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
             <div className="text-amber-900 dark:text-amber-200 space-y-1">
               <p>
-                Se eliminarán las <b>{nominasEnMes} nómina{nominasEnMes === 1 ? "" : "s"}</b> de este
-                mes y sus TC1, y la gestoría recibirá un correo con tus anomalías y un enlace para
-                subirlo <b>todo de nuevo</b>.
+                Se eliminará de este mes{" "}
+                <b>
+                  {devolverNominas && devolverSs
+                    ? `las ${nominasEnMes} nómina${nominasEnMes === 1 ? "" : "s"} y los seguros sociales`
+                    : devolverNominas
+                      ? `las ${nominasEnMes} nómina${nominasEnMes === 1 ? "" : "s"}`
+                      : "los seguros sociales"}
+                </b>
+                , y la gestoría recibirá un correo con tus anomalías y un enlace para subirlo
+                de nuevo.
               </p>
               <p>Nada de esto llega al empleado: las nóminas solo se publican al confirmarlas.</p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>
+              Qué se devuelve <span className="text-rose-600">*</span>
+            </Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(
+                [
+                  ["Nóminas", devolverNominas, setDevolverNominas],
+                  ["Seguros sociales", devolverSs, setDevolverSs],
+                ] as const
+              ).map(([texto, valor, set]) => (
+                <button
+                  key={texto}
+                  type="button"
+                  onClick={() => set(!valor)}
+                  disabled={enviando}
+                  aria-pressed={valor}
+                  className={`flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
+                    valor
+                      ? "border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-200"
+                      : "border-input hover:bg-accent"
+                  }`}
+                >
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                      valor ? "border-rose-500 bg-rose-500 text-white" : "border-muted-foreground/40"
+                    }`}
+                  >
+                    {valor ? <Check className="h-3 w-3" /> : null}
+                  </span>
+                  {texto}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Lo que no marques se da por bueno y no habrá que volver a subirlo.
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -111,7 +163,12 @@ export function RechazarNominasDialog({
             variant="destructive"
             className="gap-2"
             disabled={!valido || enviando}
-            onClick={() => onConfirmar(limpio)}
+            onClick={() =>
+              onConfirmar(limpio, {
+                nominas: devolverNominas,
+                segurosSociales: devolverSs,
+              })
+            }
           >
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
             Devolver a la gestoría

@@ -916,9 +916,12 @@ export function PagosView() {
   // Devuelve el mes a la gestoría con las anomalías que ha escrito RRHH: borra
   // todo lo subido, les manda el correo y les reabre el enlace para que suban la
   // entrega completa corregida.
-  const rechazarMes = async (motivo: string) => {
+  const rechazarMes = async (
+    motivo: string,
+    que: { nominas: boolean; segurosSociales: boolean },
+  ) => {
     setRechazando(true);
-    const res = await rechazarMesNominas(periodo, motivo);
+    const res = await rechazarMesNominas(periodo, motivo, que);
     setRechazando(false);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudieron devolver las nóminas.");
@@ -1529,7 +1532,17 @@ export function PagosView() {
               "liquidaciones",
             )
           }
-          disabled={enviando || esVistaAgregada || pagos.every((p) => !!p.confirmacionEnviadaAt)}
+          disabled={
+            enviando ||
+            esVistaAgregada ||
+            !estadoMes.confirmado ||
+            pagos.every((p) => !!p.confirmacionEnviadaAt)
+          }
+          title={
+            !estadoMes.confirmado
+              ? "Primero hay que confirmar las nóminas del mes: hasta entonces los importes pueden cambiar"
+              : "Envía a cada trabajador su liquidación del mes y avisa a contabilidad de que puede pagar"
+          }
         >
           <Send className="h-4 w-4" />
           Enviar liquidaciones

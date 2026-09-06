@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { UploadCloud, CheckCircle2, AlertTriangle, Loader2, Lock, FileText, X } from "lucide-react";
+import { UploadCloud, CheckCircle2, AlertTriangle, Loader2, FileText, X } from "lucide-react";
 import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
@@ -244,34 +244,39 @@ function Bloque({
     );
   }
 
+  // Nada pendiente de ESTE documento: mismo verde que al enviar. Que la caja
+  // sea gris cuando todo está bien se lee como "algo va mal" o "está apagado",
+  // que es justo lo contrario de lo que pasa.
+  if (sinMesesLibres) {
+    return (
+      <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-5">
+        <div className="flex items-start gap-3">
+          <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-emerald-600" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-emerald-900">{titulo}</p>
+            <p className="mt-0.5 text-sm text-emerald-700">
+              Entregado. No hay ningún mes pendiente.
+            </p>
+            {mesesEntregados.length > 0 ? (
+              <ul className="mt-2.5 space-y-1 border-t border-emerald-200 pt-2.5">
+                {mesesEntregados.map((m) => (
+                  <li key={m} className="flex items-center gap-2 text-sm text-emerald-800">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                    <span>{nombreMes(m)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
       <h2 className="text-base font-semibold text-zinc-900">{titulo}</h2>
 
-      {sinMesesLibres ? (
-        <div className="mt-3 rounded-lg bg-zinc-50 p-3">
-          <div className="flex items-start gap-2">
-            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
-            <p className="text-sm text-zinc-600">
-              No hay ningún mes pendiente. Si falta alguno, avisa a la empresa.
-            </p>
-          </div>
-          {/* Se nombran los meses: un "todo entregado" a secas no dice SI es de
-              este envío o de meses anteriores, que es justo la duda que genera. */}
-          {mesesEntregados.length > 0 ? (
-            <ul className="mt-2.5 space-y-1 border-t border-zinc-200 pt-2.5">
-              {mesesEntregados.map((m) => (
-                <li key={m} className="flex items-center gap-2 text-sm text-zinc-600">
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                  <span>{nombreMes(m)}</span>
-                  <span className="ml-auto text-xs font-medium text-emerald-700">Entregado</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : (
-        <>
           <label
             htmlFor={`mes-${tipo}`}
             className="mt-3 block text-xs font-medium text-zinc-700"
@@ -367,8 +372,6 @@ function Bloque({
               "Enviar"
             )}
           </button>
-        </>
-      )}
     </div>
   );
 }

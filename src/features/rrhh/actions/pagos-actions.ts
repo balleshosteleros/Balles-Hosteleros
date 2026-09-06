@@ -11,6 +11,7 @@ import {
   type LiquidacionDetalle,
 } from "@/features/rrhh/services/nominas/rrhh-pagos-confirmacion";
 import { nombreMes } from "@/features/rrhh/services/nominas/nominas-gestoria";
+import { sendEmail } from "@/lib/email/send";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 import type { DetalleNomina } from "@/features/rrhh/data/pagos";
@@ -322,11 +323,31 @@ export async function savePago(
 export async function enviarConfirmacionesPago(
   periodo: string,
   empleadoIds: string[],
-): Promise<{ ok: boolean; enviadosIds: string[] }> {
+): Promise<{ ok: boolean; enviadosIds: string[]; error?: string }> {
   try {
     const { supabase, empresaId, userId } = await getAppContext();
     const ids = empleadoIds.filter((id) => id && !id.startsWith("ext-"));
     if (!empresaId || ids.length === 0) return { ok: false, enviadosIds: [] };
+
+    // BARRERA: sin las nóminas del mes CONFIRMADAS no se liquida. Enviar antes
+    // significa mandar al trabajador un importe que todavía puede cambiar (si
+    // RRHH devuelve el mes a la gestoría, las nóminas se borran y se rehacen),
+    // y la liquidación queda bloqueada al enviarse. El orden es: confirmar
+    // primero, liquidar después.
+    const { data: mesRow } = await supabase
+      .from("rrhh_nominas_mes")
+      .select("confirmado_en")
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .maybeSingle();
+    if (!mesRow?.confirmado_en) {
+      return {
+        ok: false,
+        enviadosIds: [],
+        error:
+          "Antes de enviar las liquidaciones hay que confirmar las nóminas del mes.",
+      };
+    }
 
     // Solo afecta a pagos YA guardados (no a empleados sin datos): si no hay fila
     // en rrhh_pagos no hay liquidación que enviar.
@@ -436,6 +457,65 @@ export async function enviarConfirmacionesPago(
         );
       } catch (e) {
         console.error("[rrhh] enviarConfirmacionesPago correos:", e);
+      }
+    }
+
+    // Aviso a CONTABILIDAD: las liquidaciones del mes están aprobadas y cerradas,
+    // así que ya pueden ordenarse los pagos. Es el punto en que el importe deja
+    // de poder cambiar, que es justo lo que contabilidad necesita saber para no
+    // pagar sobre cifras aún vivas. Best-effort: no tumba el envío.
+    if (updated.length > 0) {
+      try {
+        const admin = createAdminClient();
+        const { data: emp } = await admin
+          .from("empresas")
+          .select("nombre, datos_generales")
+          .eq("id", empresaId)
+          .maybeSingle();
+        const dg = (emp?.datos_generales ?? {}) as Record<string, unknown>;
+        const to =
+          typeof dg.correoContabilidad === "string" ? dg.correoContabilidad.trim() : "";
+        if (to) {
+          const empresaNombre = (emp?.nombre as string) ?? "la empresa";
+          const mesLabel = nombreMes(periodo);
+          const totalMes = updated.reduce((acc, r) => acc + Number(r.total ?? 0), 0);
+          const importe = totalMes.toLocaleString("es-ES", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+          const cuantos = updated.length;
+          await sendEmail({
+            to,
+            subject: `Liquidaciones de ${mesLabel} aprobadas · ${empresaNombre}`,
+            html: `
+              <p style="margin:0 0 4px">Hola,</p>
+              <p style="margin:0 0 12px">
+                Las <b>liquidaciones de ${mesLabel}</b> de <b>${empresaNombre}</b> están
+                aprobadas y cerradas. Ya se puede proceder con los pagos.
+              </p>
+              <table cellpadding="0" cellspacing="0" border="0"
+                     style="border:1px solid #e4e4e7;border-radius:8px;padding:12px 16px">
+                <tr>
+                  <td style="padding:2px 16px 2px 0;color:#52525b;font-size:14px">Trabajadores</td>
+                  <td style="color:#18181b;font-size:14px;font-weight:600">${cuantos}</td>
+                </tr>
+                <tr>
+                  <td style="padding:2px 16px 2px 0;color:#52525b;font-size:14px">Importe total</td>
+                  <td style="color:#18181b;font-size:14px;font-weight:600">${importe} €</td>
+                </tr>
+              </table>
+              <p style="color:#888;font-size:12px;margin:14px 0 0">
+                Enviado automáticamente desde el sistema de ${empresaNombre}.
+              </p>`,
+            text:
+              `Las liquidaciones de ${mesLabel} de ${empresaNombre} están aprobadas y cerradas. ` +
+              `Ya se puede proceder con los pagos.\n` +
+              `Trabajadores: ${cuantos}\nImporte total: ${importe} €`,
+            empresaId,
+          });
+        }
+      } catch (e) {
+        console.error("[rrhh] aviso a contabilidad:", e);
       }
     }
 

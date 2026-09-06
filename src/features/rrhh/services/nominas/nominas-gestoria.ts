@@ -355,25 +355,30 @@ export async function enviarSolicitudNominasGestoria(
 
   const boton = botonSubidaNominasHtml(tk.token);
   const enlace = urlSubidaNominas(tk.token);
-  const mes = nombreMes(periodo);
-  const subject = `Subida de nóminas de ${mes} · ${empresaNombre}`;
+  // Sin el mes: el enlace sirve para cualquiera y el mes se elige dentro, así
+  // que anunciarlo en el asunto solo induce a pensar que el enlace es de ese mes.
+  const subject = `Subida de nóminas y seguros sociales · ${empresaNombre}`;
   const html = `
     <p style="margin:0 0 4px">Hola,</p>
     <p style="margin:0 0 4px">
       Podéis subir ya, de <b>${empresaNombre}</b>:
     </p>
     <ul style="margin:0 0 4px;padding-left:20px;color:#3f3f46">
-      <li>Nóminas de <b>${mes}</b></li>
+      <li>Nóminas</li>
       <li>Seguros sociales</li>
     </ul>
+    <p style="margin:0 0 4px;color:#52525b;font-size:13px">
+      El mes se elige dentro, en cada apartado.
+    </p>
     ${boton}
     ${AVISO_REVISION_HTML}
     ${AVISO_VALIDEZ_HTML}
     <p style="color:#888;font-size:12px;margin:14px 0 0">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
   const text =
     `${empresaNombre} · podéis subir ya:\n` +
-    `- Nóminas de ${mes}\n` +
-    `- Seguros sociales\n\n` +
+    `- Nóminas\n` +
+    `- Seguros sociales\n` +
+    `El mes se elige dentro, en cada apartado.\n\n` +
     `${enlace}\n\n` +
     AVISO_REVISION_TEXTO +
     "\n\n" +
