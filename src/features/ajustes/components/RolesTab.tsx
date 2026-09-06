@@ -40,7 +40,7 @@ const MODULO_AJUSTES = "AJUSTES";
 const MODULO_CAMARAS = "CÁMARAS";
 // Dos permisos independientes en la barra de herramientas:
 //  · APLICACIONES (cohete) → enlaces/accesos directos a apps externas.
-//  · ACCESOS (candado)     → bóveda de accesos y contraseñas.
+//  · CONTRASEÑAS (candado) → bóveda de contraseñas, PINs y claves.
 const MODULO_APLICACIONES = "HERR_APLICACIONES";
 const MODULO_ACCESOS = "HERR_ACCESOS";
 

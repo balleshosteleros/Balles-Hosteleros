@@ -479,7 +479,7 @@ export function AplicacionesDrawer({
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// 2) ACCESOS Y CONTRASEÑAS — bóveda segura (Lock)
+// 2) CONTRASEÑAS — bóveda segura (Lock)
 // ════════════════════════════════════════════════════════════════════════
 export function AccesosDrawer({
   empresaSlug,

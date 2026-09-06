@@ -251,6 +251,10 @@ const mesaBg: Record<string, string> = {
 const MITAD_FILL: Record<string, string> = {
   SENTADA:    "#3F6212",
   TERMINANDO: "#EC4899",
+  // NARANJA, el mismo de NO RECONFIRMADA en la lista: una mitad sin
+  // reconfirmar es un AVISO y en el pistacho de "reservada" desaparecia. Es el
+  // unico estado del defecto que pide mirarse, asi que sale de ese color.
+  NO_RECONFIRMADA: "#F97316",
   LIBERADA:   "#64748B",
   CANCELADA:  "#64748B",
   NO_SHOW:    "#64748B",
@@ -266,7 +270,9 @@ function colorMitadReserva(estado: string): string {
 
 /** Texto legible sobre el relleno de la mitad (los oscuros piden blanco). */
 function textoMitadReserva(estado: string): string {
-  return estado === "SENTADA" || MITAD_FILL[estado] === "#64748B"
+  return estado === "SENTADA" ||
+    estado === "NO_RECONFIRMADA" ||
+    MITAD_FILL[estado] === "#64748B"
     ? "#FFFFFF"
     : "#18181B";
 }
@@ -3183,19 +3189,34 @@ function PlanoCanvas({
                       ser verde oscuro y la otra verde claro a la vez. */}
                   {mesaCompartida && (
                     <div className="absolute inset-0 pointer-events-none">
+                      {/* NOMBRE arriba y hora debajo, no los dos en una linea:
+                          en una linea sola el nombre —que es lo que se busca
+                          cruzando la sala— era siempre lo que se cortaba, y en
+                          las mesas pequeñas se quedaba en "21:00…" sin cliente.
+                          La hora va en su propia linea, mas pequeña y sin
+                          truncar: son cinco cifras fijas y cortarlas no sirve
+                          de nada. */}
                       <span
-                        className="absolute left-[6%] top-[5%] max-w-[62%] truncate text-[10px] font-bold leading-none"
+                        className="absolute left-[6%] top-[5%] flex max-w-[64%] flex-col leading-none"
                         style={{ color: textoMitadReserva(rs[0].estado) }}
                       >
-                        {rs[0].hora.slice(0, 5)}{" "}
-                        {esReservaWalkIn(rs[0]) ? "WALK IN" : rs[0].cliente}
+                        <span className="truncate text-[11px] font-bold">
+                          {esReservaWalkIn(rs[0]) ? "WALK IN" : rs[0].cliente}
+                        </span>
+                        <span className="text-[9px] font-medium tabular-nums opacity-85">
+                          {rs[0].hora.slice(0, 5)}
+                        </span>
                       </span>
                       <span
-                        className="absolute bottom-[5%] right-[6%] max-w-[62%] truncate text-right text-[10px] font-bold leading-none"
+                        className="absolute bottom-[5%] right-[6%] flex max-w-[64%] flex-col items-end text-right leading-none"
                         style={{ color: textoMitadReserva(rs[1].estado) }}
                       >
-                        {rs[1].hora.slice(0, 5)}{" "}
-                        {esReservaWalkIn(rs[1]) ? "WALK IN" : rs[1].cliente}
+                        <span className="truncate max-w-full text-[11px] font-bold">
+                          {esReservaWalkIn(rs[1]) ? "WALK IN" : rs[1].cliente}
+                        </span>
+                        <span className="text-[9px] font-medium tabular-nums opacity-85">
+                          {rs[1].hora.slice(0, 5)}
+                        </span>
                       </span>
                     </div>
                   )}
@@ -6637,19 +6658,29 @@ export function ReservasView() {
                                           />
                                         </svg>
                                         <div className="absolute inset-0 pointer-events-none">
+                                          {/* Mismo criterio que el plano:
+                                              nombre arriba, hora debajo. */}
                                           <span
-                                            className="absolute left-[6%] top-[5%] max-w-[62%] truncate text-[10px] font-bold leading-none"
+                                            className="absolute left-[6%] top-[5%] flex max-w-[64%] flex-col leading-none"
                                             style={{ color: textoMitadReserva(rs[0].estado) }}
                                           >
-                                            {rs[0].hora.slice(0, 5)}{" "}
-                                            {esReservaWalkIn(rs[0]) ? "WALK IN" : rs[0].cliente}
+                                            <span className="truncate text-[11px] font-bold">
+                                              {esReservaWalkIn(rs[0]) ? "WALK IN" : rs[0].cliente}
+                                            </span>
+                                            <span className="text-[9px] font-medium tabular-nums opacity-85">
+                                              {rs[0].hora.slice(0, 5)}
+                                            </span>
                                           </span>
                                           <span
-                                            className="absolute bottom-[5%] right-[6%] max-w-[62%] truncate text-right text-[10px] font-bold leading-none"
+                                            className="absolute bottom-[5%] right-[6%] flex max-w-[64%] flex-col items-end text-right leading-none"
                                             style={{ color: textoMitadReserva(rs[1].estado) }}
                                           >
-                                            {rs[1].hora.slice(0, 5)}{" "}
-                                            {esReservaWalkIn(rs[1]) ? "WALK IN" : rs[1].cliente}
+                                            <span className="truncate max-w-full text-[11px] font-bold">
+                                              {esReservaWalkIn(rs[1]) ? "WALK IN" : rs[1].cliente}
+                                            </span>
+                                            <span className="text-[9px] font-medium tabular-nums opacity-85">
+                                              {rs[1].hora.slice(0, 5)}
+                                            </span>
                                           </span>
                                         </div>
                                       </>

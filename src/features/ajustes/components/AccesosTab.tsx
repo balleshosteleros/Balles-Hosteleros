@@ -1,6 +1,6 @@
 "use client";
 
-// ACCESOS Y CONTRASEÑAS (Ajustes → Herramientas → Accesos)
+// CONTRASEÑAS (Ajustes → Herramientas → Contraseñas)
 //
 // Separación deliberada respecto a "Aplicaciones":
 //  · APLICACIONES (cohete) → el ENLACE: nombre, logo, URL, categoría, quién la ve.
