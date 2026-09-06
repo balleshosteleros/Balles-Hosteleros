@@ -120,13 +120,17 @@ function nombreMesLargo(periodo: string): string {
   return `${NOMBRES_MES[Number(m) - 1] ?? ""} ${y}`.trim();
 }
 
-/** Los `n` meses anteriores al actual más el actual, del más reciente al más antiguo. */
-function mesesHaciaAtras(n: number): string[] {
+/**
+ * Meses del AÑO EN CURSO hasta el actual, del más reciente al más antiguo. Las
+ * nóminas se entregan y se cierran por ejercicio, así que ofrecer meses de años
+ * anteriores solo invita a subir una entrega al año equivocado.
+ */
+function mesesDelAnoEnCurso(): string[] {
   const hoy = new Date();
+  const ano = hoy.getFullYear();
   const out: string[] = [];
-  for (let i = 0; i <= n; i++) {
-    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  for (let m = hoy.getMonth(); m >= 0; m--) {
+    out.push(`${ano}-${String(m + 1).padStart(2, "0")}`);
   }
   return out;
 }
@@ -390,7 +394,7 @@ export function PagosView() {
   // Meses ofrecidos al subir: los 18 anteriores al actual más el actual. Cubre de
   // sobra los retrasos de la gestoría sin convertir el desplegable en un listado
   // interminable.
-  const mesesSubida = useMemo(() => mesesHaciaAtras(18), []);
+  const mesesSubida = useMemo(() => mesesDelAnoEnCurso(), []);
 
   // Qué tiene ya cada mes ofrecido: nóminas, TC1 y si está cerrado. Es lo que
   // decide qué se puede subir y el cuadre que se enseña en el diálogo.
@@ -466,15 +470,21 @@ export function PagosView() {
   // gestoría siempre. Los meses ofrecidos llegan hasta el de la propia entrega,
   // por si alguna vez el recibo fuera del mismo mes.
   const mesCotizadoTc1 = mesTc1Elegido ?? mesAnterior(mesSubida || periodo);
+  // Del mes de la entrega hacia atrás, sin salir de su año. La única excepción es
+  // el mes ANTERIOR a la entrega: la de enero trae el TC1 de diciembre del año
+  // pasado, y ese recibo hay que poder guardarlo en su mes de verdad.
   const mesesCotizacionTc1 = useMemo(() => {
     const base = mesSubida || periodo;
-    const out: string[] = [];
-    let p = base;
-    for (let i = 0; i < 13; i++) {
+    const anoBase = base.slice(0, 4);
+    const out: string[] = [base];
+    let p = mesAnterior(base);
+    out.push(p);
+    p = mesAnterior(p);
+    while (p.slice(0, 4) === anoBase) {
       out.push(p);
       p = mesAnterior(p);
     }
-    return out;
+    return [...new Set(out)];
   }, [mesSubida, periodo]);
 
   // Lo mismo, pero del MES ELEGIDO en el diálogo de subida: ahí la entrega entera
@@ -1193,7 +1203,7 @@ export function PagosView() {
 
   const columnDefs: Record<string, { th: ReactNode; td: (p: PagoEmpleado) => ReactNode }> = {
     puesto: {
-      th: th("puesto", "Puesto", "lista", "left", opcionesPuesto, "min-w-[150px]"),
+      th: th("puesto", "Puesto", "lista", "left", opcionesPuesto, "min-w-[90px]"),
       td: (p) => (
         <TableCell key="puesto" className="whitespace-nowrap">
           {p.puesto ? (
@@ -1205,7 +1215,7 @@ export function PagosView() {
       ),
     },
     area: {
-      th: th("area", "Área", "lista", "left", Object.values(AREA_LABEL), "min-w-[130px]"),
+      th: th("area", "Área", "lista", "left", Object.values(AREA_LABEL), "min-w-[80px]"),
       td: (p) => {
         const pal = ZONE_COLORS[p.area];
         return (
@@ -1236,13 +1246,37 @@ export function PagosView() {
         </TableCell>
       ),
     },
+    // H.R = lo que marca su horario que tenia que fichar. H.T = lo que ficho de
+    // verdad ese mes. Ambos salen de los fichajes/horario, la misma fuente que
+    // ve el empleado en su portal, para que no haya dos versiones del dato.
     horasReales: {
       th: th("horasReales", "H.R", "numero"),
-      td: (p) => <TableCell key="horasReales" className="text-right tabular-nums">{p.horasReales}h</TableCell>,
+      td: (p) => {
+        const h = horasMesMap?.get(p.empleadoId);
+        return (
+          <TableCell key="horasReales" className="text-right tabular-nums" title="Horas previstas segun su horario">
+            {h ? fmtHoras(h.teoricas) : "—"}
+          </TableCell>
+        );
+      },
     },
     horasTrabajadas: {
       th: th("horasTrabajadas", "H.T", "numero"),
-      td: (p) => <TableCell key="horasTrabajadas" className="text-right tabular-nums">{p.horasTrabajadas}h</TableCell>,
+      td: (p) => {
+        const h = horasMesMap?.get(p.empleadoId);
+        if (!h) return <TableCell key="horasTrabajadas" className="text-right tabular-nums">—</TableCell>;
+        // El balance acompana a lo fichado: verde si hizo de mas, rojo si de menos.
+        const balCls =
+          h.balance > 0.01 ? "text-emerald-600" : h.balance < -0.01 ? "text-destructive" : "text-muted-foreground";
+        return (
+          <TableCell key="horasTrabajadas" className="text-right tabular-nums" title="Horas fichadas este mes">
+            {fmtHoras(h.normales)}
+            <span className={`ml-1 text-[10px] ${balCls}`} title="Balance: fichadas − previstas + extras">
+              {h.balance >= 0 ? "+" : ""}{fmtHoras(h.balance)}
+            </span>
+          </TableCell>
+        );
+      },
     },
     complemento: {
       th: th("complemento", "Complemento", "numero"),
@@ -1387,7 +1421,7 @@ export function PagosView() {
     // Nota libre de RRHH. Ultima columna de datos y sin fila de total: un texto
     // no suma (cae en el fallback de `totalDefs`, como `puesto` o `area`).
     comentario: {
-      th: th("comentario", "Comentario", "texto", "left", undefined, "min-w-[200px]"),
+      th: th("comentario", "Comentario", "texto", "left", undefined, "min-w-[120px]"),
       td: (p) => (
         <TableCell key="comentario" className="max-w-[280px]">
           {p.comentario ? (
@@ -1779,7 +1813,7 @@ export function PagosView() {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="[&_th]:h-9 [&_th]:px-2 [&_td]:px-2 [&_td]:py-1.5 text-[13px]">
               <TableHeader>
                 <TableRow className="bg-muted/40">
                   <TableColumnHeader
@@ -1793,7 +1827,7 @@ export function PagosView() {
                     orden={orden}
                     onOrdenChange={setOrden}
                     align="left"
-                    className="min-w-[180px]"
+                    className="min-w-[130px]"
                   />
                   {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                   <TableHead className="w-[50px]"></TableHead>
@@ -1842,31 +1876,6 @@ export function PagosView() {
                           ) : !p.empleadoId.startsWith("ext-") ? (
                             <div className="text-[11px] font-normal text-amber-600">Falta DNI</div>
                           ) : null}
-                          {(() => {
-                            const h = horasMesMap?.get(p.empleadoId);
-                            if (!h) return null;
-                            // Balance: verde si ha hecho horas de más, rojo si menos, gris si cuadra.
-                            const balCls =
-                              h.balance > 0.01 ? "text-emerald-600" : h.balance < -0.01 ? "text-destructive" : "text-muted-foreground";
-                            return (
-                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-normal">
-                                <span className="text-muted-foreground" title="Horas previstas según su horario">
-                                  Previstas {fmtHoras(h.teoricas)}
-                                </span>
-                                <span className="text-muted-foreground" title="Horas fichadas normales">
-                                  · Fichadas {fmtHoras(h.normales)}
-                                </span>
-                                {h.extras > 0.01 && (
-                                  <span className="text-amber-600" title="Horas extras fichadas">
-                                    · Extras {fmtHoras(h.extras)}
-                                  </span>
-                                )}
-                                <span className={`font-semibold ${balCls}`} title="Balance: fichadas − previstas + extras">
-                                  · {h.balance >= 0 ? "+" : ""}{fmtHoras(h.balance)}
-                                </span>
-                              </div>
-                            );
-                          })()}
                         </TableCell>
                         {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
                         <TableCell>
