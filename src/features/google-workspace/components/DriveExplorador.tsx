@@ -23,6 +23,8 @@ import {
   FileText,
   Folder,
   HardDrive,
+  LayoutGrid,
+  List,
   Loader2,
   Search,
   Users2,
@@ -53,6 +55,15 @@ type DriveItem = {
 type Paso = { id: string | null; nombre: string; raiz: Raiz };
 type Raiz = "mi-unidad" | "compartido";
 
+/** Cómo se pintan los archivos: en filas o en cuadrícula, como en Drive. */
+type Vista = "lista" | "iconos";
+
+/**
+ * La vista elegida se recuerda en este navegador. Es una comodidad de cada
+ * uno, no un dato del negocio: no viaja a la base de datos.
+ */
+const MEMORIA_VISTA = "drive:vista";
+
 const RAICES: { clave: Raiz; nombre: string; Icono: typeof HardDrive }[] = [
   { clave: "mi-unidad", nombre: "Mi unidad", Icono: HardDrive },
   { clave: "compartido", nombre: "Compartido conmigo", Icono: Users2 },
@@ -81,6 +92,47 @@ function fechaLegible(iso: string | null): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
+/**
+ * Abrir en Drive y descargar. Vive aparte porque lista y cuadrícula ofrecen
+ * exactamente lo mismo: si cambia el comportamiento, cambia en los dos sitios.
+ */
+function Acciones({
+  item,
+  onDescargar,
+}: {
+  item: DriveItem;
+  onDescargar: (item: DriveItem) => void;
+}) {
+  return (
+    <>
+      {item.enlaceDrive && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title="Abrir en Drive"
+          onClick={() =>
+            window.open(item.enlaceDrive!, "_blank", "noopener,noreferrer")
+          }
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {!item.esCarpeta && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title="Descargar"
+          onClick={() => onDescargar(item)}
+        >
+          <Download className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </>
+  );
+}
+
 export function DriveExplorador({ abierto }: { abierto: boolean }) {
   const { connected } = useGoogleConnection();
 
@@ -92,6 +144,27 @@ export function DriveExplorador({ abierto }: { abierto: boolean }) {
 
   const [busqueda, setBusqueda] = useState("");
   const [buscando, setBuscando] = useState(false);
+
+  // Arranca siempre en lista y, ya montado, adopta lo que el navegador
+  // recuerde: leer localStorage en el primer render rompe la hidratación.
+  const [vista, setVista] = useState<Vista>("lista");
+  useEffect(() => {
+    try {
+      const guardada = localStorage.getItem(MEMORIA_VISTA);
+      if (guardada === "iconos" || guardada === "lista") setVista(guardada);
+    } catch {
+      // Navegador sin acceso al almacenamiento: nos quedamos con la lista.
+    }
+  }, []);
+
+  const cambiarVista = (v: Vista) => {
+    setVista(v);
+    try {
+      localStorage.setItem(MEMORIA_VISTA, v);
+    } catch {
+      // Si no se puede recordar, la vista sigue funcionando igual.
+    }
+  };
 
   // Para descartar respuestas de peticiones que ya no interesan.
   const peticion = useRef(0);
@@ -191,6 +264,20 @@ export function DriveExplorador({ abierto }: { abierto: boolean }) {
     }
   };
 
+  /** Una carpeta se entra; un archivo se abre en Drive, en pestaña nueva. */
+  const abrir = (item: DriveItem) => {
+    if (item.esCarpeta) {
+      entrarEnCarpeta(item);
+      return;
+    }
+    window.open(
+      item.enlaceDrive ??
+        `/api/google/drive/ver?id=${encodeURIComponent(item.id)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  };
+
   const descargar = (item: DriveItem) => {
     // El navegador pide al software y el software a Drive: el token no sale.
     window.location.href = `/api/google/drive/ver?id=${encodeURIComponent(item.id)}&descargar=1`;
@@ -228,6 +315,28 @@ export function DriveExplorador({ abierto }: { abierto: boolean }) {
             {nombre}
           </Button>
         ))}
+
+        {/* Lista o cuadrícula. Solo iconos: el dibujo ya dice cuál es cuál. */}
+        <div className="ml-auto flex items-center gap-1 rounded-lg bg-muted p-1">
+          <Button
+            variant={vista === "lista" ? "default" : "ghost"}
+            size="icon"
+            className="h-6 w-6"
+            title="Ver en lista"
+            onClick={() => cambiarVista("lista")}
+          >
+            <List className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant={vista === "iconos" ? "default" : "ghost"}
+            size="icon"
+            className="h-6 w-6"
+            title="Ver en iconos"
+            onClick={() => cambiarVista("iconos")}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       {/* Buscador */}
@@ -310,6 +419,54 @@ export function DriveExplorador({ abierto }: { abierto: boolean }) {
               </p>
             )}
           </div>
+        ) : vista === "iconos" ? (
+          <ul className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 lg:grid-cols-4">
+            {items.map((item) => (
+              <li key={item.id} className="group relative">
+                <button
+                  type="button"
+                  onClick={() => abrir(item)}
+                  className="flex w-full flex-col items-center gap-2 rounded-lg border p-3 text-center hover:bg-muted/40"
+                >
+                  {/* La miniatura si Drive la da; si no, el icono del tipo. */}
+                  {item.miniatura && !item.esCarpeta ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.miniatura}
+                      alt=""
+                      className="h-20 w-full rounded object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-20 w-full items-center justify-center rounded bg-muted/50">
+                      {item.esCarpeta ? (
+                        <Folder className="h-8 w-8 text-[#5f6368]" />
+                      ) : item.icono ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.icono} alt="" className="h-8 w-8" />
+                      ) : (
+                        <FileText className="h-8 w-8 text-muted-foreground" />
+                      )}
+                    </span>
+                  )}
+                  <span className="w-full">
+                    <span className="block truncate text-xs font-medium">
+                      {item.nombre}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {fechaLegible(item.modificado)}
+                      {!item.esCarpeta && item.tamano !== null && (
+                        <> · {tamanoLegible(item.tamano)}</>
+                      )}
+                    </span>
+                  </span>
+                </button>
+
+                <span className="absolute right-1.5 top-1.5 flex items-center gap-0.5 rounded-md bg-background/90 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                  <Acciones item={item} onDescargar={descargar} />
+                </span>
+              </li>
+            ))}
+          </ul>
         ) : (
           <ul className="divide-y">
             {items.map((item) => (
@@ -329,16 +486,7 @@ export function DriveExplorador({ abierto }: { abierto: boolean }) {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    item.esCarpeta
-                      ? entrarEnCarpeta(item)
-                      : window.open(
-                          item.enlaceDrive ??
-                            `/api/google/drive/ver?id=${encodeURIComponent(item.id)}`,
-                          "_blank",
-                          "noopener,noreferrer",
-                        )
-                  }
+                  onClick={() => abrir(item)}
                   className="min-w-0 flex-1 text-left"
                 >
                   <p className="truncate text-sm">{item.nombre}</p>
@@ -351,34 +499,7 @@ export function DriveExplorador({ abierto }: { abierto: boolean }) {
                 </button>
 
                 <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                  {item.enlaceDrive && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title="Abrir en Drive"
-                      onClick={() =>
-                        window.open(
-                          item.enlaceDrive!,
-                          "_blank",
-                          "noopener,noreferrer",
-                        )
-                      }
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {!item.esCarpeta && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title="Descargar"
-                      onClick={() => descargar(item)}
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
+                  <Acciones item={item} onDescargar={descargar} />
                 </div>
               </li>
             ))}
