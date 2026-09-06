@@ -1159,7 +1159,6 @@ export function PagosView() {
     { campo: "ssTotal", label: "Total SS" },
     { campo: "costeTotal", label: "Coste total" },
     { campo: "pagado", label: "Pagado" },
-    { campo: "confirmacion", label: "Confirmación" },
     { campo: "comentario", label: "Comentario" },
     { campo: "nominaDoc", label: "Nómina (documento)" },
   ];
@@ -1275,11 +1274,15 @@ export function PagosView() {
       },
     },
     complemento: {
-      th: th("complemento", "Complemento", "numero"),
-      td: (p) => <TableCell key="complemento" className="text-right tabular-nums whitespace-nowrap">{fmt(p.complemento)}</TableCell>,
+      th: th("complemento", "Complemento", "numero", "right", undefined, "text-emerald-700"),
+      td: (p) => (
+        <TableCell key="complemento" className={`text-right tabular-nums whitespace-nowrap ${p.complemento > 0 ? "text-emerald-600 dark:text-emerald-500" : "text-muted-foreground"}`}>
+          {p.complemento > 0 ? fmt(p.complemento) : "—"}
+        </TableCell>
+      ),
     },
     ajuste: {
-      th: th("ajuste", "Ajuste", "numero"),
+      th: th("ajuste", "Ajuste", "numero", "right", undefined, "text-emerald-700"),
       td: (p) => (
         <TableCell
           key="ajuste"
@@ -1290,12 +1293,20 @@ export function PagosView() {
       ),
     },
     horasExtras: {
-      th: th("horasExtras", "H.Extras", "numero"),
-      td: (p) => <TableCell key="horasExtras" className="text-right tabular-nums whitespace-nowrap">{p.horasExtras > 0 ? fmt(p.horasExtras) : "—"}</TableCell>,
+      th: th("horasExtras", "H.Extras", "numero", "right", undefined, "text-emerald-700"),
+      td: (p) => (
+        <TableCell key="horasExtras" className={`text-right tabular-nums whitespace-nowrap ${p.horasExtras > 0 ? "text-emerald-600 dark:text-emerald-500" : "text-muted-foreground"}`}>
+          {p.horasExtras > 0 ? fmt(p.horasExtras) : "—"}
+        </TableCell>
+      ),
     },
     bonus: {
-      th: th("bonus", "Bonus", "numero"),
-      td: (p) => <TableCell key="bonus" className="text-right tabular-nums whitespace-nowrap">{p.bonus > 0 ? fmt(p.bonus) : "—"}</TableCell>,
+      th: th("bonus", "Bonus", "numero", "right", undefined, "text-emerald-700"),
+      td: (p) => (
+        <TableCell key="bonus" className={`text-right tabular-nums whitespace-nowrap ${p.bonus > 0 ? "text-emerald-600 dark:text-emerald-500" : "text-muted-foreground"}`}>
+          {p.bonus > 0 ? fmt(p.bonus) : "—"}
+        </TableCell>
+      ),
     },
     ssEmpleado: {
       th: th("ssEmpleado", "SS trabajador", "numero", "right", undefined, "text-sky-700"),
@@ -1401,30 +1412,21 @@ export function PagosView() {
                 className="h-7 gap-1 border-primary text-primary hover:bg-primary/5 disabled:opacity-40"
                 onClick={() => void togglePagar(p)}
                 disabled={bloqueado}
-                title={bloqueado ? "El empleado debe aprobar (LIQUIDAR) antes de pagar" : "Marcar como pagado"}
+                title={
+                  bloqueado
+                    ? "El empleado todavía no ha aprobado su liquidación"
+                    : p.confirmacionAceptadaAt
+                      ? "Aprobada por el empleado: se puede pagar"
+                      : "Marcar como pagado"
+                }
               >
-                <Banknote className="h-3.5 w-3.5" />Pagar
+                {bloqueado ? <Clock className="h-3.5 w-3.5" /> : <Banknote className="h-3.5 w-3.5" />}
+                {bloqueado ? "Esperando" : "Pagar"}
               </Button>
             )}
           </TableCell>
         );
       },
-    },
-    confirmacion: {
-      th: <TableColumnHeader key="confirmacion" label="Aprobación" className="w-[110px]" align="center" />,
-      td: (p) => (
-        <TableCell key="confirmacion" className="text-center">
-          {p.confirmacionAceptadaAt ? (
-            <span className="inline-flex items-center gap-1 text-emerald-600" title="Aprobada por el empleado (LIQUIDAR)">
-              <CheckCircle2 className="h-4 w-4" /><span className="text-xs font-medium">Liquidada</span>
-            </span>
-          ) : p.confirmacionEnviadaAt ? (
-            <Badge variant="secondary" className="gap-1 border-amber-300 bg-amber-50 text-[10px] text-amber-700"><Clock className="h-3 w-3" />Enviada</Badge>
-          ) : (
-            <span className="text-muted-foreground text-xs">—</span>
-          )}
-        </TableCell>
-      ),
     },
     // Nota libre de RRHH. Ultima columna de datos y sin fila de total: un texto
     // no suma (cae en el fallback de `totalDefs`, como `puesto` o `area`).
@@ -1479,7 +1481,6 @@ export function PagosView() {
     total: <TableCell key="t-total" className="text-right whitespace-nowrap"><span className="text-[15px] font-bold tabular-nums">{fmt(resumen.totalFinal)}</span></TableCell>,
     costeTotal: <TableCell key="t-coste" className="text-right whitespace-nowrap bg-muted/40"><span className="text-[15px] font-bold tabular-nums">{fmt(resumen.totalFinal + resumen.totalSs)}</span></TableCell>,
     pagado: <TableCell key="t-pagado" className="text-center"><Badge variant={pagosFiltrados.every((p) => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagosFiltrados.filter((p) => p.pagado).length}/{pagosFiltrados.length}</Badge></TableCell>,
-    confirmacion: <TableCell key="t-conf" className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.confirmacionEnviadaAt).length}/{pagosFiltrados.length}</Badge></TableCell>,
   };
 
   return (
