@@ -116,38 +116,44 @@ export const ESTADO_BADGE_CLASS: Record<EstadoReserva, string> = {
   // esta columna en pleno servicio (Iván, 06-sep).
   //
   // Los VERDES son la única pareja que hay que poder distinguir sin leer, así
-  // que van a distinta profundidad: CONFIRMADA es el verde claro del "aún no
-  // ha llegado" y SENTADA el PISTACHO, más apagado y terroso, del "ya está en
-  // la mesa".
-  CONFIRMADA:      "bg-emerald-500 text-white border-emerald-600",
+  // que son el MISMO pistacho a distinta profundidad: CONFIRMADA el claro del
+  // "aún no ha llegado" y SENTADA el oscuro del "ya está en la mesa". Antes
+  // CONFIRMADA era esmeralda (un verde más azulado) y al lado del pistacho de
+  // SENTADA parecían dos familias de color distintas (Iván, 06-sep).
+  CONFIRMADA:      "bg-lime-500 text-white border-lime-600",
   RECONFIRMADA:    "bg-sky-600 text-white border-sky-700",
   NO_RECONFIRMADA: "bg-amber-500 text-white border-amber-600",
   LISTA_ESPERA:    "bg-violet-600 text-white border-violet-700",
-  SENTADA:         "bg-lime-700 text-white border-lime-800",
+  SENTADA:         "bg-lime-800 text-white border-lime-900",
   LIBERADA:        "bg-yellow-500 text-white border-yellow-600",
   // Fucsia: es el unico tono que no choca con ningun otro estado. Antes era
   // cyan y en sala se confundia con el azul de RECONFIRMADA; el gris que se
   // probo despues no gustaba. Aqui no hay duda posible de un vistazo.
   TERMINANDO:      "bg-fuchsia-600 text-white border-fuchsia-700",
   NO_SHOW:         "bg-red-600 text-white border-red-700",
-  // Rojo APAGADO, casi granate: cancelada ya no es un aviso que atender, solo
-  // deja constancia. Sin esto competia con el rojo vivo de NO SHOW.
-  CANCELADA:       "bg-red-900 text-white border-red-950",
+  // GRIS: cancelada ya no es un aviso que atender, solo deja constancia de que
+  // esa mesa se cayo. En rojo —aunque fuera apagado— pedia atencion igual que
+  // NO SHOW, que si es un problema (Ivan, 06-sep).
+  CANCELADA:       "bg-zinc-500 text-white border-zinc-600",
 };
 
 export const ESTADO_DOT_CLASS: Record<EstadoReserva, string> = {
-  CONFIRMADA:      "bg-emerald-400",
+  // Mismo pistacho que su recuadro, para que el punto de los filtros y el de
+  // la ficha del cliente no digan un verde distinto del de la lista.
+  CONFIRMADA:      "bg-lime-500",
   RECONFIRMADA:    "bg-sky-500",
   NO_RECONFIRMADA: "bg-amber-500",
   LISTA_ESPERA:    "bg-violet-500",
-  // Verde oscuro frente al claro de CONFIRMADA: mismo criterio que el chip.
-  // green-700 puro se apagaba demasiado contra el lienzo oscuro de sala; -600
-  // mantiene la lectura de "oscuro" sin perder presencia en el punto.
-  SENTADA:         "bg-green-600",
+  // Pistacho oscuro frente al claro de CONFIRMADA: mismo criterio que el
+  // recuadro. Se queda en -600 y no en el -700 del chip porque contra el
+  // lienzo oscuro de sala el punto necesita algo mas de luz para verse.
+  SENTADA:         "bg-lime-700",
   LIBERADA:        "bg-yellow-500",
   TERMINANDO:      "bg-fuchsia-500",
   NO_SHOW:         "bg-red-500",
-  CANCELADA:       "bg-red-800",
+  // Gris, igual que su recuadro: donde queda punto (filtros, clientes, plano)
+  // tiene que ser el mismo color que en el resto de la app.
+  CANCELADA:       "bg-zinc-500",
 };
 
 export type ZonaSala = "SALA" | "BARRA" | "TERRAZA_INTERIOR" | "TERRAZA_EXTERIOR" | "PRIVADO";
