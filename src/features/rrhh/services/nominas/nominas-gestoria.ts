@@ -284,43 +284,46 @@ function botonSubidaNominasHtml(token: string): string {
  * recordatorio para que las condiciones no se cuenten distinto en cada uno.
  */
 const AVISO_VALIDEZ_HTML = `
-    <p style="color:#555;font-size:13px">
-      Este enlace <b>caduca a los ${DIAS_VALIDEZ_ENLACE_NOMINAS} días</b>, hayáis subido
-      los documentos o no; después se bloquea por seguridad. Si caduca, avisadnos y os
-      enviamos uno nuevo.
+    <p style="color:#555;font-size:13px;margin:14px 0 0">
+      El enlace caduca en <b>${DIAS_VALIDEZ_ENLACE_NOMINAS} días</b>, subáis o no. Después se
+      bloquea por seguridad; pedidnos otro si lo necesitáis.
     </p>`;
 
-const AVISO_VALIDEZ_TEXTO =
-  `El enlace caduca a los ${DIAS_VALIDEZ_ENLACE_NOMINAS} días, hayáis subido los documentos o no; ` +
-  "después se bloquea por seguridad. Si caduca, avisadnos y os enviamos uno nuevo.";
+const AVISO_VALIDEZ_TEXTO = `El enlace caduca en ${DIAS_VALIDEZ_ENLACE_NOMINAS} días, subáis o no.`;
+
+/** Los 4 pasos del circuito, numerados. Es lo que la gestoría necesita saber. */
+const PASOS = [
+  ["1", "Subís", "nóminas y seguros sociales, eligiendo el mes de cada uno."],
+  ["2", "Comprobación automática", "se contrastan con las bajas médicas y las altas y bajas de contrato registradas."],
+  ["3", "Revisión de recursos humanos", "comprueban que cuadran con sus datos."],
+  ["4", "Respuesta por correo", "aprobadas y enviadas a los empleados, o con las anomalías detectadas para subsanar y volver a subir."],
+] as const;
 
 const AVISO_REVISION_HTML = `
-    <div style="border-left:4px solid #0ea5e9;background:#f0f9ff;padding:12px 16px;margin:16px 0;
-                border-radius:0 6px 6px 0">
-      <p style="margin:0 0 8px;font-weight:600;color:#075985">Qué pasa después de subirlos</p>
-      <p style="margin:0 0 6px;color:#1f2937;font-size:14px">
-        Subir los documentos <b>no significa que queden aprobados</b>. El sistema los
-        contrasta automáticamente con los datos que ya tenemos registrados: bajas médicas,
-        altas y bajas de contrato.
+    <div style="border:1px solid #e4e4e7;border-radius:8px;padding:14px 16px;margin:16px 0">
+      <p style="margin:0 0 10px;font-weight:600;color:#18181b;font-size:14px">
+        Subir no es quedar aprobado
       </p>
-      <p style="margin:0 0 6px;color:#1f2937;font-size:14px">
-        Después hay una <b>segunda revisión de recursos humanos</b>, que comprueba que las
-        nóminas y los seguros sociales cuadran con sus datos.
-      </p>
-      <p style="margin:0;color:#1f2937;font-size:14px">
-        Si todo es correcto, recibiréis un <b>correo de aprobación</b> y las nóminas se
-        envían a los empleados. Si algo no cuadra, recibiréis un correo <b>detallando lo
-        detectado</b> para que lo subsanéis y lo subáis de nuevo.
-      </p>
+      <table cellpadding="0" cellspacing="0" border="0" style="width:100%">
+        ${PASOS.map(
+          ([n, titulo, resto]) => `
+        <tr>
+          <td style="vertical-align:top;padding:0 10px 8px 0;width:22px">
+            <span style="display:inline-block;width:20px;height:20px;line-height:20px;
+                         text-align:center;border-radius:50%;background:#18181b;color:#fff;
+                         font-size:11px;font-weight:700">${n}</span>
+          </td>
+          <td style="vertical-align:top;padding:0 0 8px;color:#3f3f46;font-size:14px">
+            <b>${titulo}</b>: ${resto}
+          </td>
+        </tr>`,
+        ).join("")}
+      </table>
     </div>`;
 
 const AVISO_REVISION_TEXTO =
-  "Qué pasa después de subirlos:\n" +
-  "Subir los documentos no significa que queden aprobados. El sistema los contrasta con los datos " +
-  "registrados (bajas médicas, altas y bajas de contrato) y después recursos humanos hace una segunda " +
-  "revisión para comprobar que cuadran con sus datos.\n" +
-  "Si todo es correcto recibiréis un correo de aprobación y las nóminas se envían a los empleados. " +
-  "Si algo no cuadra, recibiréis un correo detallando lo detectado para subsanarlo y volver a subirlo.";
+  "Subir no es quedar aprobado:\n" +
+  PASOS.map(([n, titulo, resto]) => `${n}. ${titulo}: ${resto}`).join("\n");
 
 export async function enviarSolicitudNominasGestoria(
   admin: SupabaseClient,
@@ -355,21 +358,26 @@ export async function enviarSolicitudNominasGestoria(
   const mes = nombreMes(periodo);
   const subject = `Subida de nóminas de ${mes} · ${empresaNombre}`;
   const html = `
-    <p>Hola,</p>
-    <p>Ya podéis subir las <b>nóminas de ${mes}</b> de ${empresaNombre}, junto con los
-    <b>seguros sociales</b>.</p>
-    <p>Pulsad el botón y, dentro, elegid el mes en cada apartado y adjuntad los
-    documentos. Podéis subir <b>varios archivos</b> en cada uno.</p>
+    <p style="margin:0 0 4px">Hola,</p>
+    <p style="margin:0 0 4px">
+      Podéis subir ya, de <b>${empresaNombre}</b>:
+    </p>
+    <ul style="margin:0 0 4px;padding-left:20px;color:#3f3f46">
+      <li>Nóminas de <b>${mes}</b></li>
+      <li>Seguros sociales</li>
+    </ul>
     ${boton}
-    ${AVISO_VALIDEZ_HTML}
     ${AVISO_REVISION_HTML}
-    <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
+    ${AVISO_VALIDEZ_HTML}
+    <p style="color:#888;font-size:12px;margin:14px 0 0">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
   const text =
-    `Ya podéis subir las nóminas de ${mes} de ${empresaNombre}, junto con los seguros sociales.\n\n` +
-    `Subidlas aquí: ${enlace}\n\n` +
-    AVISO_VALIDEZ_TEXTO +
+    `${empresaNombre} · podéis subir ya:\n` +
+    `- Nóminas de ${mes}\n` +
+    `- Seguros sociales\n\n` +
+    `${enlace}\n\n` +
+    AVISO_REVISION_TEXTO +
     "\n\n" +
-    AVISO_REVISION_TEXTO;
+    AVISO_VALIDEZ_TEXTO;
 
   const res = await sendEmail({ to: cc ? `${to}, ${cc}` : to, subject, html, text, empresaId });
   if (!res.ok) return { ok: false, error: "No se pudo enviar el correo" };
@@ -429,20 +437,23 @@ export async function recordarSolicitudNominasGestoria(
   const mes = nombreMes(periodo);
   const subject = `Recordatorio: faltan las nóminas de ${mes} · ${empresaNombre}`;
   const html = `
-    <p>Hola,</p>
-    <p>Os recordamos que todavía <b>no hemos recibido las nóminas de ${mes}</b> de ${empresaNombre}.</p>
-    <p>Podéis subirlas aquí, eligiendo <b>${mes}</b> en el desplegable:</p>
+    <p style="margin:0 0 4px">Hola,</p>
+    <p style="margin:0 0 4px">
+      Siguen pendientes las <b>nóminas de ${mes}</b> de <b>${empresaNombre}</b>.
+    </p>
     ${boton}
-    <p>Si ya las habéis enviado por otra vía, avisadnos y no hace falta que hagáis nada.</p>
-    ${AVISO_VALIDEZ_HTML}
+    <p style="margin:10px 0 0;color:#3f3f46;font-size:14px">
+      Si ya las habéis enviado por otra vía, avisadnos.
+    </p>
     ${AVISO_REVISION_HTML}
-    <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
+    ${AVISO_VALIDEZ_HTML}
+    <p style="color:#888;font-size:12px;margin:14px 0 0">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
   const text =
-    `Recordatorio: faltan las nóminas de ${mes} de ${empresaNombre}.\n\n` +
-    `Subidlas aquí: ${enlace}\n\n` +
-    AVISO_VALIDEZ_TEXTO +
+    `Siguen pendientes las nóminas de ${mes} de ${empresaNombre}.\n\n` +
+    `${enlace}\n\n` +
+    AVISO_REVISION_TEXTO +
     "\n\n" +
-    AVISO_REVISION_TEXTO;
+    AVISO_VALIDEZ_TEXTO;
 
   const res = await sendEmail({ to: cc ? `${to}, ${cc}` : to, subject, html, text, empresaId });
   if (!res.ok) return { ok: false, error: "No se pudo enviar el recordatorio" };

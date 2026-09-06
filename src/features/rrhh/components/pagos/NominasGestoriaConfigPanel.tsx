@@ -94,7 +94,8 @@ export function NominasGestoriaConfigPanel() {
       title: `Enviar a la gestoría las nóminas de ${etiquetaMes(mesEnvio)}`,
       description:
         `Se enviará un correo a ${correoGestoria} con un enlace para subir las nóminas de ` +
-        `${etiquetaMes(mesEnvio)}. Es el enlace de siempre: no caduca. ¿Continuar?`,
+        `${etiquetaMes(mesEnvio)}. El enlace nuevo ANULA cualquier otro anterior: solo se ` +
+        `podrá subir desde este, y caduca a los 15 días. ¿Continuar?`,
       confirmLabel: "Enviar correo",
     });
     if (!ok) return;

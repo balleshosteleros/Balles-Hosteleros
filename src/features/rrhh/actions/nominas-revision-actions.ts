@@ -18,7 +18,7 @@ import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { createHash } from "node:crypto";
 import { BUCKET_NOMINAS, EXT_POR_MIME } from "@/features/rrhh/services/nominas/procesar-nominas";
 import { extraerDatosTc1 } from "@/features/rrhh/services/nominas/extraer-nominas";
-import { rechazarMesNominasGestoria } from "@/features/rrhh/services/nominas/rechazo-gestoria";
+import { avisarGestoriaAprobacion, rechazarMesNominasGestoria } from "@/features/rrhh/services/nominas/rechazo-gestoria";
 import { MOTIVO_MIN_CARACTERES } from "@/features/rrhh/lib/nominas-rechazo";
 import { mesAnterior, esPeriodoValido } from "@/features/rrhh/lib/nominas-periodos";
 import { revalidatePath } from "next/cache";
@@ -392,9 +392,21 @@ export async function confirmarMesNominas(periodo: string) {
       );
     if (error) throw error;
 
+    // Se avisa a la gestoría de que quedó aprobado. Es la otra mitad del
+    // circuito que su correo les promete: hasta ahora solo tenían noticias
+    // cuando algo iba mal. Best-effort: el mes ya está confirmado, y si el
+    // correo falla se dice en la respuesta en vez de tumbar la operación.
+    const admin = createAdminClient();
+    const correo = await avisarGestoriaAprobacion(admin, empresaId, periodo);
+
     revalidatePath("/rrhh/pagos");
     revalidatePath("/mi-panel/documentos");
-    return { ok: true as const, conIncidencia: pendientes ?? 0 };
+    return {
+      ok: true as const,
+      conIncidencia: pendientes ?? 0,
+      emailGestoriaEnviado: correo.enviado,
+      emailGestoriaDestino: correo.destino,
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[rrhh] confirmarMesNominas:", msg);

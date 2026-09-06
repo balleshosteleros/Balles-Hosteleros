@@ -148,9 +148,12 @@ export async function enviarNominasGestoriaAhora(
       periodo = mesSolicitado(anio, mes, Number(dia));
     }
 
-    // Manda SIEMPRE el mismo enlace permanente; el mes elegido aquí solo decide
-    // de qué mes habla el correo. Antes este envío creaba un enlace nuevo de 3
-    // días que pisaba el anterior.
+    // Enviar a mano ANULA lo anterior: se genera un enlace nuevo y el que
+    // tuviera la gestoría en cualquier correo viejo deja de abrir. Así solo hay
+    // UN enlace válido en cada momento, que es el del último correo enviado.
+    const rot = await regenerarTokenNominasGestoria(admin, empresaId);
+    if (!rot.ok) return { ok: false, error: rot.error };
+
     const res = await enviarSolicitudNominasGestoria(admin, empresaId, periodo);
     return res.ok ? { ok: true, periodo } : { ok: false, error: res.error };
   } catch (err) {

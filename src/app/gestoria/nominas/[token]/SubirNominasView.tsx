@@ -142,6 +142,13 @@ function Bloque({
   // Meses ya entregados de este tipo: se enseñan, pero no se pueden elegir.
   const libres = meses.filter((m) => !entregado(m, tipo));
   const sinMesesLibres = libres.length === 0;
+  // Los más recientes primero, y solo unos pocos: es un recordatorio de qué
+  // está hecho, no el histórico completo.
+  const mesesEntregados = meses
+    .filter((m) => entregado(m, tipo))
+    .map((m) => m.periodo)
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, 4);
 
   const elegirArchivos = (nuevos: File[]) => {
     setError(null);
@@ -218,12 +225,19 @@ function Bloque({
   // que eso ya está hecho y no se vuelva a subir por si acaso.
   if (hecho) {
     return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-        <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-600" />
-          <div>
-            <p className="text-sm font-semibold text-emerald-900">{titulo} de {hecho}</p>
-            <p className="text-sm text-emerald-700">Recibido correctamente.</p>
+      <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-5">
+        <div className="flex items-start gap-3">
+          <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-emerald-600" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+              Acabas de enviar
+            </p>
+            <p className="mt-0.5 text-sm font-semibold text-emerald-900">
+              {titulo} de {hecho}
+            </p>
+            <p className="mt-1 text-sm text-emerald-700">
+              Pendiente de revisión. Te avisaremos por correo.
+            </p>
           </div>
         </div>
       </div>
@@ -235,11 +249,26 @@ function Bloque({
       <h2 className="text-base font-semibold text-zinc-900">{titulo}</h2>
 
       {sinMesesLibres ? (
-        <div className="mt-3 flex items-start gap-2 rounded-lg bg-zinc-50 p-3">
-          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
-          <p className="text-sm text-zinc-600">
-            Ya está todo entregado. Si falta algo, avisa a la empresa.
-          </p>
+        <div className="mt-3 rounded-lg bg-zinc-50 p-3">
+          <div className="flex items-start gap-2">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+            <p className="text-sm text-zinc-600">
+              No hay ningún mes pendiente. Si falta alguno, avisa a la empresa.
+            </p>
+          </div>
+          {/* Se nombran los meses: un "todo entregado" a secas no dice SI es de
+              este envío o de meses anteriores, que es justo la duda que genera. */}
+          {mesesEntregados.length > 0 ? (
+            <ul className="mt-2.5 space-y-1 border-t border-zinc-200 pt-2.5">
+              {mesesEntregados.map((m) => (
+                <li key={m} className="flex items-center gap-2 text-sm text-zinc-600">
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                  <span>{nombreMes(m)}</span>
+                  <span className="ml-auto text-xs font-medium text-emerald-700">Entregado</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : (
         <>
@@ -261,7 +290,7 @@ function Bloque({
               return (
                 <option key={m.periodo} value={m.periodo} disabled={bloqueado}>
                   {nombreMes(m.periodo)}
-                  {bloqueado ? " — ya entregado" : ""}
+                  {bloqueado ? " · Entregado" : ""}
                 </option>
               );
             })}

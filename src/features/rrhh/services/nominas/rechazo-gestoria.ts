@@ -249,6 +249,55 @@ async function avisarGestoriaRechazo(
   return { enviado: res.ok, destino: to, enlace };
 }
 
+
+/**
+ * Correo de APROBACIÓN a la gestoría: el mes queda cerrado y las nóminas ya
+ * están en el portal de cada trabajador.
+ *
+ * Cierra el circuito que el propio aviso les promete ("recibiréis un correo de
+ * aprobación"). Sin esto, la gestoría solo tenía noticias cuando algo iba MAL:
+ * el silencio no distingue "aprobado" de "aún sin revisar".
+ */
+export async function avisarGestoriaAprobacion(
+  admin: SupabaseClient,
+  empresaId: string,
+  periodo: string,
+): Promise<{ enviado: boolean; destino: string | null }> {
+  const { data: emp } = await admin
+    .from("empresas")
+    .select("nombre")
+    .eq("id", empresaId)
+    .maybeSingle();
+  const empresaNombre = (emp?.nombre as string) ?? "la empresa";
+
+  const { to, cc } = await correoGestoriaEmpresa(admin, empresaId);
+  if (!to) return { enviado: false, destino: null };
+
+  const mes = nombreMes(periodo);
+  const subject = `Nóminas de ${mes} aprobadas · ${empresaNombre}`;
+  const html = `
+    <p style="margin:0 0 4px">Hola,</p>
+    <p style="margin:0 0 12px">
+      Las <b>nóminas de ${mes}</b> de <b>${empresaNombre}</b> están revisadas y
+      <b>aprobadas</b>.
+    </p>
+    <div style="border-left:4px solid #16a34a;background:#f0fdf4;padding:12px 16px;
+                border-radius:0 6px 6px 0">
+      <p style="margin:0;color:#166534;font-size:14px">
+        Ya están disponibles para los trabajadores en su portal. No hay que hacer nada más.
+      </p>
+    </div>
+    <p style="color:#888;font-size:12px;margin:14px 0 0">
+      Enviado automáticamente desde el sistema de ${empresaNombre}.
+    </p>`;
+  const text =
+    `Las nóminas de ${mes} de ${empresaNombre} están revisadas y aprobadas.\n` +
+    "Ya están disponibles para los trabajadores en su portal. No hay que hacer nada más.";
+
+  const res = await sendEmail({ to: cc ? `${to}, ${cc}` : to, subject, html, text, empresaId });
+  return { enviado: res.ok, destino: to };
+}
+
 /** Escapa el texto de RRHH antes de meterlo en el HTML del correo. */
 function escaparHtml(s: string): string {
   return s

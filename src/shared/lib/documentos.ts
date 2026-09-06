@@ -8,22 +8,20 @@
 export const MAX_DOCUMENTO_MB = 50;
 export const MAX_DOCUMENTO_BYTES = MAX_DOCUMENTO_MB * 1024 * 1024;
 
-// Tope de las NÓMINAS, por encima del de documentos: el PDF de un mes lleva
-// ~1 página por trabajador y con plantillas grandes 50 MB se queda corto. El
-// bucket `rrhh-nominas` está subido a 100 MB para acompañarlo.
+// Tope de las NÓMINAS, igualado al de documentos (50 MB), que es el del bucket.
+//
+// 50 MB sobra: un mes lleva ~1 página por trabajador (en la práctica, 10-11) y
+// además se pueden adjuntar VARIOS archivos por entrega, así que un mes grande
+// se parte sin problema. Se probó a subirlo a 100 y se devolvió a 50 por eso.
 //
 // El peso NO limita la lectura por IA: el archivo no se manda entero al modelo,
 // se parte en páginas y cada una va por separado (`extraer-nominas.ts`). El
 // límite real de la lectura son las PÁGINAS (`MAX_PAGINAS` = 200 en ese
 // fichero), es decir ~200 trabajadores.
 //
-// Historia: estaba en 25 MB y obligaba a partir el PDF del mes en varios
-// envíos; se igualó a 50 y ahora sube a 100. Aun así se pueden adjuntar VARIOS
-// archivos por entrega, que es la salida cuando un solo PDF no cabe.
-//
 // Vive aquí —y no en el servicio, que es `server-only`— para que la pantalla de
 // subida pueda avisar ANTES de subir en vez de que el servidor lo rechace después.
-export const MAX_NOMINAS_MB = 100;
+export const MAX_NOMINAS_MB = MAX_DOCUMENTO_MB;
 export const MAX_NOMINAS_BYTES = MAX_NOMINAS_MB * 1024 * 1024;
 
 // Tope de IMÁGENES sueltas y ficheros ligeros: avatar, logos (app y empresa),
