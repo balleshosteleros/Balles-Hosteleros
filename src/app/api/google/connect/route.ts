@@ -16,10 +16,19 @@ const SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/contacts.readonly",
   "https://www.googleapis.com/auth/contacts.other.readonly",
-  // Importador de Drive (PRP-081): SOLO LECTURA. El software nunca borra ni
-  // mueve nada en Drive — el vaciado lo hace Iván a mano cuando haya
-  // verificado que está todo copiado en Archivos.
-  "https://www.googleapis.com/auth/drive.readonly",
+  // Drive (PRP-084 + subida): se lee todo y se SUBE a cualquier carpeta.
+  //
+  // Es el scope completo, no `drive.file`, porque `drive.file` solo deja tocar
+  // lo que crea la propia app: no se podría subir dentro de las carpetas que
+  // ya existen en Drive, que es justo para lo que sirve el botón «Subir».
+  //
+  // Google lo clasifica como RESTRINGIDO: publicar la app a cualquier usuario
+  // exigiría auditoría CASA anual de pago. Aquí NO aplica porque las cuentas
+  // son las tres de la casa y están como usuarios de prueba de la app. Si
+  // algún día se publica, hay que revisarlo antes.
+  //
+  // El software solo LEE y SUBE: nunca borra, mueve ni renombra en Drive.
+  "https://www.googleapis.com/auth/drive",
 ].join(" ");
 
 // Vida corta: si el usuario tarda más de 10 minutos en volver de Google, se

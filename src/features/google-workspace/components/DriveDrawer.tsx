@@ -21,7 +21,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { DriveExplorador } from "./DriveExplorador";
-import { DriveIcon } from "./DriveIcon";
+import { DriveLogo } from "./DriveIcon";
 
 export function DriveDrawer({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -34,20 +34,24 @@ export function DriveDrawer({ children }: { children: ReactNode }) {
         maximizable
         className="flex flex-col gap-0 p-0 [&>button]:hidden"
       >
-        <SheetHeader className="shrink-0 border-b py-3 pl-5 pr-3">
-          <div className="flex items-center justify-between gap-2">
-            <SheetTitle className="flex items-center gap-2 text-base">
-              <DriveIcon className="h-4 w-4" />
-              Drive
-            </SheetTitle>
-            <div className="flex items-center gap-1">
-              <SheetMaximizeButton
-                className="h-8 w-8 p-0"
-                iconClassName="h-4 w-4"
-              />
-              <SheetClose className="flex h-8 w-8 items-center justify-center rounded-full opacity-70 transition-colors hover:bg-black/5 hover:opacity-100">
-                <X className="h-4 w-4" />
-                <span className="sr-only">Cerrar</span>
+        {/* El nombre va dentro del logo, como en Gmail, Calendar y Meet: el
+            título queda solo para lectores de pantalla. */}
+        <SheetTitle className="sr-only">Drive · Google Drive</SheetTitle>
+        <SheetHeader className="shrink-0 border-b px-2 py-2">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 pl-1 pr-3">
+              <DriveLogo className="h-9 w-auto" />
+            </div>
+            <div className="ml-auto flex items-center gap-1">
+              <SheetMaximizeButton className="text-[#5f6368]" />
+              <SheetClose asChild>
+                <button
+                  type="button"
+                  className="ml-1 rounded-full p-3 transition-colors hover:bg-black/5"
+                  title="Cerrar"
+                >
+                  <X className="h-5 w-5 text-[#5f6368]" />
+                </button>
               </SheetClose>
             </div>
           </div>
