@@ -182,7 +182,7 @@ import { useModoInmersivo } from "@/features/layout/contexts/modo-inmersivo-cont
 import { friendlyError } from "@/shared/lib/friendly-errors";
 // Color de zona: vive en `lib/color-zona` porque lo comparten el plano, el
 // listado por zonas y el salón de reasignación manual de mesas.
-import { colorZona } from "@/features/sala/lib/color-zona";
+import { colorZona, fondoMesaLibre } from "@/features/sala/lib/color-zona";
 import { formatearFechaEs } from "@/shared/lib/fecha";
 
 /**
@@ -3019,7 +3019,7 @@ function PlanoCanvas({
                   className={cn(
                     "sala-mesa absolute flex flex-col items-center justify-center text-[11px] font-semibold border-2 transition-all cursor-pointer px-1 overflow-hidden",
                     mesaBg[estado] ?? "",
-                    isLibre ? "text-zinc-900 border-black/30" : "border-black/20",
+                    isLibre ? "text-white border-white/15" : "border-black/20",
                     // Recuadro rojo SOLO mientras el raton esta encima: ni al
                     // abrir la ficha de una reserva ni al elegir una mesa se
                     // queda marcada. Al mover el raton se enciende unicamente
@@ -3046,7 +3046,7 @@ function PlanoCanvas({
                     width: dims.w,
                     height: dims.h,
                     borderRadius: radius,
-                    backgroundColor: isLibre ? colorZona(meta?.colorZona ?? "#FDE68A", esOscuro) : undefined,
+                    backgroundImage: isLibre ? fondoMesaLibre(m.id, esOscuro) : undefined,
                     transform: pos.rotation ? `rotate(${pos.rotation}deg)` : undefined,
                   }}
                   onClick={(e) => {
@@ -3098,11 +3098,11 @@ function PlanoCanvas({
                       /* La hora va SIN truncar: son cinco cifras fijas y
                          cortarlas ("14:0…") destruye el dato. La capacidad se
                          queda detras porque, si algo sobra, es ella. */
-                      <span className={cn("text-[10px] font-medium tabular-nums leading-tight whitespace-nowrap", isLibre ? "text-foreground/75" : "opacity-90")}>
+                      <span className={cn("text-[10px] font-medium tabular-nums leading-tight whitespace-nowrap", isLibre ? "text-white/75" : "opacity-90")}>
                         {firstR.hora.slice(0, 5)} · {m.capacidad}p
                       </span>
                     ) : (
-                      <span className={cn("text-[10px] font-normal mt-0.5", isLibre ? "text-foreground/70" : "opacity-75")}>
+                      <span className={cn("text-[10px] font-normal mt-0.5", isLibre ? "text-white/70" : "opacity-75")}>
                         ({m.capacidad}p)
                       </span>
                     )}
@@ -3116,7 +3116,7 @@ function PlanoCanvas({
                           // dato que se busca cruzando la sala. Con opacidad
                           // heredada se lavaba sobre los verdes.
                           "text-[12px] font-bold leading-tight truncate max-w-full !opacity-100",
-                          isLibre && "text-foreground",
+                          isLibre && "text-white",
                         )}
                       >
                         {isWalkIn ? "WALK IN" : firstR.cliente}
@@ -6399,7 +6399,7 @@ export function ReservasView() {
                                     className={cn(
                                       "relative overflow-hidden h-20 rounded-md flex flex-col items-center justify-center text-[11px] font-bold shadow-sm border-2 transition-all cursor-pointer px-1",
                                       mesaBg[estado] ?? "",
-                                      isLibre ? "text-zinc-900 border-black/30" : "border-black/20",
+                                      isLibre ? "text-white border-white/15" : "border-black/20",
                                       // Igual que en el plano: el rojo es solo
                                       // del raton, no se queda pegado al abrir
                                       // una reserva ni al elegir una mesa.
@@ -6408,7 +6408,7 @@ export function ReservasView() {
                                       moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
                                       destinoInvalido && "opacity-40 cursor-not-allowed",
                                     )}
-                                    style={isLibre ? { backgroundColor: colorZona(zona.colorPastel, esOscuro) } : undefined}
+                                    style={isLibre ? { backgroundImage: fondoMesaLibre(m.id, esOscuro) } : undefined}
                                     onClick={(e) => {
                                       if (moviendoAqui) {
                                         e.preventDefault();
@@ -6438,13 +6438,13 @@ export function ReservasView() {
                                       </svg>
                                     )}
                                     <span className="relative text-[13px] leading-none">{m.codigo}</span>
-                                    <span className={cn("relative text-[10px] font-normal mt-0.5", isLibre ? "text-foreground/70" : "opacity-75")}>
+                                    <span className={cn("relative text-[10px] font-normal mt-0.5", isLibre ? "text-white/70" : "opacity-75")}>
                                       ({m.capacidad}p)
                                     </span>
                                     {/* Mismo criterio que en el plano: la hora
                                         y el nombre se leen de lejos. */}
                                     {firstR && (
-                                      <span className={cn("relative text-[11px] font-bold mt-1 truncate max-w-full !opacity-100", isLibre && "text-foreground")}>
+                                      <span className={cn("relative text-[11px] font-bold mt-1 truncate max-w-full !opacity-100", isLibre && "text-white")}>
                                         {firstR.hora} {isWalkIn ? "WALK IN" : firstR.cliente}
                                       </span>
                                     )}
@@ -6607,7 +6607,7 @@ export function ReservasView() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="col-span-2 grid grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.9fr)_minmax(0,0.9fr)] items-start gap-2">
+                  <div className="col-span-2 grid grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.6fr)_minmax(0,1.2fr)] items-start gap-2">
                   {/* Fecha y hora editables: mover una reserva era el caso
                       más común y no se podía hacer desde aquí. */}
                   <div className="min-w-0">
@@ -6874,7 +6874,7 @@ export function ReservasView() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="absolute right-0 top-0 size-7 shrink-0 p-0"
+                        className="absolute right-0 top-0 size-8 shrink-0 p-0"
                         title="Modificar las mesas de la reserva"
                         aria-label="Modificar las mesas de la reserva"
                         onClick={() => abrirEditorMesas(selectedReserva)}
@@ -6958,19 +6958,9 @@ export function ReservasView() {
                 <div className="flex flex-wrap items-center gap-2">
                   <ReservaExternalBadge reserva={selectedReserva} />
                 </div>
-                {/* Actividad de ESTA reserva. Sube aquí, pegada a la mesa, para
-                    que quede a la misma altura que la actividad del cliente de
-                    la otra columna: las dos cuentan un historial, y a alturas
-                    distintas se leían como cosas de distinta importancia. */}
-                <div className="pt-2 border-t">
-                  <ActividadReserva
-                    key={actividadVersion}
-                    reservaId={selectedReserva.id}
-                  />
-                </div>
                 {/* Comunicación: los correos que se le han mandado por ESTA
-                    reserva. Van después del historial y antes del comentario,
-                    que es lo último porque es lo único que se escribe. */}
+                    reserva. Van antes del comentario, que es lo último
+                    porque es lo único que se escribe. */}
                 <div className="pt-2 border-t">
                   <HistoricoEmailsReserva reservaId={selectedReserva.id} />
                 </div>
@@ -7098,23 +7088,38 @@ export function ReservasView() {
                   </div>
                 </div>
 
-                {/* Actividad DEL CLIENTE: los cambios de sus datos, se hayan
-                    hecho aquí o desde su ficha. Va junto a los campos que la
-                    generan, y separada de la actividad de la reserva —que está
-                    más abajo y cuenta otra cosa: lo que le ha pasado a ESTA
-                    reserva. Un walk-in sin ficha no tiene actividad de cliente. */}
-                {selectedReserva.clienteId && (
-                  <>
-                    <div className="pt-2 border-t border-sky-500/20">
-                      <ActividadCliente
-                        key={`${selectedReserva.clienteId}-${actividadVersion}`}
-                        clienteId={selectedReserva.clienteId}
-                      />
-                    </div>
-                  </>
-                )}
-
               </div>
+              </div>
+
+              {/* ── Actividad, las dos a la misma altura ─────────────────
+                  Mismo motivo que las etiquetas: colgando del final de su
+                  columna nunca coincidían, porque la izquierda lleva encima la
+                  mesa y el ticket y la derecha la ficha del cliente. En su
+                  propia banda quedan siempre enfrentadas, que es como se leen:
+                  a la izquierda lo que le ha pasado a ESTA reserva, a la
+                  derecha los cambios de datos de la PERSONA. */}
+              <div className="grid shrink-0 gap-3 md:grid-cols-2">
+                <div className="rounded-lg border bg-muted/25 p-2.5">
+                  <ActividadReserva
+                    key={actividadVersion}
+                    reservaId={selectedReserva.id}
+                  />
+                </div>
+                {/* Un walk-in sin ficha no tiene actividad de cliente, pero el
+                    hueco se mantiene para que el panel de la izquierda no se
+                    descoloque. */}
+                <div className="rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-2.5">
+                  {selectedReserva.clienteId ? (
+                    <ActividadCliente
+                      key={`${selectedReserva.clienteId}-${actividadVersion}`}
+                      clienteId={selectedReserva.clienteId}
+                    />
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground">
+                      Esta reserva no tiene ficha de cliente.
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* ── Etiquetas, las dos a la misma altura ─────────────────
