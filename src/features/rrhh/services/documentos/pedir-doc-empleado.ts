@@ -11,11 +11,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email/send";
-import {
-  crearTokenDocEmpleado,
-  DOCS_EMPLEADO,
-  type TipoDocEmpleado,
-} from "./empleado-doc-token";
+import { crearTokenDocEmpleado, type TipoDocEmpleado } from "./empleado-doc-token";
 
 /** Textos del correo por tipo de documento. */
 const COPY: Record<TipoDocEmpleado, { asunto: string; que: string; comoSacarlo: string }> = {
@@ -73,6 +69,12 @@ export async function pedirDocumentoAEmpleado(
     empleadoId: string;
     tipoDoc: TipoDocEmpleado;
     recordatorio?: boolean;
+    /**
+     * Enlace ya creado por quien llama. Se usa cuando el mismo enlace viaja por
+     * dos canales (correo + notificación): crear el token dos veces lo renovaría
+     * y dejaría muerto el del primer aviso.
+     */
+    url?: string;
   },
 ): Promise<{ ok: true; to: string } | { ok: false; error: string }> {
   const { data: emp } = await admin
@@ -95,12 +97,16 @@ export async function pedirDocumentoAEmpleado(
     .maybeSingle();
   const empresaNombre = (empresa?.nombre as string) ?? "la empresa";
 
-  const tk = await crearTokenDocEmpleado(admin, {
-    empresaId: params.empresaId,
-    empleadoId: params.empleadoId,
-    tipoDoc: params.tipoDoc,
-  });
-  if (!tk.ok) return { ok: false, error: tk.error };
+  let url = params.url;
+  if (!url) {
+    const tk = await crearTokenDocEmpleado(admin, {
+      empresaId: params.empresaId,
+      empleadoId: params.empleadoId,
+      tipoDoc: params.tipoDoc,
+    });
+    if (!tk.ok) return { ok: false, error: tk.error };
+    url = tk.url;
+  }
 
   const copy = COPY[params.tipoDoc];
   const nombre = (emp.nombre as string | null)?.trim() || "Hola";
@@ -116,7 +122,7 @@ export async function pedirDocumentoAEmpleado(
     <p>${copy.comoSacarlo}</p>
     <p>Ya no hace falta que lo mandes por correo: pulsa el botón y súbelo desde ahí.
     Se guarda solo, y con eso quedas al día.</p>
-    ${botonHtml(tk.url, recordatorio)}
+    ${botonHtml(url, recordatorio)}
     <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
 
   const text =
@@ -124,7 +130,7 @@ export async function pedirDocumentoAEmpleado(
     `${recordatorio ? "Todavía nos falta" : "Para completar tu ficha nos falta"} ` +
     `${copy.que.replace(/<\/?b>/g, "")}. ` +
     `${copy.comoSacarlo.replace(/<\/?b>/g, "")}\n\n` +
-    `Súbelo desde tu enlace personal: ${tk.url}\n\n` +
+    `Súbelo desde tu enlace personal: ${url}\n\n` +
     `Enviado automáticamente desde el sistema de ${empresaNombre}.`;
 
   const res = await sendEmail({

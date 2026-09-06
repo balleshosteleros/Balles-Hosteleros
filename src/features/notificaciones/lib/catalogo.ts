@@ -41,6 +41,8 @@ export type TipoNotificacion =
   | "solicitud_pendiente"
   // Cambio del correo de acceso (login) del empleado
   | "cambio_email_acceso"
+  // Documentación identificativa pendiente: el empleado la sube por su enlace propio
+  | "doc_pendiente"
   // Tipos propios para poder encenderlos/apagarlos por separado en Ajustes
   | "firma_pendiente"
   | "resena_google"
@@ -239,6 +241,14 @@ export const TIPOS_NOTIFICACION: Record<TipoNotificacion, TipoMeta> = {
     badge: "bg-sky-100 text-sky-700",
     accionLabel: "Visto",
     requiereAccion: false,
+  },
+  doc_pendiente: {
+    label: "Documento pendiente",
+    icono: "info",
+    color: "text-amber-600",
+    badge: "bg-amber-100 text-amber-700",
+    accionLabel: "Subir mi documento",
+    requiereAccion: true,
   },
   firma_pendiente: {
     label: "Firma pendiente",

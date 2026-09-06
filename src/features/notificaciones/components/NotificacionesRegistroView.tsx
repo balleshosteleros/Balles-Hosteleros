@@ -26,6 +26,8 @@ import {
 } from "@/features/notificaciones/actions/notificaciones-actions";
 import { getTipoMeta } from "@/features/notificaciones/lib/catalogo";
 import { NuevoAvisoDialog } from "@/features/notificaciones/components/NuevoAvisoDialog";
+import { PedirDocumentoDialog } from "@/features/notificaciones/components/PedirDocumentoDialog";
+import { Button } from "@/components/ui/button";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const columnasDef: ToolbarColumna[] = [
@@ -48,6 +50,7 @@ export function NotificacionesRegistroView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [nuevoAviso, setNuevoAviso] = useState(false);
+  const [pedirDoc, setPedirDoc] = useState(false);
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -131,6 +134,11 @@ export function NotificacionesRegistroView() {
         onColumnasVisiblesChange={setColumnasVisibles}
         columnasOrden={columnasOrden}
         onColumnasOrdenChange={setColumnasOrden}
+        extraDerecha={
+          <Button variant="outline" size="sm" onClick={() => setPedirDoc(true)}>
+            Pedir documentación
+          </Button>
+        }
       />
 
       <Card>
@@ -169,6 +177,7 @@ export function NotificacionesRegistroView() {
       </Card>
 
       <NuevoAvisoDialog open={nuevoAviso} onOpenChange={setNuevoAviso} onEmitted={reload} />
+      <PedirDocumentoDialog open={pedirDoc} onOpenChange={setPedirDoc} onEmitted={reload} />
     </div>
   );
 }
