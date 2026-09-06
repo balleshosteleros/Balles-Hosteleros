@@ -411,7 +411,7 @@ export async function enviarConfirmacionesPago(
             requiereAccion: cfg.requiereAprobacion,
             refTabla: "rrhh_pagos",
             refId: r.id as string,
-            accionUrl: "/m",
+            accionUrl: "/m/pagos",
           };
         })
         .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -603,7 +603,7 @@ export async function marcarPagado(
             requiereAccion: false,
             refTabla: "rrhh_pagos",
             refId: row.id as string,
-            accionUrl: "/m",
+            accionUrl: "/m/pagos",
           },
         ]);
       }
