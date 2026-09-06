@@ -261,6 +261,22 @@
     0 6px 14px -4px hsl(var(--sala-mesa-sombra) / var(--sala-mesa-sombra-alpha));
 }
 
+/* En NOCTURNO la mesa y el lienzo son el mismo azul marino: el relleno queda a
+   1,2:1 de contraste contra el fondo y las mesas libres "no se ven". El color
+   de la mesa NO se toca —es el de la marca—: lo que se refuerza es su CONTORNO.
+
+   1. Un filo claro de 1px pegado al borde (primer inset) que dibuja la silueta.
+   2. La sombra proyectada, que en oscuro casi no hacía nada por ser más negra
+      que el propio lienzo, se mantiene para dar el relieve.
+
+   Con esto la mesa se recorta contra el fondo sin cambiar ni un grado su azul. */
+.sala-oscuro .sala-mesa {
+  box-shadow:
+    inset 0 0 0 1px hsl(213 40% 78% / 0.28),
+    0 1px 2px hsl(var(--sala-mesa-sombra) / calc(var(--sala-mesa-sombra-alpha) * 0.7)),
+    0 6px 16px -4px hsl(var(--sala-mesa-sombra) / var(--sala-mesa-sombra-alpha));
+}
+
 /* ---------------------------------------------------------------------------
    LEGIBILIDAD EN OSCURO
    ---------------------------------------------------------------------------
@@ -387,4 +403,25 @@
    panel concreto que dibuja la linea. */
 .software-oscuro [data-variant] > .fixed {
   border-color: hsl(var(--sidebar-background));
+}
+
+/* La CABECERA (y su reborde) en vista inmersiva oscura.
+
+   Se pinta FUERA del contenedor de la vista, asi que no le llega el
+   `.sala-oscuro` del tema de sala: se quedaba blanca sobre el azul marino de
+   Reservas y volvia a partir la pantalla en dos, igual que pasaba en claro
+   cuando era blanco puro sobre el gris de la pagina.
+
+   Se le da el MISMO azul marino del fondo de la vista para que cabecera y
+   contenido se lean como una sola superficie. Solo el fondo y el color del
+   texto: los bordes NO se tocan aqui —redefinir `--border` para todo el
+   contenedor dejaba la pildora de herramientas recuadrada en negro, que es lo
+   que ya explica el bloque de arriba (Ivan, 06-sep). */
+.software-oscuro > div > header,
+.software-oscuro > div > [aria-hidden] {
+  background-color: hsl(220 42% 9%);
+}
+
+.software-oscuro > div > header {
+  color: hsl(213 30% 92%);
 }
