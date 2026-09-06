@@ -390,7 +390,7 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
 
                       {/* Tareas */}
                       <TareasDrawer>
-                        <ToolTooltip label="Mis tareas">
+                        <ToolTooltip label="Tareas">
                           <Button
                             variant="ghost" size="icon"
                             className="relative h-8 w-8"

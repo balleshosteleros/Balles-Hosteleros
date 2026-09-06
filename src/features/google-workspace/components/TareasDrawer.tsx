@@ -602,7 +602,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
             <div className="flex flex-col gap-0.5">
               <SheetTitle className="flex items-center gap-2 text-base font-black tracking-tight text-violet-950">
                 <CheckSquare2 className="h-4 w-4 text-violet-600" />
-                MIS TAREAS
+                TAREAS
               </SheetTitle>
             </div>
             {pendientesHoy > 0 && (
