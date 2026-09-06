@@ -226,12 +226,21 @@
 }
 
 /* Fondo de la vista: base plana + dos halos difuminados muy amplios. En claro
-   son casi imperceptibles; en oscuro dan la profundidad "tecnológica". */
+   son casi imperceptibles; en oscuro dan la profundidad "tecnológica".
+
+   El halo de arriba se ANCLA MÁS ABAJO (`at 12% 55%`, antes `-10%`). Estando
+   pegado al borde superior, su parte más densa quedaba justo bajo la línea que
+   separa la cabecera y se leía como una SOMBRA que cruzaba media pantalla y se
+   apagaba a mitad de camino —el halo mide 70rem de ancho, no llega al otro
+   lado— (Iván, 06-sep). Bajándolo, la línea queda limpia de lado a lado y el
+   halo sigue dando profundidad, pero ya sobre el PLANO: a 55% su centro cae
+   por debajo de la barra de herramientas, así que ni la línea ni la banda de
+   los botones reciben nada de esa mancha. */
 .sala-tema {
   background-color: hsl(var(--background));
   background-image:
     radial-gradient(
-      70rem 45rem at 12% -10%,
+      70rem 45rem at 12% 55%,
       hsl(var(--sala-halo-1) / var(--sala-halo-alpha)),
       transparent 60%
     ),

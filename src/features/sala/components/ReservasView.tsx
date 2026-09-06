@@ -196,7 +196,7 @@ import { formatearFechaEs } from "@/shared/lib/fecha";
  *    CLARO. La diferencia entre los dos es de luminosidad (oscuro = ya están,
  *    claro = todavía no), que es lo que se lee de lejos y en movimiento.
  *  - TERMINADA: ya han terminado de comer pero siguen en la mesa → ROSA, el
- *    mismo fucsia con el que se marca ese estado en la lista y en la ficha.
+ *    mismo con el que se marca ese estado en la lista y en la ficha.
  *    Va aparte de OCUPADA a propósito: son los dos únicos estados con gente
  *    sentada, y para sala no es lo mismo una mesa comiendo que una a punto de
  *    quedar libre —es la que se prepara para el siguiente pase—. Antes las dos
@@ -6823,20 +6823,23 @@ export function ReservasView() {
                         cambiarEstadoReserva(selectedReserva.id, v as EstadoReserva)
                       }
                     >
-                      {/* El estado que está puesto se pinta con SU color, el
-                          mismo recuadro que lleva en la lista: si allí la fila
-                          se lee por el color y aquí el desplegable salía en
-                          texto plano, había que volver a leer la palabra para
-                          saber en cuál estaba. El desplegable abierto sí
-                          mantiene el punto por opción: nueve recuadros de
-                          color en vertical no dejan leer ninguno. */}
-                      <SelectTrigger
-                        className={cn(
-                          "h-7 border px-1.5 text-xs font-medium",
-                          ESTADO_BADGE_CLASS[selectedReserva.estado],
-                        )}
-                      >
-                        <SelectValue />
+                      {/* El color va SOLO en el RECUADRO de la etiqueta, no en
+                          todo el control: pintado el trigger entero, el verde
+                          (o el rojo) se comia el ancho completo de la ficha y
+                          competia con los campos de al lado. Asi el desplegable
+                          se lee como los de siempre y el estado sigue teniendo
+                          su color, el mismo recuadro que lleva en la lista. */}
+                      <SelectTrigger className="h-7 px-1.5 text-xs font-medium">
+                        <SelectValue asChild>
+                          <span
+                            className={cn(
+                              "inline-flex whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] font-medium leading-tight",
+                              ESTADO_BADGE_CLASS[selectedReserva.estado],
+                            )}
+                          >
+                            {ESTADO_RESERVA_LABELS[selectedReserva.estado as EstadoReserva]}
+                          </span>
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {ESTADOS_RESERVA.map((e) => (
@@ -7376,16 +7379,20 @@ export function ReservasView() {
                   lo que acompaña a la PERSONA en todas sus reservas —alergias,
                   manías—, que hasta ahora había que ir a buscar a su ficha.
                   Cajas de una línea: el límite da para una frase, y una caja
-                  alta invita a escribir lo que no cabe. */}
+                  alta invita a escribir lo que no cabe.
+
+                  SIN contador de caracteres: ocupaba un renglón entero debajo
+                  de cada caja —y son dos— para un dato que no se mira; el
+                  propio campo ya corta al llegar al límite (Iván, 06-sep). */}
               <div className="grid shrink-0 gap-3 md:grid-cols-2">
-                <div className="space-y-1.5 rounded-lg border bg-muted/25 p-2.5">
+                <div className="space-y-1 rounded-lg border bg-muted/25 px-2.5 py-2">
                   {/* "de la reserva" en el título: el cliente tiene el suyo al
                       lado, y sin apellido los dos se leían como lo mismo. */}
                   <Label className="text-muted-foreground text-xs">
                     Comentarios de la reserva
                   </Label>
                   <Input
-                    className="h-8 text-xs"
+                    className="h-7 text-xs"
                     maxLength={RESERVA_COMENTARIO_MAX_CHARS}
                     disabled={guardandoComentario}
                     value={comentarioEdit}
@@ -7396,39 +7403,31 @@ export function ReservasView() {
                     }
                     onBlur={() => void guardarComentario(selectedReserva.id)}
                   />
-                  <p className="text-right text-[10px] text-muted-foreground">
-                    {comentarioEdit.length}/{RESERVA_COMENTARIO_MAX_CHARS}
-                  </p>
                 </div>
                 {/* Observaciones DEL CLIENTE: es el mismo campo de su ficha, no
                     una copia, así que lo que se escriba aquí se ve también
                     allí. Un walk-in sin ficha no tiene dónde guardarlas, pero
                     el hueco se mantiene para que el panel de la izquierda no se
                     descoloque. */}
-                <div className="space-y-1.5 rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-2.5">
+                <div className="space-y-1 rounded-lg border border-sky-500/25 bg-sky-500/[0.06] px-2.5 py-2">
                   <Label className="text-muted-foreground text-xs">
                     Comentarios del cliente
                   </Label>
                   {selectedReserva.clienteId ? (
-                    <>
-                      <Input
-                        className="h-8 text-xs"
-                        maxLength={RESERVA_COMENTARIO_MAX_CHARS}
-                        disabled={guardandoObsCliente}
-                        value={obsClienteEdit}
-                        onChange={(e) =>
-                          setObsClienteEdit(
-                            e.target.value.slice(0, RESERVA_COMENTARIO_MAX_CHARS),
-                          )
-                        }
-                        onBlur={() =>
-                          void guardarObsCliente(selectedReserva.clienteId!)
-                        }
-                      />
-                      <p className="text-right text-[10px] text-muted-foreground">
-                        {obsClienteEdit.length}/{RESERVA_COMENTARIO_MAX_CHARS}
-                      </p>
-                    </>
+                    <Input
+                      className="h-7 text-xs"
+                      maxLength={RESERVA_COMENTARIO_MAX_CHARS}
+                      disabled={guardandoObsCliente}
+                      value={obsClienteEdit}
+                      onChange={(e) =>
+                        setObsClienteEdit(
+                          e.target.value.slice(0, RESERVA_COMENTARIO_MAX_CHARS),
+                        )
+                      }
+                      onBlur={() =>
+                        void guardarObsCliente(selectedReserva.clienteId!)
+                      }
+                    />
                   ) : (
                     <p className="text-[10px] text-muted-foreground">
                       Esta reserva no tiene ficha de cliente.

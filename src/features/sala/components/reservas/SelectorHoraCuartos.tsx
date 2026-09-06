@@ -15,6 +15,7 @@
  */
 
 import { useMemo } from "react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MINUTOS_VALIDOS_RESERVA } from "@/features/sala/lib/reserva-cuartos";
 
@@ -25,11 +26,20 @@ import { MINUTOS_VALIDOS_RESERVA } from "@/features/sala/lib/reserva-cuartos";
  * desnudo dentro, sin borde ni fondo propios.
  */
 const CLASE_CAJA =
-  "flex h-7 items-center rounded-md border border-input bg-background px-1 " +
-  "focus-within:ring-1 focus-within:ring-ring";
+  // `justify-center`: el par "HH : MM" va CENTRADO en su recuadro. Antes los
+  // dos `select` llevaban `flex-1` y se repartían todo el ancho sobrante, así
+  // que el número quedaba pegado al borde izquierdo y su flecha en la otra
+  // punta, con un vacío enorme en medio (Iván, 06-sep).
+  "flex h-7 items-center justify-center gap-0.5 rounded-md border border-input " +
+  "bg-background px-1 focus-within:ring-1 focus-within:ring-ring";
 
 const CLASE_SELECT =
-  "h-full min-w-0 flex-1 border-0 bg-transparent px-0.5 text-xs " +
+  // Sin `flex-1`: cada desplegable ocupa SOLO lo que mide su contenido, y el
+  // texto va centrado dentro. `appearance-none` quita la flecha nativa, que es
+  // la que separaba el número de su propio hueco; la flecha del conjunto se
+  // pinta una sola vez, al final de la caja.
+  "h-full w-auto min-w-0 appearance-none border-0 bg-transparent px-0.5 " +
+  "text-center text-xs tabular-nums " +
   "focus:outline-none focus-visible:outline-none " +
   "disabled:cursor-not-allowed disabled:opacity-50";
 
@@ -137,6 +147,13 @@ export function SelectorHoraCuartos({
           </option>
         ))}
       </select>
+      {/* UNA flecha para todo el control, no una por desplegable: es un solo
+          dato ("22:30"). Va al final y sin puntero, para que el clic siga
+          cayendo en el `select` que hay debajo. */}
+      <ChevronDown
+        aria-hidden
+        className="ml-0.5 size-3 shrink-0 text-muted-foreground"
+      />
     </div>
   );
 }
