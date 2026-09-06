@@ -1203,6 +1203,24 @@ export function PagosView() {
     />
   );
 
+  // Los cuatro conceptos que se suman a la nomina comparten formato: verde
+  // cuando anaden, rojo cuando descuentan (cualquiera puede venir negativo) y
+  // un guion cuando no hay importe.
+  const celdaConcepto = (key: string, valor: number): ReactNode => (
+    <TableCell
+      key={key}
+      className={`text-right tabular-nums whitespace-nowrap ${
+        valor > 0
+          ? "text-emerald-600 dark:text-emerald-500"
+          : valor < 0
+            ? "text-destructive"
+            : "text-muted-foreground"
+      }`}
+    >
+      {valor === 0 ? "—" : `${valor < 0 ? "−" : ""}${fmt(Math.abs(valor))}`}
+    </TableCell>
+  );
+
   const columnDefs: Record<string, { th: ReactNode; td: (p: PagoEmpleado) => ReactNode }> = {
     // Puesto y area comparten columna: son la misma idea (donde encaja esta
     // persona) y separados gastaban dos columnas para dos palabras. El area va
@@ -1275,38 +1293,19 @@ export function PagosView() {
     },
     complemento: {
       th: th("complemento", "Complemento", "numero", "right", undefined, "text-emerald-700"),
-      td: (p) => (
-        <TableCell key="complemento" className={`text-right tabular-nums whitespace-nowrap ${p.complemento > 0 ? "text-emerald-600 dark:text-emerald-500" : "text-muted-foreground"}`}>
-          {p.complemento > 0 ? fmt(p.complemento) : "—"}
-        </TableCell>
-      ),
+      td: (p) => celdaConcepto("complemento", p.complemento),
     },
     ajuste: {
       th: th("ajuste", "Ajuste", "numero", "right", undefined, "text-emerald-700"),
-      td: (p) => (
-        <TableCell
-          key="ajuste"
-          className={`text-right tabular-nums whitespace-nowrap ${p.ajuste < 0 ? "text-destructive" : p.ajuste > 0 ? "text-emerald-600" : ""}`}
-        >
-          {p.ajuste === 0 ? "—" : `${p.ajuste > 0 ? "+" : "−"}${fmt(Math.abs(p.ajuste))}`}
-        </TableCell>
-      ),
+      td: (p) => celdaConcepto("ajuste", p.ajuste),
     },
     horasExtras: {
       th: th("horasExtras", "H.Extras", "numero", "right", undefined, "text-emerald-700"),
-      td: (p) => (
-        <TableCell key="horasExtras" className={`text-right tabular-nums whitespace-nowrap ${p.horasExtras > 0 ? "text-emerald-600 dark:text-emerald-500" : "text-muted-foreground"}`}>
-          {p.horasExtras > 0 ? fmt(p.horasExtras) : "—"}
-        </TableCell>
-      ),
+      td: (p) => celdaConcepto("horasExtras", p.horasExtras),
     },
     bonus: {
       th: th("bonus", "Bonus", "numero", "right", undefined, "text-emerald-700"),
-      td: (p) => (
-        <TableCell key="bonus" className={`text-right tabular-nums whitespace-nowrap ${p.bonus > 0 ? "text-emerald-600 dark:text-emerald-500" : "text-muted-foreground"}`}>
-          {p.bonus > 0 ? fmt(p.bonus) : "—"}
-        </TableCell>
-      ),
+      td: (p) => celdaConcepto("bonus", p.bonus),
     },
     ssEmpleado: {
       th: th("ssEmpleado", "SS trabajador", "numero", "right", undefined, "text-sky-700"),
@@ -1409,19 +1408,24 @@ export function PagosView() {
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 gap-1 border-primary text-primary hover:bg-primary/5 disabled:opacity-40"
+                className={
+                  bloqueado
+                    ? "h-7 gap-1 border-primary/40 text-primary/60 disabled:opacity-100"
+                    : p.confirmacionAceptadaAt
+                      ? "h-7 gap-1 animate-pulse border-emerald-600 font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400"
+                      : "h-7 gap-1 border-primary text-primary hover:bg-primary/5"
+                }
                 onClick={() => void togglePagar(p)}
                 disabled={bloqueado}
                 title={
                   bloqueado
-                    ? "El empleado todavía no ha aprobado su liquidación"
+                    ? "Liquidación enviada: esperando a que el trabajador la confirme"
                     : p.confirmacionAceptadaAt
-                      ? "Aprobada por el empleado: se puede pagar"
+                      ? "El trabajador ha confirmado que la cobra: ya se puede pagar"
                       : "Marcar como pagado"
                 }
               >
-                {bloqueado ? <Clock className="h-3.5 w-3.5" /> : <Banknote className="h-3.5 w-3.5" />}
-                {bloqueado ? "Esperando" : "Pagar"}
+                <Banknote className="h-3.5 w-3.5" />Pagar
               </Button>
             )}
           </TableCell>
