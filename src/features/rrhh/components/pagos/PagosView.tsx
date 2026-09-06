@@ -47,7 +47,6 @@ import { mesAnterior } from "@/features/rrhh/lib/nominas-periodos";
 import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
-import { ZONE_COLORS } from "@/features/direccion/data/direccion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -1140,25 +1139,29 @@ export function PagosView() {
   };
 
   const columnasDef: ToolbarColumna[] = [
+    // Puesto (con el area debajo) y las horas van primero: es el contexto del
+    // trabajador. Despues el dinero, de lo que cobra a lo que cuesta. Los
+    // documentos y las acciones, al final.
     { campo: "puesto", label: "Puesto" },
-    { campo: "area", label: "Área" },
+    { campo: "horasReales", label: "H. horario" },
+    { campo: "horasTrabajadas", label: "H. fichadas" },
+    { campo: "horasBalance", label: "Diferencia" },
     { campo: "nominaBruta", label: "Nómina bruta" },
-    { campo: "ssEmpleado", label: "− SS trabajador" },
-    { campo: "irpf", label: "− IRPF" },
+    { campo: "ssEmpleado", label: "SS trabajador" },
+    { campo: "irpf", label: "IRPF" },
     { campo: "nomina", label: "Nómina neta" },
-    { campo: "horasReales", label: "H.R" },
-    { campo: "horasTrabajadas", label: "H.T" },
     { campo: "complemento", label: "Complemento" },
     { campo: "ajuste", label: "Ajuste" },
     { campo: "horasExtras", label: "H.Extras" },
     { campo: "bonus", label: "Bonus" },
-    { campo: "ssEmpresa", label: "SS Empresa" },
+    { campo: "total", label: "Total a pagar" },
+    { campo: "ssEmpresa", label: "SS empresa" },
     { campo: "ssTotal", label: "Total SS" },
-    { campo: "nominaDoc", label: "Nómina (documento)" },
-    { campo: "total", label: "Total" },
+    { campo: "costeTotal", label: "Coste total" },
     { campo: "pagado", label: "Pagado" },
     { campo: "confirmacion", label: "Confirmación" },
     { campo: "comentario", label: "Comentario" },
+    { campo: "nominaDoc", label: "Nómina (documento)" },
   ];
 
   // Nombres para el filtro de la columna Empleado (todos los del mes, no solo
@@ -1202,33 +1205,18 @@ export function PagosView() {
   );
 
   const columnDefs: Record<string, { th: ReactNode; td: (p: PagoEmpleado) => ReactNode }> = {
+    // Puesto y area comparten columna: son la misma idea (donde encaja esta
+    // persona) y separados gastaban dos columnas para dos palabras. El area va
+    // debajo en gris, sin pildora de color: los colores por zona distraian del
+    // dinero, que es lo que se viene a leer aqui.
     puesto: {
-      th: th("puesto", "Puesto", "lista", "left", opcionesPuesto, "min-w-[90px]"),
+      th: th("puesto", "Puesto", "lista", "left", opcionesPuesto, "min-w-[110px]"),
       td: (p) => (
         <TableCell key="puesto" className="whitespace-nowrap">
-          {p.puesto ? (
-            <span className="text-sm">{p.puesto}</span>
-          ) : (
-            <span className="text-sm text-muted-foreground">—</span>
-          )}
+          <span className="block text-[13px] leading-tight">{p.puesto || "—"}</span>
+          <span className="block text-[11px] leading-tight text-muted-foreground">{AREA_LABEL[p.area]}</span>
         </TableCell>
       ),
-    },
-    area: {
-      th: th("area", "Área", "lista", "left", Object.values(AREA_LABEL), "min-w-[80px]"),
-      td: (p) => {
-        const pal = ZONE_COLORS[p.area];
-        return (
-          <TableCell key="area">
-            <span
-              className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap"
-              style={{ backgroundColor: pal.bg, borderColor: pal.border, color: pal.label }}
-            >
-              {AREA_LABEL[p.area]}
-            </span>
-          </TableCell>
-        );
-      },
     },
     nominaBruta: {
       th: th("nominaBruta", "Nómina bruta", "numero"),
@@ -1246,34 +1234,42 @@ export function PagosView() {
         </TableCell>
       ),
     },
-    // H.R = lo que marca su horario que tenia que fichar. H.T = lo que ficho de
-    // verdad ese mes. Ambos salen de los fichajes/horario, la misma fuente que
-    // ve el empleado en su portal, para que no haya dos versiones del dato.
+    // Las tres columnas de horas salen del horario y de los fichajes reales: la
+    // misma fuente que ve el empleado en su portal. Van juntas y en su propia
+    // columna cada una para poder compararlas de un vistazo.
     horasReales: {
-      th: th("horasReales", "H.R", "numero"),
+      th: th("horasReales", "H. horario", "numero"),
       td: (p) => {
         const h = horasMesMap?.get(p.empleadoId);
         return (
-          <TableCell key="horasReales" className="text-right tabular-nums" title="Horas previstas segun su horario">
+          <TableCell key="horasReales" className="text-right tabular-nums" title="Horas que marca su horario">
             {h ? fmtHoras(h.teoricas) : "—"}
           </TableCell>
         );
       },
     },
     horasTrabajadas: {
-      th: th("horasTrabajadas", "H.T", "numero"),
+      th: th("horasTrabajadas", "H. fichadas", "numero"),
       td: (p) => {
         const h = horasMesMap?.get(p.empleadoId);
-        if (!h) return <TableCell key="horasTrabajadas" className="text-right tabular-nums">—</TableCell>;
-        // El balance acompana a lo fichado: verde si hizo de mas, rojo si de menos.
-        const balCls =
+        return (
+          <TableCell key="horasTrabajadas" className="text-right tabular-nums font-medium" title="Horas fichadas este mes">
+            {h ? fmtHoras(h.normales + h.extras) : "—"}
+          </TableCell>
+        );
+      },
+    },
+    horasBalance: {
+      th: th("horasBalance", "Diferencia", "numero"),
+      td: (p) => {
+        const h = horasMesMap?.get(p.empleadoId);
+        if (!h) return <TableCell key="horasBalance" className="text-right tabular-nums text-muted-foreground">—</TableCell>;
+        // Verde si ha hecho horas de mas, rojo si le faltan, gris si cuadra.
+        const cls =
           h.balance > 0.01 ? "text-emerald-600" : h.balance < -0.01 ? "text-destructive" : "text-muted-foreground";
         return (
-          <TableCell key="horasTrabajadas" className="text-right tabular-nums" title="Horas fichadas este mes">
-            {fmtHoras(h.normales)}
-            <span className={`ml-1 text-[10px] ${balCls}`} title="Balance: fichadas − previstas + extras">
-              {h.balance >= 0 ? "+" : ""}{fmtHoras(h.balance)}
-            </span>
+          <TableCell key="horasBalance" className={`text-right tabular-nums ${cls}`} title="Fichadas − horario">
+            {h.balance >= 0 ? "+" : ""}{fmtHoras(h.balance)}
           </TableCell>
         );
       },
@@ -1302,36 +1298,34 @@ export function PagosView() {
       td: (p) => <TableCell key="bonus" className="text-right tabular-nums whitespace-nowrap">{p.bonus > 0 ? fmt(p.bonus) : "—"}</TableCell>,
     },
     ssEmpleado: {
-      th: th("ssEmpleado", "− SS trabajador", "numero"),
+      th: th("ssEmpleado", "SS trabajador", "numero", "right", undefined, "text-sky-700"),
       td: (p) => (
-        <TableCell key="ssEmpleado" className="text-right tabular-nums whitespace-nowrap text-destructive">
-          {p.ssEmpleado > 0 ? `−${fmt(p.ssEmpleado)}` : fmtDato(p.ssEmpleado, nominaProcesada(p))}
-          {circuloN(p, "ssEmpleado")}
+        <TableCell key="ssEmpleado" className="text-right tabular-nums whitespace-nowrap text-sky-700 dark:text-sky-400">
+          {fmtDato(p.ssEmpleado, nominaProcesada(p))}{circuloN(p, "ssEmpleado")}
         </TableCell>
       ),
     },
     ssEmpresa: {
-      th: th("ssEmpresa", "SS Empresa", "numero"),
+      th: th("ssEmpresa", "SS empresa", "numero", "right", undefined, "text-sky-700"),
       td: (p) => (
-        <TableCell key="ssEmpresa" className="text-right tabular-nums whitespace-nowrap">
+        <TableCell key="ssEmpresa" className="text-right tabular-nums whitespace-nowrap text-sky-700 dark:text-sky-400">
           {fmtDato(p.ssEmpresa, nominaProcesada(p))}{circuloN(p, "ssEmpresa")}
         </TableCell>
       ),
     },
     ssTotal: {
-      th: th("ssTotal", "Total SS", "numero"),
+      th: th("ssTotal", "Total SS", "numero", "right", undefined, "text-sky-700"),
       td: (p) => (
-        <TableCell key="ssTotal" className="text-right tabular-nums font-medium whitespace-nowrap">
+        <TableCell key="ssTotal" className="text-right tabular-nums font-semibold whitespace-nowrap text-sky-700 dark:text-sky-400">
           {fmtDato(costeSSTotal(p), nominaProcesada(p))}{circuloN(p, "ssTotal")}
         </TableCell>
       ),
     },
     irpf: {
-      th: th("irpf", "− IRPF", "numero"),
+      th: th("irpf", "IRPF", "numero", "right", undefined, "text-amber-600"),
       td: (p) => (
-        <TableCell key="irpf" className="text-right tabular-nums whitespace-nowrap text-destructive">
-          {p.irpf > 0 ? `−${fmt(p.irpf)}` : fmtDato(p.irpf, nominaProcesada(p))}
-          {circuloN(p, "irpf")}
+        <TableCell key="irpf" className="text-right tabular-nums whitespace-nowrap text-amber-600 dark:text-amber-500">
+          {fmtDato(p.irpf, nominaProcesada(p))}{circuloN(p, "irpf")}
         </TableCell>
       ),
     },
@@ -1364,9 +1358,23 @@ export function PagosView() {
         </TableCell>
       ),
     },
+    // Lo que se lleva el trabajador. Se destaca porque es la cifra que se paga.
     total: {
-      th: th("total", "Total", "numero", "right", undefined, "font-bold"),
-      td: (p) => <TableCell key="total" className="text-right font-bold tabular-nums whitespace-nowrap">{fmt(p.total)}</TableCell>,
+      th: th("total", "Total a pagar", "numero", "right", undefined, "font-bold"),
+      td: (p) => (
+        <TableCell key="total" className="text-right whitespace-nowrap">
+          <span className="text-[15px] font-bold tabular-nums">{fmt(p.total)}</span>
+        </TableCell>
+      ),
+    },
+    // Lo que le cuesta a la empresa: lo que cobra mas toda la Seguridad Social.
+    costeTotal: {
+      th: th("costeTotal", "Coste total", "numero", "right", undefined, "font-bold"),
+      td: (p) => (
+        <TableCell key="costeTotal" className="text-right whitespace-nowrap bg-muted/40">
+          <span className="text-[15px] font-bold tabular-nums">{fmt(p.total + costeSSTotal(p))}</span>
+        </TableCell>
+      ),
     },
     pagado: {
       th: th("pagado", "Pagar", "booleano", "center", undefined, "w-[120px]"),
@@ -1449,8 +1457,13 @@ export function PagosView() {
   const totalDefs: Record<string, ReactNode> = {
     nominaBruta: <TableCell key="t-nominabruta" className="text-right tabular-nums">{fmtDato(totalNominaBruta, hayNominaProcesada)}</TableCell>,
     nomina: <TableCell key="t-nomina" className="text-right tabular-nums font-semibold">{fmtDato(resumen.totalNomina, hayNominaProcesada)}</TableCell>,
-    horasReales: <TableCell key="t-hr" className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasReales, 0)}h</TableCell>,
-    horasTrabajadas: <TableCell key="t-ht" className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasTrabajadas, 0)}h</TableCell>,
+    horasReales: <TableCell key="t-hr" className="text-right tabular-nums">{fmtHoras(pagosFiltrados.reduce((a, p) => a + (horasMesMap?.get(p.empleadoId)?.teoricas ?? 0), 0))}</TableCell>,
+    horasTrabajadas: <TableCell key="t-ht" className="text-right tabular-nums font-medium">{fmtHoras(pagosFiltrados.reduce((a, p) => { const h = horasMesMap?.get(p.empleadoId); return a + (h ? h.normales + h.extras : 0); }, 0))}</TableCell>,
+    horasBalance: (() => {
+      const bal = pagosFiltrados.reduce((a, p) => a + (horasMesMap?.get(p.empleadoId)?.balance ?? 0), 0);
+      const cls = bal > 0.01 ? "text-emerald-600" : bal < -0.01 ? "text-destructive" : "text-muted-foreground";
+      return <TableCell key="t-bal" className={`text-right tabular-nums ${cls}`}>{bal >= 0 ? "+" : ""}{fmtHoras(bal)}</TableCell>;
+    })(),
     complemento: <TableCell key="t-complemento" className="text-right tabular-nums">{fmt(resumen.totalComplementos)}</TableCell>,
     ajuste: (
       <TableCell key="t-ajuste" className={`text-right tabular-nums ${resumen.totalAjustes < 0 ? "text-destructive" : resumen.totalAjustes > 0 ? "text-emerald-600" : ""}`}>
@@ -1459,11 +1472,12 @@ export function PagosView() {
     ),
     horasExtras: <TableCell key="t-extras" className="text-right tabular-nums">{fmt(resumen.totalExtras)}</TableCell>,
     bonus: <TableCell key="t-bonus" className="text-right tabular-nums">{fmt(resumen.totalBonus)}</TableCell>,
-    ssEmpleado: <TableCell key="t-ssemp" className="text-right tabular-nums whitespace-nowrap text-destructive">{hayNominaProcesada && resumen.totalSsEmpleado > 0 ? `−${fmt(resumen.totalSsEmpleado)}` : fmtDato(resumen.totalSsEmpleado, hayNominaProcesada)}</TableCell>,
-    ssEmpresa: <TableCell key="t-ssempresa" className="text-right tabular-nums whitespace-nowrap">{fmtDato(resumen.totalSsEmpresa, hayNominaProcesada)}</TableCell>,
-    ssTotal: <TableCell key="t-sstotal" className="text-right tabular-nums font-medium whitespace-nowrap">{fmtDato(resumen.totalSs, hayNominaProcesada)}</TableCell>,
-    irpf: <TableCell key="t-irpf" className="text-right tabular-nums whitespace-nowrap text-destructive">{hayNominaProcesada && totalIrpf > 0 ? `−${fmt(totalIrpf)}` : fmtDato(totalIrpf, hayNominaProcesada)}</TableCell>,
-    total: <TableCell key="t-total" className="text-right tabular-nums font-bold">{fmt(resumen.totalFinal)}</TableCell>,
+    ssEmpleado: <TableCell key="t-ssemp" className="text-right tabular-nums whitespace-nowrap text-sky-700 dark:text-sky-400">{fmtDato(resumen.totalSsEmpleado, hayNominaProcesada)}</TableCell>,
+    ssEmpresa: <TableCell key="t-ssempresa" className="text-right tabular-nums whitespace-nowrap text-sky-700 dark:text-sky-400">{fmtDato(resumen.totalSsEmpresa, hayNominaProcesada)}</TableCell>,
+    ssTotal: <TableCell key="t-sstotal" className="text-right tabular-nums font-semibold whitespace-nowrap text-sky-700 dark:text-sky-400">{fmtDato(resumen.totalSs, hayNominaProcesada)}</TableCell>,
+    irpf: <TableCell key="t-irpf" className="text-right tabular-nums whitespace-nowrap text-amber-600 dark:text-amber-500">{fmtDato(totalIrpf, hayNominaProcesada)}</TableCell>,
+    total: <TableCell key="t-total" className="text-right whitespace-nowrap"><span className="text-[15px] font-bold tabular-nums">{fmt(resumen.totalFinal)}</span></TableCell>,
+    costeTotal: <TableCell key="t-coste" className="text-right whitespace-nowrap bg-muted/40"><span className="text-[15px] font-bold tabular-nums">{fmt(resumen.totalFinal + resumen.totalSs)}</span></TableCell>,
     pagado: <TableCell key="t-pagado" className="text-center"><Badge variant={pagosFiltrados.every((p) => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagosFiltrados.filter((p) => p.pagado).length}/{pagosFiltrados.length}</Badge></TableCell>,
     confirmacion: <TableCell key="t-conf" className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.confirmacionEnviadaAt).length}/{pagosFiltrados.length}</Badge></TableCell>,
   };
@@ -1848,17 +1862,12 @@ export function PagosView() {
                   </TableRow>
                 ) : (
                   pagosFiltrados.map((p) => {
-                    const palette = ZONE_COLORS[p.area];
                     return (
                       <TableRow
                         key={p.id}
-                        className={p.pagado ? "bg-emerald-50/40 dark:bg-emerald-950/10" : ""}
-                        style={{
-                          backgroundColor: p.pagado ? undefined : palette.bg,
-                          boxShadow: `inset 4px 0 0 0 ${palette.border}`,
-                        }}
+                        className={`h-[52px] ${p.pagado ? "bg-emerald-50/40 dark:bg-emerald-950/10" : ""}`}
                       >
-                        <TableCell className="font-medium" style={{ color: palette.label }}>
+                        <TableCell className="font-medium">
                           <div className="flex items-center gap-1.5">
                             {p.avisoInactivo ? (
                               <span
@@ -1869,7 +1878,9 @@ export function PagosView() {
                                 <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
                               </span>
                             ) : null}
-                            <span>{p.empleadoNombre}</span>
+                            <span className="block max-w-[150px] truncate" title={p.empleadoNombre}>
+                              {p.empleadoNombre}
+                            </span>
                           </div>
                           {p.dniNie ? (
                             <div className="text-[11px] font-normal tabular-nums text-muted-foreground">{p.dniNie}</div>
