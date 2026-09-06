@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle, ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -119,78 +119,60 @@ export function RevisionVinculacion({ reservaId, onResuelto, pendiente }: Props)
     });
   }
 
-  // Aviso APRETADO: sale dentro de la ficha de la reserva, encima de todo lo
-  // demás, y a tamaño normal empujaba media pantalla hacia abajo. Se reduce el
-  // relleno, la letra y el alto de las filas, pero NO se quita ni un dato: los
-  // dos juegos de valores y las tres salidas siguen enteros.
+  // Aviso MÍNIMO: sale dentro de la ficha, encima de todo, así que cada
+  // renglón que ocupa lo pierde la reserva. Se queda lo que hace falta para
+  // decidir: por qué se vincularon, en qué NO coinciden, y las tres salidas.
+  // Fuera la tabla con cabeceras y la fila del dato coincidente: el motivo ya
+  // lo dice el subtítulo, repetirlo abajo con su marca verde era el mismo dato
+  // dos veces y la mitad del alto del recuadro.
+  const etiquetaMotivo = datos.motivo === "email" ? "el correo" : "el teléfono";
+
   return (
     <div className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 dark:border-amber-800/60 dark:bg-amber-950/30">
       <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-px size-3.5 shrink-0 text-amber-600 dark:text-amber-500" />
+        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-500" />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold leading-tight text-amber-900 dark:text-amber-200">
-            Esta reserva se vinculó a un cliente que ya existía
+            Cliente ya existente
           </p>
           <p className="mt-0.5 text-[11px] leading-snug text-amber-800 dark:text-amber-300/90">
-            Coincidió por {datos.motivo === "email" ? "el correo" : "el teléfono"}
-            {valorCoincide ? " " : ""}
-            {valorCoincide ? <span className="font-medium">{valorCoincide}</span> : null}, pero
-            el resto de datos no son los mismos. Revisa si es la misma persona.
+            Coincide {etiquetaMotivo}
+            {valorCoincide ? (
+              <>
+                {" "}
+                <span className="font-medium">{valorCoincide}</span>
+              </>
+            ) : null}
+            . ¿Es la misma persona?
           </p>
 
-          <div className="mt-1.5 overflow-x-auto">
-            {/* `w-auto`: la tabla se ciñe a su contenido en vez de estirar las
-                tres columnas a todo lo ancho de la ficha, que era lo que
-                dejaba "Puso al reservar" perdido al otro extremo. */}
-            <table className="w-auto text-[11px]">
-              <thead>
-                <tr className="text-left text-amber-700 dark:text-amber-400">
-                  <th className="pb-0.5 pr-3 font-medium">Campo</th>
-                  <th className="pb-0.5 pr-3 font-medium">Ficha actual</th>
-                  <th className="pb-0.5 font-medium">Puso al reservar</th>
-                </tr>
-              </thead>
-              <tbody className="text-amber-900 dark:text-amber-200">
-                {valorCoincide ? (
-                  <tr className="border-t border-amber-200/70 dark:border-amber-800/50">
-                    <td className="py-0.5 pr-3 text-amber-700 dark:text-amber-400">
-                      {CAMPO_LABEL[campoCoincide]}
-                    </td>
-                    <td className="py-0.5 pr-3" colSpan={2}>
-                      <span className="inline-flex items-center gap-1">
-                        <Check className="size-3 shrink-0 text-emerald-600 dark:text-emerald-500" />
-                        <span className="font-medium">{valorCoincide}</span>
-                        <span className="text-amber-700 dark:text-amber-400">
-                          — es el mismo, por esto se vincularon
-                        </span>
-                      </span>
-                    </td>
-                  </tr>
-                ) : null}
-                {campos.map((c) => (
-                  <tr key={c} className="border-t border-amber-200/70 dark:border-amber-800/50">
-                    <td className="py-0.5 pr-3 text-amber-700 dark:text-amber-400">
-                      {CAMPO_LABEL[c]}
-                    </td>
-                    <td className="py-0.5 pr-3">{datos.ficha[c] || "—"}</td>
-                    <td className="py-0.5 font-medium">{datos.declarados[c]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* Las diferencias, una por renglón: lo de la ficha, la flecha, y lo
+              que puso al reservar. Sin cabeceras: con la flecha en medio se
+              entiende de qué lado está cada cosa sin tener que rotularlo. */}
+          <ul className="mt-1 space-y-0.5 text-[11px] text-amber-900 dark:text-amber-200">
+            {campos.map((c) => (
+              <li key={c} className="flex flex-wrap items-baseline gap-x-1.5">
+                <span className="text-amber-700 dark:text-amber-400">
+                  {CAMPO_LABEL[c]}
+                </span>
+                <span>{datos.ficha[c] || "—"}</span>
+                <ArrowRight className="size-3 shrink-0 self-center text-amber-600/70 dark:text-amber-500/70" />
+                <span className="font-medium">{datos.declarados[c]}</span>
+              </li>
+            ))}
+          </ul>
 
           {/* El orden no es decorativo: conservar la ficha es lo que más se
               elige —el cliente escribe su nombre de otra forma, no cambia de
               persona—, así que va primera y destacada. */}
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
             <Button
               size="sm"
               className="h-6 px-2 text-[11px]"
               disabled={enviando}
               onClick={() => resolver("CONSERVAR")}
             >
-              Conservar original
+              Conservar
             </Button>
             <Button
               size="sm"
@@ -199,7 +181,7 @@ export function RevisionVinculacion({ reservaId, onResuelto, pendiente }: Props)
               disabled={enviando}
               onClick={() => resolver("ACTUALIZAR")}
             >
-              Actualizar datos
+              Actualizar
             </Button>
             <Button
               size="sm"
@@ -208,7 +190,7 @@ export function RevisionVinculacion({ reservaId, onResuelto, pendiente }: Props)
               disabled={enviando}
               onClick={() => resolver("SEPARAR")}
             >
-              Es un cliente nuevo
+              Es otro cliente
             </Button>
           </div>
         </div>

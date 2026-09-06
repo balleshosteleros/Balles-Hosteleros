@@ -170,6 +170,7 @@ import {
 import { calcularTiempoReserva, minutosHastaReserva } from "@/features/sala/lib/reserva-tiempo";
 import { ClienteReservasBadge } from "@/features/sala/components/reservas/ClienteReservasBadge";
 import { ReservaExternalBadge } from "@/features/sala/components/reservas/ReservaExternalBadge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HistoricoEmailsReserva } from "@/features/sala/components/reservas/HistoricoEmailsReserva";
 import { ActividadReserva } from "@/features/sala/components/reservas/ActividadReserva";
 import { RevisionVinculacion } from "@/features/sala/components/reservas/RevisionVinculacion";
@@ -353,7 +354,14 @@ function formatFechaDiaNegocio(iso: string): string {
 }
 
 const LISTA_GRID =
-  // Hora · Mesa · Nombre · Per · Origen · Tipo · Estado · Tiempo.
+  // Hora · Mesa · Nombre · Origen · Tipo · Estado · Per · Tiempo.
+  //
+  // ESTADO va a ancho FIJO de 92px, lo justo que pide la palabra más larga
+  // ("No reconfirmada"): es un recuadro de color y si se encoge se corta la
+  // palabra, que es justo el dato que se venía a leer. Ni un pixel más: al
+  // pasar del punto+texto al recuadro se dejó de gastar sitio en el punto y
+  // en su hueco, y ese ancho se lo queda el NOMBRE. PERSONAS va DETRÁS del
+  // estado: primero en qué punto está la mesa, después cuánta gente es.
   // Origen y Tipo suben porque "Cancelación" y los origenes largos se cortaban
   // a media palabra; el resto del ancho se lo queda el NOMBRE, que es el dato
   // por el que se busca a la gente en sala.
@@ -368,7 +376,7 @@ const LISTA_GRID =
   // completo, así que recortarlas no pierde el dato) y lo que sueltan se lo
   // queda el nombre. Los chips que van pegados al nombre (visitas, cupón,
   // reconfirmación) no se cuentan: solo salen en algunas filas.
-  "grid grid-cols-[56px_72px_minmax(0,1fr)_42px_58px_64px_60px_64px] gap-1.5 items-center";
+  "grid grid-cols-[56px_72px_minmax(0,1fr)_58px_64px_92px_42px_64px] gap-1.5 items-center";
 
 /**
  * TIPO de la reserva: cuál de las cuatro es (PRP-082).
@@ -429,13 +437,20 @@ function TipoReservaCelda({ reserva }: { reserva: Reserva }) {
   );
 }
 
+// El estado va en RECUADRO del color, no en punto + texto suelto: en pleno
+// servicio se lee la columna de un barrido, y una pastilla de color se coge
+// antes que un punto de 10px. Sin `truncate`: la columna se dimensiona para
+// que quepa la palabra más larga ("No reconfirmada"), así que nunca hay nada
+// que cortar — un estado a medias ("No reconfir…") no vale para nada.
 function StatusDot({ estado }: { estado: EstadoReserva }) {
   return (
-    <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-      <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", ESTADO_DOT_CLASS[estado])} />
-      <span className="truncate text-[11px] leading-tight" title={ESTADO_RESERVA_LABELS[estado]}>
-        {ESTADO_RESERVA_LABELS[estado]}
-      </span>
+    <span
+      className={cn(
+        "inline-flex w-full items-center justify-center whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-tight",
+        ESTADO_BADGE_CLASS[estado],
+      )}
+    >
+      {ESTADO_RESERVA_LABELS[estado]}
     </span>
   );
 }
@@ -5936,20 +5951,6 @@ export function ReservasView() {
               />
             </span>
             <ColumnaListaHeader
-              label="Per"
-              campo="comensales"
-              opciones={opcionesColumna("comensales")}
-              seleccionadas={filtrosColumna.comensales ?? []}
-              onSeleccionChange={(v) => setFiltroColumna("comensales", v)}
-              ordenable
-              panelClassName={panelTemaSala}
-              orden={ordenColumna}
-              onOrdenChange={setOrdenColumna}
-              ordenLabelAsc="Menos"
-              ordenLabelDesc="Más"
-              align="center"
-            />
-            <ColumnaListaHeader
               label="Origen"
               campo="origen"
               opciones={opcionesColumna("origen")}
@@ -5983,6 +5984,20 @@ export function ReservasView() {
               panelClassName={panelTemaSala}
               orden={ordenColumna}
               onOrdenChange={setOrdenColumna}
+            />
+            <ColumnaListaHeader
+              label="Per"
+              campo="comensales"
+              opciones={opcionesColumna("comensales")}
+              seleccionadas={filtrosColumna.comensales ?? []}
+              onSeleccionChange={(v) => setFiltroColumna("comensales", v)}
+              ordenable
+              panelClassName={panelTemaSala}
+              orden={ordenColumna}
+              onOrdenChange={setOrdenColumna}
+              ordenLabelAsc="Menos"
+              ordenLabelDesc="Más"
+              align="center"
             />
             {/* Tiempo no filtra ni ordena: es una cuenta atrás que cambia sola
                 cada minuto, así que un valor marcado dejaría de casar con su
@@ -6071,15 +6086,19 @@ export function ReservasView() {
                               quien reservó. Va delante para que se vea antes
                               que el nombre al que avisa. */}
                           {r.vinculacionPendiente && (
-                            <span
-                              className="flex shrink-0"
-                              title="Enganchó con un cliente que ya existía y los datos no coinciden. Abre la reserva para revisarlo."
-                            >
-                              <AlertTriangle
-                                className="size-3.5 shrink-0 text-amber-500"
-                                aria-label="Datos sin revisar"
-                              />
-                            </span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="flex shrink-0">
+                                  <AlertTriangle
+                                    className="size-3.5 shrink-0 text-amber-500"
+                                    aria-label="Datos sin revisar"
+                                  />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                Datos sin revisar
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                           <span
                             className="truncate font-medium"
@@ -6137,7 +6156,6 @@ export function ReservasView() {
                           </span>
                         )}
                       </span>
-                      <span className="min-w-0 text-center tabular-nums">{r.comensales}</span>
                       <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={origenLabel(r.origen)}>
                         {origenLabel(r.origen)}
                       </span>
@@ -6147,6 +6165,7 @@ export function ReservasView() {
                           una. */}
                       <TipoReservaCelda reserva={r} />
                       <StatusDot estado={r.estado} />
+                      <span className="min-w-0 text-center tabular-nums">{r.comensales}</span>
                       {/* TIEMPO: cuenta atrás (verde), retraso (rojo),
                           ocupación desde la hora de la reserva (azul) o
                           exceso sobre el tiempo de mesa (rojo con icono). */}
@@ -6866,53 +6885,6 @@ export function ReservasView() {
                   </div>
                   </div>
                 </div>
-                {/* El desplegable de duración vive arriba, con la hora. Aquí
-                    queda solo su CONSECUENCIA: hasta qué hora se ocupa la
-                    mesa, que es lo que se mira para saber si entra otro pase. */}
-                <div>
-                  {(() => {
-                    const efectiva =
-                      selectedReserva.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null;
-                    if (!efectiva) {
-                      return (
-                        <p className="text-[10px] text-muted-foreground">
-                          Sin duración configurada.
-                        </p>
-                      );
-                    }
-                    const fin = horaMasMinutos(selectedReserva.hora, efectiva);
-                    // Solo la consecuencia práctica: hasta qué hora queda
-                    // ocupada la mesa. Cuál es el valor por defecto de la
-                    // empresa se consulta en la configuración, no hace falta
-                    // repetirlo en cada ficha.
-                    return (
-                      <p className="text-[10px] text-muted-foreground">
-                        Ocupa la mesa hasta las {fin}.
-                      </p>
-                    );
-                  })()}
-                </div>
-                {/* Comentario de ESTA reserva, editable: lo que se sabe hoy de
-                    esta mesa concreta. Se guarda al salir del campo, como el
-                    resto de la ficha. Lo que acompaña siempre a la persona
-                    —alergias, manías— va en las observaciones de su ficha de
-                    cliente, no aquí. */}
-                <div className="space-y-1.5">
-                  <Label className="text-muted-foreground text-xs">Comentarios</Label>
-                  <Textarea
-                    className="text-xs"
-                    rows={2}
-                    maxLength={RESERVA_COMENTARIO_MAX_CHARS}
-                    disabled={guardandoComentario}
-                    value={comentarioEdit}
-                    onChange={(e) =>
-                      setComentarioEdit(
-                        e.target.value.slice(0, RESERVA_COMENTARIO_MAX_CHARS),
-                      )
-                    }
-                    onBlur={() => void guardarComentario(selectedReserva.id)}
-                  />
-                </div>
                 {/* Datos del Ticket. Todo de solo lectura: el tipo de reserva,
                     el código y el dinero quedan congelados desde el canje (lo
                     impide también la base de datos, no solo esta pantalla). */}
@@ -6986,17 +6958,45 @@ export function ReservasView() {
                 <div className="flex flex-wrap items-center gap-2">
                   <ReservaExternalBadge reserva={selectedReserva} />
                 </div>
-                {/* Correos y actividad de ESTA reserva: viven en la columna de
-                    la reserva, que es de lo que hablan. Antes estaban en la del
-                    cliente y parecian suyos. */}
-                <div className="pt-2 border-t">
-                  <HistoricoEmailsReserva reservaId={selectedReserva.id} />
-                </div>
+                {/* Actividad de ESTA reserva. Sube aquí, pegada a la mesa, para
+                    que quede a la misma altura que la actividad del cliente de
+                    la otra columna: las dos cuentan un historial, y a alturas
+                    distintas se leían como cosas de distinta importancia. */}
                 <div className="pt-2 border-t">
                   <ActividadReserva
                     key={actividadVersion}
                     reservaId={selectedReserva.id}
                   />
+                </div>
+                {/* Comunicación: los correos que se le han mandado por ESTA
+                    reserva. Van después del historial y antes del comentario,
+                    que es lo último porque es lo único que se escribe. */}
+                <div className="pt-2 border-t">
+                  <HistoricoEmailsReserva reservaId={selectedReserva.id} />
+                </div>
+                {/* Comentario de ESTA reserva, editable: lo que se sabe hoy de
+                    esta mesa concreta. Se guarda al salir del campo, como el
+                    resto de la ficha. Lo que acompaña siempre a la persona
+                    —alergias, manías— va en las observaciones de su ficha de
+                    cliente, no aquí. Caja de una línea: el límite da para una
+                    frase, y una caja alta invitaba a escribir lo que no cabe. */}
+                <div className="space-y-1.5 pt-2 border-t">
+                  <Label className="text-muted-foreground text-xs">Comentarios</Label>
+                  <Input
+                    className="h-8 text-xs"
+                    maxLength={RESERVA_COMENTARIO_MAX_CHARS}
+                    disabled={guardandoComentario}
+                    value={comentarioEdit}
+                    onChange={(e) =>
+                      setComentarioEdit(
+                        e.target.value.slice(0, RESERVA_COMENTARIO_MAX_CHARS),
+                      )
+                    }
+                    onBlur={() => void guardarComentario(selectedReserva.id)}
+                  />
+                  <p className="text-right text-[10px] text-muted-foreground">
+                    {comentarioEdit.length}/{RESERVA_COMENTARIO_MAX_CHARS}
+                  </p>
                 </div>
               </div>
 
