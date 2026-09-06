@@ -35,6 +35,7 @@ yarn-error.log*
 
 # Logs del daemon de localhost (se regeneran solos, no versionar)
 .dev-daemon/*.log
+.dev-daemon/*.log.old
 
 # Local env files
 .env*.local
