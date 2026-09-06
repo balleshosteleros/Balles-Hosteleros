@@ -5919,7 +5919,11 @@ export function ReservasView() {
         {/* LEFT PANEL */}
         {panelOculto !== "lista" && (
         <div className={cn(
-          "border-r flex flex-col bg-card overflow-hidden",
+          // MISMO fondo que la barra de herramientas de arriba: en `bg-card`
+          // (blanco puro) contra el gris claro de la pagina se veia el salto de
+          // tono como una linea cruzando la pantalla, aunque ya no hubiera
+          // ningun borde (Ivan, 06-sep).
+          "border-r flex flex-col bg-background overflow-hidden",
           // El ancho sale de LISTA_ANCHO_PX, que es el mismo que coloca los
           // botones de arriba sobre el plano. Lo que crece la lista lo cede el
           // plano SOLO a lo ancho: se escala solo al espacio que le queda y
@@ -5929,7 +5933,7 @@ export function ReservasView() {
         style={
           panelOculto === "ninguno" ? { width: LISTA_ANCHO_PX } : undefined
         }>
-          <div className={cn(LISTA_GRID, "px-3 py-2 text-[10px] font-semibold text-muted-foreground border-b bg-muted/30 uppercase tracking-wider")}>
+          <div className={cn(LISTA_GRID, "px-3 py-2 text-[10px] font-semibold text-muted-foreground border-b bg-background uppercase tracking-wider")}>
             {/* Cada columna filtra y ordena desde su propia cabecera, como en
                 el resto de tablas del software: se pincha en la columna que se
                 quiere acotar, no en un botón aparte. */}

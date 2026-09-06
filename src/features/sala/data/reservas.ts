@@ -107,9 +107,14 @@ export const ESTADO_ORDEN_PRIORIDAD: Record<EstadoReserva, number> = {
  * desde aquí.
  */
 export const ESTADO_BADGE_CLASS: Record<EstadoReserva, string> = {
-  // Verde CLARO y hueco: la reserva está dada, pero esa gente todavía no ha
-  // llegado. Es el "aún no" del turno.
-  CONFIRMADA:      "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
+  // Verde CLARO pero SÓLIDO y cantoso: la reserva está dada, pero esa gente
+  // todavía no ha llegado. Es el "aún no" del turno, y por eso va en un verde
+  // más claro que el de SENTADA —que es el verde oscuro de "ya están en la
+  // mesa"—; los dos rellenos y con texto blanco, para que se lean de un
+  // barrido y no haya que acercarse a la pantalla. Antes era un verde al 15%
+  // con el texto en emerald-300: pensado para fondo oscuro, sobre el claro de
+  // la lista se desvanecía y no se leía (Iván, 06-sep).
+  CONFIRMADA:      "bg-emerald-500 text-white border-emerald-600",
   RECONFIRMADA:    "bg-sky-600/20 text-sky-400 border-sky-600/40",
   NO_RECONFIRMADA: "bg-amber-600/20 text-amber-400 border-amber-600/40",
   LISTA_ESPERA:    "bg-violet-600/20 text-violet-400 border-violet-600/40",
