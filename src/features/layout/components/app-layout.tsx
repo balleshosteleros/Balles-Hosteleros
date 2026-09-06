@@ -278,18 +278,23 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
       >
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0 h-screen">
-          {/* REBORDE superior cuando la barra esta recogida: una franja fina
-              azul marino que hace dos cosas a la vez. Cierra la vista por
-              arriba (sin ella el plano quedaba pegado al borde de la pantalla)
-              y es la zona sensible que vuelve a sacar la barra al acercar el
-              raton — si no existiera, la unica forma de recuperarla seria ir
-              hasta el menu lateral. */}
+          {/* REBORDE superior cuando la barra esta recogida: cierra la vista
+              por arriba (sin el, el plano quedaba pegado al borde de la
+              pantalla) y es la zona sensible que vuelve a sacar la barra al
+              acercar el raton — si no existiera, la unica forma de
+              recuperarla seria ir hasta el menu lateral.
+
+              Va del color del FONDO, no del menu lateral: en azul marino se
+              leia como una linea de color cruzando la pantalla justo encima de
+              la barra de herramientas, y no separa nada — es solo el hueco por
+              el que se recupera la barra. Sigue ahi y sigue siendo sensible al
+              raton; lo unico que cambia es que ya no se ve (Ivan, 06-sep). */}
           {puedeReplegar && (
             <div
               onMouseEnter={() => setHoverBarraSuperior(true)}
               aria-hidden
               className={cn(
-                "shrink-0 bg-sidebar transition-[height] duration-200 ease-out",
+                "shrink-0 bg-background transition-[height] duration-200 ease-out",
                 headerReplegado ? "h-2" : "h-0",
               )}
             />
