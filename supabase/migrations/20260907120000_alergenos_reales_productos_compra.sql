@@ -1,0 +1,135 @@
+-- ============================================================================
+-- Alérgenos reales en los productos de COMPRA (Reglamento UE 1169/2011)
+--
+-- Punto de partida: 660 productos de compra estaban marcados en bloque como
+-- 'Sin alérgenos' por un seed, incluidos leche, huevo, panko, quesos, panes,
+-- gambas, sepia o salmón. Con ese dato de entrada la derivación automática
+-- devolvía vacío para TODOS los platos de venta: la cascada funcionaba, pero
+-- se alimentaba de datos falsos.
+--
+-- Esta migración marca a mano los alérgenos de cada producto de compra que es
+-- alimento. A partir de aquí `alergenos_derivados()` los propaga solo a los
+-- productos de venta en modo 'auto' que llevan ese ingrediente.
+--
+-- NO se tocan los productos de venta ni los de elaboración: los de venta en
+-- modo auto derivan solos, y los que estén en manual mandan sobre la cascada.
+--
+-- Idempotente: se puede reejecutar; empareja por nombre exacto y tipo='compra',
+-- y aplica a todas las empresas que tengan ese producto.
+-- ============================================================================
+
+with m(nombre, alerg) as (values
+('Calamar', ARRAY['Moluscos']::text[]),
+  ('Choco limpio', ARRAY['Moluscos']::text[]),
+  ('Sepia', ARRAY['Moluscos']::text[]),
+  ('Pota anilla', ARRAY['Moluscos']::text[]),
+  ('Pota gigas congelada', ARRAY['Moluscos']::text[]),
+  ('Vieira media', ARRAY['Moluscos']::text[]),
+  ('Mejillones Jugoson', ARRAY['Moluscos']::text[]),
+  ('Tinta de calamar', ARRAY['Moluscos']::text[]),
+  ('Gamba cola pelada 50/70', ARRAY['Crustáceos']::text[]),
+  ('Gambon', ARRAY['Crustáceos']::text[]),
+  ('Ebi fry', ARRAY['Crustáceos','Gluten','Huevos']::text[]),
+  ('Lubina', ARRAY['Pescado']::text[]),
+  ('Corvina', ARRAY['Pescado']::text[]),
+  ('Salmón', ARRAY['Pescado']::text[]),
+  ('Lomo de merluza', ARRAY['Pescado']::text[]),
+  ('Cola de rape 80/150', ARRAY['Pescado']::text[]),
+  ('Morralla', ARRAY['Pescado']::text[]),
+  ('Tobiko naranja', ARRAY['Pescado']::text[]),
+  ('Cazon Adobo enharinado', ARRAY['Pescado','Gluten']::text[]),
+  ('Atún en aceite vegetal', ARRAY['Pescado']::text[]),
+  ('Leche', ARRAY['Lácteos']::text[]),
+  ('Leche condensada', ARRAY['Lácteos']::text[]),
+  ('Leche Asturiana', ARRAY['Lácteos']::text[]),
+  ('Leche Condesada', ARRAY['Lácteos']::text[]),
+  ('Nata para montar 35%', ARRAY['Lácteos']::text[]),
+  ('Nata Spray', ARRAY['Lácteos']::text[]),
+  ('Mozzarella rallada', ARRAY['Lácteos']::text[]),
+  ('Queso Burratina', ARRAY['Lácteos']::text[]),
+  ('Queso cheddar', ARRAY['Lácteos']::text[]),
+  ('Queso curado', ARRAY['Lácteos']::text[]),
+  ('Queso de cabra', ARRAY['Lácteos']::text[]),
+  ('Huevo', ARRAY['Huevos']::text[]),
+  ('Huevo de codorniz', ARRAY['Huevos']::text[]),
+  ('Yema de huevo', ARRAY['Huevos']::text[]),
+  ('Artesanillo ( 55 g )', ARRAY['Gluten']::text[]),
+  ('Artesanillo semillado ( 60 g )', ARRAY['Gluten','Sésamo']::text[]),
+  ('Pan briocht', ARRAY['Gluten','Huevos','Lácteos']::text[]),
+  ('Pan de Hamburguesa ( High Potato )', ARRAY['Gluten','Sésamo']::text[]),
+  ('Pan Diamante Blanco', ARRAY['Gluten']::text[]),
+  ('Pan Diamante maiz', ARRAY['Gluten']::text[]),
+  ('Pan gua bao', ARRAY['Gluten']::text[]),
+  ('Pan hot dog', ARRAY['Gluten']::text[]),
+  ('Pan Sin Gluten', ARRAY['Sin alérgenos']::text[]),
+  ('Panko', ARRAY['Gluten']::text[]),
+  ('Puntalette', ARRAY['Gluten']::text[]),
+  ('Croquetas de jamon con panko', ARRAY['Gluten','Lácteos','Huevos']::text[]),
+  ('Gyozas pollo y verduras', ARRAY['Gluten','Soja','Sésamo']::text[]),
+  ('Gyozas vegetales', ARRAY['Gluten','Soja','Sésamo']::text[]),
+  ('Mayonesa', ARRAY['Huevos']::text[]),
+  ('Salsa de mostaza y miel', ARRAY['Mostaza','Huevos']::text[]),
+  ('Mostaza', ARRAY['Mostaza']::text[]),
+  ('Salsa tartufata', ARRAY['Lácteos']::text[]),
+  ('Helado de vainilla', ARRAY['Lácteos','Huevos']::text[]),
+  ('Tarta de queso', ARRAY['Lácteos','Huevos','Gluten']::text[]),
+  ('Sésamo negro', ARRAY['Sésamo']::text[]),
+  ('Furikake', ARRAY['Sésamo','Pescado']::text[]),
+  ('Ensalada wakame', ARRAY['Sésamo','Soja']::text[]),
+  ('Kimuchi no moto', ARRAY['Pescado','Crustáceos','Soja']::text[]),
+  ('Salsa barbacoa', ARRAY['Sulfitos','Mostaza']::text[]),
+  ('Aceituna negra expolvoreada', ARRAY['Sulfitos']::text[]),
+  ('Orejones', ARRAY['Sulfitos']::text[]),
+  ('Tomate deshidratado en aceite', ARRAY['Sulfitos']::text[]),
+  ('Alcachofa confitada', ARRAY['Sulfitos']::text[]),
+  ('Zumo concentrado de limón', ARRAY['Sulfitos']::text[]),
+  ('Papel de arroz', ARRAY['Sin alérgenos']::text[]),
+  ('Arroz bomba', ARRAY['Sin alérgenos']::text[]),
+  ('Base de arroz de carne', ARRAY['Sin alérgenos']::text[]),
+  ('Base de arroz de paella', ARRAY['Sin alérgenos']::text[]),
+  ('Base de arroz de pescado', ARRAY['Pescado','Crustáceos','Moluscos']::text[]),
+  ('Base de arroz negro', ARRAY['Pescado','Crustáceos','Moluscos']::text[]),
+  ('Preparado chimichurri', ARRAY['Sulfitos']::text[]),
+  ('Pasta ají amarillo', ARRAY['Sin alérgenos']::text[]),
+  ('Aceite de girasol alto oleico', ARRAY['Sin alérgenos']::text[]),
+  ('Aceite de oliva 0,4', ARRAY['Sin alérgenos']::text[]),
+  ('Chile rojo', ARRAY['Sin alérgenos']::text[]),
+  ('Citronela', ARRAY['Sin alérgenos']::text[]),
+  ('Sal Maldon', ARRAY['Sin alérgenos']::text[]),
+  ('Tomate frito', ARRAY['Sin alérgenos']::text[]),
+  ('Fingers de pollo', ARRAY['Gluten','Lácteos']::text[]),
+  ('Panceta adobada', ARRAY['Sulfitos']::text[]),
+  ('Oreja de cerdo en adobo', ARRAY['Sulfitos']::text[]),
+  ('Preparado churrasco de ternera', ARRAY['Sulfitos']::text[]),
+  ('Salchichas de pavo', ARRAY['Sulfitos']::text[]),
+  ('Carne picada mixta', ARRAY['Sulfitos']::text[]),
+  ('Hamburguesa artesana angus ( 200 gr)', ARRAY['Sulfitos']::text[]),
+  ('Gofre', ARRAY['Gluten','Huevos','Lácteos']::text[]),
+  ('Palomitas Mantequilla', ARRAY['Lácteos']::text[]),
+  ('Patata maria auxiliadora', ARRAY['Sin alérgenos']::text[]),
+  ('Aguja de cerdo fresca', ARRAY['Sin alérgenos']::text[]),
+  ('Alitas de pollo', ARRAY['Sin alérgenos']::text[]),
+  ('Bacon', ARRAY['Sin alérgenos']::text[]),
+  ('Carne picada de vaca', ARRAY['Sin alérgenos']::text[]),
+  ('Carrillada de vaca', ARRAY['Sin alérgenos']::text[]),
+  ('Carrillera de ternera', ARRAY['Sin alérgenos']::text[]),
+  ('Contramuslos de pollo', ARRAY['Sin alérgenos']::text[]),
+  ('Entraña de ternera (350GR)', ARRAY['Sin alérgenos']::text[]),
+  ('Entrecot de vaca', ARRAY['Sin alérgenos']::text[]),
+  ('Filete añojo', ARRAY['Sin alérgenos']::text[]),
+  ('Filete de vaca para cachopo', ARRAY['Sin alérgenos']::text[]),
+  ('Filete pechuga de pollo', ARRAY['Sin alérgenos']::text[]),
+  ('Jamon de cebo iberico 50% loncheado', ARRAY['Sin alérgenos']::text[]),
+  ('Lomo bajo frisona ( 350 gr )', ARRAY['Sin alérgenos']::text[]),
+  ('Paleta cebo ibérico 50% loncheada', ARRAY['Sin alérgenos']::text[]),
+  ('Secreto de cerdo', ARRAY['Sin alérgenos']::text[]),
+  ('Solomillo Cerdo', ARRAY['Sin alérgenos']::text[]),
+  ('Tiras de costillas de cerdo frescas', ARRAY['Sin alérgenos']::text[]),
+  ('Tomahawk de aguja', ARRAY['Sin alérgenos']::text[])
+)
+update public.productos p
+   set alergenos = m.alerg,
+       alergenos_modo = 'manual'
+  from m
+ where p.tipo = 'compra'
+   and p.nombre = m.nombre;
