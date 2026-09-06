@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Switch } from "@/components/ui/switch";
+import { Lock } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -90,6 +91,22 @@ export function NotifLiquidacionesConfigPanel({ embedded = false }: { embedded?:
           </div>
         </>
       )}
+
+      <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50/60 p-3 dark:border-sky-900 dark:bg-sky-950/20">
+        <Lock className="mt-0.5 h-4 w-4 shrink-0 text-sky-700 dark:text-sky-400" />
+        <div className="space-y-0.5">
+          <Label className="text-sm text-sky-900 dark:text-sky-200">
+            Al enviar liquidaciones, los pagos se bloquean
+          </Label>
+          <p className="text-xs text-sky-800/80 dark:text-sky-300/80">
+            Una vez enviada la liquidación, su importe deja de poder editarse desde RRHH: es el
+            que el trabajador ve y aprueba. Solo un usuario de Dirección puede desbloquearla.
+          </p>
+          <p className="text-xs font-medium text-sky-900/70 dark:text-sky-300/70">
+            Siempre activo · no se puede desactivar
+          </p>
+        </div>
+      </div>
 
       <div className="flex items-start justify-between gap-4 rounded-lg border bg-muted/20 p-3">
         <div className="space-y-0.5">
