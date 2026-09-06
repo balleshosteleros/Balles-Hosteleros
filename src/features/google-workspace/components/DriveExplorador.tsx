@@ -114,7 +114,18 @@ export function DriveExplorador({ abierto }: { abierto: boolean }) {
           return;
         }
         if (!res.ok) {
-          setError("No se ha podido leer Google Drive.");
+          // Si Google rechaza por permisos, la cuenta esta conectada pero sin
+          // el permiso de Drive: hay que volver a autorizar, no reintentar.
+          const cuerpo = (await res.json().catch(() => null)) as {
+            motivo?: number | null;
+          } | null;
+          if (cuerpo?.motivo === 403) {
+            setError("reauth");
+          } else {
+            setError(
+              "Google no ha devuelto los archivos. Vuelve a intentarlo en unos segundos.",
+            );
+          }
           setItems([]);
           return;
         }

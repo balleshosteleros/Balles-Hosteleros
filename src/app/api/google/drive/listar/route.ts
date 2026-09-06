@@ -108,12 +108,15 @@ export async function GET(request: Request) {
   url.searchParams.set("fields", CAMPOS);
   url.searchParams.set("pageSize", "200");
   url.searchParams.set("orderBy", "folder,name");
-  // Incluye lo que vive en unidades compartidas por si alguna cuenta las tuviera.
+  // `supportsAllDrives` es inofensivo y basta para que los accesos directos a
+  // unidades compartidas se resuelvan. NO ponemos `includeItemsFromAllDrives`:
+  // Google exige acompanarlo de `corpora=allDrives` y, en cuentas Google One
+  // (que es lo que usamos aqui, no Workspace), esa combinacion se responde con
+  // 400 y la carpeta no llega a listarse nunca.
   url.searchParams.set("supportsAllDrives", "true");
-  url.searchParams.set("includeItemsFromAllDrives", "true");
   if (pageToken) url.searchParams.set("pageToken", pageToken);
 
-  const { data, needsReauth } = await googleFetchAuto<{
+  const { data, needsReauth, status } = await googleFetchAuto<{
     files?: DriveFile[];
     nextPageToken?: string;
   }>(url.toString());
@@ -122,7 +125,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "reauth" }, { status: 401 });
   }
   if (!data) {
-    return NextResponse.json({ error: "drive_error" }, { status: 502 });
+    // Devolvemos el motivo real para que la pantalla pueda decir algo util en
+    // vez de un "no se ha podido" a secas.
+    return NextResponse.json(
+      { error: "drive_error", motivo: status ?? null },
+      { status: 502 },
+    );
   }
 
   return NextResponse.json({

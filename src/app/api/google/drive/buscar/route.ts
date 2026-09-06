@@ -42,8 +42,9 @@ export async function GET(request: Request) {
   url.searchParams.set("fields", CAMPOS);
   url.searchParams.set("pageSize", "50");
   url.searchParams.set("orderBy", "folder,name");
+  // Mismo motivo que en `listar`: `includeItemsFromAllDrives` sin
+  // `corpora=allDrives` devuelve 400 en cuentas que no son de Workspace.
   url.searchParams.set("supportsAllDrives", "true");
-  url.searchParams.set("includeItemsFromAllDrives", "true");
 
   const { data, needsReauth } = await googleFetchAuto<{ files?: DriveFile[] }>(
     url.toString(),
