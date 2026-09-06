@@ -100,7 +100,7 @@ export const HERRAMIENTAS: HerramientaDef[] = [
   },
   {
     id: "reuniones",
-    nombre: "Reuniones Meet",
+    nombre: "Reuniones",
     descripcion: "Videollamadas y reuniones de Google Meet.",
     Icon: Video,
     colorKey: "emerald",
@@ -131,7 +131,7 @@ export const HERRAMIENTAS: HerramientaDef[] = [
   },
   {
     id: "chat",
-    nombre: "Comunicación interna",
+    nombre: "Chat",
     descripcion: "Chat interno entre miembros de la empresa.",
     Icon: MessageCircle,
     colorKey: "green",
@@ -145,7 +145,7 @@ export const HERRAMIENTAS: HerramientaDef[] = [
   },
   {
     id: "agenda",
-    nombre: "Agenda de contactos",
+    nombre: "Agenda",
     descripcion: "Directorio de contactos compartido.",
     Icon: Notebook,
     colorKey: "yellow",
@@ -166,7 +166,7 @@ export const HERRAMIENTAS: HerramientaDef[] = [
   },
   {
     id: "accesos",
-    nombre: "Accesos y contraseñas",
+    nombre: "Contraseñas",
     descripcion: "Bóveda segura de contraseñas, PINs y claves. Revelado con verificación de identidad.",
     Icon: Lock,
     colorKey: "red",

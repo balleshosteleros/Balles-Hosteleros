@@ -287,7 +287,7 @@ export function RolesTab() {
                     { modulo: MODULO_AJUSTES, label: "Ajustes", Icon: Settings, permiso: permisoAjustes },
                     { modulo: MODULO_CAMARAS, label: "Videovigilancia", Icon: Cctv, permiso: permisoCamaras },
                     { modulo: MODULO_APLICACIONES, label: "Aplicaciones", Icon: Rocket, permiso: permisoAplicaciones },
-                    { modulo: MODULO_ACCESOS, label: "Accesos y contraseñas", Icon: Lock, permiso: permisoAccesos },
+                    { modulo: MODULO_ACCESOS, label: "Contraseñas", Icon: Lock, permiso: permisoAccesos },
                   ].map(({ modulo, label, Icon, permiso }) => (
                     <div
                       key={modulo}

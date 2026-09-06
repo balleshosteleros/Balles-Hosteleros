@@ -140,7 +140,7 @@ export function AplicacionesTab() {
   };
 
   // Universo real de esta pantalla: solo las entradas con enlace web. El resto
-  // (caja fuerte, PIN de TPV, wifi…) vive en «Accesos y contraseñas», así que
+  // (caja fuerte, PIN de TPV, wifi…) vive en «Contraseñas», así que
   // el contador no debe compararlas contra el total o parecerá que faltan apps.
   const appsConEnlace = apps.filter(tieneEnlaceWeb);
   const sinEnlace = apps.length - appsConEnlace.length;
@@ -148,7 +148,7 @@ export function AplicacionesTab() {
   const filteredApps = apps.filter((a) => {
     // Solo son APLICACIONES las que tienen enlace web real. Las entradas sin
     // URL (caja fuerte, PIN de TPV, wifi, SIM…) son credenciales sueltas y
-    // viven en «Accesos y contraseñas», no aquí.
+    // viven en «Contraseñas», no aquí.
     if (!tieneEnlaceWeb(a)) return false;
     if (filtroCategoria !== "todas" && a.categoria !== filtroCategoria) return false;
     if (buscar) {
@@ -372,7 +372,7 @@ export function AplicacionesTab() {
           <>
             {" "}· {sinEnlace} entrada{sinEnlace === 1 ? "" : "s"} sin enlace (caja
             fuerte, PIN, wifi…) se {sinEnlace === 1 ? "gestiona" : "gestionan"} en
-            «Accesos y contraseñas»
+            «Contraseñas»
           </>
         )}
       </p>

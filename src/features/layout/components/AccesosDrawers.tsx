@@ -590,7 +590,7 @@ export function AccesosDrawer({
           <SheetHeader className="border-b py-3 pl-5 pr-14 shrink-0">
             <SheetTitle className="flex items-center gap-2 text-base">
               <Lock className="h-4 w-4 text-red-500" />
-              Accesos y contraseñas
+              Contraseñas
             </SheetTitle>
             <p className="text-xs text-muted-foreground">
               Bóveda segura. Cada revelado exige verificar tu identidad y respeta tu rol.

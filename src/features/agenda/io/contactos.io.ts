@@ -24,7 +24,7 @@ const schema = contactoSchema as unknown as RowSchema<Contacto>;
 export const agendaContactosIO: ModuleIO<Contacto> = {
   module: "agenda",
   submodule: "contactos",
-  label: "Agenda de contactos",
+  label: "Agenda",
   description: "Contactos clasificados (clientes, proveedores, técnicos, etc.).",
   schema,
   uniqueBy: "telefono",

@@ -403,7 +403,7 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
 
                       {/* Chat / Comunicación */}
                       <ChatDrawer>
-                        <ToolTooltip label="Comunicación interna">
+                        <ToolTooltip label="Chat">
                           <Button
                             variant="ghost" size="icon"
                             className="relative h-8 w-8"
@@ -427,7 +427,7 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                         </ToolTooltip>
                       </TelefonoDrawer>
 
-                      {/* Agenda de contactos */}
+                      {/* Agenda */}
                       <AgendaDrawer>
                         <ToolTooltip label="Agenda">
                           <Button
@@ -458,7 +458,7 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
 
                       {/* Apps externas — dos permisos independientes:
                            · Aplicaciones (cohete): enlaces + usuario, sin secretos → HERR_APLICACIONES.
-                           · Accesos y contraseñas (candado): bóveda segura con
+                           · Contraseñas (candado): bóveda segura con
                              revelado bajo verificación de identidad → HERR_ACCESOS. */}
                       {puedeVer("HERR_APLICACIONES") && (
                         <AplicacionesDrawer empresaSlug={empresaActual.id}>
@@ -474,7 +474,7 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                       )}
                       {puedeVer("HERR_ACCESOS") && (
                         <AccesosDrawer empresaSlug={empresaActual.id}>
-                          <ToolTooltip label="Accesos y contraseñas">
+                          <ToolTooltip label="Contraseñas">
                             <Button
                               variant="ghost" size="icon"
                               className="relative h-8 w-8"

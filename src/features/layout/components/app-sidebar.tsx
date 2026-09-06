@@ -329,7 +329,7 @@ export function AppSidebar() {
             </button>
           </div>
         ) : (
-          <div className="relative flex flex-col items-center gap-1.5">
+          <div className="relative flex flex-col items-center gap-1.5 pb-10">
             <button
               type="button"
               onClick={togglePin}

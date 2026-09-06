@@ -14,7 +14,7 @@ import { HerramientasTab } from "@/features/ajustes/components/HerramientasTab";
 import { useHydrateUsuarios } from "@/features/ajustes/hooks/use-hydrate-usuarios";
 
 // Mini-icono compuesto: rejilla 2×2 con 4 iconos de herramientas reales
-// (Correo, Calendario, Meet y Comunicación interna).
+// (Correo, Calendario, Reuniones y Chat).
 function HerramientasIcon({ className }: { className?: string }) {
   return (
     <span className={cn("grid grid-cols-2 grid-rows-2 gap-px", className)}>

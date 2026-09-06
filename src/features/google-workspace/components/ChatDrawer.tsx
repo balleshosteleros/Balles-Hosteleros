@@ -1065,7 +1065,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
         maximizable
         className="flex flex-col gap-0 p-0 [&>button]:hidden"
       >
-        <SheetTitle className="sr-only">Comunicación interna</SheetTitle>
+        <SheetTitle className="sr-only">Chat</SheetTitle>
 
         {/* Top bar global */}
         <header className="flex items-center justify-between border-b px-4 py-2 shrink-0 bg-background">
