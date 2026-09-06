@@ -278,11 +278,11 @@ export function RolesTab() {
                 {/*
                   Permisos sueltos: no son departamentos del índice lateral,
                   son las llaves de AJUSTES y de las herramientas de la barra.
-                  Cada tarjeta lleva SOLO el icono y la palabra con la que se
-                  conoce la herramienta (la misma del tooltip de la barra) y su
-                  interruptor de acceso. Sin repetir el nombre dos veces.
+                  Van en UNA columna, con el interruptor alineado con la columna
+                  ACCESO de la tabla, para que la pantalla se lea de un tirón.
+                  El icono y la separación de arriba avisan de que son otra cosa.
                 */}
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="mt-3 border-t pt-1">
                   {[
                     { modulo: MODULO_AJUSTES, label: "Ajustes", Icon: Settings, permiso: permisoAjustes },
                     { modulo: MODULO_CAMARAS, label: "Videovigilancia", Icon: Cctv, permiso: permisoCamaras },
@@ -291,16 +291,18 @@ export function RolesTab() {
                   ].map(({ modulo, label, Icon, permiso }) => (
                     <div
                       key={modulo}
-                      className="flex items-center justify-between gap-3 rounded-md border-2 border-dashed border-muted-foreground/20 bg-muted/30 px-3 py-2"
+                      className="flex items-center justify-between gap-3 border-b py-2 text-sm last:border-0"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="truncate text-sm font-medium">{label}</span>
+                      <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate font-medium">{label}</span>
                       </div>
-                      <Switch
-                        checked={permiso.ver}
-                        onCheckedChange={() => toggleAcceso(rol.id, modulo)}
-                      />
+                      <div className="flex w-24 justify-end pr-1">
+                        <Switch
+                          checked={permiso.ver}
+                          onCheckedChange={() => toggleAcceso(rol.id, modulo)}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
