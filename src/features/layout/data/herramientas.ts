@@ -70,7 +70,6 @@ export type HerramientaId =
 export interface HerramientaDef {
   id: HerramientaId;
   nombre: string;
-  descripcion: string;
   Icon: LucideIcon;
   colorKey: ToolColorKey;
 }
@@ -80,35 +79,30 @@ export const HERRAMIENTAS: HerramientaDef[] = [
   {
     id: "notificaciones",
     nombre: "Notificaciones",
-    descripcion: "Avisos del sistema dirigidos al empleado (campana y bandeja).",
     Icon: Bell,
     colorKey: "red",
   },
   {
     id: "email",
     nombre: "Correo",
-    descripcion: "Bandeja de entrada Gmail integrada en el portal.",
     Icon: Mail,
     colorKey: "orange",
   },
   {
     id: "calendario",
     nombre: "Calendario",
-    descripcion: "Calendario de Google sincronizado.",
     Icon: CalendarIcon,
     colorKey: "blue",
   },
   {
     id: "reuniones",
     nombre: "Reuniones",
-    descripcion: "Videollamadas y reuniones de Google Meet.",
     Icon: Video,
     colorKey: "emerald",
   },
   {
     id: "grabacion",
     nombre: "Grabación de pantalla",
-    descripcion: "Captura y comparte grabaciones de pantalla.",
     Icon: Monitor,
     // En reposo es gris pizarra; al estar grabando el icono se pone rojo vivo
     // (excepción gestionada en RecordingTrigger, no es un color de catálogo).
@@ -117,57 +111,48 @@ export const HERRAMIENTAS: HerramientaDef[] = [
   {
     id: "archivos",
     nombre: "Archivos",
-    descripcion:
-      "Los archivos de la empresa: el Drive de la cuenta conectada, en vivo.",
     Icon: Folder,
     colorKey: "cyan",
   },
   {
     id: "tareas",
     nombre: "Tareas",
-    descripcion: "Gestor de tareas personales y de equipo.",
     Icon: CheckSquare2,
     colorKey: "violet",
   },
   {
     id: "chat",
     nombre: "Chat",
-    descripcion: "Chat interno entre miembros de la empresa.",
     Icon: MessageCircle,
     colorKey: "green",
   },
   {
     id: "telefono",
     nombre: "Teléfono",
-    descripcion: "Llamadas VoIP integradas.",
     Icon: Phone,
     colorKey: "sky",
   },
   {
     id: "agenda",
     nombre: "Agenda",
-    descripcion: "Directorio de contactos compartido.",
     Icon: Notebook,
     colorKey: "yellow",
   },
   {
     id: "videovigilancia",
     nombre: "Videovigilancia",
-    descripcion: "Acceso a las cámaras del local.",
     Icon: Cctv,
     colorKey: "slate",
   },
   {
     id: "aplicaciones",
     nombre: "Aplicaciones",
-    descripcion: "Accesos directos a aplicaciones externas.",
     Icon: Rocket,
     colorKey: "amber",
   },
   {
     id: "accesos",
     nombre: "Contraseñas",
-    descripcion: "Bóveda segura de contraseñas, PINs y claves. Revelado con verificación de identidad.",
     Icon: Lock,
     colorKey: "red",
   },
