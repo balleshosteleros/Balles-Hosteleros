@@ -10,11 +10,11 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   completarFichaCliente,
-  construirDatosDeclarados,
-  deducirMotivoVinculacion,
+  decidirVinculacion,
   findOrLinkClienteSala,
   type CampoDistinto,
 } from "@/features/sala/lib/cliente-link";
+import { registrarVinculacionAutomatica } from "@/features/sala/lib/cliente-actividad";
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
 import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
 import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
@@ -660,19 +660,21 @@ export async function crearReservaPublicaAction(
   // familiar. Eso no lo puede decidir el sistema: se conserva lo que escribió
   // y lo resuelve el restaurante desde la ficha de la reserva.
   // ────────────────────────────────────────────────────────────────
-  const camposDistintos = link.result.camposDistintos;
-  const hayQueRevisar = link.result.existed && camposDistintos.length > 0;
-  const datosDeclarados = hayQueRevisar
-    ? construirDatosDeclarados(camposDistintos, {
+  const decision = link.result.existed
+    ? decidirVinculacion(link.result.camposDistintos, {
         nombre: data.nombre,
         apellidos: data.apellidos,
         email: data.email,
         telefono: data.telefono,
       })
-    : null;
-  const motivoVinculacion = hayQueRevisar
-    ? deducirMotivoVinculacion(camposDistintos, data.email)
-    : null;
+    : ({ tipo: "SIN_CAMBIOS" } as const);
+
+  const hayQueRevisar = decision.tipo === "REVISAR";
+  // Lo declarado sólo se guarda en la reserva cuando hay algo que decidir. En
+  // los automáticos ya se ha decidido —manda la ficha— y dejarlo escrito ahí
+  // haría reaparecer el aviso.
+  const datosDeclarados = hayQueRevisar ? decision.declarados : null;
+  const motivoVinculacion = hayQueRevisar ? decision.motivo : null;
 
   // Id generado en código para poder disparar el correo sin releer la fila.
   const reservaId = crypto.randomUUID();
@@ -684,10 +686,13 @@ export async function crearReservaPublicaAction(
     cliente_nombre: cliente.nombre,
     cliente_apellidos: cliente.apellidos,
     cliente_telefono: cliente.telefono,
-    // Excepción: el correo de confirmación tiene que llegarle a QUIEN ha
-    // reservado, no al titular de la ficha. Si enganchó por teléfono y aportó
-    // otro email, ése es su buzón; mandarlo al de la ficha avisaría a alguien
-    // que no ha reservado (y le revelaría datos de un tercero).
+    // Excepción, y sólo cuando hay duda de identidad: si enganchó por teléfono
+    // y aportó otro correo, puede ser otra persona con el móvil del titular.
+    // Ahí la confirmación va a SU buzón; mandarla al de la ficha avisaría a
+    // alguien que no ha reservado y le revelaría datos de un tercero.
+    //
+    // En todo lo demás manda la ficha: quien escribe su nombre a medias o
+    // cambia de móvil recibe la confirmación con sus datos de siempre.
     cliente_email: datosDeclarados?.email ?? cliente.email,
     datos_declarados: datosDeclarados,
     vinculacion_motivo: motivoVinculacion,
@@ -792,6 +797,23 @@ export async function crearReservaPublicaAction(
   //
   // `after()` (Next 16) ejecuta el trabajo tras responder al cliente sin
   // hacerle esperar, y es la plataforma la que garantiza que se complete.
+  // Lo que escribió y se ha descartado no se pierde: queda en la actividad de
+  // su ficha, que es donde se busca cuando alguien pregunta por qué la reserva
+  // salió a otro nombre. No bloquea la reserva, ya creada.
+  if (decision.tipo === "AUTO_CONSERVAR") {
+    after(
+      registrarVinculacionAutomatica(admin, {
+        empresaId: empresa.id,
+        clienteId: cliente.id,
+        declarados: decision.declarados,
+        motivo: decision.motivo,
+        origen: "PORTAL_PUBLICO",
+      }).catch((e) =>
+        console.error("[reservar-publica] actividad vinculacion:", e),
+      ),
+    );
+  }
+
   // ── Correos según lo que le toque hacer al cliente ──────────────────
   //
   // Sin tarjeta      → confirmación normal, como siempre.

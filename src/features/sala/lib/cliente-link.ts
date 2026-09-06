@@ -171,3 +171,51 @@ export async function registrarVisitaCliente(
     p_fecha: fechaIso,
   });
 }
+
+/** Qué hacer con una reserva que enganchó con una ficha que ya existía. */
+export type DecisionVinculacion =
+  /** Nada que revisar: los datos coinciden. */
+  | { tipo: "SIN_CAMBIOS" }
+  /**
+   * La ficha manda y se aplica sola, sin preguntar. Sólo cambian nombre y/o
+   * apellidos, o el móvil cuando enganchó por correo: en ninguno de los dos
+   * casos hay duda de que es la misma persona.
+   */
+  | { tipo: "AUTO_CONSERVAR"; motivo: VinculacionMotivo; declarados: DatosDeclarados }
+  /** Puede ser otra persona: lo decide el restaurante. */
+  | { tipo: "REVISAR"; motivo: VinculacionMotivo; declarados: DatosDeclarados };
+
+/**
+ * Decide si una reserva necesita revisión humana o se resuelve sola.
+ *
+ * ANTES cualquier diferencia abría un aviso, y el 75 % de ellos se cerraba con
+ * "dejar la ficha": el cliente había escrito "Gil" donde su ficha decía "Gil
+ * Garcia". Preguntar eso no protege nada y entrena a quien está en sala a
+ * pulsar sin leer, que es justo lo que hace peligroso el aviso que SÍ importa.
+ *
+ * Sólo hay una pregunta de verdad: **¿es otra persona?** Y eso únicamente puede
+ * pasar cuando el enganche fue por TELÉFONO y el correo es otro — el móvil
+ * compartido, la hija reservando desde el teléfono de su madre. Un correo es
+ * personal: quien lo repite es él.
+ *
+ *   nombre / apellidos distintos  → automático. Se queda la ficha.
+ *   enganchó por correo, otro móvil → automático. Es él con móvil nuevo.
+ *   enganchó por teléfono, otro correo → REVISAR. Puede ser otra persona.
+ *
+ * En los automáticos lo declarado no se pierde: se anota en la actividad del
+ * cliente, que es donde se busca después.
+ */
+export function decidirVinculacion(
+  camposDistintos: CampoDistinto[],
+  formulario: { nombre: string; apellidos?: string | null; email?: string | null; telefono?: string | null },
+): DecisionVinculacion {
+  const declarados = construirDatosDeclarados(camposDistintos, formulario);
+  if (!declarados) return { tipo: "SIN_CAMBIOS" };
+
+  const motivo = deducirMotivoVinculacion(camposDistintos, formulario.email);
+  // El enganche fue por teléfono y aporta OTRO correo: el único caso en que la
+  // persona puede ser distinta.
+  const dudaDeIdentidad = motivo === "telefono" && camposDistintos.includes("email");
+
+  return { tipo: dudaDeIdentidad ? "REVISAR" : "AUTO_CONSERVAR", motivo, declarados };
+}

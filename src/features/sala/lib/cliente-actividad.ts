@@ -124,3 +124,55 @@ export async function registrarRevisionCliente(
     console.error("[clientes] actividad revisión:", msg);
   }
 }
+
+/**
+ * Anota que una reserva llegó con datos distintos y se resolvió SOLA con los
+ * de la ficha, sin preguntar a nadie.
+ *
+ * Es el caso corriente: el cliente escribe su nombre a medias o cambia de
+ * móvil. No abre aviso —ver `decidirVinculacion()`— pero el dato no se tira:
+ * queda aquí, que es donde se mira cuando alguien pregunta por qué la reserva
+ * salió a otro nombre.
+ *
+ * Nunca lanza: la reserva ya está creada y no se deshace por un fallo al
+ * anotarla.
+ */
+export async function registrarVinculacionAutomatica(
+  supabase: SupabaseClient,
+  params: {
+    empresaId: string;
+    clienteId: string;
+    /** Lo que escribió, sólo en los campos que difieren de la ficha. */
+    declarados: { nombre?: string; apellidos?: string; email?: string; telefono?: string };
+    motivo: "email" | "telefono";
+    origen?: "MANUAL" | "AUTOMATICO" | "PORTAL_PUBLICO" | "GOOGLE_RWG";
+    usuarioId?: string | null;
+    usuarioNombre?: string | null;
+  },
+): Promise<void> {
+  const d = params.declarados;
+  const partes: string[] = [];
+  const nombreCompleto = [d.nombre, d.apellidos].filter(Boolean).join(" ").trim();
+  if (nombreCompleto) partes.push(nombreCompleto);
+  if (d.email) partes.push(d.email);
+  if (d.telefono) partes.push(d.telefono);
+  if (partes.length === 0) return;
+
+  const motivoTxt = params.motivo === "email" ? "correo" : "teléfono";
+  try {
+    const { error } = await supabase.from("cliente_historial").insert({
+      empresa_id: params.empresaId,
+      cliente_id: params.clienteId,
+      campo: "revision",
+      valor_anterior: null,
+      valor_nuevo: `Reservó con otros datos: ${partes.join(" · ")}. Coincidió por ${motivoTxt}, así que se conservaron los de la ficha.`,
+      usuario_id: params.usuarioId ?? null,
+      usuario_nombre: params.usuarioNombre ?? null,
+      origen: params.origen ?? "PORTAL_PUBLICO",
+    });
+    if (error) console.error("[clientes] actividad vinculación auto:", error.message);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[clientes] actividad vinculación auto:", msg);
+  }
+}
