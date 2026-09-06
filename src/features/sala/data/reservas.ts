@@ -122,14 +122,17 @@ export const ESTADO_BADGE_CLASS: Record<EstadoReserva, string> = {
   // SENTADA parecían dos familias de color distintas (Iván, 06-sep).
   CONFIRMADA:      "bg-lime-500 text-white border-lime-600",
   RECONFIRMADA:    "bg-sky-600 text-white border-sky-700",
-  NO_RECONFIRMADA: "bg-amber-500 text-white border-amber-600",
+  // NARANJA, no ambar: el ambar se acercaba demasiado al amarillo de LIBERADA
+  // y en la lista los dos avisos se leian como el mismo (Ivan, 06-sep).
+  NO_RECONFIRMADA: "bg-orange-500 text-white border-orange-600",
   LISTA_ESPERA:    "bg-violet-600 text-white border-violet-700",
   SENTADA:         "bg-lime-800 text-white border-lime-900",
   LIBERADA:        "bg-yellow-500 text-white border-yellow-600",
-  // Fucsia: es el unico tono que no choca con ningun otro estado. Antes era
-  // cyan y en sala se confundia con el azul de RECONFIRMADA; el gris que se
-  // probo despues no gustaba. Aqui no hay duda posible de un vistazo.
-  TERMINANDO:      "bg-fuchsia-600 text-white border-fuchsia-700",
+  // ROSA, no fucsia: el fucsia tiraba a morado y se acercaba al violeta de
+  // LISTA DE ESPERA. El rosa clasico es el unico tono que no choca con ningun
+  // otro estado —antes se probo cyan, que se confundia con el azul de
+  // RECONFIRMADA, y un gris que no gustaba (Ivan, 06-sep).
+  TERMINANDO:      "bg-pink-500 text-white border-pink-600",
   NO_SHOW:         "bg-red-600 text-white border-red-700",
   // GRIS: cancelada ya no es un aviso que atender, solo deja constancia de que
   // esa mesa se cayo. En rojo —aunque fuera apagado— pedia atencion igual que
@@ -142,14 +145,14 @@ export const ESTADO_DOT_CLASS: Record<EstadoReserva, string> = {
   // la ficha del cliente no digan un verde distinto del de la lista.
   CONFIRMADA:      "bg-lime-500",
   RECONFIRMADA:    "bg-sky-500",
-  NO_RECONFIRMADA: "bg-amber-500",
+  NO_RECONFIRMADA: "bg-orange-500",
   LISTA_ESPERA:    "bg-violet-500",
   // Pistacho oscuro frente al claro de CONFIRMADA: mismo criterio que el
   // recuadro. Se queda en -600 y no en el -700 del chip porque contra el
   // lienzo oscuro de sala el punto necesita algo mas de luz para verse.
   SENTADA:         "bg-lime-700",
   LIBERADA:        "bg-yellow-500",
-  TERMINANDO:      "bg-fuchsia-500",
+  TERMINANDO:      "bg-pink-500",
   NO_SHOW:         "bg-red-500",
   // Gris, igual que su recuadro: donde queda punto (filtros, clientes, plano)
   // tiene que ser el mismo color que en el resto de la app.

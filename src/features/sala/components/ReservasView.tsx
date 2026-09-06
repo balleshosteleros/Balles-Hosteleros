@@ -227,6 +227,41 @@ const mesaBg: Record<string, string> = {
     "[.sala-oscuro_&]:!border-white/25 [.sala-oscuro_&]:text-zinc-300",
 };
 
+/**
+ * MESA VENDIDA DOS VECES: color de CADA MITAD.
+ *
+ * Con doble servicio la mesa no tiene UN estado, tiene dos: la reserva de las
+ * 20:00 puede estar sentada mientras la de las 22:30 sigue solo confirmada.
+ * `getMesaEstadoTurno` colapsa las dos en un único color (el de la más
+ * avanzada) y así no se sabe cuál de las dos va por dónde.
+ *
+ * Aquí se traduce el estado de UNA reserva al color de SU mitad, con el mismo
+ * código que el resto del plano: verde oscuro sentada, verde claro reservada,
+ * rosa terminando. El relleno azul de mesa libre no aplica —una mitad siempre
+ * tiene reserva—, pero sí un gris apagado para las que ya no ocupan (liberada,
+ * cancelada, no-show), que siguen contando para partir la mesa.
+ */
+const MITAD_FILL: Record<string, string> = {
+  SENTADA:    "#15803D",
+  TERMINANDO: "#EC4899",
+  LIBERADA:   "#64748B",
+  CANCELADA:  "#64748B",
+  NO_SHOW:    "#64748B",
+};
+/** Verde claro de "reservada": confirmada, reconfirmada, lista de espera… */
+const MITAD_FILL_DEFECTO = "#86EFAC";
+
+function colorMitadReserva(estado: string): string {
+  return MITAD_FILL[estado] ?? MITAD_FILL_DEFECTO;
+}
+
+/** Texto legible sobre el relleno de la mitad (los oscuros piden blanco). */
+function textoMitadReserva(estado: string): string {
+  return estado === "SENTADA" || MITAD_FILL[estado] === "#64748B"
+    ? "#FFFFFF"
+    : "#18181B";
+}
+
 /** Suma minutos a "HH:MM" y devuelve "HH:MM" (envuelve pasada la medianoche). */
 function horaMasMinutos(hora: string, minutos: number): string {
   const [h, m] = hora.slice(0, 5).split(":").map(Number);

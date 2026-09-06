@@ -211,13 +211,13 @@ export function ReservaFlagsChips({
   // Doble check, como en la mensajería: VERDE cuando el cliente ha confirmado
   // que viene, ÁMBAR cuando se le pidió y aún no ha contestado. El mismo icono a
   // propósito — lo que cambia es el color, que es lo que se lee de un vistazo
-  // en pleno servicio. El ámbar es EL MISMO que lleva el estado
-  // NO_RECONFIRMADA en la lista: dos amarillos distintos para lo mismo se leían
+  // en pleno servicio. El NARANJA es el mismo que lleva el estado
+  // NO_RECONFIRMADA en la lista: dos tonos distintos para lo mismo se leían
   // como dos avisos distintos.
   if (reconfirmada) {
     chips.push({ key: "reconfirmada", label: "Reserva reconfirmada", icon: <CheckCheck className={iconSize} />, cls: "text-teal-500 border-teal-500/40 bg-teal-500/10" });
   } else if (reserva.estado === "NO_RECONFIRMADA") {
-    chips.push({ key: "no_reconfirmada", label: "Sin respuesta a la reconfirmación", icon: <CheckCheck className={iconSize} />, cls: "text-amber-400 border-amber-600/40 bg-amber-600/20" });
+    chips.push({ key: "no_reconfirmada", label: "Sin respuesta a la reconfirmación", icon: <CheckCheck className={iconSize} />, cls: "text-orange-500 border-orange-500/40 bg-orange-500/10" });
   }
   // El ORIGEN de la reserva (web, channel manager…) NO lleva icono: ya tiene
   // su propia columna en el listado y repetirlo pegado al nombre solo restaba
