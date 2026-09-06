@@ -331,7 +331,13 @@ export async function createReserva(input: {
       emailFinal = link.result.cliente.email;
     }
 
-    const estadoFinal = input.estado ?? "CONFIRMADA";
+    // El walk-in llega andando y se sienta en el acto: nace SENTADA, no
+    // CONFIRMADA. Se decide por el ORIGEN, que es lo único que identifica un
+    // walk-in, y se fuerza aquí para que dé igual por dónde entre el alta.
+    const estadoFinal =
+      normalizarOrigen(input.origen) === "WALKIN"
+        ? "SENTADA"
+        : (input.estado ?? "CONFIRMADA");
     // El canal es OBLIGATORIO: una reserva sin origen deja la analítica coja y
     // no se puede reconstruir después. Se normaliza para que no convivan
     // "telefono" y "TELEFONO" como si fueran canales distintos.

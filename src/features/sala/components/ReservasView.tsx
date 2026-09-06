@@ -1597,10 +1597,12 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       // pantalla (una unión, u otra sala): se manda por código, que es lo que
       // se guarda en BD.
       mesaCodigo: esListaEspera ? undefined : (codigoAuto ?? undefined),
-      // WALK_IN no es un estado, es el ORIGEN: quien llega sin reservar nace
-      // CONFIRMADA como cualquiera y se le marca SENTADA al sentarlo. Lo que
-      // lo distingue es el origen, que le acompaña toda su vida.
-      estado: esListaEspera ? "LISTA_ESPERA" : "CONFIRMADA",
+      // WALK_IN no es un estado, es el ORIGEN: lo que distingue al walk-in es
+      // el origen, que le acompaña toda su vida. Pero nace ya SENTADA, porque
+      // el walk-in se apunta con el cliente delante y sentándose: dejarlo
+      // CONFIRMADA obligaba a sentarlo a mano un segundo después, y mientras
+      // tanto la mesa se veía libre en el plano.
+      estado: esListaEspera ? "LISTA_ESPERA" : esWalkIn ? "SENTADA" : "CONFIRMADA",
       observaciones: form.observaciones,
       // Un walk-in es siempre gratis: ni garantía, ni prepago, ni cupón. La
       // lista de espera tampoco cobra: todavía no hay mesa que garantizar.
