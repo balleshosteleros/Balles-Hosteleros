@@ -72,3 +72,51 @@ export const ZONA_LIGHTEN = 0.35;
 export function colorZona(hex: string, esOscuro: boolean): string {
   return esOscuro ? zonaOscura(hex) : lightenHex(hex, ZONA_LIGHTEN);
 }
+
+/* ---------------------------------------------------------------------------
+   Fondo de las MESAS LIBRES
+   ---------------------------------------------------------------------------
+   Las mesas ya no se pintan del pastel de su zona: TODAS comparten el azul
+   oscuro de la marca. El color de zona sigue vivo, pero solo en las ETIQUETAS
+   de zona del plano ("Altas", "VIP", "Barra"…), que es donde de verdad hace
+   falta para saber dónde está uno; en las mesas competía con el código de
+   color de los ESTADOS, que es lo único que importa mirar durante el servicio.
+
+   Una mesa con reserva NUNCA pasa por aquí: manda su estado (OCUPADA verde
+   oscuro, RESERVADA verde claro, TERMINADA rosa, BLOQUEADA negro).
+   --------------------------------------------------------------------------- */
+
+/** Matiz del azul marino del software (el mismo 220 del tema oscuro de sala). */
+const MESA_HUE = 220;
+
+/**
+ * Degradado azul oscuro de una mesa libre.
+ *
+ * No es un color plano: cada mesa recibe una inclinación y una luminosidad
+ * ligeramente distintas, derivadas de su propio identificador. Así el plano
+ * respira —no parece una plancha de un solo azul— sin que ninguna mesa llame
+ * más la atención que otra, que es justo lo que tiene que hacer una mesa libre.
+ */
+export function fondoMesaLibre(semilla: string, esOscuro: boolean): string {
+  // Hash estable del identificador: la misma mesa se ve siempre igual entre
+  // recargas. Con Math.random() el plano parpadearía en cada render.
+  let h = 0;
+  for (let i = 0; i < semilla.length; i++) h = (h * 31 + semilla.charCodeAt(i)) | 0;
+  const abs = Math.abs(h);
+  // Variación deliberadamente CORTA: pasado este margen las mesas dejan de
+  // leerse como un conjunto y parecen estados distintos.
+  const angulo = 120 + (abs % 7) * 15; // 120º–210º
+  const deriva = (abs >> 3) % 5; // 0–4 puntos de luminosidad
+  const satura = 30 + ((abs >> 6) % 8); // 30%–37%
+
+  // En tema oscuro el azul arranca más bajo para separarse del lienzo marino;
+  // en claro sube lo justo para que el texto en blanco siga contrastando.
+  const luzAlta = (esOscuro ? 26 : 34) + deriva;
+  const luzBaja = (esOscuro ? 15 : 22) + deriva;
+
+  return (
+    `linear-gradient(${angulo}deg, ` +
+    `hsl(${MESA_HUE} ${satura}% ${luzAlta}%), ` +
+    `hsl(${MESA_HUE + 6} ${satura + 4}% ${luzBaja}%))`
+  );
+}

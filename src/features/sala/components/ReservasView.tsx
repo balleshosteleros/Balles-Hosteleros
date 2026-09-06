@@ -175,6 +175,10 @@ import { HistoricoEmailsReserva } from "@/features/sala/components/reservas/Hist
 import { ActividadReserva } from "@/features/sala/components/reservas/ActividadReserva";
 import { RevisionVinculacion } from "@/features/sala/components/reservas/RevisionVinculacion";
 import { ActividadCliente } from "@/features/sala/components/clientes/ActividadCliente";
+import {
+  getObservacionesCliente,
+  guardarObservacionesCliente,
+} from "@/features/sala/actions/cliente-ficha-actions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useModoInmersivoActivo } from "@/features/layout/hooks/useModoInmersivoActivo";
@@ -354,14 +358,16 @@ function formatFechaDiaNegocio(iso: string): string {
 }
 
 const LISTA_GRID =
-  // Hora · Mesa · Nombre · Origen · Tipo · Estado · Per · Tiempo.
+  // Hora · Mesa · Nombre · Estado · Per · Origen · Tipo · Tiempo.
   //
   // ESTADO va a ancho FIJO de 92px, lo justo que pide la palabra más larga
   // ("No reconfirmada"): es un recuadro de color y si se encoge se corta la
   // palabra, que es justo el dato que se venía a leer. Ni un pixel más: al
   // pasar del punto+texto al recuadro se dejó de gastar sitio en el punto y
-  // en su hueco, y ese ancho se lo queda el NOMBRE. PERSONAS va DETRÁS del
-  // estado: primero en qué punto está la mesa, después cuánta gente es.
+  // en su hueco, y ese ancho se lo queda el NOMBRE. Va PEGADO AL NOMBRE, y
+  // PERSONAS justo detrás: leyendo de izquierda a derecha sale quién es, en
+  // qué punto está su mesa y cuántos son —lo que se pregunta en sala—, y solo
+  // después de dónde vino la reserva y qué condiciones lleva.
   // Origen y Tipo suben porque "Cancelación" y los origenes largos se cortaban
   // a media palabra; el resto del ancho se lo queda el NOMBRE, que es el dato
   // por el que se busca a la gente en sala.
@@ -376,7 +382,7 @@ const LISTA_GRID =
   // completo, así que recortarlas no pierde el dato) y lo que sueltan se lo
   // queda el nombre. Los chips que van pegados al nombre (visitas, cupón,
   // reconfirmación) no se cuentan: solo salen en algunas filas.
-  "grid grid-cols-[56px_72px_minmax(0,1fr)_58px_64px_92px_42px_64px] gap-1.5 items-center";
+  "grid grid-cols-[56px_72px_minmax(0,1fr)_92px_42px_58px_64px_64px] gap-1.5 items-center";
 
 /**
  * TIPO de la reserva: cuál de las cuatro es (PRP-082).
@@ -3435,6 +3441,11 @@ export function ReservasView() {
    */
   const [comentarioEdit, setComentarioEdit] = useState("");
   const [guardandoComentario, setGuardandoComentario] = useState(false);
+  // Observaciones DEL CLIENTE, el mismo campo de su ficha. Se guarda aparte
+  // del resto de sus datos porque aquí solo se toca este.
+  const [obsClienteEdit, setObsClienteEdit] = useState("");
+  const [obsClienteOriginal, setObsClienteOriginal] = useState("");
+  const [guardandoObsCliente, setGuardandoObsCliente] = useState(false);
   /**
    * Confirmación al editar los datos de un cliente que ya tiene ficha. Editar
    * aquí reescribe SU ficha y todas sus reservas, así que no puede pasar de
@@ -3755,6 +3766,24 @@ export function ReservasView() {
     setClienteEdit(datos);
     setDatosClienteOriginales(datos);
     setComentarioEdit(selectedReserva.observaciones ?? "");
+
+    // Las observaciones del cliente NO viajan con la reserva: se piden a su
+    // ficha. Se vacían primero para no enseñar las del cliente anterior
+    // mientras llegan las de este.
+    setObsClienteEdit("");
+    setObsClienteOriginal("");
+    const clienteId = selectedReserva.clienteId;
+    if (!clienteId) return;
+    let vigente = true;
+    getObservacionesCliente(clienteId).then((res) => {
+      // Si mientras cargaba se abrió otra reserva, esto ya no vale.
+      if (!vigente || !res.ok) return;
+      setObsClienteEdit(res.observaciones);
+      setObsClienteOriginal(res.observaciones);
+    });
+    return () => {
+      vigente = false;
+    };
   }, [selectedReserva]);
 
   /**
@@ -4815,6 +4844,30 @@ export function ReservasView() {
     );
     // El comentario también se lee en la lista del día, así que se recarga.
     loadReservas(fecha);
+  };
+
+  /**
+   * Guarda las observaciones del cliente. Mismo comportamiento que el
+   * comentario de la reserva —al salir del campo, sin botón propio—, pero
+   * escribe en la ficha de la PERSONA: lo que se ponga aquí se ve también en
+   * su ficha y le acompaña en todas sus reservas.
+   */
+  const guardarObsCliente = async (clienteId: string) => {
+    const valor = obsClienteEdit.slice(0, RESERVA_COMENTARIO_MAX_CHARS).trim();
+    if (valor === obsClienteOriginal.trim()) return;
+
+    setGuardandoObsCliente(true);
+    const res = await guardarObservacionesCliente(clienteId, valor);
+    setGuardandoObsCliente(false);
+
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudieron guardar las observaciones.");
+      setObsClienteEdit(obsClienteOriginal);
+      return;
+    }
+    toast.success(valor ? "Observaciones guardadas" : "Observaciones borradas");
+    setObsClienteEdit(valor);
+    setObsClienteOriginal(valor);
   };
 
   /**
@@ -5951,28 +6004,6 @@ export function ReservasView() {
               />
             </span>
             <ColumnaListaHeader
-              label="Origen"
-              campo="origen"
-              opciones={opcionesColumna("origen")}
-              seleccionadas={filtrosColumna.origen ?? []}
-              onSeleccionChange={(v) => setFiltroColumna("origen", v)}
-              ordenable
-              panelClassName={panelTemaSala}
-              orden={ordenColumna}
-              onOrdenChange={setOrdenColumna}
-            />
-            <ColumnaListaHeader
-              label="Tipo"
-              campo="tipo"
-              opciones={opcionesColumna("tipo")}
-              seleccionadas={filtrosColumna.tipo ?? []}
-              onSeleccionChange={(v) => setFiltroColumna("tipo", v)}
-              ordenable
-              panelClassName={panelTemaSala}
-              orden={ordenColumna}
-              onOrdenChange={setOrdenColumna}
-            />
-            <ColumnaListaHeader
               label="Estado"
               campo="estado"
               opciones={opcionesColumna("estado")}
@@ -5998,6 +6029,28 @@ export function ReservasView() {
               ordenLabelAsc="Menos"
               ordenLabelDesc="Más"
               align="center"
+            />
+            <ColumnaListaHeader
+              label="Origen"
+              campo="origen"
+              opciones={opcionesColumna("origen")}
+              seleccionadas={filtrosColumna.origen ?? []}
+              onSeleccionChange={(v) => setFiltroColumna("origen", v)}
+              ordenable
+              panelClassName={panelTemaSala}
+              orden={ordenColumna}
+              onOrdenChange={setOrdenColumna}
+            />
+            <ColumnaListaHeader
+              label="Tipo"
+              campo="tipo"
+              opciones={opcionesColumna("tipo")}
+              seleccionadas={filtrosColumna.tipo ?? []}
+              onSeleccionChange={(v) => setFiltroColumna("tipo", v)}
+              ordenable
+              panelClassName={panelTemaSala}
+              orden={ordenColumna}
+              onOrdenChange={setOrdenColumna}
             />
             {/* Tiempo no filtra ni ordena: es una cuenta atrás que cambia sola
                 cada minuto, así que un valor marcado dejaría de casar con su
@@ -6156,6 +6209,8 @@ export function ReservasView() {
                           </span>
                         )}
                       </span>
+                      <StatusDot estado={r.estado} />
+                      <span className="min-w-0 text-center tabular-nums">{r.comensales}</span>
                       <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={origenLabel(r.origen)}>
                         {origenLabel(r.origen)}
                       </span>
@@ -6164,8 +6219,6 @@ export function ReservasView() {
                           que para saberlo había que abrir la ficha una por
                           una. */}
                       <TipoReservaCelda reserva={r} />
-                      <StatusDot estado={r.estado} />
-                      <span className="min-w-0 text-center tabular-nums">{r.comensales}</span>
                       {/* TIEMPO: cuenta atrás (verde), retraso (rojo),
                           ocupación desde la hora de la reserva (azul) o
                           exceso sobre el tiempo de mesa (rojo con icono). */}
@@ -6509,7 +6562,7 @@ export function ReservasView() {
               filas de rejilla fijas, la banda no declarada (el aviso solo
               aparece a veces) descuadraba el reparto. */}
           {selectedReserva && (
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden text-sm">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto text-sm">
 
               {/* Vinculación pendiente de revisar: va lo primero y a lo ancho
                   de las dos columnas. Es lo más importante de esta ficha —los
@@ -6527,8 +6580,13 @@ export function ReservasView() {
                 />
               </div>
 
-              {/* Banda central: las dos columnas, que son lo que crece. */}
-              <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-2">
+              {/* Banda central: las dos columnas. Miden lo que ocupan; ya no
+                  se estiran ni tienen scroll propio, porque lo largo —correos,
+                  actividad, comentarios, etiquetas— salió de ellas a sus
+                  propias bandas. Con dos scrolls anidados había que bajar
+                  dentro de una columna para ver lo que ya estaba a la vista en
+                  la otra. */}
+              <div className="grid shrink-0 gap-3 md:grid-cols-2">
               {/* ── Columna izquierda: la reserva ─────────────────────────
                   Las dos mitades van sobre fondos distintos porque cuentan
                   cosas distintas: a la izquierda lo que le pasa a ESTA reserva
@@ -6536,7 +6594,7 @@ export function ReservasView() {
                   la persona, que sigue existiendo entre reserva y reserva. Sin
                   esa separacion las dos "Etiquetas" y las dos "Actividad" se
                   leian como lo mismo. */}
-              <div className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border bg-muted/25 p-2.5">
+              <div className="flex flex-col gap-2 rounded-lg border bg-muted/25 p-2.5">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Ficha de la reserva
                 </h3>
@@ -6592,7 +6650,19 @@ export function ReservasView() {
                         cambiarEstadoReserva(selectedReserva.id, v as EstadoReserva)
                       }
                     >
-                      <SelectTrigger className="h-7 px-1.5 text-xs font-medium">
+                      {/* El estado que está puesto se pinta con SU color, el
+                          mismo recuadro que lleva en la lista: si allí la fila
+                          se lee por el color y aquí el desplegable salía en
+                          texto plano, había que volver a leer la palabra para
+                          saber en cuál estaba. El desplegable abierto sí
+                          mantiene el punto por opción: nueve recuadros de
+                          color en vertical no dejan leer ninguno. */}
+                      <SelectTrigger
+                        className={cn(
+                          "h-7 border px-1.5 text-xs font-medium",
+                          ESTADO_BADGE_CLASS[selectedReserva.estado],
+                        )}
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -6958,40 +7028,10 @@ export function ReservasView() {
                 <div className="flex flex-wrap items-center gap-2">
                   <ReservaExternalBadge reserva={selectedReserva} />
                 </div>
-                {/* Comunicación: los correos que se le han mandado por ESTA
-                    reserva. Van antes del comentario, que es lo último
-                    porque es lo único que se escribe. */}
-                <div className="pt-2 border-t">
-                  <HistoricoEmailsReserva reservaId={selectedReserva.id} />
-                </div>
-                {/* Comentario de ESTA reserva, editable: lo que se sabe hoy de
-                    esta mesa concreta. Se guarda al salir del campo, como el
-                    resto de la ficha. Lo que acompaña siempre a la persona
-                    —alergias, manías— va en las observaciones de su ficha de
-                    cliente, no aquí. Caja de una línea: el límite da para una
-                    frase, y una caja alta invitaba a escribir lo que no cabe. */}
-                <div className="space-y-1.5 pt-2 border-t">
-                  <Label className="text-muted-foreground text-xs">Comentarios</Label>
-                  <Input
-                    className="h-8 text-xs"
-                    maxLength={RESERVA_COMENTARIO_MAX_CHARS}
-                    disabled={guardandoComentario}
-                    value={comentarioEdit}
-                    onChange={(e) =>
-                      setComentarioEdit(
-                        e.target.value.slice(0, RESERVA_COMENTARIO_MAX_CHARS),
-                      )
-                    }
-                    onBlur={() => void guardarComentario(selectedReserva.id)}
-                  />
-                  <p className="text-right text-[10px] text-muted-foreground">
-                    {comentarioEdit.length}/{RESERVA_COMENTARIO_MAX_CHARS}
-                  </p>
-                </div>
               </div>
 
               {/* ── Columna derecha: el cliente ─────────────────────────── */}
-              <div className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-2.5">
+              <div className="flex flex-col gap-2 rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-2.5">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
                   Ficha del cliente
                 </h3>
@@ -7114,6 +7154,82 @@ export function ReservasView() {
                       key={`${selectedReserva.clienteId}-${actividadVersion}`}
                       clienteId={selectedReserva.clienteId}
                     />
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground">
+                      Esta reserva no tiene ficha de cliente.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Comunicaciones, en su recuadro ───────────────────────
+                  Los correos que se le han mandado por ESTA reserva. Fuera de
+                  la columna, en su propia banda a lo ancho, igual que la
+                  actividad: es un historial largo y dentro de la columna
+                  obligaba a bajar con el ratón para llegar al resto. */}
+              <div className="shrink-0 rounded-lg border bg-muted/25 p-2.5">
+                <HistoricoEmailsReserva reservaId={selectedReserva.id} />
+              </div>
+
+              {/* ── Comentarios, uno por ficha y a la misma altura ───────
+                  Dos cosas distintas que antes se confundían en una sola caja:
+                  a la izquierda lo que vale SOLO para esta noche, a la derecha
+                  lo que acompaña a la PERSONA en todas sus reservas —alergias,
+                  manías—, que hasta ahora había que ir a buscar a su ficha.
+                  Cajas de una línea: el límite da para una frase, y una caja
+                  alta invita a escribir lo que no cabe. */}
+              <div className="grid shrink-0 gap-3 md:grid-cols-2">
+                <div className="space-y-1.5 rounded-lg border bg-muted/25 p-2.5">
+                  {/* "de la reserva" en el título: el cliente tiene el suyo al
+                      lado, y sin apellido los dos se leían como lo mismo. */}
+                  <Label className="text-muted-foreground text-xs">
+                    Comentarios de la reserva
+                  </Label>
+                  <Input
+                    className="h-8 text-xs"
+                    maxLength={RESERVA_COMENTARIO_MAX_CHARS}
+                    disabled={guardandoComentario}
+                    value={comentarioEdit}
+                    onChange={(e) =>
+                      setComentarioEdit(
+                        e.target.value.slice(0, RESERVA_COMENTARIO_MAX_CHARS),
+                      )
+                    }
+                    onBlur={() => void guardarComentario(selectedReserva.id)}
+                  />
+                  <p className="text-right text-[10px] text-muted-foreground">
+                    {comentarioEdit.length}/{RESERVA_COMENTARIO_MAX_CHARS}
+                  </p>
+                </div>
+                {/* Observaciones DEL CLIENTE: es el mismo campo de su ficha, no
+                    una copia, así que lo que se escriba aquí se ve también
+                    allí. Un walk-in sin ficha no tiene dónde guardarlas, pero
+                    el hueco se mantiene para que el panel de la izquierda no se
+                    descoloque. */}
+                <div className="space-y-1.5 rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-2.5">
+                  <Label className="text-muted-foreground text-xs">
+                    Comentarios del cliente
+                  </Label>
+                  {selectedReserva.clienteId ? (
+                    <>
+                      <Input
+                        className="h-8 text-xs"
+                        maxLength={RESERVA_COMENTARIO_MAX_CHARS}
+                        disabled={guardandoObsCliente}
+                        value={obsClienteEdit}
+                        onChange={(e) =>
+                          setObsClienteEdit(
+                            e.target.value.slice(0, RESERVA_COMENTARIO_MAX_CHARS),
+                          )
+                        }
+                        onBlur={() =>
+                          void guardarObsCliente(selectedReserva.clienteId!)
+                        }
+                      />
+                      <p className="text-right text-[10px] text-muted-foreground">
+                        {obsClienteEdit.length}/{RESERVA_COMENTARIO_MAX_CHARS}
+                      </p>
+                    </>
                   ) : (
                     <p className="text-[10px] text-muted-foreground">
                       Esta reserva no tiene ficha de cliente.

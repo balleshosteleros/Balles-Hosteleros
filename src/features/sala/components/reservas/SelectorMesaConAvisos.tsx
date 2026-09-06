@@ -20,7 +20,6 @@
  * verde al crear no puede salir sin marcar al editar.
  */
 
-import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import type { Mesa } from "@/features/sala/data/reservas";
 
@@ -76,16 +75,6 @@ export function SelectorMesaConAvisos({
   className,
   etiquetaEstado,
 }: SelectorMesaConAvisosProps) {
-  /** ¿Hay algo marcado? Si no, la leyenda sobra y solo mete ruido. */
-  const hayAvisos = useMemo(
-    () =>
-      mesas.some((m) => {
-        const e = estadoPorMesa.get(m.id);
-        return e ? e.ocupada || e.aforo != null : false;
-      }),
-    [mesas, estadoPorMesa],
-  );
-
   return (
     <div className="space-y-1">
       <select
@@ -116,16 +105,6 @@ export function SelectorMesaConAvisos({
           );
         })}
       </select>
-      {hayAvisos && (
-        // Leyenda en columna y de dos palabras por icono: en línea seguida
-        // ocupaba todo el ancho y partía en varias filas según el idioma del
-        // navegador. Apilada se lee de un vistazo y no mueve lo de abajo.
-        <ul className="space-y-0.5 text-[10px] leading-tight text-muted-foreground">
-          <li>✅ disponible ahora</li>
-          <li>⏰ horario reservado</li>
-          <li>👥 límite personas</li>
-        </ul>
-      )}
     </div>
   );
 }

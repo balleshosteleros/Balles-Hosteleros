@@ -187,6 +187,11 @@ function valoresDe(filas: ListadoReservaRow[], get: (f: ListadoReservaRow) => st
 
 const COLUMNAS: ColumnaDef[] = [
   // ── Quién ──────────────────────────────────────────────────────────
+  // ESTADO y COMENSALES van pegados al NOMBRE, antes que los datos de
+  // contacto: son los dos datos que se leen a la vez que el cliente durante el
+  // servicio ("quién viene, cómo va y cuántos son"). Estaban el uno en medio
+  // de las fechas y el otro detrás de la mesa, así que había que cruzar media
+  // tabla para juntarlos (Iván, 6-sep).
   {
     campo: "cliente",
     label: "Cliente",
@@ -194,6 +199,31 @@ const COLUMNAS: ColumnaDef[] = [
     ordenable: true,
     bloqueada: true,
     valor: (f) => f.cliente,
+  },
+  {
+    campo: "estado",
+    label: "Estado",
+    filtro: "lista",
+    opciones: ESTADOS_RESERVA as unknown as string[],
+    valor: (f) => f.estado,
+    celda: (f) => {
+      if (!f.estado) return <span className="text-muted-foreground">—</span>;
+      const e = f.estado as EstadoReserva;
+      return (
+        <Badge variant="outline" className={cn("font-normal", ESTADO_BADGE_CLASS[e])}>
+          {ESTADO_RESERVA_LABELS[e] ?? f.estado}
+        </Badge>
+      );
+    },
+  },
+  {
+    campo: "comensales",
+    label: "Comensales",
+    filtro: "numero",
+    ordenable: true,
+    align: "right",
+    valor: (f) => f.comensales,
+    celda: (f) => formatNumero(f.comensales),
   },
   {
     // Las etiquetas (las de la reserva y las del cliente, ya unidas en el
@@ -262,15 +292,6 @@ const COLUMNAS: ColumnaDef[] = [
     celda: (f) => (f.turno === "COMIDA" ? "Comida" : f.turno === "CENA" ? "Cena" : ""),
   },
   {
-    campo: "comensales",
-    label: "Comensales",
-    filtro: "numero",
-    ordenable: true,
-    align: "right",
-    valor: (f) => f.comensales,
-    celda: (f) => formatNumero(f.comensales),
-  },
-  {
     campo: "duracionMinutos",
     label: "Duración",
     filtro: "numero",
@@ -292,22 +313,6 @@ const COLUMNAS: ColumnaDef[] = [
   { campo: "mesa", label: "Mesa", filtro: "texto", valor: (f) => f.mesa },
 
   // ── Situación ──────────────────────────────────────────────────────
-  {
-    campo: "estado",
-    label: "Estado",
-    filtro: "lista",
-    opciones: ESTADOS_RESERVA as unknown as string[],
-    valor: (f) => f.estado,
-    celda: (f) => {
-      if (!f.estado) return <span className="text-muted-foreground">—</span>;
-      const e = f.estado as EstadoReserva;
-      return (
-        <Badge variant="outline" className={cn("font-normal", ESTADO_BADGE_CLASS[e])}>
-          {ESTADO_RESERVA_LABELS[e] ?? f.estado}
-        </Badge>
-      );
-    },
-  },
   {
     campo: "origen",
     label: "Origen",

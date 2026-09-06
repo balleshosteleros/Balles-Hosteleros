@@ -278,3 +278,79 @@ export async function recalcularVisitasCliente(
     return { ok: false, error: msg };
   }
 }
+
+/**
+ * Observaciones de la ficha del cliente, para leerlas desde la reserva.
+ *
+ * Va aparte de `guardarFichaCliente()` porque esa pide la ficha ENTERA, y desde
+ * la reserva solo se toca este campo: mandar el resto obligaría a arrastrar
+ * datos que allí no se editan, con el riesgo de pisarlos con lo que hubiera en
+ * pantalla.
+ */
+export async function getObservacionesCliente(clienteId: string) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, observaciones: "" };
+    const empresaId = await getEmpresaActivaForUser(
+      supabase as unknown as SupabaseClient,
+      user.id,
+    );
+    if (!empresaId) return { ok: false, observaciones: "" };
+
+    // El filtro por empresa va explícito: la RLS acota a las empresas DEL
+    // usuario, no a la ACTIVA.
+    const { data, error } = await supabase
+      .from("clientes_sala")
+      .select("observaciones")
+      .eq("id", clienteId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (error) throw error;
+
+    return { ok: true, observaciones: (data?.observaciones as string | null) ?? "" };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[clientes] getObservacionesCliente:", msg);
+    return { ok: false, observaciones: "" };
+  }
+}
+
+/**
+ * Guarda SOLO las observaciones del cliente. Lo que se escribe aquí acompaña a
+ * la persona en todas sus reservas —alergias, manías—, a diferencia del
+ * comentario de la reserva, que vale solo para esa noche.
+ */
+export async function guardarObservacionesCliente(
+  clienteId: string,
+  observaciones: string,
+) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "No autenticado" };
+    const empresaId = await getEmpresaActivaForUser(
+      supabase as unknown as SupabaseClient,
+      user.id,
+    );
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const texto = observaciones.trim().slice(0, 2000);
+
+    const { error } = await supabase
+      .from("clientes_sala")
+      .update({
+        observaciones: texto || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", clienteId)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[clientes] guardarObservacionesCliente:", msg);
+    return { ok: false, error: msg };
+  }
+}

@@ -21,7 +21,7 @@ import type {
   Zona as ZonaReal,
 } from "@/features/sala/planos/data/planos";
 import type { Mesa, Reserva } from "@/features/sala/data/reservas";
-import { colorZona } from "@/features/sala/lib/color-zona";
+import { colorZona, fondoMesaLibre } from "@/features/sala/lib/color-zona";
 import {
   dimsDeMesa,
   PLANO_CANVAS_H,
@@ -214,7 +214,7 @@ export function PlanoSeleccionMesas({
                   // el plano de la vista de sala.
                   elegida
                     ? "ring-[10px] ring-red-500 z-10 !border-red-500 !border-4"
-                    : "border-foreground/30 hover:border-foreground",
+                    : "border-white/15 hover:border-white/60",
                   ocupadaPorOtra && !elegida && "border-amber-500/70",
                 )}
                 style={{
@@ -223,14 +223,15 @@ export function PlanoSeleccionMesas({
                   width: dims.w,
                   height: dims.h,
                   borderRadius: forma === "redonda" ? 9999 : 6,
-                  // Mismo color que en el plano de la vista: aclarado en tema
-                  // claro, apagado conservando el matiz en oscuro.
-                  backgroundColor: colorZona(meta?.colorZona ?? "#FDE68A", esOscuro),
+                  // Mismo azul de marca que en el plano de la vista: todas
+                  // las mesas comparten fondo, el color de zona se queda solo
+                  // en las etiquetas.
+                  backgroundImage: fondoMesaLibre(m.id, esOscuro),
                   transform: pos.rotation ? `rotate(${pos.rotation}deg)` : undefined,
                 }}
               >
                 <div
-                  className="pointer-events-none flex flex-col items-center justify-center leading-tight text-foreground"
+                  className="pointer-events-none flex flex-col items-center justify-center leading-tight text-white"
                   style={pos.rotation ? { transform: `rotate(${-pos.rotation}deg)` } : undefined}
                 >
                   <span className="flex items-center gap-0.5 leading-none">
@@ -267,7 +268,7 @@ export function PlanoSeleccionMesas({
           Ocupada por otra reserva
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded border-2 border-foreground/30" />
+          <span className="h-3 w-3 rounded border-2 border-white/15" />
           Libre
         </span>
       </div>
