@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { AlertTriangle, ArrowRight } from "lucide-react";
+import { Fragment, useEffect, useState, useTransition } from "react";
+import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -119,80 +119,91 @@ export function RevisionVinculacion({ reservaId, onResuelto, pendiente }: Props)
     });
   }
 
-  // Aviso MÍNIMO: sale dentro de la ficha, encima de todo, así que cada
-  // renglón que ocupa lo pierde la reserva. Se queda lo que hace falta para
-  // decidir: por qué se vincularon, en qué NO coinciden, y las tres salidas.
-  // Fuera la tabla con cabeceras y la fila del dato coincidente: el motivo ya
-  // lo dice el subtítulo, repetirlo abajo con su marca verde era el mismo dato
-  // dos veces y la mitad del alto del recuadro.
-  const etiquetaMotivo = datos.motivo === "email" ? "el correo" : "el teléfono";
+  // ESQUEMA, no prosa. Antes había que leer tres frases seguidas para saber qué
+  // decidir, y los botones no decían qué pasaba al pulsarlos ("Conservar" ¿el
+  // qué?). Ahora los dos juegos de datos van EN COLUMNA, uno al lado del otro
+  // y con su rótulo encima, y CADA BOTÓN VA DEBAJO DE LA COLUMNA QUE ELIGE:
+  // se ve de un vistazo que la decisión es "me quedo con esta o con esta".
+  const etiquetaMotivo = datos.motivo === "email" ? "Mismo correo" : "Mismo teléfono";
 
   return (
     <div className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 dark:border-amber-800/60 dark:bg-amber-950/30">
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-500" />
         <div className="min-w-0 flex-1">
+          {/* Una sola línea arriba: qué pasó y el dato que lo provocó. */}
           <p className="text-xs font-semibold leading-tight text-amber-900 dark:text-amber-200">
-            Cliente ya existente
+            ¿Es la misma persona?
           </p>
           <p className="mt-0.5 text-[11px] leading-snug text-amber-800 dark:text-amber-300/90">
-            Coincide {etiquetaMotivo}
+            {etiquetaMotivo}
             {valorCoincide ? (
               <>
-                {" "}
+                {": "}
                 <span className="font-medium">{valorCoincide}</span>
               </>
             ) : null}
-            . ¿Es la misma persona?
           </p>
 
-          {/* Las diferencias, una por renglón: lo de la ficha, la flecha, y lo
-              que puso al reservar. Sin cabeceras: con la flecha en medio se
-              entiende de qué lado está cada cosa sin tener que rotularlo. */}
-          <ul className="mt-1 space-y-0.5 text-[11px] text-amber-900 dark:text-amber-200">
+          {/* Las dos versiones ENFRENTADAS en columna, con su rótulo encima.
+              Cada fila es un campo que no cuadra; el rótulo de la izquierda
+              queda fuera para no repetirlo en las dos columnas. */}
+          <div className="mt-1.5 grid grid-cols-[auto_1fr_1fr] gap-x-2 gap-y-0.5 text-[11px]">
+            <span />
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+              Ficha guardada
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+              Puso al reservar
+            </span>
             {campos.map((c) => (
-              <li key={c} className="flex flex-wrap items-baseline gap-x-1.5">
+              <Fragment key={c}>
                 <span className="text-amber-700 dark:text-amber-400">
                   {CAMPO_LABEL[c]}
                 </span>
-                <span>{datos.ficha[c] || "—"}</span>
-                <ArrowRight className="size-3 shrink-0 self-center text-amber-600/70 dark:text-amber-500/70" />
-                <span className="font-medium">{datos.declarados[c]}</span>
-              </li>
+                <span className="truncate text-amber-900 dark:text-amber-200">
+                  {datos.ficha[c] || "—"}
+                </span>
+                <span className="truncate font-medium text-amber-900 dark:text-amber-200">
+                  {datos.declarados[c]}
+                </span>
+              </Fragment>
             ))}
-          </ul>
 
-          {/* El orden no es decorativo: conservar la ficha es lo que más se
-              elige —el cliente escribe su nombre de otra forma, no cambia de
-              persona—, así que va primera y destacada. */}
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {/* Cada botón DEBAJO de la columna que elige: el de la izquierda se
+                queda con la ficha, el de la derecha la reescribe con lo nuevo.
+                Sin esto había que deducir qué hacía cada palabra. */}
+            <span />
             <Button
               size="sm"
-              className="h-6 px-2 text-[11px]"
+              className="mt-1 h-6 px-2 text-[11px]"
               disabled={enviando}
               onClick={() => resolver("CONSERVAR")}
             >
-              Conservar
+              Dejar esta
             </Button>
             <Button
               size="sm"
               variant="outline"
-              className="h-6 px-2 text-[11px]"
+              className="mt-1 h-6 px-2 text-[11px]"
               disabled={enviando}
               onClick={() => resolver("ACTUALIZAR")}
             >
-              Actualizar
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-6 px-2 text-[11px]"
-              disabled={enviando}
-              onClick={() => resolver("SEPARAR")}
-            >
-              Es otro cliente
+              Poner esta
             </Button>
           </div>
+
+          {/* La tercera salida NO es una de las dos columnas —no se elige un
+              juego de datos, se rompe el enganche—, así que va aparte y en
+              texto, para que no compita con la decisión principal. */}
+          <button
+            type="button"
+            disabled={enviando}
+            onClick={() => resolver("SEPARAR")}
+            className="mt-1.5 text-[11px] underline underline-offset-2 text-amber-700 hover:text-amber-900 disabled:opacity-50 dark:text-amber-400 dark:hover:text-amber-200"
+          >
+            No, es otro cliente
+          </button>
         </div>
       </div>
     </div>
