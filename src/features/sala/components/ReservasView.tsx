@@ -7162,13 +7162,26 @@ export function ReservasView() {
                 </div>
               </div>
 
-              {/* ── Comunicaciones, en su recuadro ───────────────────────
-                  Los correos que se le han mandado por ESTA reserva. Fuera de
-                  la columna, en su propia banda a lo ancho, igual que la
-                  actividad: es un historial largo y dentro de la columna
-                  obligaba a bajar con el ratón para llegar al resto. */}
-              <div className="shrink-0 rounded-lg border bg-muted/25 p-2.5">
-                <HistoricoEmailsReserva reservaId={selectedReserva.id} />
+              {/* ── Comunicaciones, a la misma altura que el resto ───────
+                  Los correos que se le han mandado por ESTA reserva. Va en la
+                  MISMA banda de dos columnas que los comentarios, la actividad
+                  y las etiquetas: iba sola a todo lo ancho y era la única
+                  franja de la ficha que no cuadraba con las de al lado.
+                  A la derecha se mantiene el hueco —los correos son de la
+                  RESERVA, el cliente no tiene una lista propia aquí— para que
+                  el recuadro de la izquierda mida lo mismo que los de arriba. */}
+              <div className="grid shrink-0 gap-3 md:grid-cols-2">
+                <div className="rounded-lg border bg-muted/25 p-2.5">
+                  <HistoricoEmailsReserva reservaId={selectedReserva.id} />
+                </div>
+                <div className="rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-2.5">
+                  <Label className="text-muted-foreground text-xs">
+                    Comunicaciones del cliente
+                  </Label>
+                  <p className="mt-1.5 text-[10px] text-muted-foreground">
+                    Los correos se envían por reserva, no por cliente.
+                  </p>
+                </div>
               </div>
 
               {/* ── Comentarios, uno por ficha y a la misma altura ───────
