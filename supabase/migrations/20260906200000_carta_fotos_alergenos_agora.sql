@@ -1,0 +1,25 @@
+-- Fotos y alergenos importados desde la carta digital de Agora.
+--
+-- Agora sirve todo su catalogo en una sola peticion, con las fotos a 660x660
+-- (no la miniatura de 119px del listado) y los alergenos ya declarados:
+--   https://smartmenu.agorapos.com/api/digital-menu/{id}
+--   HABANA atbn9l18 · BACANAL g013zjfc
+--
+-- Resolvio lo que no estaba en Drive con nombre util: las 2.193 imagenes del
+-- Drive estan nombradas por numero de camara (DSC_0360.jpg), asi que buscar
+-- "mojito" no encontraba nada, y a ojo un mojito con y sin alcohol son
+-- identicos. Cada foto se abrio y se verifico antes de asignarla.
+--
+-- Importado (los ficheros se subieron al bucket carta-fotos):
+--   · 17 fotos HABANA  - cocteles, sin alcohol y el gofre
+--   ·  4 fotos BACANAL - Amazing Moscow Mule, Lado Oscuro y los dos sin alcohol
+--   · 20 vapers  (10 sabores x 2 empresas; 0% y 2% comparten caja, y foto)
+--   · 35 shishas (20 sabores, con las dos grafias de Al Kaher y My Amor)
+--   · 41 platos con alergenos declarados - antes no habia NINGUNO, y es
+--     obligatorio por ley. Sigue faltando la mayoria: el dato tampoco existe
+--     en productos de venta (1 de 414), tiene que salir de cocina.
+--
+-- Ojo: Agora dice "Frutos de cascara" y el catalogo del sistema usa
+-- "Frutos con cascara". Hay que traducirlo al importar.
+--
+-- Los datos ya estan aplicados; esta migracion deja constancia del origen.
