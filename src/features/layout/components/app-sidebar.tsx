@@ -33,22 +33,6 @@ function deriveModeFromPath(pathname: string, sectionsForPrefix: Section[]): Vie
   return null;
 }
 
-// Etiqueta redonda (pill) para los items y módulos del menú lateral.
-function NavPill({ text, tone }: { text: string; tone: "blue" | "green" | "yellow" }) {
-  const tones: Record<string, string> = {
-    blue: "bg-blue-600 text-white",
-    green: "bg-green-600 text-white",
-    yellow: "bg-yellow-400 text-yellow-950",
-  };
-  return (
-    <span
-      className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold leading-none ${tones[tone]}`}
-    >
-      {text}
-    </span>
-  );
-}
-
 function SubMenu({ items, collapsed }: { items: SubItem[]; collapsed: boolean }) {
   return (
     <SidebarMenuSub>
@@ -63,7 +47,6 @@ function SubMenu({ items, collapsed }: { items: SubItem[]; collapsed: boolean })
             >
               <sub.icon className="mr-2 h-4 w-4 shrink-0" />
               {!collapsed && <span className="text-sm">{sub.title}</span>}
-              {!collapsed && sub.badge && <NavPill text={sub.badge} tone="yellow" />}
             </NavLink>
           </SidebarMenuButton>
         </SidebarMenuSubItem>
@@ -81,7 +64,6 @@ function CollapsibleSection({
   activo,
   open,
   onOpenChange,
-  fase,
 }: {
   icon: React.ElementType;
   label: string;
@@ -91,13 +73,7 @@ function CollapsibleSection({
   activo: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  fase?: 1 | 2;
 }) {
-  const faseBadge =
-    fase === 2 ? (
-      <NavPill text="2ª fase" tone="yellow" />
-    ) : null;
-
   // El encabezado del módulo SOLO despliega; nunca navega. Antes era a la vez
   // enlace al módulo y disparador del desplegable: como la lista arrancaba
   // cerrada, el primer clic te sacaba a la página del módulo (vacía en la
@@ -114,7 +90,6 @@ function CollapsibleSection({
       {!collapsed && (
         <>
           <span className="text-sm flex-1">{label}</span>
-          {faseBadge}
           <ChevronDown
             className={cn(
               "h-3 w-3 ml-1 transition-transform",
@@ -378,7 +353,6 @@ export function AppSidebar() {
                     >
                       <LayoutDashboard className="mr-2 h-4 w-4 shrink-0" />
                       {!collapsed && <span className="text-sm flex-1">DASHBOARD</span>}
-                      {!collapsed && <NavPill text="2ª fase" tone="yellow" />}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -393,7 +367,6 @@ export function AppSidebar() {
                       >
                         <sub.icon className="mr-2 h-4 w-4 shrink-0" />
                         {!collapsed && <span className="text-sm">{sub.title}</span>}
-                        {!collapsed && sub.badge && <NavPill text={sub.badge} tone="yellow" />}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -430,7 +403,6 @@ export function AppSidebar() {
                         items={s.items}
                         collapsed={collapsed}
                         activo={activeKey === s.key}
-                        fase={s.fase}
                         open={openKey === s.key}
                         onOpenChange={(isOpen) => setOpenKey(isOpen ? s.key : null)}
                       />

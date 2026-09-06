@@ -64,7 +64,7 @@ export function EscandalloIcon({ className }: { className?: string }) {
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 
 export type IconType = React.ElementType;
-export type SubItem = { title: string; url: string; icon: IconType; badge?: string };
+export type SubItem = { title: string; url: string; icon: IconType };
 export type Section = {
   key: string;
   modulo: string;       // permiso para puedeVer()
@@ -73,19 +73,18 @@ export type Section = {
   prefix: string;
   items: SubItem[];
   linkTo: string;
-  fase?: 1 | 2;         // etiqueta de despliegue por fases (1ª verde / 2ª amarilla)
 };
 
 // ─── Submenús (fuente única — los consume el sidebar y el header) ─────────
 
 export const miPanelSubs: SubItem[] = [
   { title: "PERFIL", url: "/mi-panel/datos-personales", icon: UserCircle },
-  { title: "POINTS", url: "/mi-panel/points", icon: Trophy, badge: "2ª fase" },
+  { title: "POINTS", url: "/mi-panel/points", icon: Trophy },
   { title: "CALENDARIO", url: "/mi-panel/calendario", icon: CalendarDays },
   { title: "CRONOGRAMA", url: "/mi-panel/cronograma", icon: CalendarClock },
   { title: "HORARIO", url: "/mi-panel/horario", icon: Timer },
   { title: "FICHAJES", url: "/mi-panel/fichajes", icon: Fingerprint },
-  { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap, badge: "2ª fase" },
+  { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap },
   { title: "CONDICIONES", url: "/mi-panel/condiciones", icon: ClipboardCheck },
   { title: "PAGOS", url: "/mi-panel/pagos", icon: Euro },
   { title: "CUESTIONARIOS", url: "/mi-panel/cuestionarios", icon: FileQuestion },
@@ -163,10 +162,10 @@ export const rrhhSubs: SubItem[] = [
   { title: "ENTREGAS", url: "/rrhh/entregas", icon: PackageCheck },
   { title: "RECLUTAMIENTO", url: "/rrhh/reclutamiento", icon: UserRoundSearch },
   { title: "BONUS", url: "/rrhh/bonus", icon: Gift },
-  { title: "POINTS", url: "/rrhh/points", icon: Trophy, badge: "2ª fase" },
+  { title: "POINTS", url: "/rrhh/points", icon: Trophy },
   { title: "PAGOS", url: "/rrhh/pagos", icon: Euro },
   { title: "PUESTOS", url: "/rrhh/puestos", icon: Banknote },
-  { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap, badge: "2ª fase" },
+  { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap },
 ];
 
 export const marketingSubs: SubItem[] = [
@@ -206,17 +205,17 @@ export const juridicoSubs: SubItem[] = [
 // ─── Secciones del sidebar (departamentos) ─────────────────────────────────
 
 export const allSections: Section[] = [
-  { key: "direccion", modulo: "DIRECCIÓN", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs, linkTo: "/direccion", fase: 1 },
-  { key: "sala", modulo: "SALA", icon: UtensilsCrossed, label: "SALA", prefix: "/sala", items: salaSubs, linkTo: "/sala", fase: 2 },
-  { key: "cocina", modulo: "COCINA", icon: ChefHat, label: "COCINA", prefix: "/cocina", items: cocinaSubs, linkTo: "/cocina", fase: 2 },
-  { key: "logistica", modulo: "LOGÍSTICA", icon: Package, label: "LOGÍSTICA", prefix: "/logistica", items: logisticaSubs, linkTo: "/logistica", fase: 1 },
-  { key: "gerencia", modulo: "GERENCIA", icon: Briefcase, label: "GERENCIA", prefix: "/gerencia", items: gerenciaSubs, linkTo: "/gerencia", fase: 1 },
-  { key: "rrhh", modulo: "RECURSOS HUMANOS", icon: User, label: "RECURSOS HUMANOS", prefix: "/rrhh", items: rrhhSubs, linkTo: "/rrhh", fase: 1 },
-  { key: "marketing", modulo: "MARKETING", icon: Camera, label: "MARKETING", prefix: "/marketing", items: marketingSubs, linkTo: "/marketing", fase: 2 },
-  { key: "contabilidad", modulo: "CONTABILIDAD", icon: Calculator, label: "CONTABILIDAD", prefix: "/contabilidad", items: contabilidadSubs, linkTo: "/contabilidad", fase: 2 },
-  { key: "calidad", modulo: "CALIDAD", icon: CheckCircle2, label: "CALIDAD", prefix: "/calidad", items: calidadSubs, linkTo: "/calidad", fase: 1 },
-  { key: "gestoria", modulo: "GESTORÍA", icon: FileText, label: "GESTORÍA", prefix: "/gestoria", items: gestoriaSubs, linkTo: "/gestoria", fase: 1 },
-  { key: "juridico", modulo: "JURÍDICO", icon: Scale, label: "JURÍDICO", prefix: "/juridico", items: juridicoSubs, linkTo: "/juridico", fase: 1 },
+  { key: "direccion", modulo: "DIRECCIÓN", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs, linkTo: "/direccion" },
+  { key: "sala", modulo: "SALA", icon: UtensilsCrossed, label: "SALA", prefix: "/sala", items: salaSubs, linkTo: "/sala" },
+  { key: "cocina", modulo: "COCINA", icon: ChefHat, label: "COCINA", prefix: "/cocina", items: cocinaSubs, linkTo: "/cocina" },
+  { key: "logistica", modulo: "LOGÍSTICA", icon: Package, label: "LOGÍSTICA", prefix: "/logistica", items: logisticaSubs, linkTo: "/logistica" },
+  { key: "gerencia", modulo: "GERENCIA", icon: Briefcase, label: "GERENCIA", prefix: "/gerencia", items: gerenciaSubs, linkTo: "/gerencia" },
+  { key: "rrhh", modulo: "RECURSOS HUMANOS", icon: User, label: "RECURSOS HUMANOS", prefix: "/rrhh", items: rrhhSubs, linkTo: "/rrhh" },
+  { key: "marketing", modulo: "MARKETING", icon: Camera, label: "MARKETING", prefix: "/marketing", items: marketingSubs, linkTo: "/marketing" },
+  { key: "contabilidad", modulo: "CONTABILIDAD", icon: Calculator, label: "CONTABILIDAD", prefix: "/contabilidad", items: contabilidadSubs, linkTo: "/contabilidad" },
+  { key: "calidad", modulo: "CALIDAD", icon: CheckCircle2, label: "CALIDAD", prefix: "/calidad", items: calidadSubs, linkTo: "/calidad" },
+  { key: "gestoria", modulo: "GESTORÍA", icon: FileText, label: "GESTORÍA", prefix: "/gestoria", items: gestoriaSubs, linkTo: "/gestoria" },
+  { key: "juridico", modulo: "JURÍDICO", icon: Scale, label: "JURÍDICO", prefix: "/juridico", items: juridicoSubs, linkTo: "/juridico" },
 ];
 
 // ─── Módulos (raíz: icono + label corto) ───────────────────────────────────
