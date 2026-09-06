@@ -157,7 +157,12 @@ type DragState =
 /** Tiradores del recuadro rojo: 4 esquinas + 4 lados. */
 type EncuadreHandle = "nw" | "ne" | "sw" | "se" | "n" | "s" | "w" | "e";
 
-const MIN_MESA_SIZE = 36;
+/**
+ * Lo más pequeño que se puede dejar una mesa. Por debajo de esto el nombre del
+ * cliente ya no cabe dentro de la mesa en el servicio y la mesa deja de poder
+ * leerse de un vistazo, que es justo para lo que sirve el plano.
+ */
+const MIN_MESA_SIZE = 52;
 const MIN_DECO_SIZE = 16;
 /**
  * Lo más pequeño que se puede apretar el recuadro rojo. Por debajo de esto el

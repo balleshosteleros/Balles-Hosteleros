@@ -2692,8 +2692,13 @@ const PLANO_CANVAS_H = 640;
  * Aire que se deja alrededor de las mesas al encuadrar solo, en píxeles del
  * lienzo. Sin nada de margen las mesas del borde quedarían pegadas al filo de
  * la pantalla y las etiquetas de zona se cortarían.
+ *
+ * El margen se amplía con el plano, así que cada píxel de aire se come escala:
+ * con 40 por lado, una sala como la de HABANA (unos 580 de ancho útil) perdía
+ * una escala del 14% en aire, y las mesas se veían pequeñas. 16 sigue evitando
+ * que las mesas del borde queden pegadas al filo sin regalar ese tamaño.
  */
-const ENCUADRE_AUTO_MARGEN = 40;
+const ENCUADRE_AUTO_MARGEN = 16;
 
 /**
  * Recuadro que ocupan de verdad las mesas de una sala, para ampliarlo hasta
@@ -3075,7 +3080,12 @@ function PlanoCanvas({
                   className={cn(
                     "sala-mesa absolute flex flex-col items-center justify-center text-[11px] font-semibold border-2 transition-all cursor-pointer px-1 overflow-hidden",
                     mesaBg[estado] ?? "",
-                    isLibre ? "text-white border-white/15" : "border-black/20",
+                    isLibre
+                      // El borde SUBE en nocturno: sobre el lienzo marino
+                      // la mesa quedaba a 1,2:1 de contraste y no se veía.
+                      // El azul del relleno no se toca, solo su contorno.
+                      ? "text-white border-white/15 [.sala-oscuro_&]:border-white/40"
+                      : "border-black/20",
                     // Recuadro rojo SOLO mientras el raton esta encima: ni al
                     // abrir la ficha de una reserva ni al elegir una mesa se
                     // queda marcada. Al mover el raton se enciende unicamente
@@ -3116,10 +3126,16 @@ function PlanoCanvas({
                     onSelectMesa(m);
                   }}
                 >
-                  {/* Mesa con dos reservas en el mismo turno: linea diagonal de
-                      esquina a esquina. Va detras del texto (sin puntero) y en
-                      el color del propio texto, asi se ve igual sobre la mesa
-                      verde ocupada que sobre el pastel de una mesa libre. */}
+                  {/* MESA VENDIDA DOS VECES: se parte en diagonal y CADA MITAD
+                      lleva su reserva —su color de estado y su nombre—. Antes
+                      la diagonal era solo una raya sobre un fondo único: se
+                      veia que habia doble servicio, pero no cual era cual ni
+                      por donde iba cada una.
+
+                      ARRIBA-IZQUIERDA la PRIMERA por horario y abajo-derecha la
+                      siguiente: `rs` ya viene ordenado por hora, asi que se lee
+                      en el orden en que va a pasar el servicio. Si a una se le
+                      cambia el estado, cambia SOLO su mitad. */}
                   {mesaCompartida && (
                     <svg
                       className="absolute inset-0 h-full w-full pointer-events-none"
@@ -3127,17 +3143,49 @@ function PlanoCanvas({
                       preserveAspectRatio="none"
                       aria-hidden="true"
                     >
+                      {/* Triangulo superior-izquierdo: la reserva mas temprana. */}
+                      <polygon
+                        points="0,0 100,0 0,100"
+                        fill={colorMitadReserva(rs[0].estado)}
+                      />
+                      {/* Triangulo inferior-derecho: la siguiente. */}
+                      <polygon
+                        points="100,0 100,100 0,100"
+                        fill={colorMitadReserva(rs[1].estado)}
+                      />
+                      {/* La linea de separacion se mantiene: sin ella dos
+                          mitades del mismo color se leen como una mesa entera. */}
                       <line
                         x1="0"
                         y1="100"
                         x2="100"
                         y2="0"
-                        stroke="currentColor"
+                        stroke="#00000055"
                         strokeWidth="2"
                         vectorEffect="non-scaling-stroke"
-                        opacity="0.7"
                       />
                     </svg>
+                  )}
+                  {/* Los DOS nombres, uno por mitad. Van en el color que se lee
+                      sobre SU relleno, no sobre el de la mesa: una mitad puede
+                      ser verde oscuro y la otra verde claro a la vez. */}
+                  {mesaCompartida && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      <span
+                        className="absolute left-[6%] top-[5%] max-w-[62%] truncate text-[10px] font-bold leading-none"
+                        style={{ color: textoMitadReserva(rs[0].estado) }}
+                      >
+                        {rs[0].hora.slice(0, 5)}{" "}
+                        {esReservaWalkIn(rs[0]) ? "WALK IN" : rs[0].cliente}
+                      </span>
+                      <span
+                        className="absolute bottom-[5%] right-[6%] max-w-[62%] truncate text-right text-[10px] font-bold leading-none"
+                        style={{ color: textoMitadReserva(rs[1].estado) }}
+                      >
+                        {rs[1].hora.slice(0, 5)}{" "}
+                        {esReservaWalkIn(rs[1]) ? "WALK IN" : rs[1].cliente}
+                      </span>
+                    </div>
                   )}
                   {/* Contra-rotación para mantener el texto legible aunque la mesa esté girada. */}
                   <div
@@ -3149,8 +3197,23 @@ function PlanoCanvas({
                         texto grande. Con reserva, la capacidad se pega a la
                         hora en la misma linea y el nombre se queda una entera
                         para el. */}
-                    <span className="text-[13px] leading-none">{m.codigo}</span>
-                    {firstR ? (
+                    <span
+                      className="text-[13px] leading-none"
+                      // Mesa partida: el codigo cae justo sobre la diagonal, con
+                      // un relleno distinto a cada lado. Un halo del color
+                      // contrario lo mantiene legible sobre los dos.
+                      style={
+                        mesaCompartida
+                          ? { color: "#FFFFFF", textShadow: "0 0 3px #000, 0 1px 2px #000" }
+                          : undefined
+                      }
+                    >
+                      {m.codigo}
+                    </span>
+                    {/* Mesa partida: en el centro SOLO el codigo. La hora y el
+                        nombre de cada reserva ya van en su mitad, y repetidos
+                        aqui en medio se pisaban con ellos. */}
+                    {mesaCompartida ? null : firstR ? (
                       /* La hora va SIN truncar: son cinco cifras fijas y
                          cortarlas ("14:0…") destruye el dato. La capacidad se
                          queda detras porque, si algo sobra, es ella. */
@@ -3165,7 +3228,7 @@ function PlanoCanvas({
                     {/* El NOMBRE es lo que se busca al cruzar la sala: va al
                         mismo tamaño que el codigo de mesa y en semibold.
                         Estaba en 9px y a un metro del monitor no se leia. */}
-                    {firstR && (
+                    {firstR && !mesaCompartida && (
                       <span
                         className={cn(
                           // El nombre va SIEMPRE a color pleno y en bold: es el
@@ -6506,7 +6569,13 @@ export function ReservasView() {
                                     className={cn(
                                       "relative overflow-hidden h-20 rounded-md flex flex-col items-center justify-center text-[11px] font-bold shadow-sm border-2 transition-all cursor-pointer px-1",
                                       mesaBg[estado] ?? "",
-                                      isLibre ? "text-white border-white/15" : "border-black/20",
+                                      // El borde SUBE en nocturno: sobre el
+                                      // lienzo marino la mesa quedaba a 1,2:1
+                                      // de contraste y no se veía. El azul del
+                                      // relleno no se toca, solo su contorno.
+                                      isLibre
+                                        ? "text-white border-white/15 [.sala-oscuro_&]:border-white/40"
+                                        : "border-black/20",
                                       // Igual que en el plano: el rojo es solo
                                       // del raton, no se queda pegado al abrir
                                       // una reserva ni al elegir una mesa.
@@ -6525,32 +6594,70 @@ export function ReservasView() {
                                       handleSelectMesa(m);
                                     }}
                                   >
+                                    {/* Mesa vendida dos veces: igual que en el
+                                        plano, cada mitad con SU color de estado
+                                        y su nombre; la primera por horario
+                                        arriba-izquierda. */}
                                     {mesaCompartida && (
-                                      <svg
-                                        className="absolute inset-0 h-full w-full pointer-events-none"
-                                        viewBox="0 0 100 100"
-                                        preserveAspectRatio="none"
-                                        aria-hidden="true"
-                                      >
-                                        <line
-                                          x1="0"
-                                          y1="100"
-                                          x2="100"
-                                          y2="0"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                          vectorEffect="non-scaling-stroke"
-                                          opacity="0.7"
-                                        />
-                                      </svg>
+                                      <>
+                                        <svg
+                                          className="absolute inset-0 h-full w-full pointer-events-none"
+                                          viewBox="0 0 100 100"
+                                          preserveAspectRatio="none"
+                                          aria-hidden="true"
+                                        >
+                                          <polygon
+                                            points="0,0 100,0 0,100"
+                                            fill={colorMitadReserva(rs[0].estado)}
+                                          />
+                                          <polygon
+                                            points="100,0 100,100 0,100"
+                                            fill={colorMitadReserva(rs[1].estado)}
+                                          />
+                                          <line
+                                            x1="0"
+                                            y1="100"
+                                            x2="100"
+                                            y2="0"
+                                            stroke="#00000055"
+                                            strokeWidth="2"
+                                            vectorEffect="non-scaling-stroke"
+                                          />
+                                        </svg>
+                                        <div className="absolute inset-0 pointer-events-none">
+                                          <span
+                                            className="absolute left-[6%] top-[5%] max-w-[62%] truncate text-[10px] font-bold leading-none"
+                                            style={{ color: textoMitadReserva(rs[0].estado) }}
+                                          >
+                                            {rs[0].hora.slice(0, 5)}{" "}
+                                            {esReservaWalkIn(rs[0]) ? "WALK IN" : rs[0].cliente}
+                                          </span>
+                                          <span
+                                            className="absolute bottom-[5%] right-[6%] max-w-[62%] truncate text-right text-[10px] font-bold leading-none"
+                                            style={{ color: textoMitadReserva(rs[1].estado) }}
+                                          >
+                                            {rs[1].hora.slice(0, 5)}{" "}
+                                            {esReservaWalkIn(rs[1]) ? "WALK IN" : rs[1].cliente}
+                                          </span>
+                                        </div>
+                                      </>
                                     )}
-                                    <span className="relative text-[13px] leading-none">{m.codigo}</span>
+                                    <span
+                                      className="relative text-[13px] leading-none"
+                                      style={
+                                        mesaCompartida
+                                          ? { color: "#FFFFFF", textShadow: "0 0 3px #000, 0 1px 2px #000" }
+                                          : undefined
+                                      }
+                                    >
+                                      {m.codigo}
+                                    </span>
                                     <span className={cn("relative text-[10px] font-normal mt-0.5", isLibre ? "text-white/70" : "opacity-75")}>
                                       ({m.capacidad}p)
                                     </span>
                                     {/* Mismo criterio que en el plano: la hora
                                         y el nombre se leen de lejos. */}
-                                    {firstR && (
+                                    {firstR && !mesaCompartida && (
                                       <span className={cn("relative text-[11px] font-bold mt-1 truncate max-w-full !opacity-100", isLibre && "text-white")}>
                                         {firstR.hora} {isWalkIn ? "WALK IN" : firstR.cliente}
                                       </span>
