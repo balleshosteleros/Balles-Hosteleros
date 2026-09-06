@@ -21,9 +21,6 @@ import { getSiteUrl } from "@/features/rrhh/services/gestoria/gestoria-contrato"
 import { nombreMes } from "@/features/rrhh/services/nominas/nominas-gestoria";
 import { fetchEmpresaBrand } from "@/lib/email/brand-header";
 import {
-  calcularDesgloseNomina,
-  CONCEPTOS_SS_EMPRESA,
-  type DesgloseNomina,
 } from "@/features/rrhh/lib/desglose-nomina";
 
 /** Datos del mes de un empleado que se muestran en el recuadro del enlace. */
@@ -52,9 +49,6 @@ export function urlConfirmarLiquidacion(token: string): string {
   return `${getSiteUrl()}/liquidacion/${encodeURIComponent(token)}`;
 }
 
-function fmtEur(n: number): string {
-  return n.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €";
-}
 
 /**
  * Crea (o regenera) el token de confirmación de un empleado para un mes y
@@ -234,110 +228,7 @@ export async function confirmarLiquidacionPorToken(
   return { ok: true };
 }
 
-/** Recuadro HTML con el desglose de la liquidación para el cuerpo del correo. */
-function recuadroLiquidacionHtml(d: LiquidacionDetalle): string {
-  // Bruto, retenciones y coste de empresa: mismo cálculo que el portal
-  // "Mis pagos" y la web de confirmación (features/rrhh/lib/desglose-nomina).
-  const g = calcularDesgloseNomina(d);
 
-  const fila = (
-    label: string,
-    valor: string,
-    opts: { destacado?: boolean; rojo?: boolean; separador?: boolean } = {},
-  ) => {
-    const color = opts.rojo ? "#dc2626" : opts.destacado ? "#111" : "#111";
-    const peso = opts.destacado ? "font-weight:700;" : "";
-    const borde = opts.separador ? "border-top:1px solid #e5e5e5;" : "";
-    return `
-    <tr>
-      <td style="padding:6px 0;color:${opts.destacado ? "#111" : "#555"};font-size:14px;${borde}">${label}</td>
-      <td style="padding:6px 0;text-align:right;font-size:14px;${peso}color:${color};${borde}">${valor}</td>
-    </tr>`;
-  };
-
-  const filas: string[] = [];
-  // Bloque nómina: bruto → −SS → −IRPF → = neto.
-  filas.push(fila("Nómina bruta", fmtEur(g.bruto)));
-  if (g.ssEmpleado) filas.push(fila("Seguridad Social (tu parte)", `−${fmtEur(g.ssEmpleado)}`, { rojo: true }));
-  if (g.irpf) filas.push(fila("IRPF", `−${fmtEur(g.irpf)}`, { rojo: true }));
-  filas.push(fila("Nómina neta", fmtEur(g.neto), { destacado: true, separador: true }));
-  // Resto de conceptos que se suman a la liquidación.
-  if (d.complemento) filas.push(fila("Complemento", fmtEur(d.complemento)));
-  if (d.horasExtras) filas.push(fila("Horas extras", fmtEur(d.horasExtras)));
-  if (d.bonus) filas.push(fila("Bonus", fmtEur(d.bonus)));
-  if (d.ajuste) filas.push(fila("Ajuste", `${d.ajuste > 0 ? "+" : "−"}${fmtEur(Math.abs(d.ajuste))}`, { rojo: d.ajuste < 0 }));
-  filas.push(fila("Total a percibir", fmtEur(d.total), { destacado: true, separador: true }));
-  return `
-    <div style="border:1px solid #e5e5e5;border-radius:10px;padding:16px 18px;margin:16px 0;background:#ffffff">
-      <table style="width:100%;border-collapse:collapse">${filas.join("")}</table>
-    </div>
-    ${recuadroCosteEmpresaHtml(g)}`;
-}
-
-/**
- * Recuadro HTML con lo que la empresa paga por el trabajador: su aportación a
- * la Seguridad Social y el coste total. INFORMATIVO: se dice con todas las
- * letras que no se le descuenta, para que nadie lo lea como una deducción.
- * Solo se pinta si hay coste que contar (0 € calculado ≠ dato sin calcular).
- */
-function recuadroCosteEmpresaHtml(g: DesgloseNomina): string {
-  if (!g.hayCosteEmpresa) return "";
-
-  const fila = (label: string, valor: string, destacado = false) => `
-    <tr>
-      <td style="padding:6px 0;font-size:14px;color:${destacado ? "#111" : "#555"};${destacado ? "border-top:1px solid #e5e5e5;font-weight:700;" : ""}">${label}</td>
-      <td style="padding:6px 0;text-align:right;font-size:14px;color:#111;${destacado ? "border-top:1px solid #e5e5e5;font-weight:700;" : ""}">${valor}</td>
-    </tr>`;
-
-  const pct =
-    g.porcentajeSsEmpresa !== null
-      ? `, y equivale a un ${g.porcentajeSsEmpresa.toLocaleString("es-ES", { maximumFractionDigits: 1 })}% de tu nómina bruta`
-      : "";
-
-  const bloqueSs = g.ssEmpresa
-    ? `
-      <p style="margin:0 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#888">
-        Lo que paga la empresa por ti a la Seguridad Social
-      </p>
-      <div style="border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;padding:12px 14px;margin-bottom:12px">
-        <table style="width:100%;border-collapse:collapse">
-          <tr>
-            <td style="font-size:14px;color:#0c4a6e">Aportación de la empresa</td>
-            <td style="text-align:right;font-size:16px;font-weight:700;color:#0c4a6e">${fmtEur(g.ssEmpresa)}</td>
-          </tr>
-        </table>
-        <p style="margin:6px 0 0;font-size:11px;line-height:1.5;color:#0c4a6e;opacity:.75">
-          Lo paga la empresa <b>además</b> de tu nómina: no sale de tu bolsillo ni se te
-          descuenta. Cubre ${CONCEPTOS_SS_EMPRESA}${pct}.
-        </p>
-      </div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
-        ${fila("Seguridad Social (tu parte)", fmtEur(g.ssEmpleado))}
-        ${fila("Seguridad Social (parte de la empresa)", fmtEur(g.ssEmpresa))}
-        ${fila("Total cotizado por ti este mes", fmtEur(g.ssTotal), true)}
-      </table>`
-    : "";
-
-  return `
-    <div style="border:1px solid #e5e5e5;border-radius:10px;padding:16px 18px;margin:16px 0;background:#ffffff">
-      ${bloqueSs}
-      <p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#888">
-        Lo que le cuestas a la empresa
-      </p>
-      <table style="width:100%;border-collapse:collapse">
-        ${fila("Lo que percibes", fmtEur(g.total))}
-        ${g.ssEmpleado ? fila("Seguridad Social (tu parte)", `+${fmtEur(g.ssEmpleado)}`) : ""}
-        ${g.irpf ? fila("IRPF (a Hacienda)", `+${fmtEur(g.irpf)}`) : ""}
-        ${g.ssEmpresa ? fila("Seguridad Social (parte de la empresa)", `+${fmtEur(g.ssEmpresa)}`) : ""}
-        ${fila("Coste total para la empresa", fmtEur(g.costeEmpresa), true)}
-      </table>
-      <p style="margin:8px 0 0;font-size:11px;line-height:1.5;color:#888">
-        Todo el dinero que la empresa desembolsa por ti este mes: lo que cobras, lo que se te
-        retiene y se ingresa en tu nombre, y su propia aportación a la Seguridad Social. Es
-        informativo: no se te descuenta nada de aquí.
-      </p>
-    </div>`;
-}
 
 /**
  * Botón HTML «Ver y confirmar» para el correo al empleado.
@@ -397,17 +288,17 @@ export async function enviarCorreoConfirmacionLiquidacion(
 
   const d = params.detalle;
   const enlace = urlConfirmarLiquidacion(tk.token);
-  const subject = `Tu liquidación de ${d.mesLabel} · ${d.empresaNombre}`;
+  const subject = `Tu liquidación de ${d.mesLabel} ya está lista · ${d.empresaNombre}`;
   const html = `
     <p>Hola ${d.empleadoNombre.split(" ")[0] || ""},</p>
-    <p>Esta es tu liquidación de <b>${d.mesLabel}</b> en ${d.empresaNombre}. Revisa que los
-    importes son correctos y confírmalo pulsando el botón.</p>
-    ${recuadroLiquidacionHtml(d)}
+    <p>Ya tienes lista tu liquidación de <b>${d.mesLabel}</b> en ${d.empresaNombre}.</p>
+    <p>Entra en <b>Pagos</b>, dentro de tu panel, para verla y confirmar que es correcta.
+    Hasta que la confirmes no se tramita el cobro.</p>
     ${botonConfirmarHtml(tk.token)}
     <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${d.empresaNombre}.</p>`;
   const text =
-    `Tu liquidación de ${d.mesLabel} en ${d.empresaNombre}. Total: ${fmtEur(d.total)}. ` +
-    `Revísala y confírmala aquí: ${enlace}`;
+    `Ya tienes lista tu liquidación de ${d.mesLabel} en ${d.empresaNombre}. ` +
+    `Entra en Pagos, dentro de tu panel, para verla y confirmar que es correcta: ${enlace}`;
 
   const res = await sendEmail({ to, subject, html, text, empresaId: params.empresaId });
   if (!res.ok) return { ok: false, error: "No se pudo enviar el correo" };

@@ -502,14 +502,25 @@ export async function enviarConfirmacionesPago(
                 aprobadas y cerradas. Ya se puede proceder con los pagos.
               </p>
               <table cellpadding="0" cellspacing="0" border="0"
-                     style="border:1px solid #e4e4e7;border-radius:8px;padding:12px 16px">
+                     style="border-collapse:collapse;border:1px solid #e4e4e7;border-radius:8px">
                 <tr>
-                  <td style="padding:2px 16px 2px 0;color:#52525b;font-size:14px">Trabajadores</td>
-                  <td style="color:#18181b;font-size:14px;font-weight:600">${cuantos}</td>
+                  <th align="left" style="padding:8px 16px;background:#fafafa;border-bottom:1px solid #e4e4e7;color:#52525b;font-size:13px">Trabajador</th>
+                  <th align="right" style="padding:8px 16px;background:#fafafa;border-bottom:1px solid #e4e4e7;color:#52525b;font-size:13px">A pagar</th>
                 </tr>
+                ${updated
+                  .map(
+                    (r) =>
+                      `<tr>
+                         <td style="padding:6px 16px;border-bottom:1px solid #f4f4f5;color:#18181b;font-size:14px">${r.empleado_nombre ?? ""}</td>
+                         <td align="right" style="padding:6px 16px;border-bottom:1px solid #f4f4f5;color:#18181b;font-size:14px;font-weight:600">${Number(
+                           r.total ?? 0,
+                         ).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+                       </tr>`,
+                  )
+                  .join("")}
                 <tr>
-                  <td style="padding:2px 16px 2px 0;color:#52525b;font-size:14px">Importe total</td>
-                  <td style="color:#18181b;font-size:14px;font-weight:600">${importe} €</td>
+                  <td style="padding:8px 16px;background:#fafafa;color:#18181b;font-size:14px;font-weight:700">Total (${cuantos})</td>
+                  <td align="right" style="padding:8px 16px;background:#fafafa;color:#18181b;font-size:14px;font-weight:700">${importe} €</td>
                 </tr>
               </table>
               <p style="color:#888;font-size:12px;margin:14px 0 0">
@@ -518,7 +529,16 @@ export async function enviarConfirmacionesPago(
             text:
               `Las liquidaciones de ${mesLabel} de ${empresaNombre} están aprobadas y cerradas. ` +
               `Ya se puede proceder con los pagos.\n` +
-              `Trabajadores: ${cuantos}\nImporte total: ${importe} €`,
+              updated
+                .map(
+                  (r) =>
+                    `- ${r.empleado_nombre ?? ""}: ${Number(r.total ?? 0).toLocaleString("es-ES", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })} €`,
+                )
+                .join("\n") +
+              `\n\nTotal (${cuantos}): ${importe} €`,
             empresaId,
           });
         }
