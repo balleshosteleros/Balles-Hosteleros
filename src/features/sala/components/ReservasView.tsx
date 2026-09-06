@@ -7174,16 +7174,21 @@ export function ReservasView() {
                   A la derecha se mantiene el hueco —los correos son de la
                   RESERVA, el cliente no tiene una lista propia aquí— para que
                   el recuadro de la izquierda mida lo mismo que los de arriba. */}
-              <div className="grid shrink-0 gap-3 md:grid-cols-2">
-                <div className="rounded-lg border bg-muted/25 p-2.5">
+              {/* Las dos bandas se escriben IGUAL: mismo rotulo con su sobre
+                  delante, mismo tamano de letra y el mismo relleno corto. La de
+                  la derecha no despliega nada —no hay correos por cliente— pero
+                  ocupa lo mismo, asi que las dos columnas siguen cuadrando. */}
+              <div className="grid shrink-0 items-start gap-3 md:grid-cols-2">
+                <div className="rounded-lg border bg-muted/25 px-2.5 py-2">
                   <HistoricoEmailsReserva reservaId={selectedReserva.id} />
                 </div>
-                <div className="rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-2.5">
-                  <Label className="text-muted-foreground text-xs">
-                    Comunicaciones del cliente
-                  </Label>
-                  <p className="mt-1.5 text-[10px] text-muted-foreground">
-                    Los correos se envían por reserva, no por cliente.
+                <div className="rounded-lg border border-sky-500/25 bg-sky-500/[0.06] px-2.5 py-2">
+                  <span className="flex w-full items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <Mail className="h-3.5 w-3.5 shrink-0" />
+                    <span>Comunicaciones</span>
+                  </span>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Se envían por reserva, no por cliente.
                   </p>
                 </div>
               </div>

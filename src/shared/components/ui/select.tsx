@@ -75,11 +75,19 @@ const SelectContent = React.forwardRef<
       {...props}
     >
       <SelectScrollUpButton />
+      {/* OJO con la altura: shadcn trae aqui `h-[--radix-select-trigger-height]`,
+          que es la altura del DISPARADOR (28px en los selects pequenos). Al
+          usarla como alto del panel, la lista se sale de su marco y tapa lo que
+          tenga debajo —en la ficha de una reserva, media ventana—. Lo que hace
+          falta es un TOPE de alto disponible, no un alto fijo: con
+          `max-h-[--radix-select-content-available-height]` el panel crece solo
+          lo que pide su contenido y, si no cabe en la pantalla, se queda con
+          scroll dentro de su recuadro (Ivan, 06-sep). */}
       <SelectPrimitive.Viewport
         className={cn(
           "p-1",
           position === "popper" &&
-            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]",
+            "max-h-[var(--radix-select-content-available-height)] w-full min-w-[var(--radix-select-trigger-width)]",
         )}
       >
         {children}

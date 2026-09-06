@@ -195,7 +195,7 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
   const tz = empresaActual?.zonaHoraria;
 
   return (
-    <Collapsible open={abierto} onOpenChange={setAbierto} className="space-y-2">
+    <Collapsible open={abierto} onOpenChange={setAbierto} className="space-y-1">
       {/* Plegado por defecto: en la ficha lo que se consulta a diario es la
           reserva, no los correos. Se abre cuando hace falta comprobar qué se
           le ha mandado al cliente. El número va en la cabecera para saberlo
