@@ -17,6 +17,8 @@ import {
   mesSolicitado,
   correoGestoriaEmpresa,
   regenerarTokenNominasGestoria,
+  clampDiasAntelacion,
+  DIAS_ANTELACION_DEFAULT,
 } from "@/features/rrhh/services/nominas/nominas-gestoria";
 
 export interface NominasGestoriaConfig {
@@ -25,6 +27,8 @@ export interface NominasGestoriaConfig {
   emailCc: string;
   diaEnvio: number; // 1-28
   notifRrhh: boolean;
+  /** Días antes de acabar el mes en que ese mes ya se puede subir (1-5). */
+  diasAntelacion: number;
   ultimoEnvio: string | null; // AAAA-MM ya enviado (informativo)
 }
 
@@ -34,6 +38,7 @@ const CONFIG_DEFAULT: NominasGestoriaConfig = {
   emailCc: "",
   diaEnvio: 1, // por defecto el día 1 (a las 00:00 de la zona de la empresa)
   notifRrhh: true,
+  diasAntelacion: DIAS_ANTELACION_DEFAULT,
   ultimoEnvio: null,
 };
 
@@ -44,7 +49,7 @@ export async function getNominasGestoriaConfig(): Promise<NominasGestoriaConfig>
     const { data, error } = await supabase
       .from("empresas")
       .select(
-        "nominas_gestoria_activo, nominas_gestoria_email, nominas_gestoria_email_cc, nominas_gestoria_dia_envio, nominas_gestoria_notif_rrhh, nominas_gestoria_ultimo_envio",
+        "nominas_gestoria_activo, nominas_gestoria_email, nominas_gestoria_email_cc, nominas_gestoria_dia_envio, nominas_gestoria_notif_rrhh, nominas_gestoria_dias_antelacion, nominas_gestoria_ultimo_envio",
       )
       .eq("id", empresaId)
       .maybeSingle();
@@ -56,6 +61,7 @@ export async function getNominasGestoriaConfig(): Promise<NominasGestoriaConfig>
       emailCc: (data.nominas_gestoria_email_cc as string | null) ?? "",
       diaEnvio: (data.nominas_gestoria_dia_envio as number | null) ?? 1,
       notifRrhh: data.nominas_gestoria_notif_rrhh ?? true,
+      diasAntelacion: clampDiasAntelacion(data.nominas_gestoria_dias_antelacion),
       ultimoEnvio: (data.nominas_gestoria_ultimo_envio as string | null) ?? null,
     };
   } catch (err) {
@@ -85,6 +91,9 @@ export async function setNominasGestoriaConfig(
       payload.nominas_gestoria_dia_envio = Math.max(1, Math.min(28, Math.round(cfg.diaEnvio)));
     }
     if (cfg.notifRrhh !== undefined) payload.nominas_gestoria_notif_rrhh = cfg.notifRrhh;
+    if (cfg.diasAntelacion !== undefined) {
+      payload.nominas_gestoria_dias_antelacion = clampDiasAntelacion(cfg.diasAntelacion);
+    }
     if (Object.keys(payload).length === 0) return { ok: true };
     const { error } = await supabase.from("empresas").update(payload).eq("id", empresaId);
     if (error) throw error;

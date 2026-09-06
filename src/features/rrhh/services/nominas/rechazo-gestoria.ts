@@ -162,6 +162,7 @@ async function avisarGestoriaRechazo(
   periodo: string,
   motivo: string,
   ronda: number,
+  que: { nominas: boolean; segurosSociales: boolean },
 ): Promise<{ enviado: boolean; destino: string | null; enlace: string | null }> {
   const { data: emp } = await admin
     .from("empresas")
@@ -187,41 +188,55 @@ async function avisarGestoriaRechazo(
     .map((l) => `<p style="margin:0 0 6px">${escaparHtml(l)}</p>`)
     .join("");
 
+  // Qué se devuelve exactamente: lo que RRHH da por bueno NO se vuelve a pedir.
+  const ambos = que.nominas && que.segurosSociales;
+  const queTexto = ambos
+    ? "las nóminas y los seguros sociales"
+    : que.nominas
+      ? "las nóminas"
+      : "los seguros sociales";
+  const queCorto = ambos ? "Nóminas y seguros sociales" : que.nominas ? "Nóminas" : "Seguros sociales";
+  const conservado = ambos
+    ? ""
+    : que.nominas
+      ? "<p>Los <b>seguros sociales</b> de ese mes los damos por buenos: <b>no hay que volver a subirlos</b>.</p>"
+      : "<p>Las <b>nóminas</b> de ese mes las damos por buenas: <b>no hay que volver a subirlas</b>.</p>";
+
   const boton = enlace
     ? `<div style="margin:20px 0">
          <a href="${enlace}"
             style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;
                    padding:12px 22px;border-radius:8px;font-weight:600;font-size:14px">
-           Volver a subir las nóminas
+           Volver a subir
          </a>
          <p style="color:#888;font-size:12px;margin-top:8px">
-           Elegid <b>${mes}</b> en el desplegable y subid de nuevo <b>todas</b> las
-           nóminas de ese mes y sus TC1, ya corregidos.
-           Lo anterior se ha eliminado del sistema.
+           Elegid <b>${mes}</b> en el desplegable y subid de nuevo ${queTexto},
+           ya corregido. Lo anterior se ha eliminado del sistema.
          </p>
        </div>`
     : `<p style="color:#b91c1c">No se ha podido generar el enlace de subida. Contactad con la empresa.</p>`;
 
-  const subject = `Nóminas de ${mes} devueltas para corregir · ${empresaNombre}`;
+  const subject = `${queCorto} de ${mes} · devuelto para corregir · ${empresaNombre}`;
   const html = `
     <p>Hola,</p>
-    <p>Hemos revisado las <b>nóminas de ${mes}</b> de ${empresaNombre} y <b>no las damos por
-    buenas</b>. Os las devolvemos para que las corrijáis.</p>
+    <p>Hemos revisado <b>${queTexto} de ${mes}</b> de ${empresaNombre} y <b>no lo damos por
+    bueno</b>. Os lo devolvemos para que lo corrijáis.</p>
     <div style="border-left:4px solid #f59e0b;background:#fffbeb;padding:12px 16px;margin:16px 0;
                 border-radius:0 6px 6px 0">
       <p style="margin:0 0 8px;font-weight:600;color:#92400e">Anomalías detectadas</p>
       <div style="color:#1f2937;font-size:14px">${motivoHtml}</div>
     </div>
-    <p>Todo lo que habíais subido de este mes <b>se ha eliminado</b>: hay que volver a subir
-    la entrega completa, no solo las nóminas corregidas.</p>
+    <p>Lo que habíais subido de ${queTexto} <b>se ha eliminado</b>: hay que subirlo de nuevo
+    completo, no solo los documentos corregidos.</p>
+    ${conservado}
     ${boton}
     <p style="color:#888;font-size:12px">
       Entrega nº ${ronda} de ${mes}. Enviado automáticamente desde el sistema de ${empresaNombre}.
     </p>`;
   const text =
-    `Nóminas de ${mes} de ${empresaNombre} devueltas para corregir.\n\n` +
+    `${queCorto} de ${mes} de ${empresaNombre}: devuelto para corregir.\n\n` +
     `Anomalías detectadas:\n${motivo}\n\n` +
-    `Todo lo subido se ha eliminado: hay que volver a subir la entrega completa.\n` +
+    `Lo subido de ${queTexto} se ha eliminado: hay que subirlo de nuevo completo.\n` +
     (enlace ? `Subidlas aquí: ${enlace}` : "Contactad con la empresa para el enlace.");
 
   const res = await sendEmail({
@@ -258,6 +273,16 @@ export async function rechazarMesNominasGestoria(
   periodo: string,
   motivo: string,
   userId: string | null,
+  /**
+   * QUÉ se devuelve. Los dos documentos se revisan por separado: es normal que
+   * los seguros sociales estén bien y las nóminas no (o al revés), y devolver
+   * lo que ya estaba correcto obligaría a la gestoría a resubirlo sin motivo.
+   * Por defecto, ambos (comportamiento anterior).
+   */
+  que: { nominas: boolean; segurosSociales: boolean } = {
+    nominas: true,
+    segurosSociales: true,
+  },
 ): Promise<ResultadoRechazo> {
   const { data: mesPrev } = await admin
     .from("rrhh_nominas_mes")
@@ -285,13 +310,20 @@ export async function rechazarMesNominasGestoria(
   );
   if (eMes) throw eMes;
 
-  // 2 y 3. Vaciar el mes.
-  const { borradas, empleados } = await borrarNominasDelMes(admin, empresaId, periodo);
-  await limpiarImportesDeNomina(admin, empresaId, periodo, empleados);
-  const tc1Borrado = await borrarTc1DelMes(admin, empresaId, periodo);
+  // 2 y 3. Vaciar SOLO lo que se devuelve. Lo que RRHH da por bueno se queda
+  //        donde está: la gestoría no tiene que volver a subirlo.
+  let borradas = 0;
+  if (que.nominas) {
+    const r = await borrarNominasDelMes(admin, empresaId, periodo);
+    borradas = r.borradas;
+    await limpiarImportesDeNomina(admin, empresaId, periodo, r.empleados);
+  }
+  const tc1Borrado = que.segurosSociales
+    ? await borrarTc1DelMes(admin, empresaId, periodo)
+    : false;
 
   // 4. Avisar a la gestoría con las anomalías y el enlace nuevo.
-  const correo = await avisarGestoriaRechazo(admin, empresaId, periodo, motivo, rondaNueva);
+  const correo = await avisarGestoriaRechazo(admin, empresaId, periodo, motivo, rondaNueva, que);
 
   // 5. Histórico + aviso interno.
   await admin.from("rrhh_nominas_rechazos").insert({

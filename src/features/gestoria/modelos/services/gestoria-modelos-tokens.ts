@@ -63,6 +63,13 @@ export async function crearTokenModelosGestoria(
     grupo: GrupoModelo;
     periodo: ModeloPeriodo;
     plazoDias?: number;
+    /**
+     * Cierra el enlace vivo del periodo antes de crear el nuevo. Lo usa el
+     * REENVÍO manual: pedirlo otra vez significa que el anterior ya no sirve.
+     * El cron NO lo pasa: si ya hay uno vivo es que acaba de crearlo la otra
+     * ejecución, y entonces no debe enviar nada.
+     */
+    reemplazarAbierto?: boolean;
   },
 ): Promise<{ ok: true; token: string; tokenId: string } | { ok: false; error: string }> {
   try {
@@ -70,6 +77,20 @@ export async function crearTokenModelosGestoria(
     const token = generarToken();
     const tokenHash = hashToken(token);
     const expira = new Date(Date.now() + plazoDias * 86_400_000).toISOString();
+
+    // Solo puede haber UN enlace vivo por periodo (índice único parcial). En un
+    // reenvío se cierra el anterior: el enlace viejo deja de abrir, que es justo
+    // lo que se espera al mandar uno nuevo.
+    if (params.reemplazarAbierto) {
+      await admin
+        .from("gestoria_modelos_tokens")
+        .update({ completado_en: new Date().toISOString() })
+        .eq("empresa_id", params.empresaId)
+        .eq("ejercicio", params.ejercicio)
+        .eq("grupo", params.grupo)
+        .eq("periodo", params.periodo)
+        .is("completado_en", null);
+    }
 
     const { data, error } = await admin
       .from("gestoria_modelos_tokens")

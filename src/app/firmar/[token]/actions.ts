@@ -744,6 +744,38 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       }
     }
 
+    // Contrato de trabajo firmado: se archiva en la carpeta «Contratos» del
+    // trabajador. Es lo que la app lleva prometiendo en dos sitios (el aviso a
+    // RRHH del tick 4 y el panel de gestoría: «queda en su carpeta de
+    // documentos»), pero no ocurría: el contrato solo vivía en el bucket de
+    // firmas. Es el documento laboral más importante que firma, y era el único
+    // de los tres que no se archivaba. Best-effort, igual que sanciones y actas:
+    // si falla, la firma ya está hecha y él tiene su copia por email.
+    if ((doc.tipo as string) === "contrato") {
+      try {
+        const destPath = `${doc.empresa_id}/${doc.empleado_id}/contrato-${documentoId}.pdf`;
+        const copia = await admin.storage
+          .from("empleados-docs")
+          .upload(destPath, firmadoBytes, { upsert: true, contentType: "application/pdf" });
+        if (!copia.error) {
+          await admin.from("documentos_empleado").insert({
+            empresa_id: doc.empresa_id,
+            empleado_id: doc.empleado_id,
+            categoria: "contratos",
+            nombre: `${doc.titulo} (firmado).pdf`,
+            storage_path: destPath,
+            tipo_mime: "application/pdf",
+            tamano_bytes: firmadoBytes.length,
+            created_by: (emp?.user_id as string) ?? null,
+          });
+        } else {
+          console.error("[firmar/firmar] archivar contrato:", copia.error.message);
+        }
+      } catch (e) {
+        console.error("[firmar/firmar] archivar contrato en documentos del empleado:", e);
+      }
+    }
+
     // Documento firmado: el aviso in-app de "documento para firmar" queda leído.
     // Corre con service role porque la firma ocurre por enlace público, sin sesión
     // del empleado. Complementario: si falla, no debe tumbar la firma ya completada.

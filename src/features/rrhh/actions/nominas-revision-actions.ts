@@ -412,7 +412,16 @@ export async function confirmarMesNominas(periodo: string) {
  * reabre el enlace para que suba la entrega completa corregida. El motivo es
  * OBLIGATORIO — sin decir qué está mal, la gestoría no puede corregir nada.
  */
-export async function rechazarMesNominas(periodo: string, motivo: string) {
+export async function rechazarMesNominas(
+  periodo: string,
+  motivo: string,
+  /**
+   * Qué se devuelve. Los seguros sociales pueden estar bien y las nóminas no
+   * (o al revés): se devuelve solo lo que falla, para no obligar a la gestoría
+   * a resubir lo que ya estaba correcto. Por defecto, ambos.
+   */
+  que: { nominas: boolean; segurosSociales: boolean } = { nominas: true, segurosSociales: true },
+) {
   try {
     const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
@@ -444,18 +453,32 @@ export async function rechazarMesNominas(periodo: string, motivo: string) {
       };
     }
 
-    // Devolver un mes vacío no tiene sentido: no hay nada que corregir.
-    const { count } = await supabase
-      .from("rrhh_pagos_nominas")
-      .select("id", { count: "exact", head: true })
-      .eq("empresa_id", empresaId)
-      .eq("periodo", periodo);
-    if (!count) {
+    if (!que.nominas && !que.segurosSociales) {
+      return { ok: false as const, error: "Elige qué se devuelve a la gestoría." };
+    }
+
+    // Devolver algo que no existe no tiene sentido: no hay nada que corregir.
+    const [nominasCount, tc1Count] = await Promise.all([
+      supabase
+        .from("rrhh_pagos_nominas")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId)
+        .eq("periodo", periodo),
+      supabase
+        .from("rrhh_nominas_tc1")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId)
+        .eq("periodo", periodo),
+    ]);
+    if (que.nominas && !nominasCount.count) {
       return { ok: false as const, error: "No hay nóminas de este mes que devolver." };
+    }
+    if (que.segurosSociales && !tc1Count.count) {
+      return { ok: false as const, error: "No hay seguros sociales de este mes que devolver." };
     }
 
     const admin = createAdminClient();
-    const r = await rechazarMesNominasGestoria(admin, empresaId, periodo, texto, userId);
+    const r = await rechazarMesNominasGestoria(admin, empresaId, periodo, texto, userId, que);
 
     revalidatePath("/rrhh/pagos");
     revalidatePath("/mi-panel/documentos");

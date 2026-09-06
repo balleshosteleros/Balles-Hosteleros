@@ -195,6 +195,27 @@ export function NominasGestoriaConfigPanel() {
             </p>
           </div>
 
+          <div className="space-y-1.5 rounded-lg border bg-muted/20 p-3">
+            <Label className="text-sm">Adelantar la subida del mes en curso</Label>
+            <div className="flex items-center gap-2">
+              <NumberInput
+                min={1}
+                max={5}
+                decimales={false}
+                emptyValue={5}
+                value={cfg.diasAntelacion}
+                onValueChange={(v) => set("diasAntelacion", v)}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">días antes de acabar (1 a 5)</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Días antes de que termine el mes en que la gestoría ya puede subir ese mes, para
+              que vaya adelantando. Con 5, septiembre aparece a partir del día 26. No se puede
+              subir un mes que no ha llegado a su recta final.
+            </p>
+          </div>
+
           <div className="flex items-start justify-between gap-4 rounded-lg border bg-muted/20 p-3">
             <div className="space-y-0.5">
               <Label className="text-sm">Avisar a RRHH cuando la gestoría suba nóminas</Label>

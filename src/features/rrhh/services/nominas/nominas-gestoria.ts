@@ -370,10 +370,58 @@ export interface EstadoMesNominas {
   tieneNominas: boolean;
   /** RRHH lo devolvió para corregir: vuelve a estar libre. */
   rechazado: boolean;
+  /**
+   * Ya hay recibo de seguros sociales (TC1) que COTIZA este mes. Se lleva
+   * aparte de `tieneNominas` a propósito: los dos documentos se entregan por
+   * separado (la Seguridad Social liquida a mes vencido), así que cada uno
+   * cierra su propio desplegable y no el del otro.
+   */
+  tieneSegurosSociales: boolean;
 }
 
 /** Cuántos meses hacia atrás puede elegir la gestoría. */
 export const MESES_ELEGIBLES_NOMINAS = 18;
+
+/** Antelación por defecto y tope, en días, para abrir el mes en curso. */
+export const DIAS_ANTELACION_DEFAULT = 5;
+export const DIAS_ANTELACION_MAX = 5;
+
+/** Antelación configurada de la empresa, acotada a la ventana válida (1-5). */
+export function clampDiasAntelacion(n: unknown): number {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v)) return DIAS_ANTELACION_DEFAULT;
+  return Math.max(1, Math.min(DIAS_ANTELACION_MAX, v));
+}
+
+/**
+ * ¿Faltan `diasAntelacion` días o menos para que acabe el mes en curso? Solo
+ * entonces ese mes se ofrece a la gestoría.
+ *
+ * Se cuenta en la zona de la EMPRESA, no del servidor: si no, a fin de mes el
+ * desfase horario abriría o cerraría el mes un día antes de tiempo.
+ */
+async function mesEnCursoYaElegible(
+  admin: SupabaseClient,
+  empresaId: string,
+  mesActual: string,
+): Promise<boolean> {
+  const { data } = await admin
+    .from("empresas")
+    .select("nominas_gestoria_dias_antelacion")
+    .eq("id", empresaId)
+    .maybeSingle();
+  const dias = clampDiasAntelacion(data?.nominas_gestoria_dias_antelacion);
+
+  const tz = await getZonaHorariaEmpresa(admin, empresaId);
+  const hoyIso = hoyEnZona(tz); // 'AAAA-MM-DD' en la zona de la empresa
+  const [anio, mes, diaHoy] = hoyIso.split("-").map(Number);
+  // Día 0 del mes siguiente = último día de este mes. En UTC puro: son fechas
+  // de calendario, no instantes, y así ninguna zona las desplaza.
+  const ultimoDia = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+
+  // Con antelación 5 y un mes de 30 días: se abre a partir del día 26.
+  return diaHoy > ultimoDia - dias && `${anio}-${String(mes).padStart(2, "0")}` === mesActual;
+}
 
 /**
  * Los últimos meses ya terminados y en qué estado está cada uno. Alimenta el
@@ -385,15 +433,19 @@ export async function estadoMesesNominas(
   mesActual: string,
   n: number = MESES_ELEGIBLES_NOMINAS,
 ): Promise<EstadoMesNominas[]> {
-  // Se empieza en el mes ANTERIOR al actual: un mes sin terminar no tiene nóminas.
+  // Se empieza en el mes ANTERIOR al actual: un mes sin terminar no tiene
+  // nóminas... salvo en sus últimos días, cuando la gestoría ya las tiene
+  // hechas. `diasAntelacion` (Ajustes → Pagos, 1-5) abre el mes EN CURSO en su
+  // recta final para que pueda ir adelantando la entrega.
   const periodos: string[] = [];
+  if (await mesEnCursoYaElegible(admin, empresaId, mesActual)) periodos.push(mesActual);
   let p = mesAnterior(mesActual);
   for (let i = 0; i < n; i++) {
     periodos.push(p);
     p = mesAnterior(p);
   }
 
-  const [mesesRes, nominasRes] = await Promise.all([
+  const [mesesRes, nominasRes, tc1Res] = await Promise.all([
     admin
       .from("rrhh_nominas_mes")
       .select("periodo, confirmado_en, rechazado_en")
@@ -404,6 +456,13 @@ export async function estadoMesesNominas(
       .select("periodo")
       .eq("empresa_id", empresaId)
       .in("periodo", periodos),
+    // Los recibos se indexan por el mes que COTIZAN, que es el que elige la
+    // gestoría en su desplegable, no por el mes de la entrega.
+    admin
+      .from("rrhh_nominas_tc1")
+      .select("periodo_cotizacion")
+      .eq("empresa_id", empresaId)
+      .in("periodo_cotizacion", periodos),
   ]);
 
   const porMes = new Map<string, { confirmado: boolean; rechazado: boolean }>();
@@ -414,6 +473,9 @@ export async function estadoMesesNominas(
     });
   }
   const conNominas = new Set((nominasRes.data ?? []).map((r) => r.periodo as string));
+  const conTc1 = new Set(
+    (tc1Res.data ?? []).map((r) => r.periodo_cotizacion as string).filter(Boolean),
+  );
 
   // Tener nóminas NO cierra el mes: solo lo cierra RRHH al confirmarlo. Se
   // informa de que la entrega ya empezó, pero se sigue admitiendo el resto de
@@ -422,6 +484,7 @@ export async function estadoMesesNominas(
     periodo,
     cerrado: porMes.get(periodo)?.confirmado ?? false,
     tieneNominas: conNominas.has(periodo),
+    tieneSegurosSociales: conTc1.has(periodo),
     rechazado: porMes.get(periodo)?.rechazado ?? false,
   }));
 }
@@ -438,7 +501,12 @@ export async function validarPeriodoSubida(
 ): Promise<{ ok: false; error: string; status: number } | null> {
   if (!periodo) return { ok: false, error: "Elige el mes al que corresponden.", status: 400 };
   if (!esPeriodoValido(periodo)) return { ok: false, error: "Mes no válido.", status: 400 };
-  if (periodo >= mesActual) {
+  if (periodo > mesActual) {
+    return { ok: false, error: "Ese mes todavía no ha empezado.", status: 400 };
+  }
+  // El mes EN CURSO solo se admite en su recta final (Ajustes → Pagos). Antes
+  // de eso no puede haber nóminas que subir.
+  if (periodo === mesActual && !(await mesEnCursoYaElegible(admin, empresaId, mesActual))) {
     return { ok: false, error: "Ese mes todavía no ha terminado.", status: 400 };
   }
   // Un enlace que no caduca no debe poder escribir en cualquier mes de la

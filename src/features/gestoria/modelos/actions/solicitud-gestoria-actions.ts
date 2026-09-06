@@ -68,6 +68,8 @@ export async function reenviarSolicitudGestoria(
       ejercicio,
       grupo,
       periodo,
+      // Reenviar = el enlace anterior queda anulado y vale el nuevo.
+      reemplazarAbierto: true,
     });
     if (!tk.ok) return { ok: false, error: "No se pudo generar el enlace de subida." };
 
