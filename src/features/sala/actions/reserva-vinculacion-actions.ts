@@ -255,13 +255,30 @@ export async function resolverVinculacion(
     // descartó: si mañana alguien pregunta por qué la reserva salió a otro
     // nombre, la respuesta está en la actividad.
     if (resolucion === "CONSERVAR") {
+      // El correo vuelve al de la FICHA. Mientras la revisión estaba abierta, la
+      // reserva llevaba el correo que escribió el cliente: la confirmación
+      // tenía que llegarle a él, porque podía no ser el titular de la ficha.
+      //
+      // Al decidir que SÍ es el titular, ese correo queda descartado y todo lo
+      // que venga después —la valoración, sobre todo— va al de siempre. Antes
+      // aquí se reasignaba `r.cliente_email`, que es el valor que la fila YA
+      // tenía: no cambiaba nada y la reserva se quedaba con el correo
+      // descartado para el resto de su vida.
+      //
+      // Los correos ya enviados no se tocan: quedan en el histórico de la
+      // reserva con la dirección real a la que salieron.
+      const { data: fichaEmail } = await supabase
+        .from("clientes_sala")
+        .select("email")
+        .eq("id", clienteId ?? "")
+        .maybeSingle();
+
       const { error } = await supabase
         .from("reservas")
         .update({
           vinculacion_estado: "CONSERVADA",
           datos_declarados: null,
-          // El correo vuelve al de la ficha: se ha decidido que es esa persona.
-          cliente_email: r.cliente_email,
+          cliente_email: (fichaEmail?.email as string | null) ?? r.cliente_email,
         })
         .eq("id", reservaId)
         .eq("empresa_id", empresaId);

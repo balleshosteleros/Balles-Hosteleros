@@ -28,3 +28,34 @@ justo lo que hace peligroso el aviso que SÍ importa.
 - Solo la reserva PÚBLICA genera el aviso. Sala y RwG no lo marcan nunca.
 
 Ver [[reservas_vinculacion_revision_rgpd]] y [[reservas_dedup_cliente]].
+
+## A qué correo va cada cosa (cuando SÍ pregunta)
+
+Mientras el aviso está PENDIENTE, la reserva lleva el correo **que escribió el
+cliente**, no el de la ficha:
+
+- La **confirmación** le llega a él. Es quien ha reservado, y como puede no ser
+  el titular, mandarla al de la ficha avisaría a alguien que no ha reservado y
+  le revelaría datos de un tercero.
+- Ese correo lleva un aviso: «tu reserva figura a nombre de Nicole R.»
+  (apellido abreviado a la inicial, para no filtrar la identidad del titular).
+  Así el cliente puede decir «esta no soy yo».
+
+Al **resolver** el aviso:
+
+- **Conservar** → `reservas.cliente_email` vuelve al de la FICHA. Todo lo
+  posterior (valoración, recordatorios) va al de siempre. El correo escrito se
+  descarta.
+- **Actualizar** → el correo nuevo pasa a la ficha y manda a partir de ahí.
+- **Separar** → ficha propia con el correo nuevo.
+
+Los correos **ya enviados no se tocan**: `reserva_email_envios` guarda el
+`destinatario` real de cada uno, así que el histórico de la reserva sigue
+mostrando a qué dirección salió cada correo aunque luego se descartara.
+
+**Bug corregido 06-09-26:** en `CONSERVAR` el código hacía
+`cliente_email: r.cliente_email` — se reasignaba su propio valor, no cambiaba
+nada, y la reserva se quedaba con el correo descartado de por vida. La
+valoración se iba a una dirección que el restaurante había rechazado. Pasó de
+verdad con una reserva (`nicoleyodi@hotmail.com` en vez de
+`laricanicky@gmail.com`).
