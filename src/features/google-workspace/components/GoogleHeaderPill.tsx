@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useGoogleConnection, type CuentaGoogle } from "./useGoogleConnection";
+import { ToolTooltip } from "@/features/layout/components/ToolTooltip";
 
 const GOOGLE_RING_BG =
   "conic-gradient(from 0deg, #4285F4 0deg, #4285F4 90deg, #EA4335 90deg, #EA4335 180deg, #FBBC05 180deg, #FBBC05 270deg, #34A853 270deg, #34A853 360deg)";
@@ -86,14 +87,15 @@ export function GoogleHeaderPill() {
 
   if (!connected) {
     return (
-      <a
-        href={`/api/google/connect?next=${next}`}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full border bg-card shadow-sm transition-colors hover:bg-muted"
-        title="Conecta tu cuenta de Google para sincronizar correo, calendario y Meet"
-        aria-label="Conectar mi Google"
-      >
-        <GoogleLogo className="h-4 w-4 shrink-0" />
-      </a>
+      <ToolTooltip label="Conecta tu cuenta de Google para sincronizar correo, calendario y reuniones">
+        <a
+          href={`/api/google/connect?next=${next}`}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border bg-card shadow-sm transition-colors hover:bg-muted"
+          aria-label="Conectar mi Google"
+        >
+          <GoogleLogo className="h-4 w-4 shrink-0" />
+        </a>
+      </ToolTooltip>
     );
   }
 
@@ -139,10 +141,10 @@ export function GoogleHeaderPill() {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
+        <ToolTooltip label={`Cuenta Google activa: ${email ?? ""}`}>
         <button
           type="button"
           className="inline-flex h-8 w-8 items-center justify-center rounded-full border bg-card shadow-sm transition-colors hover:bg-muted"
-          title={`Cuenta Google activa: ${email ?? ""}`}
           aria-label={`Cuenta Google activa: ${email ?? ""}`}
         >
           {switching ? (
@@ -151,6 +153,7 @@ export function GoogleHeaderPill() {
             <Avatar cuenta={cuentaActiva} size="md" showRing={false} />
           )}
         </button>
+        </ToolTooltip>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72 p-0">
         <DropdownMenuLabel className="flex items-center gap-2 border-b bg-muted/40 px-3 py-3">

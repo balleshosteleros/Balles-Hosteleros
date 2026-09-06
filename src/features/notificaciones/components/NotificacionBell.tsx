@@ -33,6 +33,7 @@ import { getTipoMeta } from "@/features/notificaciones/lib/catalogo";
 import { getIconoTipo } from "@/features/notificaciones/lib/catalogo-iconos";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
+import { ToolTooltip } from "@/features/layout/components/ToolTooltip";
 
 function fmtFecha(iso: string, tz: string): string {
   return formatFechaEnZona(iso, tz, { day: "2-digit", month: "short", year: undefined });
@@ -138,11 +139,11 @@ export function NotificacionBell({
       <Sheet open={open} onOpenChange={(o) => { setOpen(o); if (o) cargar(); }}>
         <SheetTrigger asChild>
           {variant === "toolbar" ? (
+            <ToolTooltip label="Notificaciones">
             <button
               type="button"
               className={`relative inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors ${className ?? ""}`}
               aria-label="Notificaciones"
-              title="Notificaciones"
             >
               <Bell className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.notificaciones.colorKey)}`} />
               {sinVer > 0 && (
@@ -151,6 +152,7 @@ export function NotificacionBell({
                 </span>
               )}
             </button>
+            </ToolTooltip>
           ) : (
             <button
               type="button"

@@ -6,6 +6,7 @@ import { useRecorder } from "../contexts/recorder-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { cn } from "@/lib/utils";
 import { HERRAMIENTA, toolTextColor } from "@/features/layout/data/herramientas";
+import { ToolTooltip } from "@/features/layout/components/ToolTooltip";
 
 export function RecordingTrigger() {
   const { setDrawerOpen, state } = useRecordingStore();
@@ -23,12 +24,12 @@ export function RecordingTrigger() {
   const { Icon: GrabacionIcon, colorKey } = HERRAMIENTA.grabacion;
 
   return (
+    <ToolTooltip label={isRecording ? "Grabando — pulsa para detener" : "Grabar pantalla"}>
     <Button
       variant="ghost"
       size="icon"
       className={cn("relative h-8 w-8", isRecording && "bg-red-50 hover:bg-red-100")}
       onClick={() => setDrawerOpen(true)}
-      title={isRecording ? "Grabando — pulsa para detener" : "Grabar pantalla"}
     >
       {/* Único indicador de que se está grabando: un punto rojo parpadeando en
           la barra. No se pinta ningún recuadro sobre la página, que hacía creer
@@ -57,5 +58,6 @@ export function RecordingTrigger() {
         </span>
       ) : null}
     </Button>
+    </ToolTooltip>
   );
 }

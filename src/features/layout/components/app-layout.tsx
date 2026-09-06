@@ -46,6 +46,8 @@ import {
   AccesosDrawer,
 } from "@/features/layout/components/AccesosDrawers";
 import { ToolsAvisoPopups } from "@/features/layout/components/ToolsAvisoPopups";
+import { ToolTooltip } from "@/features/layout/components/ToolTooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { CamarasDrawer } from "@/features/camaras/components/CamarasDrawer";
 import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";
 import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
@@ -182,34 +184,9 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
   // sacarla, así que esconderla dejaría la barra irrecuperable.
   const { state: sidebarState, isMobile: sidebarIsMobile } = useSidebar();
   const { inmersivo, inmersivoOscuro } = useModoInmersivo();
-  // Hover sobre el reborde superior: la barra tambien se saca por arriba, sin
-  // tener que ir hasta el menu lateral.
-  const [hoverBarraSuperior, setHoverBarraSuperior] = useState(false);
-  const puedeReplegar = inmersivo && !sidebarIsMobile;
-  const headerReplegado =
-    puedeReplegar && sidebarState === "collapsed" && !hoverBarraSuperior;
-
-  /**
-   * Recoge la barra al salir el raton, PERO no mientras haya un panel suyo
-   * abierto (correo, calendario, avatar, cualquier desplegable). Esos paneles
-   * se pintan flotando fuera de la barra, asi que mover el raton hacia ellos
-   * dispara el `onMouseLeave` de la cabecera: sin esta comprobacion la barra
-   * se recogeria justo cuando el usuario va a usarla.
-   *
-   * Se buscan SOLO los paneles flotantes (los que Radix saca a un portal con
-   * su propio `role`), no cualquier `[data-state="open"]`: ese atributo lo
-   * llevan tambien el menu lateral y los acordeones del propio menu, asi que
-   * casi siempre habia alguno y la barra no se recogia nunca.
-   */
-  const recogerBarraSuperior = useCallback(() => {
-    if (typeof document !== "undefined") {
-      const panelAbierto = document.querySelector(
-        '[role="menu"][data-state="open"], [role="dialog"][data-state="open"], [role="listbox"][data-state="open"]',
-      );
-      if (panelAbierto) return;
-    }
-    setHoverBarraSuperior(false);
-  }, []);
+  // La cabecera NO se repliega: esta SIEMPRE fija, tambien en Reservas. Antes
+  // se escondia sola al colapsar el menu lateral y habia que ir a buscarla con
+  // el raton para que volviera a salir (Ivan, 06-sep).
 
   const { title: headerLabel, icon: ModuleIcon } = getRouteMeta(pathname);
 
@@ -278,47 +255,21 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
       >
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0 h-screen">
-          {/* REBORDE superior cuando la barra esta recogida: cierra la vista
-              por arriba (sin el, el plano quedaba pegado al borde de la
-              pantalla) y es la zona sensible que vuelve a sacar la barra al
-              acercar el raton — si no existiera, la unica forma de
-              recuperarla seria ir hasta el menu lateral.
-
-              Va del color del FONDO, no del menu lateral: en azul marino se
-              leia como una linea de color cruzando la pantalla justo encima de
-              la barra de herramientas, y no separa nada — es solo el hueco por
-              el que se recupera la barra. Sigue ahi y sigue siendo sensible al
-              raton; lo unico que cambia es que ya no se ve (Ivan, 06-sep). */}
-          {puedeReplegar && (
-            <div
-              onMouseEnter={() => setHoverBarraSuperior(true)}
-              aria-hidden
-              className={cn(
-                "shrink-0 bg-background transition-[height] duration-200 ease-out",
-                headerReplegado ? "h-2" : "h-0",
-              )}
-            />
-          )}
-          {/* La barra NO se desmonta al replegarse: se le quita el alto. Así
-              los contadores, el reproductor y los drawers abiertos siguen
-              vivos y volver a mostrarla no recarga nada. `invisible` evita que
-              el contenido replegado siga siendo enfocable con el tabulador.
-              Al salir el raton de la barra desplegada, vuelve a recogerse. */}
           <header
-            onMouseEnter={() => puedeReplegar && setHoverBarraSuperior(true)}
-            onMouseLeave={() => puedeReplegar && recogerBarraSuperior()}
             className={cn(
-              // Sin linea de separacion y del MISMO fondo que la pagina: la
-              // cabecera y la barra de herramientas de debajo se leen como una
-              // sola superficie. Antes la cabecera era blanco puro (`--card`)
-              // sobre el gris claro de la pagina y ademas llevaba `border-b`,
-              // asi que se veia un corte cruzando la pantalla justo encima de
-              // las herramientas (Ivan, 06-sep).
+              // MISMO fondo que la pagina (no `--card`): la cabecera y la barra
+              // de herramientas de debajo son la misma superficie. Cuando la
+              // cabecera era blanco puro sobre el gris de la pagina, ademas
+              // del borde, el corte se veia como una franja cruzando la
+              // pantalla (Ivan, 06-sep).
+              //
+              // La linea SI vuelve, pero fina y sola: separa la cabecera de las
+              // herramientas sin cambio de fondo detras. En NOCTURNO va BLANCA
+              // translucida, porque el `--border` del tema oscuro es el mismo
+              // azul marino del lienzo y ahi no se veia nada (Ivan, 06-sep).
               "sticky top-0 z-30 flex items-center bg-background px-3 md:px-4 shrink-0 gap-2 md:gap-3",
-              "transition-[height,opacity] duration-200 ease-out",
-              headerReplegado
-                ? "h-0 overflow-hidden opacity-0 invisible"
-                : "h-14 opacity-100",
+              "border-b [.software-oscuro_&]:border-b-white/25",
+              "h-14",
             )}
           >
             {/*
@@ -363,162 +314,178 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                   <MiniReproductor />
 
                   {/* Integraciones: Google (cuenta + email + calendario + meet) | tareas + chat + llamadas | apps */}
-                  <div className="hidden md:flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5">
-                    {/* Notificaciones — joya de la corona, la primera de la barra */}
-                    <NotificacionBell variant="toolbar" />
+                  {/* Un solo proveedor para todas las etiquetas de la barra: así el
+                      retardo de aparición es común y, al pasar de un icono al de al
+                      lado, la etiqueta salta al momento en vez de reaparecer. */}
+                  <TooltipProvider delayDuration={300}>
+                    <div className="hidden md:flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5">
+                      {/* Notificaciones — joya de la corona, la primera de la barra */}
+                      <NotificacionBell variant="toolbar" />
 
-                    {/* Separador visual */}
-                    <span className="w-px h-5 bg-border mx-0.5" />
+                      {/* Separador visual */}
+                      <span className="w-px h-5 bg-border mx-0.5" />
 
-                    {/* Cuenta Google activa (icono) */}
-                    <GoogleHeaderPill />
+                      {/* Cuenta Google activa (icono) */}
+                      <GoogleHeaderPill />
 
-                    {/* Email */}
-                    <GmailDrawer>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="relative h-8 w-8"
-                        title="Correo"
-                      >
-                        <ToolIcon.email className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.email.colorKey)}`} />
-                        <NavBadge count={ajustes.notificaciones.email.badgeActivo ? counts.emails : 0} color={HERRAMIENTA.email.colorKey} />
-                      </Button>
-                    </GmailDrawer>
+                      {/* Email */}
+                      <GmailDrawer>
+                        <ToolTooltip label="Correo">
+                          <Button
+                            variant="ghost" size="icon"
+                            className="relative h-8 w-8"
+                          >
+                            <ToolIcon.email className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.email.colorKey)}`} />
+                            <NavBadge count={ajustes.notificaciones.email.badgeActivo ? counts.emails : 0} color={HERRAMIENTA.email.colorKey} />
+                          </Button>
+                        </ToolTooltip>
+                      </GmailDrawer>
 
-                    {/* Calendario */}
-                    <CalendarDrawer>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="relative h-8 w-8"
-                        title="Calendario"
-                      >
-                        <ToolIcon.calendario className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.calendario.colorKey)}`} />
-                        <NavBadge count={ajustes.notificaciones.calendario.badgeActivo ? counts.events : 0} color={HERRAMIENTA.calendario.colorKey} />
-                      </Button>
-                    </CalendarDrawer>
+                      {/* Calendario */}
+                      <CalendarDrawer>
+                        <ToolTooltip label="Calendario">
+                          <Button
+                            variant="ghost" size="icon"
+                            className="relative h-8 w-8"
+                          >
+                            <ToolIcon.calendario className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.calendario.colorKey)}`} />
+                            <NavBadge count={ajustes.notificaciones.calendario.badgeActivo ? counts.events : 0} color={HERRAMIENTA.calendario.colorKey} />
+                          </Button>
+                        </ToolTooltip>
+                      </CalendarDrawer>
 
-                    {/* Archivos — espejo en vivo de Google Drive (PRP-084).
-                        Es el ÚNICO Archivos: el explorador propio (PRP-079) se
-                        retiró al quedarse sin uso. Icono de carpeta del
-                        catálogo, no el logo de Drive. */}
-                    <DriveDrawer>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="relative h-8 w-8"
-                        title="Archivos"
-                      >
-                        <ToolIcon.archivos className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.archivos.colorKey)}`} />
-                      </Button>
-                    </DriveDrawer>
+                      {/* Archivos — espejo en vivo de Google Drive (PRP-084).
+                          Es el ÚNICO Archivos: el explorador propio (PRP-079) se
+                          retiró al quedarse sin uso. Icono de carpeta del
+                          catálogo, no el logo de Drive. */}
+                      <DriveDrawer>
+                        <ToolTooltip label="Archivos">
+                          <Button
+                            variant="ghost" size="icon"
+                            className="relative h-8 w-8"
+                          >
+                            <ToolIcon.archivos className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.archivos.colorKey)}`} />
+                          </Button>
+                        </ToolTooltip>
+                      </DriveDrawer>
 
-                    {/* Google Meet */}
-                    <MeetDrawer>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="relative h-8 w-8"
-                        title="Reuniones Meet"
-                      >
-                        <ToolIcon.reuniones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.reuniones.colorKey)}`} />
-                        <NavBadge count={ajustes.notificaciones.reuniones.badgeActivo ? counts.meetings : 0} color={HERRAMIENTA.reuniones.colorKey} />
-                      </Button>
-                    </MeetDrawer>
+                      {/* Google Meet */}
+                      <MeetDrawer>
+                        <ToolTooltip label="Reuniones">
+                          <Button
+                            variant="ghost" size="icon"
+                            className="relative h-8 w-8"
+                          >
+                            <ToolIcon.reuniones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.reuniones.colorKey)}`} />
+                            <NavBadge count={ajustes.notificaciones.reuniones.badgeActivo ? counts.meetings : 0} color={HERRAMIENTA.reuniones.colorKey} />
+                          </Button>
+                        </ToolTooltip>
+                      </MeetDrawer>
 
-                    {/* Grabación de pantalla */}
-                    <RecordingTrigger />
+                      {/* Grabación de pantalla */}
+                      <RecordingTrigger />
 
-                    {/* Separador visual */}
-                    <span className="w-px h-5 bg-border mx-0.5" />
+                      {/* Separador visual */}
+                      <span className="w-px h-5 bg-border mx-0.5" />
 
-                    {/* Tareas */}
-                    <TareasDrawer>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="relative h-8 w-8"
-                        title="Mis tareas"
-                      >
-                        <ToolIcon.tareas className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.tareas.colorKey)}`} />
-                        <NavBadge count={ajustes.notificaciones.tareas.badgeActivo ? counts.tasks : 0} color={HERRAMIENTA.tareas.colorKey} />
-                      </Button>
-                    </TareasDrawer>
+                      {/* Tareas */}
+                      <TareasDrawer>
+                        <ToolTooltip label="Mis tareas">
+                          <Button
+                            variant="ghost" size="icon"
+                            className="relative h-8 w-8"
+                          >
+                            <ToolIcon.tareas className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.tareas.colorKey)}`} />
+                            <NavBadge count={ajustes.notificaciones.tareas.badgeActivo ? counts.tasks : 0} color={HERRAMIENTA.tareas.colorKey} />
+                          </Button>
+                        </ToolTooltip>
+                      </TareasDrawer>
 
-                    {/* Chat / Comunicación */}
-                    <ChatDrawer>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="relative h-8 w-8"
-                        title="Comunicación interna"
-                      >
-                        <ToolIcon.chat className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.chat.colorKey)}`} />
-                        <NavBadge count={ajustes.notificaciones.chat.badgeActivo ? counts.chatGroups : 0} color={HERRAMIENTA.chat.colorKey} />
-                      </Button>
-                    </ChatDrawer>
+                      {/* Chat / Comunicación */}
+                      <ChatDrawer>
+                        <ToolTooltip label="Comunicación interna">
+                          <Button
+                            variant="ghost" size="icon"
+                            className="relative h-8 w-8"
+                          >
+                            <ToolIcon.chat className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.chat.colorKey)}`} />
+                            <NavBadge count={ajustes.notificaciones.chat.badgeActivo ? counts.chatGroups : 0} color={HERRAMIENTA.chat.colorKey} />
+                          </Button>
+                        </ToolTooltip>
+                      </ChatDrawer>
 
-                    {/* Teléfono VoIP */}
-                    <TelefonoDrawer>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="relative h-8 w-8"
-                        title="Teléfono"
-                      >
-                        <ToolIcon.telefono className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.telefono.colorKey)}`} />
-                        <NavBadge count={ajustes.notificaciones.telefono.badgeActivo ? counts.missedCalls : 0} color={HERRAMIENTA.telefono.colorKey} />
-                      </Button>
-                    </TelefonoDrawer>
+                      {/* Teléfono VoIP */}
+                      <TelefonoDrawer>
+                        <ToolTooltip label="Teléfono">
+                          <Button
+                            variant="ghost" size="icon"
+                            className="relative h-8 w-8"
+                          >
+                            <ToolIcon.telefono className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.telefono.colorKey)}`} />
+                            <NavBadge count={ajustes.notificaciones.telefono.badgeActivo ? counts.missedCalls : 0} color={HERRAMIENTA.telefono.colorKey} />
+                          </Button>
+                        </ToolTooltip>
+                      </TelefonoDrawer>
 
-                    {/* Agenda de contactos */}
-                    <AgendaDrawer>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="relative h-8 w-8"
-                        title="Agenda de contactos"
-                      >
-                        <ToolIcon.agenda className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.agenda.colorKey)}`} />
-                        <NavBadge count={ajustes.notificaciones.agenda.badgeActivo ? counts.newContacts : 0} color={HERRAMIENTA.agenda.colorKey} />
-                      </Button>
-                    </AgendaDrawer>
+                      {/* Agenda de contactos */}
+                      <AgendaDrawer>
+                        <ToolTooltip label="Agenda">
+                          <Button
+                            variant="ghost" size="icon"
+                            className="relative h-8 w-8"
+                          >
+                            <ToolIcon.agenda className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.agenda.colorKey)}`} />
+                            <NavBadge count={ajustes.notificaciones.agenda.badgeActivo ? counts.newContacts : 0} color={HERRAMIENTA.agenda.colorKey} />
+                          </Button>
+                        </ToolTooltip>
+                      </AgendaDrawer>
 
-                    {/* Videovigilancia — solo si el rol tiene CÁMARAS activado. */}
-                    {puedeVer("CÁMARAS") && (
-                      <CamarasDrawer>
-                        <Button
-                          variant="ghost" size="icon"
-                          className="relative h-8 w-8"
-                          title="Videovigilancia"
-                        >
-                          <ToolIcon.videovigilancia className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.videovigilancia.colorKey)}`} />
-                        </Button>
-                      </CamarasDrawer>
-                    )}
-                    {/* Separador visual */}
-                    <span className="w-px h-5 bg-border mx-0.5" />
+                      {/* Videovigilancia — solo si el rol tiene CÁMARAS activado. */}
+                      {puedeVer("CÁMARAS") && (
+                        <CamarasDrawer>
+                          <ToolTooltip label="Videovigilancia">
+                            <Button
+                              variant="ghost" size="icon"
+                              className="relative h-8 w-8"
+                            >
+                              <ToolIcon.videovigilancia className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.videovigilancia.colorKey)}`} />
+                            </Button>
+                          </ToolTooltip>
+                        </CamarasDrawer>
+                      )}
+                      {/* Separador visual */}
+                      <span className="w-px h-5 bg-border mx-0.5" />
 
-                    {/* Apps externas — dos permisos independientes:
-                         · Aplicaciones (cohete): enlaces + usuario, sin secretos → HERR_APLICACIONES.
-                         · Accesos y contraseñas (candado): bóveda segura con
-                           revelado bajo verificación de identidad → HERR_ACCESOS. */}
-                    {puedeVer("HERR_APLICACIONES") && (
-                      <AplicacionesDrawer empresaSlug={empresaActual.id}>
-                        <Button
-                          variant="ghost" size="icon"
-                          className="relative h-8 w-8"
-                          title="Aplicaciones"
-                        >
-                          <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
-                        </Button>
-                      </AplicacionesDrawer>
-                    )}
-                    {puedeVer("HERR_ACCESOS") && (
-                      <AccesosDrawer empresaSlug={empresaActual.id}>
-                        <Button
-                          variant="ghost" size="icon"
-                          className="relative h-8 w-8"
-                          title="Accesos y contraseñas"
-                        >
-                          <ToolIcon.accesos className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.accesos.colorKey)}`} />
-                        </Button>
-                      </AccesosDrawer>
-                    )}
-                  </div>
+                      {/* Apps externas — dos permisos independientes:
+                           · Aplicaciones (cohete): enlaces + usuario, sin secretos → HERR_APLICACIONES.
+                           · Accesos y contraseñas (candado): bóveda segura con
+                             revelado bajo verificación de identidad → HERR_ACCESOS. */}
+                      {puedeVer("HERR_APLICACIONES") && (
+                        <AplicacionesDrawer empresaSlug={empresaActual.id}>
+                          <ToolTooltip label="Aplicaciones">
+                            <Button
+                              variant="ghost" size="icon"
+                              className="relative h-8 w-8"
+                            >
+                              <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
+                            </Button>
+                          </ToolTooltip>
+                        </AplicacionesDrawer>
+                      )}
+                      {puedeVer("HERR_ACCESOS") && (
+                        <AccesosDrawer empresaSlug={empresaActual.id}>
+                          <ToolTooltip label="Accesos y contraseñas">
+                            <Button
+                              variant="ghost" size="icon"
+                              className="relative h-8 w-8"
+                            >
+                              <ToolIcon.accesos className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.accesos.colorKey)}`} />
+                            </Button>
+                          </ToolTooltip>
+                        </AccesosDrawer>
+                      )}
+                    </div>
+                  </TooltipProvider>
 
                   {/* Bloque final: empresa + nombre + ajustes + avatar — todo en un pill */}
                   <div className="flex items-center gap-0.5 rounded-full border bg-muted/40 py-1 px-1.5">
@@ -552,7 +519,6 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                         <button
                           type="button"
                           className="flex items-center justify-center rounded-full p-0.5 hover:bg-accent transition-colors focus:outline-none"
-                          title="Mi panel"
                           aria-label="Mi panel"
                           onMouseEnter={() => setUserMenuOpen(true)}
                         >
