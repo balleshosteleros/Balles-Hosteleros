@@ -278,6 +278,11 @@ export interface Tc1Mes {
   periodoCotizacion: string | null;
   /** Periodo que declara el propio documento (lectura IA): sirve para contrastar. */
   periodoDocumento: string | null;
+  /** Visto bueno de RRHH a este recibo. `null` = pendiente de aprobar. */
+  aprobadoEn: string | null;
+  /** Devuelto a la gestoría, con lo que se les dijo. Excluyente con `aprobadoEn`. */
+  rechazadoEn: string | null;
+  rechazoMotivo: string | null;
 }
 
 export interface EstadoMesNominas {
@@ -320,7 +325,9 @@ export async function getEstadoMesNominas(periodo: string): Promise<EstadoMesNom
     // Los TC1 del mes: puede haber varios (ordinaria + complementarias).
     const { data: tc1Filas } = await supabase
       .from("rrhh_nominas_tc1")
-      .select("id, nombre, importe, trabajadores, periodo_cotizacion, periodo_documento")
+      .select(
+        "id, nombre, importe, trabajadores, periodo_cotizacion, periodo_documento, aprobado_en, rechazado_en, rechazo_motivo",
+      )
       .eq("empresa_id", empresaId)
       .eq("periodo", periodo)
       .order("subido_en", { ascending: true });
@@ -340,6 +347,9 @@ export async function getEstadoMesNominas(periodo: string): Promise<EstadoMesNom
         trabajadores: t.trabajadores != null ? Number(t.trabajadores) : null,
         periodoCotizacion: (t.periodo_cotizacion as string | null) ?? null,
         periodoDocumento: (t.periodo_documento as string | null) ?? null,
+        aprobadoEn: (t.aprobado_en as string | null) ?? null,
+        rechazadoEn: (t.rechazado_en as string | null) ?? null,
+        rechazoMotivo: (t.rechazo_motivo as string | null) ?? null,
       })),
       rechazado: rechazadoEn !== null,
       rechazadoEn,
@@ -738,6 +748,26 @@ export async function subirTc1Mes(input: {
     );
     if (error) throw error;
 
+    // Deja rastro en el histórico del mes, igual que las nóminas: hasta ahora el
+    // recibo se subía sin registrar nada y la auditoría del mes salía coja.
+    // Best-effort: el recibo ya está guardado, y perder la línea del histórico no
+    // justifica tumbar la subida.
+    try {
+      await admin.from("nominas_gestoria_subidas").insert({
+        empresa_id: empresaId,
+        periodo: input.periodo,
+        documento: "seguros_sociales",
+        periodo_cotizacion: mesCotizado,
+        importe: datos.liquidoTotal,
+        origen: "manual",
+        archivo_nombre: input.nombre,
+        archivo_bytes: bytes.length,
+        creado_por: userId,
+      });
+    } catch (e) {
+      console.error("[rrhh] subirTc1Mes: histórico:", e);
+    }
+
     revalidatePath("/rrhh/pagos");
     return {
       ok: true as const,
@@ -861,6 +891,13 @@ export interface CuadreMesCotizadoUI {
   /** Hay datos suficientes para afirmar si cuadra o no. */
   comprobable: boolean;
   cuadra: boolean;
+  /**
+   * Visto bueno de los recibos de ESE mes cotizado. Se aprueban todos juntos —son
+   * el mismo dinero en varios papeles—, así que basta con que uno lo esté.
+   */
+  aprobadoEn: string | null;
+  rechazadoEn: string | null;
+  rechazoMotivo: string | null;
 }
 
 export interface EstadoSubidaMes {
@@ -901,7 +938,9 @@ export async function getEstadoSubidaMeses(periodos: string[]): Promise<EstadoSu
 
     const { data: tc1Filas } = await supabase
       .from("rrhh_nominas_tc1")
-      .select("id, periodo, nombre, importe, trabajadores, periodo_cotizacion, periodo_documento")
+      .select(
+        "id, periodo, nombre, importe, trabajadores, periodo_cotizacion, periodo_documento, aprobado_en, rechazado_en, rechazo_motivo",
+      )
       .eq("empresa_id", empresaId)
       .in("periodo", periodos)
       .order("subido_en", { ascending: true });
@@ -916,6 +955,9 @@ export async function getEstadoSubidaMeses(periodos: string[]): Promise<EstadoSu
         trabajadores: t.trabajadores != null ? Number(t.trabajadores) : null,
         periodoCotizacion: (t.periodo_cotizacion as string | null) ?? null,
         periodoDocumento: (t.periodo_documento as string | null) ?? null,
+        aprobadoEn: (t.aprobado_en as string | null) ?? null,
+        rechazadoEn: (t.rechazado_en as string | null) ?? null,
+        rechazoMotivo: (t.rechazo_motivo as string | null) ?? null,
       });
       tc1PorMes.set(p, lista);
     }
@@ -984,6 +1026,9 @@ export async function getEstadoSubidaMeses(periodos: string[]): Promise<EstadoSu
             sinNominas,
             comprobable,
             cuadra: !comprobable || Math.abs((totalTc1 ?? 0) - ssMes) < 0.005,
+            aprobadoEn: lista.find((t) => t.aprobadoEn)?.aprobadoEn ?? null,
+            rechazadoEn: lista.find((t) => t.rechazadoEn)?.rechazadoEn ?? null,
+            rechazoMotivo: lista.find((t) => t.rechazoMotivo)?.rechazoMotivo ?? null,
           };
         });
 

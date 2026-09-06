@@ -34,6 +34,12 @@ interface Props {
   nominasEnMes: number;
   enviando: boolean;
   onConfirmar: (motivo: string, que: { nominas: boolean; segurosSociales: boolean }) => void;
+  /**
+   * Documento desde el que se abrió. Se marca solo ese: al pulsar "Rechazar" en
+   * los seguros sociales no se está pidiendo devolver también las nóminas. Se
+   * puede cambiar aquí dentro, que para eso están las casillas.
+   */
+  inicial?: "nominas" | "seguros" | "ambos";
 }
 
 /** Ejemplos para que RRHH no se quede en blanco ante el cuadro vacío. */
@@ -49,13 +55,17 @@ export function RechazarNominasDialog({
   nominasEnMes,
   enviando,
   onConfirmar,
+  inicial = "ambos",
 }: Props) {
   const [motivo, setMotivo] = useState("");
   // QUÉ se devuelve. Se revisan por separado: es normal que los seguros
   // sociales estén bien y las nóminas no, y devolver lo correcto obligaría a la
   // gestoría a resubir lo que ya estaba bien.
-  const [devolverNominas, setDevolverNominas] = useState(true);
-  const [devolverSs, setDevolverSs] = useState(true);
+  // Arranca marcado el documento desde el que se abrió. Quien lo usa lo remonta
+  // con `key` al cambiar de bloque, así que no hay que resincronizar nada aquí:
+  // el estado inicial se vuelve a calcular solo.
+  const [devolverNominas, setDevolverNominas] = useState(inicial !== "seguros");
+  const [devolverSs, setDevolverSs] = useState(inicial !== "nominas");
 
   const limpio = motivo.trim();
   const faltan = MOTIVO_MIN_CARACTERES - limpio.length;
