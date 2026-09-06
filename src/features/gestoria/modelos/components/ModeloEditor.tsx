@@ -108,7 +108,7 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
           <Link href="/gestoria/modelos">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="h-4 w-4 mr-1" />
-              Modelos
+              Fiscal
             </Button>
           </Link>
           <div>

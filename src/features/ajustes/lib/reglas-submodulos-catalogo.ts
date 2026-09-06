@@ -416,8 +416,8 @@ export const CATALOGO: ModuloDef[] = [
     key: "gestoria",
     label: "GESTORÍA",
     submodulos: [
-      placeholder("modelos", "Modelos"),
-      placeholder("presentaciones", "Presentaciones"),
+      placeholder("modelos", "Fiscal"),
+      placeholder("contrataciones", "Laboral"),
     ],
   },
 

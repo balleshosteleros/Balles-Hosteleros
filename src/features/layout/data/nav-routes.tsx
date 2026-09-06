@@ -194,8 +194,8 @@ export const contabilidadSubs: SubItem[] = [
 ];
 
 export const gestoriaSubs: SubItem[] = [
-  { title: "MODELOS", url: "/gestoria/modelos", icon: FileSearch },
-  { title: "CONTRATACIONES", url: "/gestoria/contrataciones", icon: UserPlus },
+  { title: "FISCAL", url: "/gestoria/modelos", icon: FileSearch },
+  { title: "LABORAL", url: "/gestoria/contrataciones", icon: UserPlus },
 ];
 
 export const juridicoSubs: SubItem[] = [
