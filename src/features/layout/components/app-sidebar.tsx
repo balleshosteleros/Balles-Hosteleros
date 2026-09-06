@@ -138,8 +138,6 @@ function CollapsibleSection({
   );
 }
 
-const SIDEBAR_PINNED_STORAGE_KEY = "sidebar:pinned";
-
 // Anchos variados para las filas del esqueleto del menú (mientras cargan permisos).
 const SIDEBAR_SKELETON_WIDTHS = ["w-28", "w-36", "w-24", "w-32", "w-24", "w-36", "w-28"];
 
@@ -223,28 +221,15 @@ export function AppSidebar() {
     if (activeKey) setOpenKey(activeKey);
   }, [activeKey]);
 
-  // En las páginas hub (Mis Paneles / Mis Departamentos) el sidebar queda fijo
-  // expandido — no se auto-colapsa ni se cierra al salir el cursor. Al pulsar
-  // un módulo o submódulo se navega fuera de la hub y el auto-collapse arranca.
-  const isHubRoute = pathname === "/mi-panel" || pathname === "/mis-departamentos";
-
-  // Modo "fijado": el usuario pulsa el botón del header y el sidebar queda
-  // siempre abierto, sin auto-collapse ni hover-leave-close. Persiste entre
-  // sesiones. Por defecto está desactivado (modo automático).
+  // Modo "fijado": el usuario pulsa la chincheta del header y el sidebar queda
+  // siempre abierto, sin auto-collapse ni cierre al salir el cursor. NO se
+  // guarda: al volver a entrar en el software siempre arranca en automático.
   const [isPinned, setIsPinned] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (localStorage.getItem(SIDEBAR_PINNED_STORAGE_KEY) === "true") {
-      setIsPinned(true);
-      setOpen(true);
-    }
-  }, [setOpen]);
 
-  const isLocked = isPinned || isHubRoute;
-
-  // Auto-collapse: tras pulsar un módulo/submódulo se encoge a los 3s.
-  // Hover-to-expand: al pasar el ratón sobre la barra colapsada se expande al
-  // instante; al salir el cursor (sin haber pulsado nada) se cierra al instante.
+  // Auto-collapse: tras pulsar un módulo/submódulo se encoge a los 3s (el
+  // cursor puede quedarse encima al navegar). Hover-to-expand: al pasar el
+  // ratón sobre la barra colapsada se expande al instante; al salir el cursor
+  // se cierra al instante, sin excepciones.
   const autoCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // True solo cuando la expansión actual la abrió el hover (no un toggle manual
   // ni un click). Si es true, mouseleave cierra inmediatamente.
@@ -277,36 +262,20 @@ export function AppSidebar() {
     if (isMobile || isPinned) return;
     clearAutoCollapseTimer();
     if (collapsed) {
-      // En hub el sidebar queda fijo abierto tras el hover, así que no
-      // marcamos la expansión como "por hover" (para no cerrarla al salir).
-      openedByHoverRef.current = !isLocked;
+      openedByHoverRef.current = true;
       setOpen(true);
     }
-  }, [isMobile, isPinned, isLocked, collapsed, clearAutoCollapseTimer, setOpen]);
+  }, [isMobile, isPinned, collapsed, clearAutoCollapseTimer, setOpen]);
 
+  // Regla única: si no está fijado, en cuanto el cursor sale del sidebar se
+  // cierra al instante, esté como esté (hub, recién abierto, tras un click).
   const handleSidebarMouseLeave = useCallback(() => {
     if (isMobile || isPinned) return;
-    if (isLocked) {
-      // En la hub el sidebar queda fijo abierto hasta que se pulse algo.
-      clearAutoCollapseTimer();
-      openedByHoverRef.current = false;
-      pendingPostClickRef.current = false;
-      return;
-    }
-    if (openedByHoverRef.current) {
-      // Expandido solo por hover sin click → cerrar al instante.
-      clearAutoCollapseTimer();
-      openedByHoverRef.current = false;
-      setOpen(false);
-      return;
-    }
-    // Regla universal: si el sidebar está abierto y el cursor sale, cerrar a 3s.
-    // Cubre carga inicial (defaultOpen=true) y cualquier estado en el que
-    // ni openedByHover ni pendingPostClick estén activos.
-    if (!collapsed && !autoCollapseTimerRef.current) {
-      scheduleAutoCollapse();
-    }
-  }, [isMobile, isPinned, isLocked, collapsed, clearAutoCollapseTimer, scheduleAutoCollapse, setOpen]);
+    clearAutoCollapseTimer();
+    openedByHoverRef.current = false;
+    pendingPostClickRef.current = false;
+    setOpen(false);
+  }, [isMobile, isPinned, clearAutoCollapseTimer, setOpen]);
 
   const handleContentClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -325,9 +294,6 @@ export function AppSidebar() {
   const togglePin = useCallback(() => {
     setIsPinned((prev) => {
       const next = !prev;
-      if (typeof window !== "undefined") {
-        localStorage.setItem(SIDEBAR_PINNED_STORAGE_KEY, String(next));
-      }
       if (next) {
         clearAutoCollapseTimer();
         openedByHoverRef.current = false;
