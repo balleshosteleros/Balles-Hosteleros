@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
-import { puedeEditarModulo } from "@/features/auth/lib/permisos";
+import { puedeVerModulo } from "@/features/auth/lib/permisos";
 import { presignPutR2 } from "@/shared/lib/r2";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -61,11 +61,11 @@ export async function POST(req: Request) {
       );
     }
 
-    // Subir canciones es GESTIÓN: requiere el permiso MÚSICA de Ajustes → Roles.
-    const { esDirector, permisos } = await getRolContext(user.id);
-    if (!puedeEditarModulo(permisos, "MÚSICA")) {
+    // La música va dentro de SALA: quien ve SALA puede subir canciones.
+    const { permisos } = await getRolContext(user.id);
+    if (!puedeVerModulo(permisos, "SALA")) {
       return NextResponse.json(
-        { error: "Tu rol no puede añadir canciones" },
+        { error: "Sin acceso a Sala" },
         { status: 403 },
       );
     }

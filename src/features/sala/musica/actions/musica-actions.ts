@@ -3,11 +3,9 @@
 /**
  * Server actions de Sala → Música.
  *
- * Reparto de permisos:
- *  · VER y dar al Play → cualquiera que vea SALA. Es lo que hace el equipo del
- *    local durante el servicio y no debe requerir nada más.
- *  · GESTIONAR (crear listas, subir canciones, fijar horarios) → solo roles con
- *    el permiso MÚSICA marcado en Ajustes → Roles.
+ * Permisos: la música NO tiene permiso propio en Ajustes → Roles. Va dentro de
+ * SALA: quien ve SALA la usa entera (dar al Play, crear listas, subir canciones
+ * y fijar horarios). Es lo que hace el equipo del local durante el servicio.
  *
  * La disponibilidad horaria se calcula SIEMPRE en servidor con la zona horaria
  * de la empresa: si se calculara en el navegador, un portátil con la hora mal
@@ -19,7 +17,7 @@ import { z } from "zod";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
-import { puedeVerModulo, puedeEditarModulo } from "@/features/auth/lib/permisos";
+import { puedeVerModulo } from "@/features/auth/lib/permisos";
 import { calcularDisponibilidad } from "@/features/sala/musica/lib/disponibilidad";
 import { deleteObjectR2, presignGetR2 } from "@/shared/lib/r2";
 import type {
@@ -49,20 +47,12 @@ async function guardVer() {
   return { ok: true as const, supabase, empresaId, userId, esDirector, permisos };
 }
 
-/** ¿Puede GESTIONAR la música? Requiere el permiso MÚSICA (o ser dirección). */
+/*
+  La música NO tiene permiso propio: va dentro de SALA. Quien ve SALA la
+  gestiona entera (crear listas, subir canciones, fijar horarios y dar al Play).
+*/
 async function guardGestion() {
-  const base = await guardVer();
-  if (!base.ok) return base;
-  if (!puedeEditarModulo(base.permisos, "MÚSICA")) {
-    return {
-      ok: false as const,
-      error: "Tu rol no puede gestionar la música. Pídelo en Ajustes → Roles.",
-      supabase: base.supabase,
-      empresaId: null,
-      userId: base.userId,
-    };
-  }
-  return base;
+  return guardVer();
 }
 
 // ─── Lectura: listas con canciones, horarios y disponibilidad ───────────────
@@ -84,10 +74,10 @@ export async function listMusica(): Promise<{
   try {
     const ctx = await guardVer();
     if (!ctx.ok) return { ok: false, ...vacio, error: ctx.error };
-    const { supabase, empresaId, esDirector, permisos } = ctx;
+    const { supabase, empresaId } = ctx;
 
     const tz = await getZonaHorariaEmpresa(supabase, empresaId);
-    const puedeGestionar = puedeEditarModulo(permisos, "MÚSICA");
+    const puedeGestionar = true;
 
     const [listasRes, cancionesRes, vinculosRes, horariosRes, usoRes] = await Promise.all([
       supabase.from("musica_listas").select("*").eq("empresa_id", empresaId)

@@ -6,8 +6,8 @@
  * Flujo pensado para el servicio: arriba lo que suena, debajo las listas que la
  * empresa dejó preparadas. El equipo del local entra, ve las listas disponibles
  * a esta hora y pulsa Play. Todo lo demás (crear listas, subir canciones,
- * horarios) queda detrás del engranaje de Configuración y solo lo ve quien tiene
- * el permiso MÚSICA.
+ * horarios) queda detrás del engranaje de Configuración. No hay permiso aparte:
+ * quien ve SALA gestiona la música.
  */
 
 import { useState, useMemo, useRef } from "react";

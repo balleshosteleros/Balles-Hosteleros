@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronDown, ChevronRight, Settings, Users, Cctv, Rocket, KeyRound, Music } from "lucide-react";
+import { ChevronDown, ChevronRight, Settings, Users, Cctv, Rocket, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { saveRolesToSupabase, loadRolesFromSupabase } from "@/features/ajustes/actions/roles-actions";
 import { getEmployees } from "@/actions/admin";
@@ -43,16 +43,11 @@ const MODULO_CAMARAS = "CÁMARAS";
 //  · ACCESOS (candado)     → bóveda de accesos y contraseñas.
 const MODULO_APLICACIONES = "HERR_APLICACIONES";
 const MODULO_ACCESOS = "HERR_ACCESOS";
-// Submódulo SALA → MÚSICA. Quien lo tiene marcado puede crear listas, subir
-// canciones y fijar horarios. Dar al Play NO necesita este permiso: lo puede
-// hacer cualquiera que vea SALA.
-const MODULO_MUSICA = "MÚSICA";
 
 function buildPermisosCompletos(overrides: Rol["permisos"] = []): {
   nav: Rol["permisos"];
   ajustes: Rol["permisos"][0];
   camaras: Rol["permisos"][0];
-  musica: Rol["permisos"][0];
   aplicaciones: Rol["permisos"][0];
   accesos: Rol["permisos"][0];
 } {
@@ -62,8 +57,7 @@ function buildPermisosCompletos(overrides: Rol["permisos"] = []): {
   const camaras = find(MODULO_CAMARAS) ?? { modulo: MODULO_CAMARAS, ver: false, editar: false };
   const aplicaciones = find(MODULO_APLICACIONES) ?? { modulo: MODULO_APLICACIONES, ver: false, editar: false };
   const accesos = find(MODULO_ACCESOS) ?? { modulo: MODULO_ACCESOS, ver: false, editar: false };
-  const musica = find(MODULO_MUSICA) ?? { modulo: MODULO_MUSICA, ver: false, editar: false };
-  return { nav, ajustes, camaras, aplicaciones, accesos, musica };
+  return { nav, ajustes, camaras, aplicaciones, accesos };
 }
 
 export function RolesTab() {
@@ -146,28 +140,6 @@ export function RolesTab() {
     persistRoles(nextRoles);
   };
 
-  /*
-    MÚSICA es un permiso de GESTIÓN, no de acceso: la vista Sala → Música la ve
-    cualquiera que vea SALA (para poder dar al Play), pero solo quien tiene esto
-    marcado puede crear listas, subir canciones y fijar horarios. Por eso se
-    mueve `editar` y se deja `ver` en true — al revés que `toggleAcceso`.
-  */
-  const toggleMusica = (rolId: string) => {
-    let nextRoles: Rol[] = [];
-    setAjustes((prev) => {
-      nextRoles = prev.roles.map((r) => {
-        if (r.id !== rolId) return r;
-        const existing = r.permisos.find((p) => p.modulo === MODULO_MUSICA);
-        const nuevoGestionar = !(existing?.editar ?? false);
-        const newPermisos = existing
-          ? r.permisos.map((p) => p.modulo === MODULO_MUSICA ? { ...p, ver: true, editar: nuevoGestionar } : p)
-          : [...r.permisos, { modulo: MODULO_MUSICA, ver: true, editar: nuevoGestionar }];
-        return { ...r, permisos: newPermisos };
-      });
-      return { ...prev, roles: nextRoles };
-    });
-    persistRoles(nextRoles);
-  };
 
   // Activa o desactiva de golpe los 11 departamentos de navegación (sin tocar AJUSTES).
   const toggleTodosDepartamentos = (rolId: string, valor: boolean) => {
@@ -190,7 +162,7 @@ export function RolesTab() {
     <div className="space-y-2">
       {ajustes.roles.map((rol) => {
         const isOpen = expandedRol === rol.id;
-        const { nav: permisosNav, ajustes: permisoAjustes, camaras: permisoCamaras, aplicaciones: permisoAplicaciones, accesos: permisoAccesos, musica: permisoMusica } = buildPermisosCompletos(rol.permisos);
+        const { nav: permisosNav, ajustes: permisoAjustes, camaras: permisoCamaras, aplicaciones: permisoAplicaciones, accesos: permisoAccesos } = buildPermisosCompletos(rol.permisos);
         const TOTAL_MODULOS = MODULOS_NAV.length + 4; // 11 nav + AJUSTES + CÁMARAS + APLICACIONES + ACCESOS
         const accesosCount = [...permisosNav, permisoAjustes, permisoCamaras, permisoAplicaciones, permisoAccesos].filter((p) => p.ver).length;
         const usuariosConRol = usuariosSupabase.filter(
@@ -303,97 +275,34 @@ export function RolesTab() {
                   );
                 })()}
 
-                {/* AJUSTES + CÁMARAS — al final, visualmente diferenciados */}
+                {/*
+                  Permisos sueltos: no son departamentos del índice lateral,
+                  son las llaves de AJUSTES y de las herramientas de la barra.
+                  Cada tarjeta lleva SOLO el icono y la palabra con la que se
+                  conoce la herramienta (la misma del tooltip de la barra) y su
+                  interruptor de acceso. Sin repetir el nombre dos veces.
+                */}
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-md border-2 border-dashed border-muted-foreground/20 bg-muted/30 px-3 py-2">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Settings className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[10px] font-bold text-muted-foreground tracking-wider">ACCESO AL PANEL DE AJUSTES</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">{MODULO_AJUSTES}</span>
-                      <div className="flex flex-col items-center gap-0.5 w-24">
-                        <span className="text-[10px] text-muted-foreground font-bold">ACCESO</span>
-                        <Switch
-                          checked={permisoAjustes.ver}
-                          onCheckedChange={() => toggleAcceso(rol.id, MODULO_AJUSTES)}
-                        />
+                  {[
+                    { modulo: MODULO_AJUSTES, label: "Ajustes", Icon: Settings, permiso: permisoAjustes },
+                    { modulo: MODULO_CAMARAS, label: "Videovigilancia", Icon: Cctv, permiso: permisoCamaras },
+                    { modulo: MODULO_APLICACIONES, label: "Aplicaciones", Icon: Rocket, permiso: permisoAplicaciones },
+                    { modulo: MODULO_ACCESOS, label: "Accesos y contraseñas", Icon: Lock, permiso: permisoAccesos },
+                  ].map(({ modulo, label, Icon, permiso }) => (
+                    <div
+                      key={modulo}
+                      className="flex items-center justify-between gap-3 rounded-md border-2 border-dashed border-muted-foreground/20 bg-muted/30 px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate text-sm font-medium">{label}</span>
                       </div>
+                      <Switch
+                        checked={permiso.ver}
+                        onCheckedChange={() => toggleAcceso(rol.id, modulo)}
+                      />
                     </div>
-                  </div>
-
-                  <div className="rounded-md border-2 border-dashed border-muted-foreground/20 bg-muted/30 px-3 py-2">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Cctv className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[10px] font-bold text-muted-foreground tracking-wider">ACCESO A VIDEOVIGILANCIA</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">{MODULO_CAMARAS}</span>
-                      <div className="flex flex-col items-center gap-0.5 w-24">
-                        <span className="text-[10px] text-muted-foreground font-bold">ACCESO</span>
-                        <Switch
-                          checked={permisoCamaras.ver}
-                          onCheckedChange={() => toggleAcceso(rol.id, MODULO_CAMARAS)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/*
-                    SALA → MÚSICA. Este permiso decide quién GESTIONA la música
-                    (crear listas, subir canciones, fijar horarios). Pulsar Play
-                    no lo necesita: puede hacerlo cualquiera que vea SALA.
-                  */}
-                  <div className="rounded-md border-2 border-dashed border-muted-foreground/20 bg-muted/30 px-3 py-2">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Music className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[10px] font-bold text-muted-foreground tracking-wider">GESTIÓN DE LA MÚSICA (SALA)</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">{MODULO_MUSICA}</span>
-                      <div className="flex flex-col items-center gap-0.5 w-24">
-                        <span className="text-[10px] text-muted-foreground font-bold">GESTIONAR</span>
-                        <Switch
-                          checked={permisoMusica.editar}
-                          onCheckedChange={() => toggleMusica(rol.id)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-md border-2 border-dashed border-muted-foreground/20 bg-muted/30 px-3 py-2">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Rocket className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[10px] font-bold text-muted-foreground tracking-wider">ACCESOS DIRECTOS A APLICACIONES</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">APLICACIONES</span>
-                      <div className="flex flex-col items-center gap-0.5 w-24">
-                        <span className="text-[10px] text-muted-foreground font-bold">ACCESO</span>
-                        <Switch
-                          checked={permisoAplicaciones.ver}
-                          onCheckedChange={() => toggleAcceso(rol.id, MODULO_APLICACIONES)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-md border-2 border-dashed border-muted-foreground/20 bg-muted/30 px-3 py-2">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[10px] font-bold text-muted-foreground tracking-wider">ACCESOS Y CONTRASEÑAS</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">CONTRASEÑAS</span>
-                      <div className="flex flex-col items-center gap-0.5 w-24">
-                        <span className="text-[10px] text-muted-foreground font-bold">ACCESO</span>
-                        <Switch
-                          checked={permisoAccesos.ver}
-                          onCheckedChange={() => toggleAcceso(rol.id, MODULO_ACCESOS)}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </CardContent>
             )}
