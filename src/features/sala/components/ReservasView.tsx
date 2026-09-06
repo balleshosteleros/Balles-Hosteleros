@@ -215,9 +215,16 @@ const mesaBg: Record<string, string> = {
   // servicio no habia forma de saber cual estaba sentada.
   // OCUPADA va oscuro y con el texto en BLANCO; RESERVADA claro y con el
   // texto en negro. El contraste del texto refuerza la lectura del estado.
-  OCUPADA: "bg-[#15803D] hover:bg-[#166534] text-white",
-  RESERVADA: "bg-[#86EFAC] hover:bg-[#6EE7A0] text-zinc-900",
-  TERMINADA: "bg-[#E879F9] hover:bg-[#D946EF] text-zinc-900",
+  // Los colores son los MISMOS que los estados de la lista, en su version
+  // hexadecimal: OCUPADA el pistacho oscuro de SENTADA (lime-800), RESERVADA
+  // el pistacho claro de CONFIRMADA (lime-300, un punto mas claro que el chip
+  // para que el texto negro se lea sobre la mesa) y TERMINADA el rosa de
+  // TERMINADA (pink-500). Antes eran verdes esmeralda y un fucsia, de cuando
+  // la paleta de estados era otra: el plano y la lista decian colores
+  // distintos para lo mismo (Ivan, 06-sep).
+  OCUPADA: "bg-[#3F6212] hover:bg-[#365314] text-white",
+  RESERVADA: "bg-[#BEF264] hover:bg-[#A3E635] text-zinc-900",
+  TERMINADA: "bg-[#EC4899] hover:bg-[#DB2777] text-white",
   // En tema oscuro el negro puro se confundía con el lienzo azul marino: la
   // mesa bloqueada pasa a un gris azulado con borde marcado para seguir
   // leyéndose como "apagada" sin desaparecer del plano.
@@ -242,14 +249,16 @@ const mesaBg: Record<string, string> = {
  * cancelada, no-show), que siguen contando para partir la mesa.
  */
 const MITAD_FILL: Record<string, string> = {
-  SENTADA:    "#15803D",
+  SENTADA:    "#3F6212",
   TERMINANDO: "#EC4899",
   LIBERADA:   "#64748B",
   CANCELADA:  "#64748B",
   NO_SHOW:    "#64748B",
 };
-/** Verde claro de "reservada": confirmada, reconfirmada, lista de espera… */
-const MITAD_FILL_DEFECTO = "#86EFAC";
+/** Pistacho claro de "reservada": confirmada, reconfirmada, lista de espera…
+ *  Es el mismo verde que RESERVADA en el plano, para que una mitad y una mesa
+ *  entera en el mismo estado no salgan de dos verdes distintos. */
+const MITAD_FILL_DEFECTO = "#BEF264";
 
 function colorMitadReserva(estado: string): string {
   return MITAD_FILL[estado] ?? MITAD_FILL_DEFECTO;

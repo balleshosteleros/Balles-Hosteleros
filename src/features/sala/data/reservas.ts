@@ -121,7 +121,11 @@ export const ESTADO_BADGE_CLASS: Record<EstadoReserva, string> = {
   // CONFIRMADA era esmeralda (un verde más azulado) y al lado del pistacho de
   // SENTADA parecían dos familias de color distintas (Iván, 06-sep).
   CONFIRMADA:      "bg-lime-500 text-white border-lime-600",
-  RECONFIRMADA:    "bg-sky-600 text-white border-sky-700",
+  // IGUAL que CONFIRMADA a proposito: para la mesa las dos son lo mismo —la
+  // reserva esta dada y esa gente aun no ha llegado—. Lo que las separa es el
+  // DOBLE CHECK verde de la fila, que dice que ademas ha contestado; el color
+  // del estado no tiene que repetir esa informacion (Ivan, 06-sep).
+  RECONFIRMADA:    "bg-lime-500 text-white border-lime-600",
   // NARANJA, no ambar: el ambar se acercaba demasiado al amarillo de LIBERADA
   // y en la lista los dos avisos se leian como el mismo (Ivan, 06-sep).
   NO_RECONFIRMADA: "bg-orange-500 text-white border-orange-600",
@@ -144,7 +148,7 @@ export const ESTADO_DOT_CLASS: Record<EstadoReserva, string> = {
   // Mismo pistacho que su recuadro, para que el punto de los filtros y el de
   // la ficha del cliente no digan un verde distinto del de la lista.
   CONFIRMADA:      "bg-lime-500",
-  RECONFIRMADA:    "bg-sky-500",
+  RECONFIRMADA:    "bg-lime-500",
   NO_RECONFIRMADA: "bg-orange-500",
   LISTA_ESPERA:    "bg-violet-500",
   // Pistacho oscuro frente al claro de CONFIRMADA: mismo criterio que el
