@@ -7865,13 +7865,14 @@ export function ReservasView() {
               </>
             )}
           </p>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setConfirmEstado(null)}>
-              Cancelar
-            </Button>
+          {/* La pregunta es de sí o no, así que los botones son la respuesta:
+              uno al lado del otro, mismo tamaño. Para salir sin tocar nada
+              está la X de la cabecera; un tercer botón "Cancelar" al lado de
+              los otros dos solo confundía con "pasar a cancelada". */}
+          <div className="grid grid-cols-2 gap-2">
             <Button
-              variant="outline"
               size="sm"
+              className="bg-red-600 text-white hover:bg-red-700"
               onClick={() => {
                 if (!confirmEstado) return;
                 const c = confirmEstado;
@@ -7879,10 +7880,11 @@ export function ReservasView() {
                 aplicarEstadoReserva(c.id, c.estado, false);
               }}
             >
-              Cambiar sin avisar
+              No
             </Button>
             <Button
               size="sm"
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
               onClick={() => {
                 if (!confirmEstado) return;
                 const c = confirmEstado;
@@ -7890,7 +7892,7 @@ export function ReservasView() {
                 aplicarEstadoReserva(c.id, c.estado, true);
               }}
             >
-              Cambiar y avisar
+              Sí
             </Button>
           </div>
         </DialogContent>
