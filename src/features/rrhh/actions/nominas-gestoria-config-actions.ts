@@ -16,6 +16,7 @@ import {
   enviarSolicitudNominasGestoria,
   mesSolicitado,
   correoGestoriaEmpresa,
+  regenerarTokenNominasGestoria,
 } from "@/features/rrhh/services/nominas/nominas-gestoria";
 
 export interface NominasGestoriaConfig {
@@ -69,6 +70,12 @@ export async function setNominasGestoriaConfig(
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false };
+
+    // Quien cambia esto decide a qué correo salen las nóminas de la empresa:
+    // mismo permiso que confirmarlas.
+    const { data: puede } = await supabase.rpc("puede_gestionar_pagos");
+    if (puede !== true) return { ok: false };
+
     const payload: Record<string, unknown> = {};
     if (cfg.activo !== undefined) payload.nominas_gestoria_activo = cfg.activo;
     if (cfg.email !== undefined) payload.nominas_gestoria_email = cfg.email.trim() || null;
@@ -98,8 +105,17 @@ export async function enviarNominasGestoriaAhora(
   periodoElegido?: string,
 ): Promise<{ ok: boolean; error?: string; periodo?: string }> {
   try {
-    const { empresaId } = await getAppContext();
+    const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autorizado" };
+
+    // Mandar un correo a la gestoría es un acto hacia fuera: lo decide quien
+    // gestiona pagos, no cualquiera con cuenta en la empresa. Misma función que
+    // aplica la RLS, para que pantalla y BD no discrepen.
+    const { data: puede } = await supabase.rpc("puede_gestionar_pagos");
+    if (puede !== true) {
+      return { ok: false, error: "No tienes permiso para escribir a la gestoría." };
+    }
+
     const admin = createAdminClient();
     const tz = await getZonaHorariaEmpresa(admin, empresaId);
 
@@ -149,5 +165,34 @@ export async function getCorreoGestoria(): Promise<string | null> {
   } catch (err) {
     console.error("[nominas-gestoria] getCorreoGestoria:", err);
     return null;
+  }
+}
+
+/**
+ * ROTAR el enlace de subida de nóminas: genera uno nuevo y el anterior deja de
+ * valer al instante. Es la salida cuando el enlace se filtra o cambia la
+ * gestoría — antes existía la función pero no había forma de invocarla desde
+ * ningún sitio, así que un enlace comprometido era para siempre.
+ *
+ * El enlace es permanente y no caduca: rotarlo es la ÚNICA forma de revocarlo.
+ * Después hay que reenviarlo, porque el que tenga la gestoría deja de abrir.
+ */
+export async function rotarEnlaceNominasGestoria(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autorizado" };
+
+    const { data: puede } = await supabase.rpc("puede_gestionar_pagos");
+    if (puede !== true) {
+      return { ok: false, error: "No tienes permiso para cambiar el enlace de la gestoría." };
+    }
+
+    const admin = createAdminClient();
+    const res = await regenerarTokenNominasGestoria(admin, empresaId);
+    if (!res.ok) return { ok: false, error: res.error };
+    return { ok: true };
+  } catch (err) {
+    console.error("[nominas-gestoria] rotarEnlace:", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Error" };
   }
 }

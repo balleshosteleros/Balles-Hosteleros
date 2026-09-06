@@ -5,13 +5,14 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/shared/components/NumberInput";
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, Send } from "lucide-react";
+import { Loader2, Save, Send, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import {
   getNominasGestoriaConfig,
   setNominasGestoriaConfig,
   enviarNominasGestoriaAhora,
   getCorreoGestoria,
+  rotarEnlaceNominasGestoria,
   type NominasGestoriaConfig,
 } from "@/features/rrhh/actions/nominas-gestoria-config-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -50,6 +51,7 @@ export function NominasGestoriaConfigPanel() {
   const [cfg, setCfg] = useState<NominasGestoriaConfig | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [rotando, setRotando] = useState(false);
   // Mes a reclamar con «Enviar ahora». Por defecto, el último ya cerrado.
   const [mesEnvio, setMesEnvio] = useState(MESES_ELEGIBLES[0]);
   // Correo REAL al que irá el envío (Ajustes → Configuración), para poder
@@ -108,6 +110,30 @@ export function NominasGestoriaConfigPanel() {
       });
     } else {
       toast.error(res.error ?? "No se pudo enviar el correo.");
+    }
+  };
+
+  const rotarEnlace = async () => {
+    // El enlace es permanente: rotarlo es la ÚNICA forma de revocarlo si se
+    // filtra. Rompe el que la gestoría tenga guardado, así que se avisa.
+    const ok = await confirm({
+      title: "Cambiar el enlace de subida de nóminas",
+      description:
+        "Se generará un enlace nuevo y el actual dejará de funcionar al instante. " +
+        "La gestoría ya no podrá subir con el enlace que tenga guardado: habrá que " +
+        "reenviárselo con «Enviar ahora». Úsalo si el enlace se ha filtrado o cambias de gestoría.",
+      confirmLabel: "Cambiar el enlace",
+    });
+    if (!ok) return;
+    setRotando(true);
+    const res = await rotarEnlaceNominasGestoria();
+    setRotando(false);
+    if (res.ok) {
+      toast.success("Enlace cambiado. El anterior ya no funciona.", {
+        description: "Envíaselo de nuevo a la gestoría con «Enviar ahora».",
+      });
+    } else {
+      toast.error(res.error ?? "No se pudo cambiar el enlace.");
     }
   };
 
@@ -218,6 +244,21 @@ export function NominasGestoriaConfigPanel() {
               <><Loader2 className="h-4 w-4 animate-spin" />Enviando…</>
             ) : (
               <><Send className="h-4 w-4" />Enviar ahora</>
+            )}
+          </Button>
+        )}
+        {cfg.activo && (
+          <Button
+            variant="outline"
+            onClick={rotarEnlace}
+            disabled={rotando}
+            className="gap-2"
+            title="Genera un enlace nuevo. El actual deja de funcionar al instante."
+          >
+            {rotando ? (
+              <><Loader2 className="h-4 w-4 animate-spin" />Cambiando…</>
+            ) : (
+              <><KeyRound className="h-4 w-4" />Cambiar enlace</>
             )}
           </Button>
         )}

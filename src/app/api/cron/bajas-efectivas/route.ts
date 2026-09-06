@@ -23,6 +23,13 @@
  * las 6:00 o más (y aún no es mediodía, para no repetir con otra ejecución).
  * Idempotente: quien ya está en «Ex-empleados» se ignora.
  *
+ * NO CAMBIAR LA HORA DEL CRON en `vercel.json` sin recalcular la ventana: el
+ * schedule y el corte de las 6:00 locales son UNA sola decisión. En
+ * `Europe/Madrid` (UTC+1/+2) las 05:00 UTC son las 06:00/07:00 locales, justo
+ * dentro de la ventana. Ya pasó una vez: un commit ajeno lo movió a las 03:00
+ * UTC (= 05:00 en Madrid, por debajo del corte) y el cron dejó de dar de baja a
+ * NADIE durante meses, en silencio, sin error ninguno.
+ *
  * Solo acepta llamadas con header `Authorization: Bearer ${CRON_SECRET}`.
  */
 

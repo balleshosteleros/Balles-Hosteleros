@@ -25,7 +25,7 @@
     },
     {
       "path": "/api/cron/bajas-efectivas",
-      "schedule": "0 3 * * *"
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/points/cron/devengo-diario",
