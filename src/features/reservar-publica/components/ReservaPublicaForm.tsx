@@ -24,6 +24,7 @@ import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInput
 import type { ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
 import { SelectorDisponibilidad } from "@/features/reservar-publica/components/SelectorDisponibilidad";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { diaNegocioDe } from "@/features/sala/lib/dia-negocio";
 import { SelectorOpcion } from "@/components/ui/selector-opcion";
 import { VolverAWebPublica } from "@/components/VolverAWebPublica";
 import {
@@ -78,14 +79,29 @@ interface Props {
   zonaHoraria: string;
 }
 
-/** Fecha de HOY (YYYY-MM-DD) en el restaurante, no en el navegador del cliente. */
+/**
+ * DÍA DE NEGOCIO de hoy (YYYY-MM-DD) en el restaurante, no en el navegador del
+ * cliente ni el día civil.
+ *
+ * El día de servicio no cambia a medianoche, cambia a las 06:00: a las 00:29
+ * del sábado la sala sigue dando la cena del VIERNES. Con el día civil, quien
+ * entraba de madrugada veía el calendario en el día siguiente, y el pase de las
+ * 00:30 se leía como el de la madrugada de MAÑANA — a 24 h de distancia. Así
+ * pasaba la antelación mínima y la reserva se guardaba en el día equivocado.
+ */
 function hoyEnZona(tz: string): string {
-  return new Intl.DateTimeFormat("sv-SE", {
+  const partes = new Intl.DateTimeFormat("sv-SE", {
     timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
   }).format(new Date());
+  // "sv-SE" con hora da "2026-09-06 00:29".
+  const [fechaCivil, horaCivil] = partes.split(" ");
+  return diaNegocioDe(fechaCivil, horaCivil ?? "12:00");
 }
 
 function isHexColor(c: string | null | undefined): c is string {

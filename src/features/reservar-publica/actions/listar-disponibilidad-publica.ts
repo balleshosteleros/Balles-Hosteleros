@@ -21,7 +21,7 @@ import {
   getCamposObligatoriosReserva,
   type CamposObligatoriosReserva,
 } from "@/features/sala/lib/reserva-campos-obligatorios";
-import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
+import { turnoDeHora, diaNegocioDe } from "@/features/sala/lib/dia-negocio";
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import {
@@ -176,7 +176,20 @@ export async function listarDisponibilidadPublicaAction(
   // el día anterior y se ofrecerían horas ya pasadas.
   const maxDias = (cfg.antelacion_max_dias as number | null) ?? 90;
   const tz = await getZonaHorariaEmpresa(admin, empresaId);
-  const { fecha: hoyISO, minutos: minAhora } = ahoraEnZona(tz);
+  const { fecha: fechaCivilAhora, minutos: minAhora } = ahoraEnZona(tz);
+  // "Hoy" es el DÍA DE NEGOCIO, que no cambia a medianoche sino a las 06:00:
+  // a las 00:29 del sábado seguimos en el servicio del viernes.
+  //
+  // `minAhora` NO se toca: sigue siendo el reloj de pared (0-1439). Los pases
+  // de madrugada de esa misma noche se generan como m >= 1440 dentro de la
+  // cena que cruza medianoche, así que para compararlos con el reloj hay que
+  // sumarles el día que va del día de negocio a la fecha civil real.
+  const hoyISO = diaNegocioDe(fechaCivilAhora, minutosAHora(minAhora));
+  const desfaseDiaNegocio = Math.round(
+    (Date.parse(`${fechaCivilAhora}T00:00:00Z`) - Date.parse(`${hoyISO}T00:00:00Z`)) /
+      86_400_000,
+  );
+  const minAhoraJornada = minAhora + desfaseDiaNegocio * MIN_POR_DIA;
   if (fecha < hoyISO) {
     return { ok: true, slots: [], cerrado: true, mensaje: "Esa fecha ya ha pasado.", obligatorios };
   }
@@ -322,7 +335,7 @@ export async function listarDisponibilidadPublicaAction(
       // con el reloj de hoy. Sin esto, las 01:00 valían 1500 y nunca salían
       // como pasadas, y la madrugada seguía ofreciéndose ya vencida.
       const minutosDesdeHoy = m + diasHastaFecha * MIN_POR_DIA;
-      if (minutosDesdeHoy < minAhora + antelacionMin) {
+      if (minutosDesdeHoy < minAhoraJornada + antelacionMin) {
         continue;
       }
 
