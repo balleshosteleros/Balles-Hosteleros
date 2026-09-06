@@ -405,23 +405,43 @@
   border-color: hsl(var(--sidebar-background));
 }
 
-/* La CABECERA (y su reborde) en vista inmersiva oscura.
+/* La CABECERA en vista inmersiva oscura.
 
    Se pinta FUERA del contenedor de la vista, asi que no le llega el
    `.sala-oscuro` del tema de sala: se quedaba blanca sobre el azul marino de
-   Reservas y volvia a partir la pantalla en dos, igual que pasaba en claro
-   cuando era blanco puro sobre el gris de la pagina.
+   Reservas y partia la pantalla en dos, igual que pasaba en claro cuando era
+   blanco puro sobre el gris de la pagina.
 
-   Se le da el MISMO azul marino del fondo de la vista para que cabecera y
-   contenido se lean como una sola superficie. Solo el fondo y el color del
-   texto: los bordes NO se tocan aqui —redefinir `--border` para todo el
-   contenedor dejaba la pildora de herramientas recuadrada en negro, que es lo
-   que ya explica el bloque de arriba (Ivan, 06-sep). */
+   Se REDEFINEN LOS TOKENS, no se pintan colores sueltos: la cabecera esta
+   hecha de `bg-card`, `text-muted-foreground`, `border`… y forzando solo el
+   fondo quedaba una banda gris con la pildora clara encima y los rotulos
+   secundarios ("DIRECCION", el nombre del modulo) en un gris del tema claro
+   que sobre azul marino no se leia. Cambiando los tokens, cada pieza se
+   adapta sola y sigue siendo la misma cabecera de siempre.
+
+   Los valores son los MISMOS del tema oscuro de sala (bloque `.sala-oscuro`),
+   asi que cabecera y contenido son exactamente el mismo azul, sin costuras.
+
+   `--border` SI se toca aqui, pero igualado al propio fondo: asi la pildora de
+   herramientas no queda recuadrada —que es lo que se buscaba evitar— y a la
+   vez desaparece la linea de separacion (Ivan, 06-sep). */
 .software-oscuro > div > header,
 .software-oscuro > div > [aria-hidden] {
-  background-color: hsl(220 42% 9%);
-}
+  --background: 220 42% 9%;
+  --foreground: 213 30% 92%;
+  --card: 220 42% 9%;
+  --card-foreground: 213 30% 92%;
+  --popover: 221 40% 12%;
+  --popover-foreground: 213 30% 92%;
+  --muted: 220 30% 17%;
+  --muted-foreground: 215 20% 70%;
+  --accent: 220 32% 22%;
+  --accent-foreground: 213 30% 90%;
+  --secondary: 220 30% 19%;
+  --secondary-foreground: 213 25% 85%;
+  --border: 220 42% 9%;
+  --input: 220 25% 22%;
 
-.software-oscuro > div > header {
-  color: hsl(213 30% 92%);
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
