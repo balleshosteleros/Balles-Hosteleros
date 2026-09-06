@@ -14,6 +14,37 @@ const TIPO_LABELS: Record<string, string> = {
   onboarding: "Onboarding",
 };
 
+/**
+ * Qué nombre recibe cada bucket de Supabase Storage en el desglose. Aquí vive
+ * lo que el software genera solo: nóminas, contratos, albaranes, fotos de la
+ * carta... Un bucket que no esté en esta lista se agrupa en "Otros documentos"
+ * en vez de desaparecer: los bytes tienen que cuadrar con el total.
+ */
+const BUCKET_LABELS: Record<string, string> = {
+  "rrhh-nominas": "Nóminas",
+  "empleados-docs": "Documentos de empleados",
+  "contratos-gestoria": "Contratos",
+  firmas: "Firmas",
+  "logistica-albaranes": "Albaranes",
+  "logistica-facturas": "Facturas",
+  "modelos-aeat-pdf": "Modelos fiscales",
+  "carta-fotos": "Fotos de la carta",
+  "paginas-web-assets": "Páginas web",
+  "cvs-candidatos": "CV de candidatos",
+  "documentacion-candidatos": "Documentación de candidatos",
+  "cierres-documentos": "Cierres",
+  "chat-archivos": "Chat",
+  "empresa-logos": "Imagen de marca",
+  "estudios-apertura-fotos": "Estudios de apertura",
+  "inspeccion-imagenes": "Inspecciones",
+  "juridico-documentos": "Jurídico",
+  documentacion: "Documentación",
+  "formacion-docs": "Formación",
+  "gerencia-informes": "Informes",
+  "cronogramas-videos": "Cronogramas",
+  "nuevas-recetas-fotos-cata": "Recetas",
+};
+
 // GET — almacenamiento de la empresa del usuario autenticado:
 // cuota total (bytes_used / bytes_limit) + desglose por tipo de contenido.
 export async function GET() {
@@ -64,6 +95,40 @@ export async function GET() {
       bytes: v.bytes,
       count: v.count,
     }));
+
+    // Documentos de Supabase Storage: nóminas, albaranes, contratos, fotos de
+    // la carta... Sin esto el desglose salía vacío aunque el total no lo fuera.
+    const { data: buckets } = await admin.rpc("storage_desglose_por_bucket", {
+      p_empresa_id: empresaId,
+    });
+
+    let otros = { bytes: 0, count: 0 };
+    for (const b of (buckets ?? []) as {
+      bucket: string;
+      bytes: number;
+      files: number;
+    }[]) {
+      const label = BUCKET_LABELS[b.bucket];
+      const bytes = Number(b.bytes ?? 0);
+      const count = Number(b.files ?? 0);
+      if (label) {
+        desglose.push({ tipo: b.bucket, label, bytes, count });
+      } else {
+        // Un bucket nuevo no debe evaporarse del desglose: se agrupa.
+        otros = { bytes: otros.bytes + bytes, count: otros.count + count };
+      }
+    }
+    if (otros.bytes > 0) {
+      desglose.push({
+        tipo: "otros",
+        label: "Otros documentos",
+        bytes: otros.bytes,
+        count: otros.count,
+      });
+    }
+
+    // De mayor a menor: lo que ocupa se ve primero.
+    desglose.sort((a, b) => b.bytes - a.bytes);
 
     return NextResponse.json({
       bytes_used: Number(usage?.bytes_used ?? 0),

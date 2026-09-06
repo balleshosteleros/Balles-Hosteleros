@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HardDrive, Loader2, Video, GraduationCap, Megaphone, PlayCircle, FileBox, Plus } from "lucide-react";
+import { HardDrive, Loader2, Video, GraduationCap, Megaphone, PlayCircle, FileBox, Plus, FileText, Receipt, Image as ImageIcon, PenLine, Globe, MessageSquare, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -31,10 +31,29 @@ function formatTamano(bytes: number): string {
 }
 
 const ICONO_TIPO: Record<string, typeof Video> = {
+  // Vídeo (R2)
   grabacion: Video,
   formacion: GraduationCap,
   marketing: Megaphone,
   onboarding: PlayCircle,
+  // Documentos (Supabase Storage). Lo que no esté aquí cae en el icono
+  // genérico de archivo, que ya era el comportamiento anterior.
+  "rrhh-nominas": Receipt,
+  "empleados-docs": Users,
+  "contratos-gestoria": FileText,
+  firmas: PenLine,
+  "logistica-albaranes": Receipt,
+  "logistica-facturas": Receipt,
+  "modelos-aeat-pdf": FileText,
+  "carta-fotos": ImageIcon,
+  "paginas-web-assets": Globe,
+  "cvs-candidatos": FileText,
+  "documentacion-candidatos": FileText,
+  "cierres-documentos": FileText,
+  "chat-archivos": MessageSquare,
+  "empresa-logos": ImageIcon,
+  "estudios-apertura-fotos": ImageIcon,
+  "inspeccion-imagenes": ImageIcon,
 };
 
 /**
@@ -106,7 +125,7 @@ export function AlmacenamientoEmpresa() {
           <div className="space-y-2">
             <div className="flex items-baseline justify-between">
               <span className="text-lg font-semibold">
-                {usedGb.toLocaleString("es-ES", { maximumFractionDigits: 2 })} GB usados
+                {formatTamano(used)} usados
               </span>
               <span className="text-sm text-muted-foreground">
                 de {limitGb.toLocaleString("es-ES", { maximumFractionDigits: 0 })} GB
