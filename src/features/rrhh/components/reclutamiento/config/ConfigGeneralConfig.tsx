@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   getReclutamientoConfigGeneral,
@@ -203,6 +204,44 @@ export const ConfigGeneralConfig = forwardRef<
               </Select>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      {/* Corte de la migración: desde cuándo el software gestiona las altas.
+          Sin esto, los trabajadores que venían ya contratados salían en Gestoría →
+          Contrataciones como «la gestoría no ha recibido el alta», en rojo y con
+          un botón de reenvío que habría dado de alta por duplicado. Ahora esas
+          altas simplemente no se listan. */}
+      <Card>
+        <div className="px-5 py-4 border-b border-border">
+          <h3 className="font-semibold text-foreground text-sm">Migración de trabajadores</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Día desde el que las altas se tramitan con el software. Los trabajadores que
+            empezaron antes ya estaban dados de alta en la Seguridad Social, así que no
+            aparecen en Gestoría → Contrataciones: no hay nada que comunicar. Sus fichas
+            y sus datos no se tocan.
+          </p>
+        </div>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="migracion-hasta" className="text-sm text-foreground">
+                Primer día gestionado con el software
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Déjalo vacío si todas las contrataciones se han hecho desde aquí.
+              </p>
+            </div>
+            <Input
+              id="migracion-hasta"
+              type="date"
+              className="w-44 h-9 shrink-0"
+              value={config.gestoria_migracion_hasta ?? ""}
+              onChange={(e) =>
+                setConfig((c) => c && { ...c, gestoria_migracion_hasta: e.target.value || null })
+              }
+            />
+          </div>
         </CardContent>
       </Card>
 

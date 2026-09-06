@@ -55,6 +55,14 @@ export interface ContratacionRow {
   estado: EstadoTramite;
   pendiente_de: MotivoPendiente | null;
 
+  /**
+   * El trámite es ANTERIOR al corte de la migración: se gestionó fuera del
+   * software (el trabajador ya estaba de alta en la Seguridad Social). Estas
+   * filas NO se listan — se descartan antes de llegar a la pantalla —, así que
+   * el campo solo sirve para ese filtrado.
+   */
+  migrado: boolean;
+
   /** Peligro: pendiente y la fecha del trámite ya llegó (o pasó). */
   aviso: NivelAviso;
   aviso_texto: string | null;

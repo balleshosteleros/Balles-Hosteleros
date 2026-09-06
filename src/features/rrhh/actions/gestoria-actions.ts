@@ -180,6 +180,12 @@ export interface ReclutamientoConfigGeneral {
   documentacion_dias_validez: number;
   /** Días que vive el enlace con el que la GESTORÍA sube el contrato firmado. */
   gestoria_contrato_dias_validez: number;
+  /**
+   * Día de corte de la MIGRACIÓN. Las altas con día de comienzo anterior se
+   * tramitaron fuera del software (el trabajador ya estaba de alta en la
+   * Seguridad Social), así que no se avisan ni se alarman. `null` = sin corte.
+   */
+  gestoria_migracion_hasta: string | null;
 }
 
 const CONFIG_GENERAL_DEFAULT: ReclutamientoConfigGeneral = {
@@ -195,6 +201,7 @@ const CONFIG_GENERAL_DEFAULT: ReclutamientoConfigGeneral = {
   notificar_reclutador_nueva_candidatura: true,
   documentacion_dias_validez: 7,
   gestoria_contrato_dias_validez: 7,
+  gestoria_migracion_hasta: null,
 };
 
 const CONFIG_GENERAL_COLS = Object.keys(CONFIG_GENERAL_DEFAULT).join(", ");

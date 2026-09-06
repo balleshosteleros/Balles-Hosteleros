@@ -47,6 +47,65 @@ function nombreDe(nombre: unknown, apellidos: unknown): string {
 }
 
 /**
+ * Día de corte de la migración configurado por la empresa (Ajustes → RRHH →
+ * Reclutamiento). `null` si no se ha marcado ninguno.
+ */
+async function getCorteMigracion(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("reclutamiento_config")
+    .select("gestoria_migracion_hasta")
+    .eq("empresa_id", empresaId)
+    .maybeSingle<{ gestoria_migracion_hasta: string | null }>();
+  return data?.gestoria_migracion_hasta ?? null;
+}
+
+/**
+ * Día de comienzo pactado de un empleado: la fila VIGENTE de condiciones y, si no
+ * la hay (alta antigua o manual), el alta de su ficha. Mismo criterio que el
+ * listado, para que el guard del reenvío y lo que se ve en pantalla coincidan.
+ */
+async function getPrimerDiaEmpleado(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empleadoId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("empleado_condiciones")
+    .select("primer_dia, vigente_hasta, vigente_desde")
+    .eq("empleado_id", empleadoId)
+    .order("vigente_desde", { ascending: false, nullsFirst: false });
+  const filas = (data ?? []) as Array<Record<string, unknown>>;
+  const vigente = filas.find((c) => c.vigente_hasta == null) ?? filas[0];
+  if (vigente?.primer_dia) return vigente.primer_dia as string;
+
+  const { data: emp } = await supabase
+    .from("empleados")
+    .select("fecha_alta")
+    .eq("id", empleadoId)
+    .maybeSingle<{ fecha_alta: string | null }>();
+  return emp?.fecha_alta ?? null;
+}
+
+/**
+ * ¿El trámite entró por MIGRACIÓN, es decir, se gestionó fuera del software?
+ *
+ * La empresa marca en Ajustes el día desde el que gestiona las altas aquí
+ * (`gestoria_migracion_hasta`). Todo lo ANTERIOR venía ya tramitado: el
+ * trabajador estaba dado de alta en la Seguridad Social antes de que existiera
+ * el sistema, así que no hubo —ni debe haber— correo a la gestoría.
+ *
+ * Sin esto, esas altas se leían como «el correo no salió» y salían en rojo, con
+ * un botón de reenvío que no debía pulsarse nunca. Sin corte configurado
+ * (`null`) nada es migrado y el comportamiento es el de siempre.
+ */
+function esMigrado(fechaEvento: string | null, corte: string | null): boolean {
+  if (!corte || !fechaEvento) return false;
+  return fechaEvento.slice(0, 10) < corte.slice(0, 10);
+}
+
+/**
  * Marca de PELIGRO: el trámite sigue pendiente y su fecha clave ya llegó o pasó.
  *
  * Es el caso que pidió Iván: un alta cuyo contrato no está cerrado y el
@@ -83,14 +142,17 @@ export async function listContrataciones(): Promise<{
 
     const tz = await getZonaHorariaEmpresa(supabase as unknown as SupabaseClient, empresaId);
     const hoy = hoyEnZona(tz);
+    const corte = await getCorteMigracion(supabase, empresaId);
 
     const [altas, bajas, modificaciones] = await Promise.all([
-      listAltas(supabase, empresaId, hoy),
-      listBajas(supabase, empresaId, hoy),
+      listAltas(supabase, empresaId, hoy, corte),
+      listBajas(supabase, empresaId, hoy, corte),
       listModificaciones(supabase, empresaId),
     ]);
 
-    const data = [...altas, ...bajas, ...modificaciones].sort((a, b) =>
+    // Los trámites migrados no se listan: se gestionaron fuera del software y no
+    // hay nada que hacer con ellos (ver `esMigrado`).
+    const data = [...altas, ...bajas, ...modificaciones].filter((r) => !r.migrado).sort((a, b) =>
       a.enviado_en < b.enviado_en ? 1 : a.enviado_en > b.enviado_en ? -1 : 0,
     );
     return { ok: true, data };
@@ -112,6 +174,7 @@ async function listAltas(
   supabase: Awaited<ReturnType<typeof createClient>>,
   empresaId: string,
   hoy: string,
+  corte: string | null,
 ): Promise<ContratacionRow[]> {
   const { data, error } = await supabase
     .from("gestoria_contrato_tokens")
@@ -130,6 +193,7 @@ async function listAltas(
     supabase,
     empresaId,
     hoy,
+    corte,
     new Set(filas.map((f) => f.empleado_id as string).filter(Boolean)),
   );
 
@@ -197,6 +261,8 @@ async function listAltas(
     const pendiente = pendienteDe !== null;
     // Día de comienzo: el pactado en condiciones; si no hay, el alta de la ficha.
     const fechaEvento = primerDia.get(empId) ?? (emp?.fecha_alta as string | null) ?? null;
+    // Anterior al corte: se tramitó fuera del software, no hay nada que exigir.
+    const migrado = esMigrado(fechaEvento, corte);
 
     return {
       id: f.id as string,
@@ -209,6 +275,7 @@ async function listAltas(
       fecha_evento: fechaEvento,
       estado: pendiente ? ("pendiente" as const) : ("correcto" as const),
       pendiente_de: pendienteDe,
+      migrado,
       ...calcularAviso(pendiente, fechaEvento, hoy, {
         hoy: "Empieza HOY y el contrato sigue sin cerrar",
         pasado: "Ya ha empezado a trabajar y el contrato sigue sin cerrar",
@@ -234,6 +301,7 @@ async function listAltasNuncaEnviadas(
   supabase: Awaited<ReturnType<typeof createClient>>,
   empresaId: string,
   hoy: string,
+  corte: string | null,
   conToken: Set<string>,
 ): Promise<ContratacionRow[]> {
   // Candidatos ya promovidos a empleado: es el momento en que el alta debía salir.
@@ -279,6 +347,9 @@ async function listAltasNuncaEnviadas(
     const empId = c.empleado_id as string;
     const emp = empleados.get(empId);
     const fechaEvento = primerDia.get(empId) ?? (emp?.fecha_alta as string | null) ?? null;
+    // Caso principal del corte: estas altas «sin token» son casi siempre las de
+    // la migración. Antes del corte no falta ningún correo, faltaba el contexto.
+    const migrado = esMigrado(fechaEvento, corte);
     return {
       // No hay token: el id de la fila es el del empleado (único y estable aquí).
       id: `sin-envio-${empId}`,
@@ -292,6 +363,7 @@ async function listAltasNuncaEnviadas(
       fecha_evento: fechaEvento,
       estado: "pendiente" as const,
       pendiente_de: "email_fallido" as MotivoPendiente,
+      migrado,
       ...calcularAviso(true, fechaEvento, hoy, {
         hoy: "Empieza HOY y la gestoría no ha recibido el alta",
         pasado: "Ya ha empezado a trabajar y la gestoría no ha recibido el alta",
@@ -314,6 +386,7 @@ async function listBajas(
   supabase: Awaited<ReturnType<typeof createClient>>,
   empresaId: string,
   hoy: string,
+  corte: string | null,
 ): Promise<ContratacionRow[]> {
   const { data, error } = await supabase
     .from("gestoria_bajas")
@@ -349,6 +422,8 @@ async function listBajas(
     else if (!tieneJustificante) pendienteDe = "justificante_baja";
 
     const pendiente = pendienteDe !== null;
+    // Bajas anteriores al corte: se tramitaron con la gestoría fuera del sistema.
+    const migrado = esMigrado(ultimoDia, corte);
     const aviso = fallido
       ? {
           aviso: "peligro" as const,
@@ -373,6 +448,7 @@ async function listBajas(
       fecha_evento: ultimoDia,
       estado: pendiente ? ("pendiente" as const) : ("correcto" as const),
       pendiente_de: pendienteDe,
+      migrado,
       tipo_baja_label: (b.tipo_baja_label as string | null) ?? null,
       motivo: (b.motivo as string | null) ?? null,
       ...aviso,
@@ -421,6 +497,9 @@ async function listModificaciones(
       fecha_evento: (m.primer_dia as string | null) ?? null,
       estado: "correcto" as const,
       pendiente_de: null,
+      // Las modificaciones solo existen si se enviaron desde el software, así que
+      // nunca vienen de la migración.
+      migrado: false,
       aviso: "ninguno" as const,
       aviso_texto: null,
       puesto_anterior: (m.puesto_origen_nombre as string | null) ?? null,
@@ -464,6 +543,22 @@ export async function reenviarAltaGestoria(
       .eq("empresa_id", empresaId)
       .maybeSingle();
     if (!emp) return { ok: false, error: "El trabajador no pertenece a esta empresa." };
+
+    // Un alta anterior al corte de la migración se tramitó fuera del software: la
+    // gestoría ya la tiene y el trabajador está de alta en la Seguridad Social.
+    // Reenviarla daría de alta por duplicado, así que se corta también aquí y no
+    // solo ocultando el botón.
+    const corte = await getCorteMigracion(supabaseSrv, empresaId);
+    if (corte) {
+      const primerDia = await getPrimerDiaEmpleado(supabaseSrv, empleadoId);
+      if (esMigrado(primerDia, corte)) {
+        return {
+          ok: false,
+          error:
+            "Este alta es anterior al corte de la migración: se tramitó fuera del software y no debe reenviarse.",
+        };
+      }
+    }
 
     // `forzar`: el envío automático ya se dio por hecho una vez; este reenvío es
     // una acción manual y explícita, no debe depender del toggle de envío auto.
