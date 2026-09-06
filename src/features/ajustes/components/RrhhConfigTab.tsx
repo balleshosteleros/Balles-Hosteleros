@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Save, ShieldCheck, Palmtree } from "lucide-react";
+import { Loader2, Save, ShieldCheck, Palmtree, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { listDepartamentos } from "@/features/rrhh/actions/empleados-actions";
 import { getRrhhConfig, saveRrhhConfig } from "@/features/rrhh/actions/rrhh-config-actions";
+import { SS_EMPRESA_PCT_DEFECTO } from "@/features/rrhh/lib/coste-hora";
 import {
   DIAS_SEMANA_OPCIONES,
   VACACIONES_REGLAS_DEFAULT,
@@ -55,6 +56,8 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
   // que es como se comporta un permiso mientras la empresa no configure nada.
   const [permisoMin, setPermisoMin] = useState<string>("");
   const [permisoMax, setPermisoMax] = useState<string>("");
+  // Seguridad Social a cargo de la empresa: lo que se paga POR ENCIMA del bruto.
+  const [ssPct, setSsPct] = useState<string>(String(SS_EMPRESA_PCT_DEFECTO));
 
   useEffect(() => {
     let activo = true;
@@ -74,6 +77,11 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
         setDiasMax(cfgRes.data.vacacionesDiasMax != null ? String(cfgRes.data.vacacionesDiasMax) : "");
         setPermisoMin(cfgRes.data.permisoDiasMin != null ? String(cfgRes.data.permisoDiasMin) : "");
         setPermisoMax(cfgRes.data.permisoDiasMax != null ? String(cfgRes.data.permisoDiasMax) : "");
+        setSsPct(
+          cfgRes.data.seguridadSocialEmpresaPct != null
+            ? String(cfgRes.data.seguridadSocialEmpresaPct)
+            : String(SS_EMPRESA_PCT_DEFECTO),
+        );
       }
       setCargando(false);
     });
@@ -125,6 +133,12 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
   ];
 
   async function guardar() {
+    // El porcentaje admite decimales (35,5) y se escribe con coma en español.
+    const ssNum = Number(String(ssPct).replace(",", "."));
+    if (!Number.isFinite(ssNum) || ssNum < 0 || ssNum > 100) {
+      toast.error("La Seguridad Social de empresa debe ser un porcentaje entre 0 y 100.");
+      return;
+    }
     if (rangoInvalido) {
       toast.error("El máximo de días de vacaciones no puede ser menor que el mínimo.");
       return;
@@ -147,6 +161,7 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
         permisoMinNum != null && Number.isFinite(permisoMinNum) ? permisoMinNum : null,
       permisoDiasMax:
         permisoMaxNum != null && Number.isFinite(permisoMaxNum) ? permisoMaxNum : null,
+      seguridadSocialEmpresaPct: ssNum,
     });
     setGuardando(false);
     if (!res.ok) {
@@ -320,6 +335,30 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
               El máximo de días al año se configura aparte, en RRHH → Horarios →
               Tipos de ausencia, en el campo «Límite de días al año» de cada tipo.
             </p>
+          </div>
+
+          <div className="space-y-3 rounded-lg border bg-card p-4">
+            <div className="flex items-center gap-2">
+              <Coins className="h-4 w-4" />
+              <h3 className="text-sm font-semibold">Coste de personal</h3>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ss-empresa">Seguridad Social a cargo de la empresa (%)</Label>
+              <Input
+                id="ss-empresa"
+                inputMode="decimal"
+                value={ssPct}
+                onChange={(e) => setSsPct(e.target.value)}
+                className="max-w-[140px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                Lo que paga la empresa POR ENCIMA del sueldo bruto. Se suma al coste por hora y al
+                día de vacaciones, permiso o baja, para que los ratios de gerencia reflejen lo que
+                cuesta de verdad la plantilla. Por defecto {SS_EMPRESA_PCT_DEFECTO} %, que es lo que
+                sale de las nóminas ya cargadas.
+              </p>
+            </div>
           </div>
 
           <div className="flex justify-end">

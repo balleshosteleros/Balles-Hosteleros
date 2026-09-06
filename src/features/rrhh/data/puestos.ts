@@ -18,6 +18,12 @@ export interface NivelSalarial {
   jornadaContrato: string;
   horasSemanales: number;
   diasLibres: number;
+  /**
+   * Lo que cuesta una hora de este puesto. Se copia al empleado al contratarlo y
+   * es lo que usan los ratios de coste de personal. A 0 se calcula solo:
+   * bruto x 12 / (52 x horas de la semana).
+   */
+  costeHora: number;
   horarioSemanal: HorarioDia[];
   observaciones: string;
   estado: "activo" | "borrador" | "inactivo";

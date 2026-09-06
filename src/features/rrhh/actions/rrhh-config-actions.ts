@@ -1,6 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { SS_EMPRESA_PCT_DEFECTO } from "@/features/rrhh/lib/coste-hora";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminUser } from "@/features/rrhh/services/empleados-core";
 import { revalidatePath } from "next/cache";
@@ -29,6 +30,12 @@ export interface RrhhConfig {
   permisoDiasMin: number | null;
   /** Máximo de días naturales por solicitud de permiso. null = sin máximo. */
   permisoDiasMax: number | null;
+  /**
+   * Seguridad Social a cargo de la EMPRESA, en % sobre el bruto.
+   * El bruto es lo que cobra el trabajador; esto es lo que paga la empresa
+   * ADEMÁS por él, y sin ello el coste de personal sale corto.
+   */
+  seguridadSocialEmpresaPct: number | null;
 }
 
 /** Convierte a entero dentro de rango, o null si no es un valor usable. */
@@ -52,7 +59,7 @@ export async function getRrhhConfig(): Promise<{ ok: boolean; data?: RrhhConfig;
     const { data, error } = await admin
       .from("empresa_rrhh_config")
       .select(
-        "validador_depto_operativa_id, validador_depto_administrativa_id, tareas_validador_activo, vacaciones_dia_inicio, vacaciones_dias_min, vacaciones_dias_max, permiso_dias_min, permiso_dias_max",
+        "validador_depto_operativa_id, validador_depto_administrativa_id, tareas_validador_activo, vacaciones_dia_inicio, vacaciones_dias_min, vacaciones_dias_max, permiso_dias_min, permiso_dias_max, seguridad_social_empresa_pct",
       )
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -82,6 +89,10 @@ export async function getRrhhConfig(): Promise<{ ok: boolean; data?: RrhhConfig;
         permisoDiasMax: data
           ? enteroEnRango(data.permiso_dias_max, 1, 366)
           : PERMISO_REGLAS_DEFAULT.diasMax,
+        seguridadSocialEmpresaPct:
+          data?.seguridad_social_empresa_pct != null
+            ? Number(data.seguridad_social_empresa_pct)
+            : SS_EMPRESA_PCT_DEFECTO,
       },
     };
   } catch (err) {
@@ -101,6 +112,7 @@ export async function saveRrhhConfig(input: {
   vacacionesDiasMax: number | null;
   permisoDiasMin: number | null;
   permisoDiasMax: number | null;
+  seguridadSocialEmpresaPct: number | null;
 }) {
   try {
     const { empresaId } = await getAppContext();
@@ -142,6 +154,17 @@ export async function saveRrhhConfig(input: {
       };
     }
 
+    // La Seguridad Social es un porcentaje, no un entero: admite decimales
+    // (35,8) y tiene que quedarse entre 0 y 100.
+    let ssPct: number | null = null;
+    if (input.seguridadSocialEmpresaPct != null) {
+      const n = Number(input.seguridadSocialEmpresaPct);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        return { ok: false, error: "La Seguridad Social de empresa debe ser un porcentaje entre 0 y 100." };
+      }
+      ssPct = Math.round(n * 100) / 100;
+    }
+
     let admin;
     try { admin = createAdminClient(); }
     catch { return { ok: false, error: "Supabase admin no configurado." }; }
@@ -159,6 +182,7 @@ export async function saveRrhhConfig(input: {
           vacaciones_dias_max: diasMax,
           permiso_dias_min: permisoMin,
           permiso_dias_max: permisoMax,
+          seguridad_social_empresa_pct: ssPct,
         },
         { onConflict: "empresa_id" },
       );

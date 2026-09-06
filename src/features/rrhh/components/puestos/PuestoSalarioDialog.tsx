@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { NumberInput } from "@/shared/components/NumberInput";
+import { formatEur } from "@/shared/lib/numero";
+import { costeHoraDe } from "@/features/rrhh/lib/coste-hora";
 import { Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -59,6 +61,7 @@ function nivelVacio(nivel: number): NivelSalarial {
     jornadaContrato: "Completa",
     horasSemanales: 0,
     diasLibres: 0,
+    costeHora: 0,
     horarioSemanal: [],
     observaciones: "",
     estado: "activo",
@@ -106,6 +109,9 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     falta(campo) ? "border-destructive focus-visible:ring-destructive" : "";
 
   const cur = niveles[idx] ?? niveles[0];
+  // Lo que costaría la hora con el sueldo y la jornada de arriba: se enseña como
+  // ayuda para que se vea de dónde sale la cifra si no se escribe a mano.
+  const costeHoraSugerido = costeHoraDe(cur?.salarioBruto ?? 0, cur?.horasSemanales ?? 0) ?? 0;
 
   // Vista previa de la semana del horario elegido.
   const turnoById = useMemo(() => {
@@ -261,6 +267,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           jornadaContrato: n.jornadaContrato,
           horasSemanales: n.horasSemanales,
           diasLibres: n.diasLibres,
+          costeHora: n.costeHora,
           vacaciones: n.vacaciones,
           observaciones: n.observaciones,
           estado: n.estado,
@@ -399,6 +406,21 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
               <div className="space-y-1.5">
                 <Label htmlFor="ps-horas">Horas/semana</Label>
                 <NumberInput id="ps-horas" value={cur?.horasSemanales ?? 0} onValueChange={(v) => setCur({ horasSemanales: v })} min={0} max={60} className={claseFalta("horasSemanales")} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ps-coste-hora">Coste por hora (€)</Label>
+                <NumberInput
+                  id="ps-coste-hora"
+                  value={cur?.costeHora ?? 0}
+                  onValueChange={(v) => setCur({ costeHora: v })}
+                  min={0}
+                  decimales
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {costeHoraSugerido > 0
+                    ? `Si lo dejas en blanco se usa ${formatEur(costeHoraSugerido)} (el sueldo repartido entre las horas).`
+                    : "Se calcula solo con el salario y las horas de la semana."}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ps-dias">Días libres</Label>

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { costeHoraDe } from "@/features/rrhh/lib/coste-hora";
 
 /**
  * Condiciones del puesto → empleado (snapshot versionado).
@@ -33,6 +34,12 @@ export interface CondicionesPuesto {
   dias_libres: number | null;
   vacaciones: string | null;
   horario_semanal: unknown;
+  /**
+   * Lo que cuesta una hora de este puesto. Se guarda como dato propio para poder
+   * corregirlo a mano cuando el coste real no sale de dividir el sueldo entre las
+   * horas. Si viene vacío, se deduce del bruto y las horas semanales.
+   */
+  coste_hora: number | null;
 }
 
 /**
@@ -46,7 +53,7 @@ export async function leerCondicionesPuesto(
   const { data } = await admin
     .from("puesto_salarios")
     .select(
-      "nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal",
+      "nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, coste_hora",
     )
     .eq("puesto_id", puestoId)
     .order("nivel", { ascending: true })
@@ -73,6 +80,7 @@ export async function leerCondicionesPuesto(
     dias_libres: num(row.dias_libres),
     vacaciones: texto(row.vacaciones),
     horario_semanal: row.horario_semanal,
+    coste_hora: num(row.coste_hora) ?? costeHoraDe(num(row.salario_bruto), num(row.horas_semanales)),
   };
 }
 
@@ -131,6 +139,9 @@ export async function escribirCondicionesVigentes(
     dias_libres: cond?.dias_libres ?? null,
     vacaciones: cond?.vacaciones ?? null,
     horario_semanal: cond?.horario_semanal ?? [],
+    // El coste de la hora viaja con el resto: queda congelado en el histórico del
+    // trabajador, así que tocar el puesto después no le cambia lo ya pactado.
+    coste_hora: cond?.coste_hora ?? null,
     primer_dia: primerDia,
     tipo_contrato: tipoContrato,
     vigente_desde: primerDia,

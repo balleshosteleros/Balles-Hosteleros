@@ -32,6 +32,7 @@ import { copiarDocumentacionCandidatoAEmpleado } from "@/features/rrhh/services/
 import { enviarAltaGestoria } from "@/features/rrhh/actions/gestoria-actions";
 import { faltantesAltaGestoria } from "@/features/rrhh/data/campos-gestoria";
 import { escribirCondicionesVigentes } from "@/features/rrhh/services/condiciones-puesto";
+import { costeHoraDe } from "@/features/rrhh/lib/coste-hora";
 import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 import { revalidatePath } from "next/cache";
 
@@ -257,6 +258,7 @@ async function guardarSnapshotCondiciones(
     salario_bruto: number | null; nomina_neta: number; efectivo_extra: number; salario_neto: number;
     jornada_contrato: string | null; horas_semanales: number | null;
     dias_libres: number | null; vacaciones: string | null; horario_semanal: unknown;
+    coste_hora: number | null;
   } | null,
 ) {
   // `empleado_condiciones` es un HISTÓRICO versionado: al contratar se escribe la
@@ -380,7 +382,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // numeración que existan; si la plantilla está vacía, `cond` queda null.
   const { data: condRows } = await admin
     .from("puesto_salarios")
-    .select("nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal")
+    .select("nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, coste_hora")
     .eq("puesto_id", input.puestoId)
     .order("nivel", { ascending: true })
     .limit(1);
@@ -395,6 +397,12 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
         salario_neto: condRow.salario_neto, jornada_contrato: condRow.jornada_contrato,
         horas_semanales: condRow.horas_semanales, dias_libres: condRow.dias_libres,
         vacaciones: condRow.vacaciones, horario_semanal: condRow.horario_semanal,
+        // El coste de la hora se hereda del puesto; si la plantilla no lo tiene
+        // escrito, se deduce del sueldo con la misma cuenta de siempre.
+        coste_hora:
+          condRow.coste_hora != null
+            ? Number(condRow.coste_hora)
+            : costeHoraDe(Number(condRow.salario_bruto), Number(condRow.horas_semanales)),
       }
     : null;
 
