@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, Eye, Mail, MessageCircle, Smartphone } from "lucide-react";
+import {
+  ChevronDown,
+  Eye,
+  Mail,
+  MailOpen,
+  MessageCircle,
+  Smartphone,
+} from "lucide-react";
 
 import {
   Collapsible,
@@ -36,6 +43,11 @@ import {
 interface LineaComunicacion {
   id: string;
   via: "CORREO" | "WHATSAPP" | "SMS";
+  /**
+   * El asunto tal cual salió al cliente. Es lo que él tiene en su bandeja, así
+   * que es lo que hay que enseñar aquí; el nombre de la plantilla solo se usa
+   * de respaldo en los envíos antiguos que no lo guardaron.
+   */
   titulo: string;
   destinatario: string | null;
   autor: string;
@@ -149,7 +161,7 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
         ...correos.data.map((e): LineaComunicacion => ({
           id: `correo-${e.id}`,
           via: "CORREO",
-          titulo: RESERVA_EMAIL_TIPO_LABELS[e.tipo],
+          titulo: e.asunto?.trim() || RESERVA_EMAIL_TIPO_LABELS[e.tipo],
           destinatario: e.destinatario,
           autor: autor(e),
           enviadoAt: e.enviadoAt,
@@ -233,14 +245,18 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
                   {tz ? formatFechaHoraEnZona(e.enviadoAt, tz) : "—"}
                 </span>
               </div>
+              {/* Quién lo mandó va en su propia línea, separado del asunto:
+                  son dos datos distintos y juntos se leían como uno solo. */}
               <div className="mt-0.5 text-muted-foreground">
                 Enviado por{" "}
                 <span className="font-medium text-foreground">{e.autor}</span>
-                {e.destinatario ? ` · ${e.destinatario}` : ""}
+              </div>
+              <div className="text-muted-foreground">
+                {e.destinatario}
                 {/* En WhatsApp y SMS, el estado de entrega que da la pasarela. */}
                 {e.estado && (
                   <>
-                    {" · "}
+                    {e.destinatario ? " · " : ""}
                     <span className={cn(e.fallido && "text-destructive")}>
                       {e.estado}
                     </span>
@@ -248,17 +264,24 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
                 )}
                 {/* En correo, si el cliente lo ha abierto. Lo marca el píxel
                     del propio correo: que conste es señal de que llegó a un
-                    buzón real. */}
+                    buzón real. Va con sobre abierto o cerrado, que se distingue
+                    de un vistazo sin tener que leer. */}
                 {e.via === "CORREO" && (
                   <>
-                    {" · "}
+                    {e.destinatario ? " · " : ""}
                     <span
                       className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium",
                         e.abiertoAt
-                          ? "font-medium text-emerald-600 dark:text-emerald-400"
-                          : "text-muted-foreground",
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "bg-muted text-muted-foreground",
                       )}
                     >
+                      {e.abiertoAt ? (
+                        <MailOpen className="h-3 w-3 shrink-0" />
+                      ) : (
+                        <Mail className="h-3 w-3 shrink-0" />
+                      )}
                       {e.abiertoAt ? "Abierto" : "Sin abrir"}
                     </span>
                   </>
