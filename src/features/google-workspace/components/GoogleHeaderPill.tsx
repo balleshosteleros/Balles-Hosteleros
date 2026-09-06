@@ -141,7 +141,11 @@ export function GoogleHeaderPill() {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <ToolTooltip label={`Cuenta Google activa: ${email ?? ""}`}>
+        {/* Etiqueta CORTA, como el resto de la barra: el correo entero hacia
+            un tooltip larguisimo que tapaba media fila de iconos. La cuenta
+            concreta ya se lee al abrir el desplegable, y el aria-label la
+            sigue diciendo entera para el lector de pantalla. */}
+        <ToolTooltip label="Cuenta de Google">
         <button
           type="button"
           className="inline-flex h-8 w-8 items-center justify-center rounded-full border bg-card shadow-sm transition-colors hover:bg-muted"
@@ -155,31 +159,40 @@ export function GoogleHeaderPill() {
         </button>
         </ToolTooltip>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72 p-0">
-        <DropdownMenuLabel className="flex items-center gap-2 border-b bg-muted/40 px-3 py-3">
-          <Avatar cuenta={cuentaActiva} size="lg" />
+      {/* MISMO patron que el menu de usuario de la cabecera: ancho w-60,
+          etiquetas en 10px mayusculas y opciones en text-xs con icono de
+          3.5. Antes era una tarjeta aparte —w-72, p-0, cabecera con fondo
+          gris y avatares grandes— y en la misma barra convivian dos
+          desplegables con dos lenguajes distintos. */}
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Cuenta activa
+        </DropdownMenuLabel>
+        <div className="flex items-center gap-2 px-3 py-1.5">
+          <Avatar cuenta={cuentaActiva} size="sm" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-foreground">
+            <p className="truncate text-xs font-medium text-foreground">
               {name || "Conectado a Google"}
             </p>
-            <p className="truncate text-[11px] text-muted-foreground">
+            <p className="truncate text-[10px] text-muted-foreground">
               {email}
             </p>
           </div>
-          <Check className="h-4 w-4 shrink-0 text-emerald-500" />
-        </DropdownMenuLabel>
+          <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+        </div>
 
         {otras.length > 0 && (
           <>
-            <div className="px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Otras cuentas
-            </div>
+            </DropdownMenuLabel>
             {otras.map((cuenta) => {
               const ocupada = busyEmail === cuenta.email;
               return (
                 <div
                   key={cuenta.email}
-                  className="group flex items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-muted"
+                  className="group flex items-center gap-2 rounded-sm px-3 py-1.5 hover:bg-accent"
                 >
                   <button
                     type="button"
@@ -188,7 +201,7 @@ export function GoogleHeaderPill() {
                     className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:opacity-60"
                   >
                     {ocupada ? (
-                      <Loader2 className="h-7 w-7 shrink-0 animate-spin p-1.5 text-muted-foreground" />
+                      <Loader2 className="h-6 w-6 shrink-0 animate-spin p-1 text-muted-foreground" />
                     ) : (
                       <Avatar cuenta={cuenta} size="sm" />
                     )}
@@ -219,29 +232,23 @@ export function GoogleHeaderPill() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem asChild>
+        <DropdownMenuItem asChild className="cursor-pointer gap-2 px-3 py-1.5">
           <a
             href={`/api/google/connect?next=${next}&switch=1`}
-            className="cursor-pointer"
             title="Solo la primera vez por cuenta. Después cambias con un click."
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Añadir otra cuenta de Google
+            <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs font-medium">Añadir otra cuenta</span>
           </a>
         </DropdownMenuItem>
 
         <DropdownMenuItem
           onClick={onSignOutActive}
-          className="cursor-pointer text-destructive focus:text-destructive"
+          className="cursor-pointer gap-2 px-3 py-1.5 text-destructive focus:text-destructive"
         >
-          <LogOut className="mr-2 h-4 w-4" />
-          Desconectar esta cuenta
+          <LogOut className="h-3.5 w-3.5" />
+          <span className="text-xs font-medium">Desconectar esta cuenta</span>
         </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-        <div className="px-3 py-1.5 text-[10px] text-muted-foreground">
-          Tus emails y eventos solo los ves tú.
-        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );
