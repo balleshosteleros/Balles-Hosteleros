@@ -63,9 +63,13 @@ import {
 import { updateZona } from "@/features/sala/planos/actions/zonas-actions";
 import { setSalaEncuadre } from "@/features/sala/planos/actions/salas-actions";
 
-const MESA_SIZE = 60;
-const MESA_RECT_W = 84;
-const MESA_RECT_H = 48;
+// Tamano DE SERIE de una mesa nueva. Nunca por debajo de MIN_MESA_SIZE: una
+// mesa recien puesta no puede nacer mas pequena de lo que luego se permite
+// dejarla. La rectangular es mas ancha que alta, pero su alto tampoco baja del
+// minimo (Ivan, 06-sep).
+const MESA_SIZE = 68;
+const MESA_RECT_W = 96;
+const MESA_RECT_H = 64;
 const CANVAS_W = 1200;
 const CANVAS_H = 640;
 /** Alto fijo del badge "etiqueta de zona" en px del canvas. */
@@ -158,11 +162,18 @@ type DragState =
 type EncuadreHandle = "nw" | "ne" | "sw" | "se" | "n" | "s" | "w" | "e";
 
 /**
- * Lo más pequeño que se puede dejar una mesa. Por debajo de esto el nombre del
- * cliente ya no cabe dentro de la mesa en el servicio y la mesa deja de poder
- * leerse de un vistazo, que es justo para lo que sirve el plano.
+ * TAMAÑO MÍNIMO DE SERIE de una mesa, para TODAS las empresas.
+ *
+ * Por debajo de esto el nombre del cliente ya no cabe dentro de la mesa
+ * durante el servicio y el plano deja de leerse de un vistazo, que es justo
+ * para lo que sirve. Vale igual para un local que se monta hoy que para uno ya
+ * en marcha: una sala nueva no puede quedar con las mesas más pequeñas de lo
+ * que se puede trabajar (Iván, 06-sep).
+ *
+ * Estaba en 52 y se quedaba corto —una sala real ronda los 66— así que se sube
+ * a 64: lo justo para que ninguna sala nazca ilegible.
  */
-const MIN_MESA_SIZE = 52;
+const MIN_MESA_SIZE = 64;
 const MIN_DECO_SIZE = 16;
 /**
  * Lo más pequeño que se puede apretar el recuadro rojo. Por debajo de esto el

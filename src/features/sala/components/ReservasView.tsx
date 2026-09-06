@@ -2679,10 +2679,13 @@ function KpiTurnoMes({
 }
 
 
-/** Dimensiones por defecto. Coinciden con SalaPlanoEditor. */
-const PLANO_MESA_SIZE = 60;
-const PLANO_MESA_RECT_W = 84;
-const PLANO_MESA_RECT_H = 48;
+/** Dimensiones por defecto. Coinciden con SalaPlanoEditor (MESA_SIZE y
+ *  MESA_RECT_*), que es donde vive el tamano de serie y el minimo. Si aqui
+ *  fueran mas pequenas, una mesa sin medida guardada se veria de un tamano en
+ *  el plano y de otro en el editor. */
+const PLANO_MESA_SIZE = 68;
+const PLANO_MESA_RECT_W = 96;
+const PLANO_MESA_RECT_H = 64;
 
 function getPlanoMesaDims(forma: FormaMesa, pos?: PlanoMesaPosicion | null) {
   const defW = forma === "rectangular" ? PLANO_MESA_RECT_W : PLANO_MESA_SIZE;
