@@ -144,6 +144,8 @@ export interface PagoGuardado {
   total: number;
   pagado: boolean;
   comentario: string | null;
+  comentarioEmpleado?: string | null;
+  confirmacionRechazadaAt?: string | null;
   nominaPath: string | null;
   numNominas: number; // nº de nóminas individuales de ese empleado/mes (para el badge)
   // Las nóminas individuales del mes (ordenadas). Cuando hay 2+, permite abrir el
@@ -175,13 +177,17 @@ type PagoDbRow = {
   total: number | string;
   pagado: boolean;
   comentario: string | null;
+  comentarioEmpleado?: string | null;
+  confirmacionRechazadaAt?: string | null;
   nomina_path: string | null;
   confirmacion_enviada_at: string | null;
   confirmacion_aceptada_at: string | null;
+  comentario_empleado?: string | null;
+  confirmacion_rechazada_at?: string | null;
 };
 
 const PAGO_COLS =
-  "empleado_id, empleado_nombre, fijo, nomina, horas_reales, horas_trabajadas, complemento, ajuste, horas_extras, bonus, ss_empleado, ss_empresa, irpf, total, pagado, comentario, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
+  "empleado_id, empleado_nombre, fijo, nomina, horas_reales, horas_trabajadas, complemento, ajuste, horas_extras, bonus, ss_empleado, ss_empresa, irpf, total, pagado, comentario, comentario_empleado, confirmacion_rechazada_at, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
 
 function dbToPago(r: PagoDbRow): PagoGuardado {
   return {
@@ -201,6 +207,8 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
     total: Number(r.total),
     pagado: r.pagado,
     comentario: r.comentario ?? null,
+    comentarioEmpleado: r.comentario_empleado ?? null,
+    confirmacionRechazadaAt: r.confirmacion_rechazada_at ?? null,
     nominaPath: r.nomina_path,
     numNominas: 0,
     avisoInactivo: false,
@@ -829,5 +837,194 @@ export async function loadPagosRango(
   } catch (err) {
     console.error("[rrhh] loadPagosRango:", err);
     return { ok: false, data: [], meses: 0 };
+  }
+}
+
+// ── Liquidación PENDIENTE del trabajador (su portal) ────────────────────────
+// El histórico (`listMisPagosAbonados`) enseña lo ya cobrado. Esto enseña lo que
+// está esperando su respuesta: enviada por RRHH y sin contestar, o rechazada por
+// él y todavía sin rehacer. Es lo que le sale arriba en "Mis pagos" con los
+// botones de cobrar y rechazar.
+
+export interface PagoPendiente extends PagoAbonado {
+  /** Motivo que él mismo escribió si la rechazó (para poder verlo al reintentar). */
+  comentarioEmpleado: string | null;
+  rechazadaAt: string | null;
+}
+
+export async function getMiLiquidacionPendiente(): Promise<{
+  ok: boolean;
+  data: PagoPendiente | null;
+  error?: string;
+}> {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false, data: null };
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+
+    const { data: fichas } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("empresa_id", empresaId);
+    const fichaIds = (fichas ?? []).map((f) => f.id as string);
+    if (fichaIds.length === 0) return { ok: true, data: null };
+
+    // Enviada, aún sin pagar y sin aprobar: o no ha contestado, o la rechazó.
+    const { data, error } = await supabase
+      .from("rrhh_pagos")
+      .select(`${PAGO_ABONADO_COLS}, comentario_empleado, confirmacion_rechazada_at`)
+      .eq("empresa_id", empresaId)
+      .in("empleado_id", fichaIds)
+      .not("confirmacion_enviada_at", "is", null)
+      .is("confirmacion_aceptada_at", null)
+      .eq("pagado", false)
+      .order("periodo", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { ok: true, data: null };
+
+    const r = data as unknown as Record<string, unknown>;
+    return {
+      ok: true,
+      data: {
+        ...bdToPagoAbonado(r, tz),
+        comentarioEmpleado: (r.comentario_empleado as string | null) ?? null,
+        rechazadaAt: (r.confirmacion_rechazada_at as string | null) ?? null,
+      },
+    };
+  } catch (err) {
+    console.error("[rrhh] getMiLiquidacionPendiente:", err);
+    return { ok: false, data: null, error: friendlyError(err, "getMiLiquidacionPendiente") };
+  }
+}
+
+/**
+ * El trabajador COBRA: aprueba que su liquidación es correcta. A partir de aquí
+ * RRHH puede pagarla (el botón se le pone verde). Le llega un correo dejando
+ * constancia, sin importes: las cifras las tiene en su portal.
+ */
+export async function cobrarMiLiquidacion(
+  pagoId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false, error: "Sesión no válida" };
+
+    const { data: fichas } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("empresa_id", empresaId);
+    const fichaIds = (fichas ?? []).map((f) => f.id as string);
+    if (fichaIds.length === 0) return { ok: false, error: "Sin ficha de empleado" };
+
+    // Al aprobar se limpia un rechazo anterior: si la rechazó y ahora la acepta,
+    // dejar la marca haría que RRHH siguiera viéndola como rechazada.
+    const { data, error } = await supabase
+      .from("rrhh_pagos")
+      .update({
+        confirmacion_aceptada_at: new Date().toISOString(),
+        confirmacion_rechazada_at: null,
+      })
+      .eq("id", pagoId)
+      .eq("empresa_id", empresaId)
+      .in("empleado_id", fichaIds)
+      .not("confirmacion_enviada_at", "is", null)
+      .is("confirmacion_aceptada_at", null)
+      .select("id, periodo, empleado_id, empleado_nombre")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { ok: false, error: "Esa liquidación ya no está pendiente" };
+
+    // Correo de constancia (best-effort: si falla, la aprobación sigue en pie).
+    try {
+      const admin = createAdminClient();
+      const [{ data: emp }, { data: ficha }] = await Promise.all([
+        admin.from("empresas").select("nombre").eq("id", empresaId).maybeSingle(),
+        admin
+          .from("empleados")
+          .select("email_empresa, email_personal")
+          .eq("id", data.empleado_id as string)
+          .maybeSingle(),
+      ]);
+      const to = ((ficha?.email_empresa as string | null) || (ficha?.email_personal as string | null) || "").trim();
+      if (to) {
+        const empresaNombre = (emp?.nombre as string) ?? "la empresa";
+        const mes = periodoLabel(data.periodo as string);
+        const nombre = String(data.empleado_nombre ?? "").split(" ")[0] || "";
+        await sendEmail({
+          to,
+          subject: `Liquidación de ${mes} confirmada · ${empresaNombre}`,
+          html: `
+            <p>Hola ${nombre},</p>
+            <p>Gracias por aprobar y confirmar que tu liquidación de <b>${mes}</b> es correcta.</p>
+            <p>Con esto podemos cerrar el mes de forma correcta por tu parte y por la nuestra.</p>
+            <p style="color:#888;font-size:12px">
+              Enviado automáticamente desde el sistema de ${empresaNombre}.
+            </p>`,
+          text:
+            `Gracias por aprobar y confirmar que tu liquidación de ${mes} es correcta. ` +
+            `Con esto podemos cerrar el mes de forma correcta por tu parte y por la nuestra.`,
+          empresaId,
+        });
+      }
+    } catch (e) {
+      console.error("[rrhh] correo constancia liquidación:", e);
+    }
+
+    return { ok: true };
+  } catch (err) {
+    console.error("[rrhh] cobrarMiLiquidacion:", err);
+    return { ok: false, error: friendlyError(err, "cobrarMiLiquidacion") };
+  }
+}
+
+/**
+ * El trabajador RECHAZA su liquidación con un motivo corto. No se aprueba nada:
+ * el botón de RRHH vuelve a su estado de espera y el motivo aparece en la
+ * columna de comentarios, junto a la nota que hubiera puesto la empresa.
+ */
+export async function rechazarMiLiquidacion(
+  pagoId: string,
+  motivo: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const texto = motivo.trim();
+    if (!texto) return { ok: false, error: "Escribe el motivo del rechazo" };
+    if (texto.length > 280) return { ok: false, error: "El motivo es demasiado largo" };
+
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false, error: "Sesión no válida" };
+
+    const { data: fichas } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("empresa_id", empresaId);
+    const fichaIds = (fichas ?? []).map((f) => f.id as string);
+    if (fichaIds.length === 0) return { ok: false, error: "Sin ficha de empleado" };
+
+    const { data, error } = await supabase
+      .from("rrhh_pagos")
+      .update({
+        confirmacion_rechazada_at: new Date().toISOString(),
+        comentario_empleado: capitalizeText(texto),
+      })
+      .eq("id", pagoId)
+      .eq("empresa_id", empresaId)
+      .in("empleado_id", fichaIds)
+      .not("confirmacion_enviada_at", "is", null)
+      .is("confirmacion_aceptada_at", null)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { ok: false, error: "Esa liquidación ya no está pendiente" };
+
+    return { ok: true };
+  } catch (err) {
+    console.error("[rrhh] rechazarMiLiquidacion:", err);
+    return { ok: false, error: friendlyError(err, "rechazarMiLiquidacion") };
   }
 }

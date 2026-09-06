@@ -30,6 +30,13 @@ import {
 } from "@/features/notificaciones/actions/notif-config-actions";
 import { NominasRevisionDialog } from "@/features/rrhh/components/pagos/NominasRevisionDialog";
 import { RechazarNominasDialog } from "@/features/rrhh/components/pagos/RechazarNominasDialog";
+import { CuadreEntregaCard, type BloqueCuadre } from "@/features/rrhh/components/pagos/CuadreEntregaCard";
+import {
+  aprobarSegurosSociales,
+  rechazarSegurosSociales,
+  reabrirSegurosSociales,
+  listarHistoricoMes,
+} from "@/features/rrhh/actions/nominas-aprobacion-actions";
 import {
   listarNominasRevision,
   getEstadoMesNominas,
@@ -286,7 +293,6 @@ export function PagosView() {
   // empleadoId cuya nómina se está abriendo (para el indicador del icono).
   const [abriendoNomina, setAbriendoNomina] = useState<string | null>(null);
   const [descargandoMes, setDescargandoMes] = useState(false);
-  const [confirmandoMes, setConfirmandoMes] = useState(false);
   const [subiendoTc1, setSubiendoTc1] = useState(false);
   const tc1InputRef = useRef<HTMLInputElement>(null);
   // Mes que se COTIZA en el TC1 que se va a adjuntar. No es el de la entrega: los
@@ -309,6 +315,11 @@ export function PagosView() {
   // Devolución del mes a la gestoría: diálogo con las anomalías (obligatorias).
   const [showRechazo, setShowRechazo] = useState(false);
   const [rechazando, setRechazando] = useState(false);
+  // Qué bloque de la tarjeta de cuadre está en marcha (bloquea sus botones).
+  const [cuadreOcupado, setCuadreOcupado] = useState<BloqueCuadre["clave"] | null>(null);
+  // A qué documento apunta el diálogo de devolución: las nóminas del mes o los
+  // seguros sociales, que se revisan por separado.
+  const [rechazoDe, setRechazoDe] = useState<BloqueCuadre["clave"]>("nominas");
   const [nominasEnMes, setNominasEnMes] = useState(0);
   // Suma de SS (trabajador + empresa) de las nóminas del mes: el contraste de los TC1.
   const [ssNominasMes, setSsNominasMes] = useState(0);
@@ -434,32 +445,21 @@ export function PagosView() {
   // liquidaciones (ordinaria + complementaria de vacaciones) el total del mes es
   // la suma de todas.
   const hayTc1 = estadoMes.tc1.length > 0;
-  const tc1ConImporte = estadoMes.tc1.filter((t) => t.importe != null);
-  const tc1SinImporte = estadoMes.tc1.length - tc1ConImporte.length;
-  const totalTc1 =
-    tc1ConImporte.length > 0
-      ? Math.round(tc1ConImporte.reduce((a, t) => a + (t.importe ?? 0), 0) * 100) / 100
-      : null;
+  // Recibos sin líquido legible: con uno solo, el total del mes está INCOMPLETO
+  // y no se puede afirmar que cuadre. Se dice en la tarjeta para revisarlo a mano.
+  const tc1SinImporte = estadoMes.tc1.filter((t) => t.importe == null).length;
   // El cuadre se hace contra las nóminas del mes que COTIZAN los recibos, no
   // contra las del mes que se está viendo: los seguros sociales van a mes
-  // vencido, así que con las nóminas de agosto llega el TC1 de julio y
+  // vencido, así que con las nóminas de agosto llega el recibo de julio y
   // compararlos entre sí daría un descuadre que no existe.
   const cuadrePorMesVisto = estadoSubidaMeses[periodo]?.cuadrePorMesCotizado ?? [];
-  const mesesVistoSinNominas = cuadrePorMesVisto.filter((c) => c.sinNominas);
-  // Al céntimo: no se admite holgura, igual que en el cuadre del servidor. Si
-  // algún recibo se guardó sin líquido legible, el total está INCOMPLETO y no se
-  // puede afirmar que cuadre: se trata como "no comprobable", no como correcto.
-  const tc1Comprobable = cuadrePorMesVisto.some((c) => c.comprobable);
-  const cuadraTc1 = cuadrePorMesVisto.every((c) => c.cuadra);
-  // Cotización de los meses cotizados que sí se han podido contrastar: es lo que
-  // se enseña enfrente del total de los recibos.
-  const ssCotizadaComparable =
-    Math.round(
-      cuadrePorMesVisto.filter((c) => !c.sinNominas).reduce((a, c) => a + c.ssNominas, 0) * 100,
-    ) / 100;
-  // Los meses que cotizan los recibos del mes visto, para nombrarlos en pantalla.
   const mesesCotizadosVistos = cuadrePorMesVisto.map((c) => c.periodo);
-  const etiquetaMesesCotizados = mesesCotizadosVistos.map(nombreMesLargo).join(" y ");
+
+  // MES COTIZADO principal del recibo que llega con esta entrega. Si aún no hay
+  // recibo no hay nada que aprobar, pero la tarjeta debe seguir diciendo de qué
+  // mes se le espera: el anterior, que es lo que hace la gestoría siempre.
+  const mesCotizadoPrincipal = mesesCotizadosVistos[0] ?? mesAnterior(periodo);
+  const cuadreSs = cuadrePorMesVisto.find((c) => c.periodo === mesCotizadoPrincipal) ?? null;
 
   const mesSubidaLabel = useMemo(() => nombreMesLargo(mesSubida), [mesSubida]);
   const estadoMesSubida = estadoSubidaMeses[mesSubida];
@@ -888,9 +888,7 @@ export function PagosView() {
       confirmLabel: "Confirmar nóminas",
     });
     if (!ok) return;
-    setConfirmandoMes(true);
     const res = await confirmarMesNominas(periodo);
-    setConfirmandoMes(false);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudieron confirmar las nóminas.");
       return;
@@ -962,15 +960,76 @@ export function PagosView() {
       confirmLabel: "Reabrir",
     });
     if (!ok) return;
-    setConfirmandoMes(true);
     const res = await reabrirMesNominas(periodo);
-    setConfirmandoMes(false);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo reabrir el mes.");
       return;
     }
     await refrescarEstadoMes();
     toast.success(`Nóminas de ${mesLabelNominas} reabiertas para corregir.`);
+  };
+
+  // ── Seguros sociales: su propio visto bueno ────────────────────────────────
+  // Se aprueban por MES COTIZADO, no por el de la entrega: el recibo que llega
+  // con las nóminas de julio cotiza junio, y es contra las de junio contra las
+  // que cuadra. Si hay complementaria (vacaciones) van los dos recibos juntos:
+  // son el mismo dinero en dos papeles.
+
+  const aprobarSs = async () => {
+    if (!mesCotizadoPrincipal) return;
+    const ok = await confirm({
+      title: `Aprobar los seguros sociales de ${nombreMesLargo(mesCotizadoPrincipal)}`,
+      description: "Quedará registrado quién y cuándo dio el visto bueno al recibo de cotizaciones.",
+      confirmLabel: "Aprobar",
+    });
+    if (!ok) return;
+    setCuadreOcupado("seguros");
+    const res = await aprobarSegurosSociales(mesCotizadoPrincipal);
+    setCuadreOcupado(null);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudieron aprobar los seguros sociales.");
+      return;
+    }
+    await Promise.all([refrescarEstadoMes(), refrescarEstadoSubida()]);
+    toast.success(`Seguros sociales de ${nombreMesLargo(mesCotizadoPrincipal)} aprobados.`);
+  };
+
+  const reabrirSs = async () => {
+    if (!mesCotizadoPrincipal) return;
+    const ok = await confirm({
+      title: `Reabrir los seguros sociales de ${nombreMesLargo(mesCotizadoPrincipal)}`,
+      description: "Volverán a quedar pendientes de aprobar. ¿Continuar?",
+      confirmLabel: "Reabrir",
+    });
+    if (!ok) return;
+    setCuadreOcupado("seguros");
+    const res = await reabrirSegurosSociales(mesCotizadoPrincipal);
+    setCuadreOcupado(null);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo reabrir.");
+      return;
+    }
+    await Promise.all([refrescarEstadoMes(), refrescarEstadoSubida()]);
+    toast.success("Seguros sociales reabiertos.");
+  };
+
+  // El diálogo de devolución es el mismo para los dos documentos: cambia a quién
+  // apunta. Las nóminas se BORRAN al devolverlas (la gestoría sube la entrega
+  // corregida entera); el recibo se conserva, para poder compararlo con el nuevo.
+  const rechazarSs = async (motivo: string) => {
+    if (!mesCotizadoPrincipal) return;
+    setRechazando(true);
+    const res = await rechazarSegurosSociales(mesCotizadoPrincipal, motivo);
+    setRechazando(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudieron devolver los seguros sociales.");
+      return;
+    }
+    setShowRechazo(false);
+    await Promise.all([refrescarEstadoMes(), refrescarEstadoSubida()]);
+    toast.success(`Seguros sociales de ${nombreMesLargo(mesCotizadoPrincipal)} marcados como devueltos.`, {
+      description: "Avisa a la gestoría: el recibo se conserva para poder compararlo con el corregido.",
+    });
   };
 
   const guardarEdicion = (datos: Partial<PagoEmpleado>) => {
@@ -1436,17 +1495,82 @@ export function PagosView() {
     // no suma (cae en el fallback de `totalDefs`, como `puesto` o `area`).
     comentario: {
       th: th("comentario", "Comentario", "texto", "left", undefined, "min-w-[120px]"),
-      td: (p) => (
-        <TableCell key="comentario" className="max-w-[280px]">
-          {p.comentario ? (
-            <span className="block truncate text-xs" title={p.comentario}>{p.comentario}</span>
-          ) : (
-            <span className="text-muted-foreground text-xs">—</span>
-          )}
-        </TableCell>
-      ),
+      td: (p) => {
+        const rechazo = p.confirmacionRechazadaAt ? p.comentarioEmpleado : null;
+        if (!p.comentario && !rechazo) {
+          return <TableCell key="comentario" className="max-w-[280px]"><span className="text-muted-foreground text-xs">—</span></TableCell>;
+        }
+        return (
+          <TableCell key="comentario" className="max-w-[280px]">
+            {rechazo && (
+              <span
+                className="block truncate text-xs font-medium text-destructive"
+                title={`El trabajador rechazó la liquidación: ${rechazo}`}
+              >
+                Rechazado: {rechazo}
+              </span>
+            )}
+            {p.comentario && (
+              <span className="block truncate text-xs" title={p.comentario}>{p.comentario}</span>
+            )}
+          </TableCell>
+        );
+      },
     },
   };
+
+  // Los dos bloques de la tarjeta de cuadre. Cada uno mira SU mes: las nóminas,
+  // el que se está viendo; los seguros sociales, el que cotiza el recibo, que va
+  // a mes vencido. Las cifras se enseñan aunque no cuadren o falte una: la
+  // tarjeta informa siempre, y son los botones los que se desactivan.
+  const bloquesCuadre: BloqueCuadre[] = [
+    {
+      clave: "nominas",
+      titulo: "Nóminas",
+      periodo,
+      mesLabel: mesLabelNominas,
+      // En las nóminas los dos lados salen del mismo volcado, así que cuadran por
+      // construcción: lo que se aprueba es la entrega, no una comparación.
+      sistema: nominasEnMes > 0 ? ssNominasMes : null,
+      gestoria: nominasEnMes > 0 ? ssNominasMes : null,
+      aprobadoEn: estadoMes.confirmado ? estadoMes.confirmadoEn : null,
+      rechazadoEn: estadoMes.rechazado ? estadoMes.rechazadoEn : null,
+      aprobadoPor: null,
+      nota:
+        nominasEnMes === 0
+          ? `La gestoría todavía no ha entregado las nóminas de ${mesLabelNominas}.`
+          : incidenciasNominas > 0
+            ? `${incidenciasNominas} nómina${incidenciasNominas === 1 ? "" : "s"} con incidencia por revisar.`
+            : null,
+      puedeGestionar: estadoMes.puedeGestionar,
+    },
+    {
+      clave: "seguros",
+      titulo: "Seguros sociales",
+      periodo: mesCotizadoPrincipal,
+      mesLabel: nombreMesLargo(mesCotizadoPrincipal),
+      // Sistema = la cotización de las nóminas de ESE mes. Gestoría = la suma de
+      // los líquidos de sus recibos. Si algún recibo no se pudo leer, el total
+      // está incompleto y no se puede afirmar que cuadre: se muestra "—".
+      sistema: cuadreSs && !cuadreSs.sinNominas ? cuadreSs.ssNominas : null,
+      gestoria: cuadreSs?.comprobable ? cuadreSs.totalTc1 : null,
+      aprobadoEn: cuadreSs?.aprobadoEn ?? null,
+      rechazadoEn: cuadreSs?.rechazadoEn ?? null,
+      aprobadoPor: null,
+      nota: !hayTc1
+        ? `Sin el recibo de cotizaciones no se puede comprobar la Seguridad Social de ${nombreMesLargo(mesCotizadoPrincipal)}.`
+        : cuadreSs?.sinNominas
+          ? `Este recibo cotiza ${nombreMesLargo(mesCotizadoPrincipal)} y de ese mes no hay nóminas en el sistema.`
+          : !cuadreSs?.comprobable
+            ? `${tc1SinImporte} de ${estadoMes.tc1.length} recibos sin importe legible: comprueba el cuadre a mano.`
+            : !cuadreSs.cuadra
+              ? "Revisa si falta alguna liquidación complementaria (vacaciones) o alguna nómina del mes."
+              : cuadreSs.numTc1 > 1
+                ? `${cuadreSs.numTc1} recibos sumados.`
+                : null,
+      puedeGestionar: estadoMes.puedeGestionar,
+    },
+  ];
 
   const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
     (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
@@ -1547,36 +1671,6 @@ export function PagosView() {
             ? `Leyendo nóminas… ${progresoNominas.hechas}/${progresoNominas.total}`
             : "Subir nóminas"}
         </Button>
-        {/* Devolver a la gestoría: la otra salida de la revisión. Solo tiene
-            sentido con nóminas subidas y el mes aún sin confirmar. */}
-        {estadoMes.puedeGestionar && !estadoMes.confirmado && nominasEnMes > 0 && !esVistaAgregada && (
-          <Button
-            variant="outline"
-            className="gap-2 text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900/50"
-            onClick={() => setShowRechazo(true)}
-            disabled={rechazando || confirmandoMes}
-            title="Devolver las nóminas a la gestoría con las anomalías, para que las corrija y las suba de nuevo"
-          >
-            <Undo2 className="h-4 w-4" />
-            Devolver a gestoría
-          </Button>
-        )}
-        {estadoMes.puedeGestionar && (
-          <Button
-            variant={estadoMes.confirmado ? "outline" : "default"}
-            className="gap-2"
-            onClick={() => (estadoMes.confirmado ? reabrirMes() : confirmarMes())}
-            disabled={confirmandoMes || esVistaAgregada}
-            title={
-              estadoMes.confirmado
-                ? "Las nóminas están confirmadas y publicadas al empleado. Reabrir permite corregirlas."
-                : "Cierra las nóminas del mes: quedan inmutables y se publican en la carpeta de cada empleado"
-            }
-          >
-            {estadoMes.confirmado ? <Unlock className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
-            {estadoMes.confirmado ? "Reabrir nóminas" : "Confirmar nóminas"}
-          </Button>
-        )}
         <Button
           className="gap-2"
           onClick={() =>
@@ -1602,94 +1696,25 @@ export function PagosView() {
         </Button>
       </div>
 
-      {/* CUADRE DEL MES: los TC1 y las nóminas son el MISMO dinero de dos formas
-          —el recibo agrupa por concepto de cotización y las nóminas lo reparten
-          por trabajador—, así que la suma de los líquidos de TODOS los recibos del
-          mes debe dar la Seguridad Social (trabajador + empresa) de las nóminas.
-          Va arriba y siempre a la vista: es la comprobación que decide si la
-          entrega del mes es válida. En trimestre/año no se pinta: sería mezclar
-          meses. */}
-      {!esVistaAgregada && (hayTc1 || ssNominasMes > 0) && (
-        <div
-          className={`rounded-lg border p-4 ${
-            !tc1Comprobable
-              ? "border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900/50"
-              : cuadraTc1
-                ? "border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-900/50"
-                : "border-destructive/50 bg-destructive/5"
-          }`}
-        >
-          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-            <div className="flex items-center gap-2 min-w-0">
-              {!tc1Comprobable ? (
-                <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
-              ) : cuadraTc1 ? (
-                <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
-              ) : (
-                <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
-              )}
-              <div className="min-w-0">
-                <p className="text-sm font-medium">
-                  {!hayTc1
-                    ? `Falta el TC1 de ${mesLabelNominas}`
-                    : mesesVistoSinNominas.length > 0
-                      ? `Faltan las nóminas de ${mesesVistoSinNominas.map((c) => nombreMesLargo(c.periodo)).join(" y ")}`
-                      : !tc1Comprobable
-                        ? "No se pudo leer el importe de todos los TC1"
-                        : cuadraTc1
-                          ? "Los TC1 cuadran con las nóminas"
-                          : "Los TC1 NO cuadran con las nóminas"}
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {!hayTc1
-                    ? "Sin el recibo de cotizaciones no se puede comprobar la Seguridad Social del mes."
-                    : mesesVistoSinNominas.length > 0
-                      ? `Estos recibos cotizan ${etiquetaMesesCotizados}, y de ese mes no hay nóminas en el sistema. Súbelas para poder comprobar el cuadre.`
-                      : !tc1Comprobable
-                        ? `${tc1SinImporte} de ${estadoMes.tc1.length} recibos sin importe legible: comprueba el cuadre a mano.`
-                        : cuadraTc1
-                          ? `La suma de ${estadoMes.tc1.length} recibo${estadoMes.tc1.length === 1 ? "" : "s"} coincide con la Seguridad Social de ${etiquetaMesesCotizados}.`
-                          : `Revisa si falta alguna liquidación complementaria (vacaciones) o alguna nómina de ${etiquetaMesesCotizados}.`}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              <div className="text-right">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  TC1{hayTc1 && estadoMes.tc1.length > 1 ? ` · ${estadoMes.tc1.length} recibos` : ""}
-                </p>
-                <p className="text-sm font-semibold tabular-nums">
-                  {totalTc1 != null ? fmt(totalTc1) : "—"}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  {/* Se nombra el mes COTIZADO: es contra esas nóminas contra las
-                      que cuadra el recibo, no contra las del mes que se ve. */}
-                  SS de las nóminas{etiquetaMesesCotizados ? ` · ${etiquetaMesesCotizados}` : ""}
-                </p>
-                <p className="text-sm font-semibold tabular-nums">
-                  {mesesVistoSinNominas.length > 0 && ssCotizadaComparable === 0
-                    ? "—"
-                    : fmt(ssCotizadaComparable)}
-                </p>
-              </div>
-              {tc1Comprobable && !cuadraTc1 && (
-                <div className="text-right">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Diferencia
-                  </p>
-                  <p className="text-sm font-semibold tabular-nums text-destructive">
-                    {fmt(Math.abs((totalTc1 ?? 0) - ssCotizadaComparable))}
-                  </p>
-                </div>
-              )}
-              <Button variant="outline" size="sm" onClick={() => setShowDocsMes(true)}>
-                {hayTc1 ? "Ver documentos" : "Adjuntar TC1"}
-              </Button>
-            </div>
-          </div>
+      {/* CUADRE DE LA ENTREGA: los dos documentos que manda la gestoría, cada
+          uno contra las nóminas de SU mes. Va arriba a la derecha y se pinta
+          SIEMPRE —también en meses vacíos—, porque es donde se ve de un vistazo
+          si queda algo por aprobar. En trimestre/año no: sería mezclar meses. */}
+      {!esVistaAgregada && (
+        <div className="flex justify-end">
+          <CuadreEntregaCard
+            periodo={periodo}
+            bloques={bloquesCuadre}
+            ocupado={cuadreOcupado}
+            onAprobar={(c) => (c === "nominas" ? confirmarMes() : aprobarSs())}
+            onRechazar={(c) => {
+              setRechazoDe(c);
+              setShowRechazo(true);
+            }}
+            onReabrir={(c) => (c === "nominas" ? reabrirMes() : reabrirSs())}
+            onVerDocumentos={() => setShowDocsMes(true)}
+            cargarHistorico={() => listarHistoricoMes(periodo)}
+          />
         </div>
       )}
 
@@ -1809,13 +1834,25 @@ export function PagosView() {
         </div>
       )}
 
+      {/* Devolución a la gestoría. Es el mismo diálogo para los dos documentos:
+          llega marcado el que se pulsó, y desde dentro se puede añadir el otro.
+          Marcar las nóminas las BORRA (la gestoría sube la entrega corregida
+          entera); marcar solo los seguros sociales conserva el recibo, para
+          poder compararlo con el que llegue. */}
       <RechazarNominasDialog
+        key={rechazoDe}
         open={showRechazo}
         onOpenChange={setShowRechazo}
-        mesLabel={mesLabelNominas}
+        mesLabel={rechazoDe === "seguros" ? nombreMesLargo(mesCotizadoPrincipal) : mesLabelNominas}
         nominasEnMes={nominasEnMes}
         enviando={rechazando}
-        onConfirmar={rechazarMes}
+        inicial={rechazoDe}
+        onConfirmar={(motivo, que) => {
+          // Solo los seguros sociales: no hay entrega que borrar ni correo de
+          // devolución del mes; se marca el recibo y se conserva.
+          if (!que.nominas && que.segurosSociales) return rechazarSs(motivo);
+          return rechazarMes(motivo, que);
+        }}
       />
 
       <NominasRevisionDialog
