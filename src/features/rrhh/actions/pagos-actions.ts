@@ -6,6 +6,10 @@ import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { getNotifLiquidacionesConfig } from "@/features/notificaciones/actions/notif-config-actions";
 import { crearNotificaciones } from "@/features/notificaciones/actions/notificaciones-actions";
+import {
+  enviarCorreoConfirmacionLiquidacion,
+  type LiquidacionDetalle,
+} from "@/features/rrhh/services/nominas/rrhh-pagos-confirmacion";
 import { nombreMes } from "@/features/rrhh/services/nominas/nominas-gestoria";
 import { sendEmail } from "@/lib/email/send";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
@@ -406,10 +410,55 @@ export async function enviarConfirmacionesPago(
       if (rows.length > 0) await crearNotificaciones(rows);
     }
 
-    // La liquidación se avisa SOLO por notificación en la app. Antes salía
-    // ademas un correo con enlace de confirmación, pero eran dos avisos del
-    // mismo hecho y el trabajador acababa confirmando por donde le pillara.
-    // El circuito vive en la app: ahi ve el detalle y ahi confirma.
+    // Correo al empleado con el detalle + enlace de confirmación (best-effort).
+    // Va por service-role: crea el token (hash-only) y manda el correo a
+    // email_empresa (o personal). No rompe el flujo si falta correo o SMTP.
+    if (updated.length > 0) {
+      try {
+        const admin = createAdminClient();
+        const { data: emp } = await admin
+          .from("empresas")
+          .select("nombre")
+          .eq("id", empresaId)
+          .maybeSingle();
+        const empresaNombre = (emp?.nombre as string) ?? "la empresa";
+        const mesLabel = nombreMes(periodo);
+        await Promise.all(
+          updated.map((r) => {
+            const detalle: LiquidacionDetalle = {
+              empleadoNombre: r.empleado_nombre as string,
+              periodo,
+              mesLabel,
+              empresaNombre,
+              fijo: Boolean(r.fijo),
+                        nomina: Number(r.nomina),
+              complemento: Number(r.complemento),
+              ajuste: Number(r.ajuste),
+              horasExtras: Number(r.horas_extras),
+              bonus: Number(r.bonus),
+                        ssEmpleado: Number(r.ss_empleado),
+              ssEmpresa: Number(r.ss_empresa),
+              irpf: Number(r.irpf),
+              total: Number(r.total),
+              confirmadoEn: null,
+              marcaUrl: null,
+            };
+            return enviarCorreoConfirmacionLiquidacion(admin, {
+              empresaId,
+              empleadoId: r.empleado_id as string,
+              periodo,
+              pagoId: r.id as string,
+              detalle,
+            }).catch((e) => {
+              console.error("[rrhh] correo liquidación:", e);
+              return { ok: false as const };
+            });
+          }),
+        );
+      } catch (e) {
+        console.error("[rrhh] enviarConfirmacionesPago correos:", e);
+      }
+    }
 
     // Aviso a CONTABILIDAD: las liquidaciones del mes están aprobadas y cerradas,
     // así que ya pueden ordenarse los pagos. Es el punto en que el importe deja
