@@ -107,29 +107,32 @@ export const ESTADO_ORDEN_PRIORIDAD: Record<EstadoReserva, number> = {
  * desde aquí.
  */
 export const ESTADO_BADGE_CLASS: Record<EstadoReserva, string> = {
-  // Verde CLARO pero SÓLIDO y cantoso: la reserva está dada, pero esa gente
-  // todavía no ha llegado. Es el "aún no" del turno, y por eso va en un verde
-  // más claro que el de SENTADA —que es el verde oscuro de "ya están en la
-  // mesa"—; los dos rellenos y con texto blanco, para que se lean de un
-  // barrido y no haya que acercarse a la pantalla. Antes era un verde al 15%
-  // con el texto en emerald-300: pensado para fondo oscuro, sobre el claro de
-  // la lista se desvanecía y no se leía (Iván, 06-sep).
+  // TODOS los estados se pintan igual: fondo RELLENO del color y texto blanco.
+  // Antes cada uno era su color al 20% con la letra en un tono claro del mismo
+  // color —pensado para el fondo oscuro de sala—, y sobre el fondo claro de la
+  // lista y de la ficha el texto se perdía contra su propio fondo: "Terminada"
+  // en lila sobre lila, "Liberada" en amarillo sobre amarillo. Relleno y
+  // blanco se leen igual en los dos temas y de un barrido, que es como se mira
+  // esta columna en pleno servicio (Iván, 06-sep).
+  //
+  // Los VERDES son la única pareja que hay que poder distinguir sin leer, así
+  // que van a distinta profundidad: CONFIRMADA es el verde claro del "aún no
+  // ha llegado" y SENTADA el PISTACHO, más apagado y terroso, del "ya está en
+  // la mesa".
   CONFIRMADA:      "bg-emerald-500 text-white border-emerald-600",
-  RECONFIRMADA:    "bg-sky-600/20 text-sky-400 border-sky-600/40",
-  NO_RECONFIRMADA: "bg-amber-600/20 text-amber-400 border-amber-600/40",
-  LISTA_ESPERA:    "bg-violet-600/20 text-violet-400 border-violet-600/40",
-  // Verde OSCURO y SÓLIDO, como en CoverManager. Es el único estado del turno
-  // que se pinta relleno: en pleno servicio "ya están en la mesa" tiene que
-  // saltar sin leer. Antes era green-700/25 y contra el emerald-600/20 de
-  // CONFIRMADA eran el mismo verde translúcido; en movimiento no se distinguían.
-  SENTADA:         "bg-green-700 text-white border-green-800",
-  LIBERADA:        "bg-yellow-600/20 text-yellow-300 border-yellow-600/40",
+  RECONFIRMADA:    "bg-sky-600 text-white border-sky-700",
+  NO_RECONFIRMADA: "bg-amber-500 text-white border-amber-600",
+  LISTA_ESPERA:    "bg-violet-600 text-white border-violet-700",
+  SENTADA:         "bg-lime-700 text-white border-lime-800",
+  LIBERADA:        "bg-yellow-500 text-white border-yellow-600",
   // Fucsia: es el unico tono que no choca con ningun otro estado. Antes era
   // cyan y en sala se confundia con el azul de RECONFIRMADA; el gris que se
   // probo despues no gustaba. Aqui no hay duda posible de un vistazo.
-  TERMINANDO:      "bg-fuchsia-600/20 text-fuchsia-300 border-fuchsia-600/40",
-  NO_SHOW:         "bg-red-600/20 text-red-400 border-red-600/40",
-  CANCELADA:       "bg-red-900/20 text-red-500 border-red-800/40",
+  TERMINANDO:      "bg-fuchsia-600 text-white border-fuchsia-700",
+  NO_SHOW:         "bg-red-600 text-white border-red-700",
+  // Rojo APAGADO, casi granate: cancelada ya no es un aviso que atender, solo
+  // deja constancia. Sin esto competia con el rojo vivo de NO SHOW.
+  CANCELADA:       "bg-red-900 text-white border-red-950",
 };
 
 export const ESTADO_DOT_CLASS: Record<EstadoReserva, string> = {

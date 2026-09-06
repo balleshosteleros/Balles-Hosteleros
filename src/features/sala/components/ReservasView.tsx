@@ -86,7 +86,6 @@ import {
   componerTelefono,
   paisDeTelefono,
 } from "@/features/sala/data/prefijos-telefono";
-import { ReservaEstadoDot } from "@/features/sala/components/reservas/ReservaEstadoBadge";
 import { EtiquetaChip } from "@/features/sala/components/reservas/config/EtiquetaChip";
 import {
   listEtiquetasEfectivasDeReservas,
@@ -633,13 +632,19 @@ function ReservaQuickPopover({
                 key={e}
                 size="sm"
                 variant="outline"
+                // El boton ENTERO va del color de su estado, igual que el
+                // recuadro de la lista y el de la ficha: se elige por el color,
+                // que es lo que se lee de un vistazo en servicio. El punto
+                // sobraba —era el mismo dato dos veces— y con el fondo ya
+                // pintado no aportaba nada. El estado en el que ESTA la reserva
+                // se marca con el aro, que sigue leyendose sobre el color.
                 className={cn(
-                  "h-9 text-xs justify-center gap-1.5",
-                  reserva.estado === e && "ring-1 ring-primary",
+                  "h-9 justify-center text-xs",
+                  ESTADO_BADGE_CLASS[e],
+                  reserva.estado === e && "ring-2 ring-primary ring-offset-1",
                 )}
                 onClick={() => onCambiarEstado(reserva.id, e)}
               >
-                <ReservaEstadoDot estado={e} className="w-2 h-2" />
                 <span className="truncate">{ESTADO_RESERVA_LABELS[e]}</span>
               </Button>
             ))}
@@ -780,7 +785,17 @@ function MesaVariasReservas({
             <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
               {r.comensales} per
             </span>
-            <ReservaEstadoDot estado={r.estado} className="h-2 w-2 shrink-0" />
+            {/* Recuadro con la palabra, no un punto suelto: el punto obligaba
+                a recordar que color es cada estado. Aqui va en pequeno porque
+                la fila es estrecha, pero es el mismo color de siempre. */}
+            <span
+              className={cn(
+                "shrink-0 whitespace-nowrap rounded border px-1 py-0.5 text-[9px] font-medium leading-none",
+                ESTADO_BADGE_CLASS[r.estado],
+              )}
+            >
+              {ESTADO_RESERVA_LABELS[r.estado]}
+            </span>
           </button>
         ))}
       </div>
@@ -6672,8 +6687,16 @@ export function ReservasView() {
                       <SelectContent>
                         {ESTADOS_RESERVA.map((e) => (
                           <SelectItem key={e} value={e}>
-                            <span className="flex items-center gap-1.5">
-                              <ReservaEstadoDot estado={e} className="h-2 w-2" />
+                            {/* Cada opcion con SU color, igual que el resto de
+                                la pantalla. Antes era un punto y la palabra en
+                                negro: habia que saberse los colores de memoria
+                                para relacionarlos con la lista. */}
+                            <span
+                              className={cn(
+                                "inline-flex whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] font-medium leading-tight",
+                                ESTADO_BADGE_CLASS[e],
+                              )}
+                            >
                               {ESTADO_RESERVA_LABELS[e]}
                             </span>
                           </SelectItem>
