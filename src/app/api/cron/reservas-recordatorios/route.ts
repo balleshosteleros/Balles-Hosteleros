@@ -59,6 +59,19 @@ export const runtime = "nodejs";
 
 const MAX_POR_TIRADA = 100;
 
+/**
+ * Días hacia atrás que mira la petición de valoración, contando ayer.
+ *
+ * No es "pedir valoraciones viejas": es alcanzar a quien no estaba listo a las
+ * 10:00 —la reserva de madrugada que el portal guardó en el día equivocado y
+ * Sala corrigió por la tarde, o la que se creó después del cron—. Con ventana
+ * de un solo día esa persona no recibía el correo nunca.
+ *
+ * Tres cubren un fin de semana entero sin llegar a preguntar por una comida
+ * que ya nadie recuerda.
+ */
+const DIAS_REPESCA_VALORACION = 3;
+
 /** Zona horaria de los ajustes de la empresa (`config_operativa.zonaHoraria`). */
 function tzDeEmpresa(configOperativa: unknown): string {
   const cfg = (configOperativa as Record<string, unknown> | null) ?? null;
@@ -342,10 +355,26 @@ export async function GET(request: Request) {
         //
         // Ahora es lo que se pidió y lo que hacía Cover: comiste o cenaste
         // ayer, hoy a las 10:00 te llega. Sin cuentas de horas.
+        //
+        // La ventana mira VARIOS días atrás, no solo ayer, para repescar al
+        // rezagado. Una reserva puede no estar lista a las 10:00 y llegar
+        // tarde: la de madrugada que el portal guardó en el día siguiente y
+        // Sala movió a su jornada real por la tarde, o la que se creó después
+        // de que pasara el cron. Mirando solo "ayer", ese día no se vuelve a
+        // consultar nunca y esa persona se queda sin correo para siempre.
+        //
+        // Repescar no duplica: la consulta exige `email_valoracion_at IS NULL`,
+        // así que quien ya lo recibió no vuelve a entrar, y `descartarYaValoradas`
+        // deja fuera a quien ya opinó de esa comida.
         const ayer = diaEnZona(new Date(ahora.getTime() - 86_400_000), tz);
+        const desdeDia = diaEnZona(
+          new Date(ahora.getTime() - DIAS_REPESCA_VALORACION * 86_400_000),
+          tz,
+        );
         const pendientesV = await buscarPendientes(supabase, {
           empresaId: c.empresa_id,
           dia: ayer,
+          diaDesde: desdeDia,
           // A TODO el que asistió, sin mirar el tipo de reserva ni el origen:
           // el que entró sin reservar y acabó sentado comió lo mismo que el
           // que reservó por la web, y su opinión vale igual.
@@ -465,8 +494,14 @@ async function buscarPendientes(
     /**
      * Dia civil del restaurante ("AAAA-MM-DD") COMPLETO. Lo usa la valoracion:
      * se pide por el dia en que se comio, no por horas transcurridas.
+     * Es el FINAL de la ventana (normalmente ayer).
      */
     dia?: string;
+    /**
+     * Primer dia civil de la ventana, para repescar al que quedo pendiente en
+     * tiradas anteriores. Si no se pasa, la ventana es solo `dia`.
+     */
+    diaDesde?: string;
     estados: string[];
     auditCol:
       | "email_recordatorio_at"
@@ -493,9 +528,9 @@ async function buscarPendientes(
   // fuera del `gte/lte` y NUNCA recibía recordatorio (el envío marca la columna
   // de auditoría, así que tampoco se recuperaba en tiradas posteriores).
   const DIA_MS = 86_400_000;
-  // Por dia civil: la ventana ES ese dia, sin margenes ni conversion a UTC.
+  // Por dia civil: la ventana son esos dias, sin margenes ni conversion a UTC.
   const fechaDesde = args.dia
-    ? args.dia
+    ? (args.diaDesde ?? args.dia)
     : diaEnZona(new Date(args.desde!.getTime() - DIA_MS), args.tz);
   const fechaHasta = args.dia
     ? args.dia
