@@ -117,14 +117,6 @@ export function IntegracionesTab() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold text-foreground">Integraciones</h2>
-        <p className="text-sm text-muted-foreground">
-          Conecta tu empresa con servicios externos. Cada empresa gestiona sus
-          propias claves; afectan solo a la empresa activa del selector.
-        </p>
-      </div>
-
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {INTEGRACIONES.map((integracion) => {
           const estado = estados[integracion.key] ?? "sin_conectar";
