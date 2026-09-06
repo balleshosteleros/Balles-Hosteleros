@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { UploadCloud, CheckCircle2, AlertTriangle, Loader2, Lock } from "lucide-react";
+import { UploadCloud, CheckCircle2, AlertTriangle, Loader2, Lock, FileText, X } from "lucide-react";
 import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
@@ -98,7 +98,7 @@ export function SubirNominasView({ endpoint, empresaNombre, meses, mesSugerido }
         />
 
         <p className="text-center text-xs text-zinc-400">
-          PDF o imagen · máximo {MAX_NOMINAS_MB} MB
+          PDF o imagen · puedes adjuntar varios · máximo {MAX_NOMINAS_MB} MB cada uno
         </p>
       </div>
     </div>
@@ -130,7 +130,10 @@ function Bloque({
     mesSugerido;
 
   const [mes, setMes] = useState(primerLibre);
-  const [file, setFile] = useState<File | null>(null);
+  // VARIOS archivos por entrega: un mes puede venir en más de un PDF (por
+  // lotes, o porque la gestoría los saca por centro de trabajo). Se envían de
+  // uno en uno al servidor, que ya sabe acumular en el mismo mes.
+  const [files, setFiles] = useState<File[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hecho, setHecho] = useState<string | null>(null);
@@ -140,47 +143,70 @@ function Bloque({
   const libres = meses.filter((m) => !entregado(m, tipo));
   const sinMesesLibres = libres.length === 0;
 
-  const elegirArchivo = (f: File | null) => {
+  const elegirArchivos = (nuevos: File[]) => {
     setError(null);
     setHecho(null);
-    if (!f) return setFile(null);
-    const tipoOk = TIPOS_OK.includes(f.type) || /\.pdf$/i.test(f.name);
-    if (!tipoOk) {
-      setError("Formato no admitido. Adjunta un PDF o una imagen.");
+    if (nuevos.length === 0) return;
+
+    const malFormato = nuevos.find(
+      (f) => !TIPOS_OK.includes(f.type) && !/\.pdf$/i.test(f.name),
+    );
+    if (malFormato) {
+      setError(`«${malFormato.name}» no es un PDF ni una imagen.`);
       return;
     }
-    if (f.size > MAX_NOMINAS_BYTES) {
-      setError(`El archivo supera ${MAX_NOMINAS_MB} MB.`);
+    const muyGrande = nuevos.find((f) => f.size > MAX_NOMINAS_BYTES);
+    if (muyGrande) {
+      setError(`«${muyGrande.name}» supera ${MAX_NOMINAS_MB} MB. Divídelo en varios archivos.`);
       return;
     }
-    setFile(f);
+    // Se acumulan: adjuntar por segunda vez añade, no reemplaza. Se descartan
+    // los repetidos por nombre y tamaño, que es el despiste habitual.
+    setFiles((prev) => {
+      const clave = (f: File) => `${f.name}|${f.size}`;
+      const yaEstan = new Set(prev.map(clave));
+      return [...prev, ...nuevos.filter((f) => !yaEstan.has(clave(f)))];
+    });
+  };
+
+  const quitarArchivo = (i: number) => {
+    setError(null);
+    setFiles((prev) => prev.filter((_, idx) => idx !== i));
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   const enviar = async () => {
-    if (!file) return;
+    if (files.length === 0) return;
     setEnviando(true);
     setError(null);
     try {
-      const fd = new FormData();
-      fd.append("archivo", file);
-      fd.append("documento", tipo);
-      if (tipo === "nominas") {
+      // De uno en uno, no en paralelo: cada archivo dispara una lectura por IA
+      // pesada, y mandarlos a la vez agota el tiempo de la función. Si uno
+      // falla se para ahí y se dice cuál: los ya subidos quedan guardados.
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const fd = new FormData();
+        fd.append("archivo", f);
+        fd.append("documento", tipo);
         fd.append("periodo", mes);
-      } else {
-        // El recibo se guarda con la entrega del mes siguiente, pero lo que
-        // manda es el mes que COTIZA: es el que elige aquí la gestoría.
-        fd.append("periodo", mes);
-        fd.append("periodoCotizacion", mes);
+        if (tipo === "tc1") {
+          // El recibo se guarda con la entrega del mes siguiente, pero lo que
+          // manda es el mes que COTIZA: es el que elige aquí la gestoría.
+          fd.append("periodoCotizacion", mes);
+        }
+        const res = await fetch(endpoint, { method: "POST", body: fd });
+        const json = await res.json();
+        if (!json.ok) {
+          const cual = files.length > 1 ? `«${f.name}»: ` : "";
+          setError(`${cual}${json.error ?? "No se pudo subir el archivo."}`);
+          // Se quitan los que YA entraron: al reintentar no se repiten.
+          setFiles((prev) => prev.slice(i));
+          return;
+        }
       }
-      const res = await fetch(endpoint, { method: "POST", body: fd });
-      const json = await res.json();
-      if (json.ok) {
-        setHecho(nombreMes(mes));
-        setFile(null);
-        if (inputRef.current) inputRef.current.value = "";
-      } else {
-        setError(json.error ?? "No se pudo subir el archivo.");
-      }
+      setHecho(nombreMes(mes));
+      setFiles([]);
+      if (inputRef.current) inputRef.current.value = "";
     } catch (err) {
       setError(friendlyError(err, "subirDocumentoGestoria"));
     } finally {
@@ -244,23 +270,49 @@ function Bloque({
           <label
             htmlFor={`archivo-${tipo}`}
             className={`mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-5 text-sm transition-colors ${
-              file
+              files.length > 0
                 ? "border-emerald-300 bg-emerald-50 text-emerald-800"
                 : "border-zinc-300 text-zinc-600 hover:border-zinc-400 hover:bg-zinc-50"
             }`}
           >
             <UploadCloud className="h-5 w-5 shrink-0" />
-            <span className="truncate">{file ? file.name : "Adjuntar archivo"}</span>
+            <span className="truncate">
+              {files.length === 0 ? "Adjuntar archivos" : "Adjuntar otro archivo"}
+            </span>
           </label>
           <input
             ref={inputRef}
             id={`archivo-${tipo}`}
             type="file"
             accept=".pdf,image/*"
+            multiple
             className="hidden"
             disabled={enviando}
-            onChange={(e) => elegirArchivo(e.target.files?.[0] ?? null)}
+            onChange={(e) => elegirArchivos(Array.from(e.target.files ?? []))}
           />
+
+          {files.length > 0 ? (
+            <ul className="mt-2 space-y-1.5">
+              {files.map((f, i) => (
+                <li
+                  key={`${f.name}-${f.size}-${i}`}
+                  className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2"
+                >
+                  <FileText className="h-4 w-4 shrink-0 text-zinc-400" />
+                  <span className="min-w-0 flex-1 truncate text-sm text-zinc-700">{f.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => quitarArchivo(i)}
+                    disabled={enviando}
+                    aria-label={`Quitar ${f.name}`}
+                    className="shrink-0 rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-40"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           {error ? (
             <div className="mt-3 flex items-start gap-2 rounded-lg bg-rose-50 p-3">
@@ -272,14 +324,16 @@ function Bloque({
           <button
             type="button"
             onClick={enviar}
-            disabled={!file || enviando}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={files.length === 0 || enviando}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {enviando ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Enviando…
               </>
+            ) : files.length > 1 ? (
+              `Enviar ${files.length} archivos`
             ) : (
               "Enviar"
             )}

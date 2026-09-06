@@ -33,7 +33,7 @@ export default async function SubirNominasPage({
     const titulo = res.reason === "expired" ? "Enlace caducado" : "Enlace no válido";
     const mensaje =
       res.reason === "expired"
-        ? "Este enlace era de un mes concreto y ha caducado. Pide a la empresa el enlace nuevo: es permanente y sirve para cualquier mes."
+        ? "Por seguridad, el enlace se bloquea a los 15 días de enviarse. Pide uno nuevo a la empresa y podrás subir los documentos."
         : "El enlace no es válido. Pide uno nuevo al departamento de RRHH de la empresa.";
     return (
       <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">

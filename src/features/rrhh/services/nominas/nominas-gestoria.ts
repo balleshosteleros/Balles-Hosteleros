@@ -7,11 +7,17 @@ import "server-only";
  * «Enviar ahora» de Ajustes de Pagos y la API pública de subida (resuelve el
  * token, lee las nóminas con IA y las vuelca a `rrhh_pagos`).
  *
- * El enlace es PERMANENTE y por EMPRESA: no lleva el mes dentro ni caduca. La
- * gestoría elige dentro el mes de las nóminas y, aparte, el de los seguros
- * sociales. Un mes se entrega en UNA subida, pero esa subida puede llevar
- * VARIOS archivos, así que el mes no se cierra al recibir el primero: quien lo
- * cierra es RRHH al validarlo.
+ * El enlace es por EMPRESA y no lleva el mes dentro: la gestoría elige dentro el
+ * mes de las nóminas y, aparte, el de los seguros sociales. Un mes se entrega en
+ * UNA subida, pero esa subida puede llevar VARIOS archivos, así que el mes no se
+ * cierra al recibir el primero: quien lo cierra es RRHH al validarlo.
+ *
+ * VIGENCIA: vive `DIAS_VALIDEZ_ENLACE_NOMINAS` días desde el último correo, se
+ * suba o no, y luego se bloquea. Cada aviso y cada recordatorio la renuevan
+ * (`renovarVigenciaEnlace`), así que mientras se le esté pidiendo algo la
+ * gestoría siempre tiene un enlace válido. El token en sí NO cambia: sigue
+ * siendo el mismo de la empresa, para no dejar enlaces vivos sueltos por los
+ * correos antiguos.
  *
  * Mismo patrón hash-only que `gestoria_contrato_tokens`: solo se persiste el
  * HMAC del token.
@@ -45,6 +51,14 @@ const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
+/**
+ * Días que vive el enlace desde que se envía. Se bloquea al vencer SUBA O NO:
+ * un enlace de subida que no caduca es una llave permanente en un buzón ajeno.
+ * Cada aviso o recordatorio lo renueva, así que la gestoría siempre tiene uno
+ * válido mientras se le esté pidiendo algo.
+ */
+export const DIAS_VALIDEZ_ENLACE_NOMINAS = 15;
+
 
 /** 'AAAA-MM' → 'junio de 2026' (para textos del correo y la pantalla). */
 export function nombreMes(periodo: string): string {
@@ -117,17 +131,19 @@ export function urlSubidaNominas(token: string): string {
 export async function obtenerOCrearTokenPermanente(
   admin: SupabaseClient,
   empresaId: string,
-): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; token: string; tokenId: string } | { ok: false; error: string }> {
   try {
     const { data } = await admin
       .from("nominas_gestoria_tokens")
-      .select("token_plano")
+      .select("id, token_plano")
       .eq("empresa_id", empresaId)
       .is("periodo", null)
       .maybeSingle();
     // `token_plano` se guarda en claro a propósito: es lo que permite reenviar
     // SIEMPRE el mismo enlace en cada recordatorio.
-    if (data?.token_plano) return { ok: true, token: data.token_plano as string };
+    if (data?.token_plano) {
+      return { ok: true, token: data.token_plano as string, tokenId: data.id as string };
+    }
 
     return await regenerarTokenNominasGestoria(admin, empresaId);
   } catch (err) {
@@ -143,7 +159,7 @@ export async function obtenerOCrearTokenPermanente(
 export async function regenerarTokenNominasGestoria(
   admin: SupabaseClient,
   empresaId: string,
-): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; token: string; tokenId: string } | { ok: false; error: string }> {
   try {
     const token = generarToken();
     const tokenHash = hashToken(token);
@@ -159,16 +175,22 @@ export async function regenerarTokenNominasGestoria(
       periodo: null,
       token_hash: tokenHash,
       token_plano: token,
-      expira_en: null,
+      // Nace con la validez estándar; cada aviso la renueva desde ese momento.
+      expira_en: new Date(Date.now() + DIAS_VALIDEZ_ENLACE_NOMINAS * 86_400_000).toISOString(),
       cerrado_en: null,
       enviado_en: new Date().toISOString(),
       recordatorio_enviado_en: null,
     };
-    const { error } = existente?.id
-      ? await admin.from("nominas_gestoria_tokens").update(fila).eq("id", existente.id as string)
-      : await admin.from("nominas_gestoria_tokens").insert(fila);
+    const { data: guardada, error } = existente?.id
+      ? await admin
+          .from("nominas_gestoria_tokens")
+          .update(fila)
+          .eq("id", existente.id as string)
+          .select("id")
+          .single()
+      : await admin.from("nominas_gestoria_tokens").insert(fila).select("id").single();
     if (error) return { ok: false, error: error.message };
-    return { ok: true, token };
+    return { ok: true, token, tokenId: (guardada?.id as string) ?? (existente?.id as string) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Error creando el enlace de nóminas" };
   }
@@ -202,6 +224,25 @@ export async function resolverTokenNominasGestoria(
   const expira = data.expira_en as string | null;
   if (expira && new Date(expira).getTime() < Date.now()) return { ok: false, reason: "expired" };
   return { ok: true, row: { id: data.id as string, empresa_id: data.empresa_id as string } };
+}
+
+/**
+ * Estira la caducidad del enlace a DIAS_VALIDEZ_ENLACE_NOMINAS desde AHORA.
+ * Se llama en cada aviso y recordatorio: mientras se le pida algo a la
+ * gestoría, su enlace sigue vivo; cuando se deja de pedir, vence solo.
+ */
+export async function renovarVigenciaEnlace(
+  admin: SupabaseClient,
+  tokenId: string,
+): Promise<string> {
+  const expira = new Date(
+    Date.now() + DIAS_VALIDEZ_ENLACE_NOMINAS * 86_400_000,
+  ).toISOString();
+  await admin
+    .from("nominas_gestoria_tokens")
+    .update({ expira_en: expira, enviado_en: new Date().toISOString() })
+    .eq("id", tokenId);
+  return expira;
 }
 
 /** Revoca el enlace de la empresa: deja de valer de inmediato. */
@@ -238,6 +279,49 @@ function botonSubidaNominasHtml(token: string): string {
  * Crea/regenera el token. Best-effort. Devuelve `ok:false` con motivo si falta
  * config (sin email o desactivado) o falla el envío.
  */
+/**
+ * Textos comunes de los correos a la gestoría. Se comparten entre el aviso y el
+ * recordatorio para que las condiciones no se cuenten distinto en cada uno.
+ */
+const AVISO_VALIDEZ_HTML = `
+    <p style="color:#555;font-size:13px">
+      Este enlace <b>caduca a los ${DIAS_VALIDEZ_ENLACE_NOMINAS} días</b>, hayáis subido
+      los documentos o no; después se bloquea por seguridad. Si caduca, avisadnos y os
+      enviamos uno nuevo.
+    </p>`;
+
+const AVISO_VALIDEZ_TEXTO =
+  `El enlace caduca a los ${DIAS_VALIDEZ_ENLACE_NOMINAS} días, hayáis subido los documentos o no; ` +
+  "después se bloquea por seguridad. Si caduca, avisadnos y os enviamos uno nuevo.";
+
+const AVISO_REVISION_HTML = `
+    <div style="border-left:4px solid #0ea5e9;background:#f0f9ff;padding:12px 16px;margin:16px 0;
+                border-radius:0 6px 6px 0">
+      <p style="margin:0 0 8px;font-weight:600;color:#075985">Qué pasa después de subirlos</p>
+      <p style="margin:0 0 6px;color:#1f2937;font-size:14px">
+        Subir los documentos <b>no significa que queden aprobados</b>. El sistema los
+        contrasta automáticamente con los datos que ya tenemos registrados: bajas médicas,
+        altas y bajas de contrato.
+      </p>
+      <p style="margin:0 0 6px;color:#1f2937;font-size:14px">
+        Después hay una <b>segunda revisión de recursos humanos</b>, que comprueba que las
+        nóminas y los seguros sociales cuadran con sus datos.
+      </p>
+      <p style="margin:0;color:#1f2937;font-size:14px">
+        Si todo es correcto, recibiréis un <b>correo de aprobación</b> y las nóminas se
+        envían a los empleados. Si algo no cuadra, recibiréis un correo <b>detallando lo
+        detectado</b> para que lo subsanéis y lo subáis de nuevo.
+      </p>
+    </div>`;
+
+const AVISO_REVISION_TEXTO =
+  "Qué pasa después de subirlos:\n" +
+  "Subir los documentos no significa que queden aprobados. El sistema los contrasta con los datos " +
+  "registrados (bajas médicas, altas y bajas de contrato) y después recursos humanos hace una segunda " +
+  "revisión para comprobar que cuadran con sus datos.\n" +
+  "Si todo es correcto recibiréis un correo de aprobación y las nóminas se envían a los empleados. " +
+  "Si algo no cuadra, recibiréis un correo detallando lo detectado para subsanarlo y volver a subirlo.";
+
 export async function enviarSolicitudNominasGestoria(
   admin: SupabaseClient,
   empresaId: string,
@@ -263,22 +347,29 @@ export async function enviarSolicitudNominasGestoria(
   const tk = await obtenerOCrearTokenPermanente(admin, empresaId);
   if (!tk.ok) return { ok: false, error: tk.error };
 
+  // El enlace vive 15 días DESDE ESTE ENVÍO, suba o no la gestoría.
+  await renovarVigenciaEnlace(admin, tk.tokenId);
+
   const boton = botonSubidaNominasHtml(tk.token);
   const enlace = urlSubidaNominas(tk.token);
   const mes = nombreMes(periodo);
   const subject = `Subida de nóminas de ${mes} · ${empresaNombre}`;
   const html = `
     <p>Hola,</p>
-    <p>Ya podéis subir las <b>nóminas de ${mes}</b> de ${empresaNombre}.</p>
-    <p>Pulsad el botón, <b>elegid ${mes}</b> en el desplegable y adjuntadlas. Enviad
-    <b>todas las del mes en la misma subida</b>: pueden ser varios archivos o un único
-    PDF con todas (una por página). Se leen y vuelcan automáticamente al sistema, y
-    pasan a <b>recursos humanos para su validación</b>.</p>
+    <p>Ya podéis subir las <b>nóminas de ${mes}</b> de ${empresaNombre}, junto con los
+    <b>seguros sociales</b>.</p>
+    <p>Pulsad el botón y, dentro, elegid el mes en cada apartado y adjuntad los
+    documentos. Podéis subir <b>varios archivos</b> en cada uno.</p>
     ${boton}
-    <p style="color:#555;font-size:13px">Este enlace es el <b>mismo siempre</b> y no caduca:
-    guardadlo. Dentro elegís el mes de las nóminas y, aparte, el de los seguros sociales.</p>
+    ${AVISO_VALIDEZ_HTML}
+    ${AVISO_REVISION_HTML}
     <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-  const text = `Ya podéis subir las nóminas de ${mes} de ${empresaNombre}. Súbelas aquí: ${enlace}`;
+  const text =
+    `Ya podéis subir las nóminas de ${mes} de ${empresaNombre}, junto con los seguros sociales.\n\n` +
+    `Subidlas aquí: ${enlace}\n\n` +
+    AVISO_VALIDEZ_TEXTO +
+    "\n\n" +
+    AVISO_REVISION_TEXTO;
 
   const res = await sendEmail({ to: cc ? `${to}, ${cc}` : to, subject, html, text, empresaId });
   if (!res.ok) return { ok: false, error: "No se pudo enviar el correo" };
@@ -329,6 +420,10 @@ export async function recordarSolicitudNominasGestoria(
   const token = tk.token_plano as string | null;
   if (!token) return { ok: true, omitido: "sin_token" };
 
+  // El recordatorio también renueva la vigencia: si el enlace del aviso ya venció,
+  // este correo trae uno utilizable en vez de mandarlos a una pantalla caducada.
+  await renovarVigenciaEnlace(admin, tk.id as string);
+
   const boton = botonSubidaNominasHtml(token);
   const enlace = urlSubidaNominas(token);
   const mes = nombreMes(periodo);
@@ -336,11 +431,18 @@ export async function recordarSolicitudNominasGestoria(
   const html = `
     <p>Hola,</p>
     <p>Os recordamos que todavía <b>no hemos recibido las nóminas de ${mes}</b> de ${empresaNombre}.</p>
-    <p>Podéis subirlas con <b>el mismo enlace</b> de siempre, eligiendo <b>${mes}</b> en el desplegable:</p>
+    <p>Podéis subirlas aquí, eligiendo <b>${mes}</b> en el desplegable:</p>
     ${boton}
     <p>Si ya las habéis enviado por otra vía, avisadnos y no hace falta que hagáis nada.</p>
+    ${AVISO_VALIDEZ_HTML}
+    ${AVISO_REVISION_HTML}
     <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-  const text = `Recordatorio: faltan las nóminas de ${mes} de ${empresaNombre}. Súbelas aquí: ${enlace}`;
+  const text =
+    `Recordatorio: faltan las nóminas de ${mes} de ${empresaNombre}.\n\n` +
+    `Subidlas aquí: ${enlace}\n\n` +
+    AVISO_VALIDEZ_TEXTO +
+    "\n\n" +
+    AVISO_REVISION_TEXTO;
 
   const res = await sendEmail({ to: cc ? `${to}, ${cc}` : to, subject, html, text, empresaId });
   if (!res.ok) return { ok: false, error: "No se pudo enviar el recordatorio" };
@@ -381,6 +483,7 @@ export interface EstadoMesNominas {
 
 /** Cuántos meses hacia atrás puede elegir la gestoría. */
 export const MESES_ELEGIBLES_NOMINAS = 18;
+
 
 /** Antelación por defecto y tope, en días, para abrir el mes en curso. */
 export const DIAS_ANTELACION_DEFAULT = 5;
