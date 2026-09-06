@@ -4547,6 +4547,10 @@ export function ReservasView() {
         case "zona":
           return [zonaLabel(r.zona ? String(r.zona) : null) || "—"];
         case "nombre":
+          // Los walk-in van TODOS bajo una sola opción, "WALK IN", en vez de
+          // una por fila: no tienen nombre que distinguirlos, y así se quitan
+          // o se dejan solos de un clic, que es lo que se hace en el pase.
+          if (esReservaWalkIn(r)) return ["WALK IN"];
           return [`${r.cliente || "WALK IN"} ${r.apellidos ?? ""}`.trim()];
         case "comensales":
           return [String(r.comensales)];
@@ -4668,6 +4672,16 @@ export function ReservasView() {
       // Los comensales se ordenan por su número, no como cadena.
       if (campo === "comensales") {
         return lista.sort((a, b) => Number(a) - Number(b));
+      }
+      // En Nombre, "WALK IN" va SIEMPRE el primero: es la única opción que se
+      // busca a propósito (quitar o dejar solo a los que llegaron sin
+      // reservar), y por orden alfabético quedaba enterrada al final.
+      if (campo === "nombre") {
+        return lista.sort((a, b) => {
+          if (a === "WALK IN") return -1;
+          if (b === "WALK IN") return 1;
+          return a.localeCompare(b, "es");
+        });
       }
       return lista.sort((a, b) => a.localeCompare(b, "es"));
     },
@@ -5731,7 +5745,7 @@ export function ReservasView() {
       </div>
 
       {/* TOP BAR — todo en una sola línea: acciones + filtros + turno + sala/zonas + vista + fecha + ajustes */}
-      <div className="shrink-0 bg-background px-2 py-1.5 flex items-center gap-1.5 flex-nowrap overflow-x-auto">
+      <div className="shrink-0 border-b bg-background px-2 py-1.5 flex items-center gap-1.5 flex-nowrap overflow-x-auto">
         {/* Acciones: NUEVA · Lista espera · Estados · Buscar — solo en vista día.
             En vista mes el bloque se oculta pero NO se colapsa: mantiene su
             hueco para que el resto de controles no cambie de sitio entre

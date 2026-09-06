@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, ListFilter, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ListFilter, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -185,15 +185,21 @@ export function ColumnaListaHeader({
                 <ArrowDown className="h-3 w-3" />
               ))}
             {filtroActivo && <ListFilter className="h-3 w-3 fill-current" />}
+            {/* En reposo, TODAS las columnas enseñan el mismo embudo que la de
+                Estado —antes unas llevaban flecha doble y otras embudo, y en
+                cabeceras pegadas (Nombre + Etiquetas) parecían dos controles
+                distintos—, y solo aparece al pasar por encima: la cabecera se
+                lee limpia y el icono sale donde se va a pinchar. */}
             {!filtroActivo && !ordenActivo && (
-              <ArrowUpDown
+              <ListFilter
                 className={cn(
                   "h-3 w-3 transition-opacity",
-                  // Sin rótulo el embudo es lo ÚNICO que se ve: si se escondiera
-                  // hasta pasar el ratón, la columna parecería un hueco vacío.
+                  // Sin rótulo el embudo es lo ÚNICO que ocupa la cabecera: si
+                  // se escondiera del todo, Zona y Etiquetas quedarían como un
+                  // hueco vacío sin nada donde pinchar. Se deja apagado.
                   soloIcono
-                    ? "opacity-50 group-hover:opacity-100"
-                    : "opacity-0 group-hover:opacity-50",
+                    ? "opacity-30 group-hover:opacity-100"
+                    : "opacity-0 group-hover:opacity-60",
                 )}
               />
             )}
