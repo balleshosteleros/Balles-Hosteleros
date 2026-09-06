@@ -488,16 +488,24 @@ export function CierresView() {
 
 
   const resumen = useMemo(() => {
-    const total = cierres.length;
+    // Cuadrar o descuadrar solo tiene sentido en un CIERRE: la retirada y el
+    // ingreso se guardan siempre con descuadre 0 y `cuadra` a true, así que
+    // contarlas aquí inflaba el recuento (33 apuntes se leían como 33 cierres,
+    // y 27 "cuadran" cuando en realidad solo cuadraban 8 de 14 cierres).
+    let total = 0;
     let cuadran = 0;
     let descuadrados = 0;
     let saldoNeto = 0;
     let acumuladoEfectivo = 0;
     let acumuladoGastos = 0;
     cierres.forEach((c) => {
-      if (c.cuadra) cuadran++;
-      else descuadrados++;
-      saldoNeto += c.descuadre;
+      if (c.tipo === "cierre") {
+        total++;
+        if (c.cuadra) cuadran++;
+        else descuadrados++;
+        saldoNeto += c.descuadre;
+      }
+      // El efectivo y los gastos sí suman de TODO movimiento: es la caja real.
       acumuladoEfectivo += importeEfectivo(c);
       acumuladoGastos += c.total_gastos;
     });

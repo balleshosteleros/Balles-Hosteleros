@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { hoyEnZona, ZONA_HORARIA_FALLBACK } from "@/features/empresa/lib/zona-horaria";
 import { toast } from "sonner";
 import * as Icons from "lucide-react";
 import {
@@ -39,23 +41,29 @@ import { DocumentosVencimiento } from "./DocumentosVencimiento";
 
 type EstadoVencimiento = "AL DIA" | "PROXIMA" | "VENCIDA" | "SIN FECHA";
 
-function calcularEstado(fechaVencimiento: string | null): EstadoVencimiento {
+/**
+ * Días entre hoy (en la zona de la EMPRESA) y la fecha de vencimiento.
+ *
+ * El "hoy" llega de fuera: si se leyera del navegador, quien mire la pantalla
+ * desde otro huso vería una obligación como vencida un día antes o después de
+ * lo que toca. Se comparan las fechas en UTC porque ambas son días de
+ * calendario, no instantes: así el cálculo no depende del huso del navegador.
+ */
+function diasRestantes(fechaVencimiento: string | null, hoyEmpresa: string): number | null {
+  if (!fechaVencimiento) return null;
+  const hoy = Date.parse(`${hoyEmpresa.slice(0, 10)}T00:00:00Z`);
+  const fecha = Date.parse(`${fechaVencimiento.slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(hoy) || !Number.isFinite(fecha)) return null;
+  return Math.round((fecha - hoy) / 86_400_000);
+}
+
+function calcularEstado(fechaVencimiento: string | null, hoyEmpresa: string): EstadoVencimiento {
   if (!fechaVencimiento) return "SIN FECHA";
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const fecha = new Date(`${fechaVencimiento}T00:00:00`);
-  const dias = Math.ceil((fecha.getTime() - hoy.getTime()) / 86_400_000);
+  const dias = diasRestantes(fechaVencimiento, hoyEmpresa);
+  if (dias === null) return "SIN FECHA";
   if (dias < 0) return "VENCIDA";
   if (dias <= 30) return "PROXIMA";
   return "AL DIA";
-}
-
-function diasRestantes(fechaVencimiento: string | null): number | null {
-  if (!fechaVencimiento) return null;
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const fecha = new Date(`${fechaVencimiento}T00:00:00`);
-  return Math.ceil((fecha.getTime() - hoy.getTime()) / 86_400_000);
 }
 
 const ETIQUETA_ESTADO: Record<EstadoVencimiento, string> = {
@@ -110,6 +118,10 @@ function IconoVencimiento({ nombre, className }: { nombre: string; className?: s
 }
 
 export function VencimientosView() {
+  // "Hoy" se mide en la hora de la EMPRESA: si se leyera del navegador, una
+  // obligación aparecería vencida un día antes o después según dónde esté quien mira.
+  const { empresaActual } = useEmpresa();
+  const hoyEmpresa = hoyEnZona(empresaActual?.zonaHoraria ?? ZONA_HORARIA_FALLBACK);
   const [vencimientos, setVencimientos] = useState<VencimientoRow[]>([]);
   const [cargando, setCargando] = useState(true);
   const [vista, setVista] = useState<"lista" | "calendario">("lista");
@@ -149,8 +161,8 @@ export function VencimientosView() {
   const conEstado = useMemo(
     () => vencimientos
       .filter((r) => r.activo)
-      .map((r) => ({ ...r, estado: calcularEstado(r.fecha_vencimiento) })),
-    [vencimientos]
+      .map((r) => ({ ...r, estado: calcularEstado(r.fecha_vencimiento, hoyEmpresa) })),
+    [vencimientos, hoyEmpresa]
   );
 
   // ─── Barra superior: los cuadrados con icono ──────────────────────────────
@@ -250,7 +262,7 @@ export function VencimientosView() {
             <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-9 xl:grid-cols-12 gap-2">
               {cuadrados.map((r) => {
                 const cat = r.clave ? getVencimientoCatalogo(r.clave) : undefined;
-                const dias = diasRestantes(r.fecha_vencimiento);
+                const dias = diasRestantes(r.fecha_vencimiento, hoyEmpresa);
                 return (
                   <Tooltip key={r.id}>
                     <TooltipTrigger asChild>
@@ -432,9 +444,9 @@ export function VencimientosView() {
                   <DialogTitle className="flex items-center gap-3 pr-8">
                     <IconoVencimiento nombre={catalogoSel?.icono ?? "ShieldCheck"} className="h-5 w-5 shrink-0" />
                     <span className="flex-1">{seleccionada.nombre}</span>
-                    <Badge className={`gap-1 shrink-0 ${estadoBadge[calcularEstado(seleccionada.fecha_vencimiento)]}`}>
-                      {estadoIcono[calcularEstado(seleccionada.fecha_vencimiento)]}
-                      {ETIQUETA_ESTADO[calcularEstado(seleccionada.fecha_vencimiento)]}
+                    <Badge className={`gap-1 shrink-0 ${estadoBadge[calcularEstado(seleccionada.fecha_vencimiento, hoyEmpresa)]}`}>
+                      {estadoIcono[calcularEstado(seleccionada.fecha_vencimiento, hoyEmpresa)]}
+                      {ETIQUETA_ESTADO[calcularEstado(seleccionada.fecha_vencimiento, hoyEmpresa)]}
                     </Badge>
                   </DialogTitle>
                 </DialogHeader>

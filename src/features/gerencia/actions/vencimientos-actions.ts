@@ -38,13 +38,39 @@ async function getContext() {
   return { supabase, user, empresaId };
 }
 
-/** Suma la periodicidad a una fecha para saber cuándo toca la siguiente. */
+/**
+ * Suma la periodicidad a una fecha para saber cuándo toca la siguiente.
+ *
+ * Se calcula sobre los NÚMEROS de la fecha, nunca con `Date`, por dos motivos
+ * que daban fechas equivocadas en obligaciones legales:
+ *  · `setMonth` desborda: 31/01 + 1 mes daba el 2 o 3 de marzo en vez del
+ *    último día de febrero. Aquí el día se recorta al último del mes destino.
+ *  · `toISOString()` pasa a UTC, así que en horario español restaba un día
+ *    (15/06 + 1 mes salía 14/07).
+ */
 function calcularProximoVencimiento(desde: string, periodicidad: string): string | null {
   const meses = MESES_PERIODICIDAD[periodicidad as PeriodicidadVencimiento];
   if (meses === null || meses === undefined) return null;
-  const fecha = new Date(`${desde}T00:00:00`);
-  fecha.setMonth(fecha.getMonth() + meses);
-  return fecha.toISOString().slice(0, 10);
+
+  const [anoStr, mesStr, diaStr] = desde.slice(0, 10).split("-");
+  const ano = Number(anoStr);
+  const mes = Number(mesStr);
+  const dia = Number(diaStr);
+  if (!Number.isFinite(ano) || !Number.isFinite(mes) || !Number.isFinite(dia)) return null;
+
+  // Mes destino contando desde 0, para repartir el desbordamiento en años.
+  const totalMeses = (mes - 1) + meses;
+  const anoDestino = ano + Math.floor(totalMeses / 12);
+  const mesDestino = (totalMeses % 12) + 1;
+
+  // Último día real del mes destino (el 0 del mes siguiente, en UTC para que no
+  // intervenga la zona del servidor).
+  const ultimoDia = new Date(Date.UTC(anoDestino, mesDestino, 0)).getUTCDate();
+  const diaDestino = Math.min(dia, ultimoDia);
+
+  const dd = String(diaDestino).padStart(2, "0");
+  const mm = String(mesDestino).padStart(2, "0");
+  return `${anoDestino}-${mm}-${dd}`;
 }
 
 export async function listVencimientos(): Promise<{ ok: boolean; data: VencimientoRow[]; error?: string }> {

@@ -3,12 +3,14 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaHoraEnZona, ZONA_HORARIA_FALLBACK } from "@/features/empresa/lib/zona-horaria";
 import { useAuth } from "@/features/auth/contexts/auth-context";
-import { getComunicadosByEmpresa, type Comunicado, ESTADO_COMUNICADO_LABELS, RECURRENCIA_LABELS, type EstadoComunicado, type Recurrencia } from "@/features/rrhh/data/comunicados";
+import { type Comunicado, ESTADO_COMUNICADO_LABELS, RECURRENCIA_LABELS, type EstadoComunicado, type Recurrencia } from "@/features/rrhh/data/comunicados";
 import {
   listComunicados,
   createComunicado,
   updateComunicado,
+  deleteComunicado,
   listEmpleadosParaComunicado,
   type EmpleadoSelector,
 } from "@/features/gerencia/actions/comunicados-actions";
@@ -28,7 +30,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  CalendarDays, MoreHorizontal, Eye, Copy, Clock, Archive,
+  CalendarDays, MoreHorizontal, Eye, Clock, Archive,
   Trash2, FileText, Users, Building2, ArrowLeft, Save, Upload, X, AlertTriangle, ImageIcon, Bell,
   ChevronLeft, ChevronRight, Settings, ShieldAlert,
 } from "lucide-react";
@@ -48,6 +50,7 @@ import { comunicadosIO } from "@/features/gerencia/io/comunicados.io";
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
 import { SancionDisciplinariaView } from "@/features/gerencia/components/SancionDisciplinariaView";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 function EstadoBadge({ estado }: { estado: EstadoComunicado }) {
   const colors: Record<EstadoComunicado, string> = {
@@ -605,29 +608,71 @@ function ComunicadoCalendario({ comunicados, vista, setVista, mesOffset, setMesO
   );
 }
 
+/**
+ * Fila de `comunicados` (BD) → comunicado de pantalla.
+ *
+ * Los destinatarios se cuentan de lo que hay guardado: `toda_empresa` significa
+ * la empresa entera, y si no, se cuentan los departamentos y empleados elegidos.
+ * No se inventa ningún número: lo que no está guardado se queda a cero.
+ */
+function filaAComunicado(fila: Record<string, unknown>): Comunicado {
+  const texto = (v: unknown): string => (typeof v === "string" ? v : "");
+  const lista = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+
+  const todaEmpresa = fila.toda_empresa === true;
+  const departamentos = lista(fila.departamentos_destinatarios);
+  const empleados = lista(fila.empleados_destinatarios);
+
+  return {
+    id: texto(fila.id),
+    titulo: texto(fila.titulo),
+    asunto: texto(fila.asunto),
+    cuerpo: texto(fila.cuerpo),
+    estado: (texto(fila.estado) || "borrador") as EstadoComunicado,
+    creadorId: texto(fila.creador_id),
+    creadoEl: texto(fila.created_at),
+    envio: typeof fila.envio === "string" ? fila.envio : null,
+    recurrencia: (texto(fila.recurrencia) || "sin_repeticion") as Recurrencia,
+    alcancePct: Number(fila.alcance_pct ?? 0) || 0,
+    rolesDestinatarios: lista(fila.roles_destinatarios),
+    todaEmpresa,
+    destinatarios: {
+      empresas: todaEmpresa ? 1 : 0,
+      departamentos: departamentos.length,
+      empleados: empleados.length,
+    },
+    prioridad: (texto(fila.prioridad) || "normal") as Comunicado["prioridad"],
+    observaciones: texto(fila.observaciones),
+  };
+}
+
 export function ComunicadosView() {
-  const { empresaActual } = useEmpresa();
-  const empresaId = empresaActual?.id || "habana";
+  // `empresaResuelta` evita enseñar el nombre de la empresa por defecto mientras
+  // aún se está resolviendo cuál es la activa del usuario.
+  const { empresaActual, empresaResuelta } = useEmpresa();
+  const { confirm, dialog: dialogoConfirmar } = useConfirmDelete();
+  // Las fechas guardadas son instantes: se leen en la hora de la EMPRESA, no en
+  // la del navegador de quien mira la pantalla.
+  const tz = empresaActual?.zonaHoraria ?? ZONA_HORARIA_FALLBACK;
   const [comunicados, setComunicados] = useState<Comunicado[]>([]);
   const [empleadosReales, setEmpleadosReales] = useState<EmpleadoSelector[]>([]);
-  const [, setLoading] = useState(true);
+  const [cargando, setCargando] = useState(true);
 
   const loadComunicados = useCallback(async () => {
-    setLoading(true);
+    setCargando(true);
     try {
       const res = await listComunicados();
-      if (res.ok && res.data.length > 0) {
-        // DB has data but shape is flat; use mock for rich nested data
-        setComunicados(getComunicadosByEmpresa(empresaId));
-      } else {
-        setComunicados(getComunicadosByEmpresa(empresaId));
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudieron cargar los comunicados");
+        setComunicados([]);
+        return;
       }
-    } catch {
-      setComunicados(getComunicadosByEmpresa(empresaId));
+      setComunicados((res.data ?? []).map(filaAComunicado));
     } finally {
-      setLoading(false);
+      setCargando(false);
     }
-  }, [empresaId]);
+  }, []);
 
   const loadEmpleadosReales = useCallback(async () => {
     const res = await listEmpleadosParaComunicado();
@@ -702,6 +747,43 @@ export function ComunicadosView() {
   const openCreate = () => { setEditingComunicado(null); setEditorMode("create"); };
   const closeEditor = () => { setEditorMode("list"); setEditingComunicado(null); };
 
+  /** Archiva el comunicado: deja de estar en circulación pero se conserva. */
+  const archivar = async (c: Comunicado) => {
+    const res = await updateComunicado(c.id, {
+      titulo: c.titulo,
+      asunto: c.asunto,
+      cuerpo: c.cuerpo,
+      estado: "archivado",
+      prioridad: c.prioridad,
+      recurrencia: c.recurrencia,
+      todaEmpresa: c.todaEmpresa,
+      rolesDestinatarios: c.rolesDestinatarios,
+      observaciones: c.observaciones,
+    });
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo archivar");
+      return;
+    }
+    toast.success("Comunicado archivado");
+    await loadComunicados();
+  };
+
+  const eliminar = async (c: Comunicado) => {
+    const ok = await confirm({
+      title: "¿Eliminar este comunicado?",
+      description: `Se borrará «${c.titulo}». Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    const res = await deleteComunicado(c.id);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo eliminar");
+      return;
+    }
+    toast.success("Comunicado eliminado");
+    await loadComunicados();
+  };
+
   const saveEditor = async (form: EditorForm) => {
     // Solo validamos al CREAR (al editar dejamos pasar).
     if (editorMode === "create") {
@@ -754,7 +836,7 @@ export function ComunicadosView() {
           onBack={closeEditor}
           onSave={saveEditor}
           empleadosReales={empleadosReales}
-          empresaNombre={empresaActual?.nombre || ""}
+          empresaNombre={empresaResuelta ? empresaActual?.nombre ?? "" : ""}
         />
         <ValidacionFaltantesDialog
           open={faltantesComunicado.length > 0}
@@ -783,7 +865,7 @@ export function ComunicadosView() {
         <TableCell key="titulo">
           <div>
             <p className="font-semibold text-sm">{c.titulo}</p>
-            <p className="text-xs text-muted-foreground">Empresa: {empresaActual?.nombre}</p>
+            <p className="text-xs text-muted-foreground">Empresa: {empresaResuelta ? empresaActual?.nombre : ""}</p>
           </div>
         </TableCell>
       ),
@@ -797,13 +879,13 @@ export function ComunicadosView() {
     creadoEl: {
       th: <TableHead key="creadoEl">Creado el</TableHead>,
       td: (c) => (
-        <TableCell key="creadoEl" className="text-sm text-muted-foreground whitespace-nowrap">{c.creadoEl}</TableCell>
+        <TableCell key="creadoEl" className="text-sm text-muted-foreground whitespace-nowrap">{formatFechaHoraEnZona(c.creadoEl, tz)}</TableCell>
       ),
     },
     envio: {
       th: <TableHead key="envio">Envío</TableHead>,
       td: (c) => (
-        <TableCell key="envio" className="text-sm text-muted-foreground whitespace-nowrap">{c.envio || "—"}</TableCell>
+        <TableCell key="envio" className="text-sm text-muted-foreground whitespace-nowrap">{c.envio ? formatFechaHoraEnZona(c.envio, tz) : "—"}</TableCell>
       ),
     },
     recurrencia: {
@@ -909,18 +991,18 @@ export function ComunicadosView() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEdit(c)}><Eye className="h-4 w-4 mr-2" />Ver / Editar</DropdownMenuItem>
-                          <DropdownMenuItem><Copy className="h-4 w-4 mr-2" />Duplicar</DropdownMenuItem>
-                          <DropdownMenuItem><Clock className="h-4 w-4 mr-2" />Programar</DropdownMenuItem>
-                          <DropdownMenuItem><Archive className="h-4 w-4 mr-2" />Archivar</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive"><Trash2 className="h-4 w-4 mr-2" />Eliminar</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEdit(c)}><Eye className="h-4 w-4 mr-2" />Ver / editar</DropdownMenuItem>
+                          {c.estado !== "archivado" && (
+                            <DropdownMenuItem onClick={() => archivar(c)}><Archive className="h-4 w-4 mr-2" />Archivar</DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem className="text-destructive" onClick={() => eliminar(c)}><Trash2 className="h-4 w-4 mr-2" />Eliminar</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No se encontraron comunicados</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={columnasRender.length + 2} className="text-center text-muted-foreground py-8">{cargando ? "Cargando…" : "No se encontraron comunicados"}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -942,6 +1024,7 @@ export function ComunicadosView() {
           <SancionDisciplinariaView />
         </TabsContent>
       </Tabs>
+      {dialogoConfirmar}
     </div>
   );
 }

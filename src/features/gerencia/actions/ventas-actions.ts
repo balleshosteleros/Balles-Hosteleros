@@ -23,6 +23,8 @@ function emptyDashboard(fromIso: string, toIso: string): VentasDashboard {
       costeTotal: 0,
       margenTotal: 0,
       margenPct: 0,
+      ingresosSinCoste: 0,
+      productosSinCoste: 0,
     },
     porDia: [],
     porProducto: [],
@@ -83,7 +85,7 @@ export async function getVentasDashboard(
     const productoIds = Array.from(
       new Set(lineas.map((l) => l.producto_id).filter((x): x is string => Boolean(x))),
     );
-    const productosMap = new Map<string, { categoria: string; coste: number }>();
+    const productosMap = new Map<string, { categoria: string; coste: number; tieneCoste: boolean }>();
     if (productoIds.length > 0) {
       const { data: prods, error: prodErr } = await supabase
         .from("productos")
@@ -91,9 +93,15 @@ export async function getVentasDashboard(
         .in("id", productoIds);
       if (prodErr) throw prodErr;
       for (const p of prods ?? []) {
+        // `coste` se guarda como texto: vacío o nulo significa "no dado de alta",
+        // que NO es lo mismo que costar 0 €.
+        const costeRaw = (p as { coste: unknown }).coste;
+        const costeTexto = costeRaw == null ? "" : String(costeRaw).trim();
+        const coste = toNum(costeRaw);
         productosMap.set(p.id as string, {
           categoria: ((p as { categoria: string | null }).categoria) ?? "Sin categoría",
-          coste: toNum((p as { coste: unknown }).coste),
+          coste,
+          tieneCoste: costeTexto !== "" && coste > 0,
         });
       }
     }
@@ -124,6 +132,7 @@ export async function getVentasDashboard(
       cantidad: number;
       ingresos: number;
       coste: number;
+      tieneCoste: boolean;
     };
     const prodMap = new Map<string, ProdAgg>();
     for (const l of lineas) {
@@ -139,6 +148,7 @@ export async function getVentasDashboard(
           cantidad: 0,
           ingresos: 0,
           coste: 0,
+          tieneCoste: meta?.tieneCoste ?? false,
         } as ProdAgg);
       const qty = toNum(l.cantidad);
       const pu = toNum(l.precio_unitario);
@@ -153,11 +163,14 @@ export async function getVentasDashboard(
     const cantidadMediaProducto =
       productosAgg.length > 0 ? totalUnidades / productosAgg.length : 0;
     const popThreshold = cantidadMediaProducto * POPULARIDAD_THRESHOLD;
-    const margenes = productosAgg.map((p) =>
-      p.cantidad > 0 ? (p.ingresos - p.coste) / p.cantidad : 0,
-    );
+    // El margen medio SOLO se calcula con los productos que tienen coste dado de
+    // alta. Los que no lo tienen aportaban un margen igual a su precio entero,
+    // subiendo la media y desplazando la clasificación de toda la carta.
+    const conCoste = productosAgg.filter((p) => p.tieneCoste && p.cantidad > 0);
     const margenMedio =
-      margenes.length > 0 ? margenes.reduce((s, x) => s + x, 0) / margenes.length : 0;
+      conCoste.length > 0
+        ? conCoste.reduce((s, p) => s + (p.ingresos - p.coste) / p.cantidad, 0) / conCoste.length
+        : 0;
 
     const porProducto: VentaProducto[] = productosAgg
       .map((p) => {
@@ -166,7 +179,9 @@ export async function getVentasDashboard(
         const margenPct = p.ingresos > 0 ? margenTotal / p.ingresos : 0;
         const popularidadPct = totalUnidades > 0 ? p.cantidad / totalUnidades : 0;
         const altaPop = p.cantidad >= popThreshold && popThreshold > 0;
-        const altaMargen = margenUnitario >= margenMedio && margenUnitario > 0;
+        // Sin coste no se puede afirmar que el margen sea alto: se trata como
+        // no-alto para no colocar el plato entre los rentables sin saberlo.
+        const altaMargen = p.tieneCoste && margenUnitario >= margenMedio && margenUnitario > 0;
         const clasificacion: MenuClass =
           altaPop && altaMargen
             ? "ESTRELLA"
@@ -188,6 +203,7 @@ export async function getVentasDashboard(
           margenPct,
           popularidadPct,
           clasificacion,
+          tieneCoste: p.tieneCoste,
         };
       })
       .sort((a, b) => b.ingresos - a.ingresos);
@@ -230,6 +246,12 @@ export async function getVentasDashboard(
           costeTotal,
           margenTotal,
           margenPct: ingresosTotal > 0 ? margenTotal / ingresosTotal : 0,
+          // Cuánto de lo vendido NO tiene coste dado de alta: es la medida de
+          // hasta qué punto se puede fiar uno del margen de arriba.
+          ingresosSinCoste: productosAgg
+            .filter((p) => !p.tieneCoste)
+            .reduce((s, p) => s + p.ingresos, 0),
+          productosSinCoste: productosAgg.filter((p) => !p.tieneCoste).length,
         },
         porDia,
         porProducto,

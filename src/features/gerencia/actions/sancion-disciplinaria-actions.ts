@@ -90,12 +90,33 @@ export async function crearSancionDisciplinaria(
 
     const plazoDias = Math.max(1, Math.min(60, Number(input.plazoDias ?? 15) || 15));
 
-    const { data: emp, error: empErr } = await admin
+    // El selector de la pantalla trabaja con el id de USUARIO (el del acceso), y
+    // la ficha del trabajador vive en `empleados` con su propio id. Son cosas
+    // distintas y nunca coinciden, así que se acepta cualquiera de los dos: se
+    // busca primero por la ficha y, si no aparece, por el usuario al que pertenece.
+    const CAMPOS_EMPLEADO =
+      "id, nombre, apellidos, dni_nie, puesto, email_empresa, email_personal, empresa_id, estado, departamentos!empleados_departamento_id_fkey ( nombre )";
+
+    const { data: porFicha, error: empErr } = await admin
       .from("empleados")
-      .select("id, nombre, apellidos, dni_nie, puesto, email_empresa, email_personal, empresa_id, estado, departamentos!empleados_departamento_id_fkey ( nombre )")
+      .select(CAMPOS_EMPLEADO)
       .eq("id", empleadoId)
       .maybeSingle();
-    if (empErr || !emp) return { ok: false, error: "Trabajador no encontrado" };
+    if (empErr) return { ok: false, error: "Trabajador no encontrado" };
+
+    let emp = porFicha;
+    if (!emp) {
+      // Un mismo usuario puede tener ficha en varias empresas (espejos), así que
+      // se acota a la empresa activa para quedarse con la que toca.
+      const { data: porUsuario } = await admin
+        .from("empleados")
+        .select(CAMPOS_EMPLEADO)
+        .eq("user_id", empleadoId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      emp = porUsuario;
+    }
+    if (!emp) return { ok: false, error: "Trabajador no encontrado" };
     if (emp.empresa_id !== empresaId) return { ok: false, error: "El trabajador no pertenece a tu empresa" };
     if (emp.estado !== "Activo") return { ok: false, error: "El trabajador no está activo" };
 
@@ -111,6 +132,9 @@ export async function crearSancionDisciplinaria(
     const empresaLogoUrl =
       ((empresa?.isotipo_url as string | null) || (empresa?.logo_url as string | null)) ?? null;
 
+    // A partir de aquí SIEMPRE el id de la ficha: `empleadoId` es lo que llegó de
+    // la pantalla y puede ser el id del usuario, que no vale para guardar.
+    const fichaId = emp.id as string;
     const empleadoNombre = `${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim();
     const departamento =
       (emp as unknown as { departamentos?: { nombre?: string | null } | null }).departamentos?.nombre ?? null;
@@ -152,7 +176,7 @@ export async function crearSancionDisciplinaria(
       .from("firmas_documentos")
       .insert({
         empresa_id: empresaId,
-        empleado_id: empleadoId,
+        empleado_id: fichaId,
         titulo,
         tipo: TIPO_DOC,
         modalidad: "manuscrita_digital",
@@ -242,7 +266,7 @@ export async function crearSancionDisciplinaria(
         tipo: "alerta",
         titulo: "Sanción disciplinaria — firma requerida",
         mensaje: "Has recibido una comunicación de sanción disciplinaria. Fírmala como acuse de recibo (leído).",
-        segmento: { tipo: "empleados", empleadoIds: [empleadoId] },
+        segmento: { tipo: "empleados", empleadoIds: [fichaId] },
         accionLabel: "Firmar",
         accionUrl: `${base}/firmar/${encodeURIComponent(token)}`,
         refTabla: "firmas_documentos",

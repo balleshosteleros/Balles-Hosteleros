@@ -56,12 +56,14 @@ export async function listMantenimiento() {
     const { supabase, empresaId } = await getContext();
     // Se traen las actualizaciones en la misma consulta: sin ellas el historial
     // de la ficha aparecia siempre vacio al recargar.
-    const query = supabase
+    // Sin empresa resuelta no se devuelve NADA: omitir el filtro mostraba las
+    // incidencias de todas las empresas del usuario.
+    if (!empresaId) return { ok: true, data: [] };
+    const { data, error } = await supabase
       .from("mantenimiento")
       .select("*, mantenimiento_actualizaciones(*)")
+      .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
-    if (empresaId) query.eq("empresa_id", empresaId);
-    const { data, error } = await query;
     if (error) throw error;
     return { ok: true, data: data ?? [] };
   } catch (err) {
@@ -121,7 +123,8 @@ export async function updateIncidencia(
   }
 ) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
 
     // Un desperfecto TERMINADO se consulta, no se edita. Lo unico que sigue
     // abierto es el estado, para poder reabrirlo si se cerro por error o si la
@@ -130,7 +133,9 @@ export async function updateIncidencia(
       .from("mantenimiento")
       .select("estado")
       .eq("id", id)
-      .single();
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!actual) return { ok: false, error: "La incidencia ya no existe" };
     if (actual?.estado === "TERMINADO") {
       const soloEstado =
         Object.keys(updates).length === 1 && updates.estado !== undefined;
@@ -166,7 +171,8 @@ export async function updateIncidencia(
     const { error } = await supabase
       .from("mantenimiento")
       .update(dbUpdates)
-      .eq("id", id);
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
@@ -185,7 +191,18 @@ export async function addActualizacion(
   fecha?: string
 ) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // La incidencia tiene que ser de la empresa activa: sin esta comprobación
+    // se podría apuntar trabajo en una incidencia de otra empresa.
+    const { data: incidencia } = await supabase
+      .from("mantenimiento")
+      .select("id")
+      .eq("id", incidenciaId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!incidencia) return { ok: false, error: "La incidencia ya no existe" };
 
     if (texto.trim().length < MIN_COMENTARIOS)
       return { ok: false, error: `Las observaciones necesitan al menos ${MIN_COMENTARIOS} caracteres` };
@@ -211,7 +228,8 @@ export async function addActualizacion(
     const { error: errEstado } = await supabase
       .from("mantenimiento")
       .update({ estado: resultado, updated_at: new Date().toISOString() })
-      .eq("id", incidenciaId);
+      .eq("id", incidenciaId)
+      .eq("empresa_id", empresaId);
     if (errEstado) throw errEstado;
 
     return { ok: true };

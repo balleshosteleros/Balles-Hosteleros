@@ -45,6 +45,7 @@ import {
   PawPrint,
   Info,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getVentasDashboard } from "@/features/gerencia/actions/ventas-actions";
@@ -343,6 +344,20 @@ export function VentasView() {
             accent="text-emerald-400"
           />
         </div>
+
+        {/* El margen solo vale lo que valen los costes: si faltan escandallos,
+            se dice cuánto de lo vendido se está contando sin coste. */}
+        {(resumen?.ingresosSinCoste ?? 0) > 0 && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>
+              El margen está calculado de menos: {fmtInt(resumen?.productosSinCoste ?? 0)}{" "}
+              {(resumen?.productosSinCoste ?? 0) === 1 ? "producto vendido no tiene" : "productos vendidos no tienen"}{" "}
+              coste dado de alta, y suponen {fmtEUR(resumen?.ingresosSinCoste ?? 0)} de lo vendido.
+              Hasta que se les ponga coste, esos productos no cuentan como de alto margen.
+            </p>
+          </div>
+        )}
 
         {/* Tabs */}
         <Tabs defaultValue="resumen" className="w-full">

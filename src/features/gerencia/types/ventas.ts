@@ -24,6 +24,13 @@ export interface VentasResumen {
   costeTotal: number;
   margenTotal: number;
   margenPct: number;
+  /**
+   * Cobertura del coste: un producto SIN coste dado de alta no es un producto
+   * con coste 0. Si no se separan, el margen sale inflado y el plato aparece
+   * como si fuese el más rentable de la carta.
+   */
+  ingresosSinCoste: number;
+  productosSinCoste: number;
 }
 
 export interface VentaDia {
@@ -47,6 +54,8 @@ export interface VentaProducto {
   margenPct: number;
   popularidadPct: number;
   clasificacion: MenuClass;
+  /** `false` cuando el producto no tiene coste dado de alta: su margen no es fiable. */
+  tieneCoste: boolean;
 }
 
 export interface VentaCategoria {

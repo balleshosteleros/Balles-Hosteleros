@@ -288,7 +288,12 @@ export async function listCierres(): Promise<{ ok: true; data: CierreRow[] } | {
       .from("cierres_semanales")
       .select("id, tipo, fecha, semana_iso, efectivo_retirado, retirada_entrada, total_contado, cuadra, descuadre, notas, storage_path, file_name, size_bytes, mime_type, documentos, registrado_por, created_at")
       .eq("empresa_id", empresaId)
-      .order("fecha", { ascending: false });
+      // El desempate por `created_at` NO es cosmético: la columna "Acumulado" se
+      // calcula recorriendo esta lista al revés, y sin un orden estable los
+      // apuntes del mismo día salían en orden arbitrario, mostrando saldos
+      // intermedios negativos que nunca existieron.
+      .order("fecha", { ascending: false })
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error("[cierres:list] error:", error.message);
@@ -732,7 +737,7 @@ export async function deleteCierre(id: string): Promise<{ ok: boolean; error?: s
 
     const { data: row } = await supabase
       .from("cierres_semanales")
-      .select("fecha, storage_path, documentos")
+      .select("fecha, tipo, efectivo_retirado, retirada_entrada, storage_path, documentos")
       .eq("id", id)
       .eq("empresa_id", empresaId)
       .single();
@@ -745,6 +750,50 @@ export async function deleteCierre(id: string): Promise<{ ok: boolean; error?: s
     // puede borrar un apunte que ya está fuera de plazo.
     const bloqueo = await comprobarPlazoApunte(supabase, empresaId, String(row.fecha), "borrar");
     if (bloqueo) return { ok: false, error: bloqueo };
+
+    // GUARDIA DE CAJA AL BORRAR: quitar un apunte que SUMA efectivo (un cierre,
+    // o una retirada de entrada) puede dejar el acumulado en negativo a partir
+    // de esa fecha. El alta ya protege esta invariante; sin esta comprobación se
+    // rompía por la puerta de atrás simplemente borrando.
+    const efectoDelBorrado = -efectoEnCaja({
+      tipo: ((row.tipo as string | null) ?? "cierre") as CierreTipo,
+      efectivo_retirado: Number(row.efectivo_retirado ?? 0),
+      retirada_entrada: row.retirada_entrada === true,
+    });
+    if (efectoDelBorrado < 0) {
+      const { data: todos, error: errTodos } = await supabase
+        .from("cierres_semanales")
+        .select("id, fecha, created_at, tipo, efectivo_retirado, retirada_entrada")
+        .eq("empresa_id", empresaId);
+      if (errTodos) {
+        console.error("[cierres:delete] saldo:", errTodos.message);
+        return { ok: false, error: "No se pudo comprobar el efectivo acumulado en caja" };
+      }
+
+      // Se recalcula la línea completa SIN el apunte que se quiere borrar.
+      const restantes = (todos ?? [])
+        .filter((m) => (m.id as string) !== id)
+        .map((m) => ({
+          fecha: ((m.fecha as string) ?? "").slice(0, 10),
+          created_at: (m.created_at as string) ?? "",
+          tipo: (((m.tipo as string | null) ?? "cierre") as CierreTipo),
+          efectivo_retirado: Number(m.efectivo_retirado ?? 0),
+          retirada_entrada: m.retirada_entrada === true,
+        }))
+        .sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : a.created_at < b.created_at ? -1 : 1));
+
+      let run = 0;
+      for (const m of restantes) {
+        run = céntimos(run + efectoEnCaja(m));
+        if (run < 0) {
+          return {
+            ok: false,
+            error: `No se puede borrar este apunte: el efectivo acumulado quedaría en ${fmtEuro(run)} el ${m.fecha}, `
+              + `y la caja nunca puede quedar por debajo de cero. Borra antes los movimientos posteriores que dependen de él.`,
+          };
+        }
+      }
+    }
 
     // Recopilar todas las rutas a borrar (array `documentos` + doc legacy), sin duplicados.
     const paths = new Set<string>();

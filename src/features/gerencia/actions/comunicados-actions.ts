@@ -17,12 +17,14 @@ async function getContext() {
 export async function listComunicados() {
   try {
     const { supabase, empresaId } = await getContext();
-    const query = supabase
+    // Sin empresa resuelta no se devuelve NADA. Antes se omitía el filtro, que
+    // es justo lo contrario de lo que hace falta: enseñaba las de todas.
+    if (!empresaId) return { ok: true, data: [] };
+    const { data, error } = await supabase
       .from("comunicados")
       .select("*")
+      .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
-    if (empresaId) query.eq("empresa_id", empresaId);
-    const { data, error } = await query;
     if (error) throw error;
     return { ok: true, data: data ?? [] };
   } catch (err) {
@@ -148,17 +150,21 @@ export async function createComunicado(input: ComunicadoInput) {
 
 export async function updateComunicado(id: string, input: ComunicadoInput) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
     const { data: anterior } = await supabase
       .from("comunicados")
       .select("estado")
       .eq("id", id)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
+    if (!anterior) return { ok: false, error: "El comunicado ya no existe" };
 
     const { error } = await supabase
       .from("comunicados")
       .update({ ...toRow(input), updated_at: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
 
     // Solo notificamos al pasar de borrador → publicado para evitar spam de pushes
@@ -191,11 +197,13 @@ export async function updateComunicado(id: string, input: ComunicadoInput) {
 
 export async function deleteComunicado(id: string) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
     const { error } = await supabase
       .from("comunicados")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
