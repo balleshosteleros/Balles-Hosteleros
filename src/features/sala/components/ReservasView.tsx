@@ -5583,7 +5583,7 @@ export function ReservasView() {
       </div>
 
       {/* TOP BAR — todo en una sola línea: acciones + filtros + turno + sala/zonas + vista + fecha + ajustes */}
-      <div className="shrink-0 border-b bg-card px-2 py-1.5 flex items-center gap-1.5 flex-nowrap overflow-x-auto">
+      <div className="shrink-0 bg-background px-2 py-1.5 flex items-center gap-1.5 flex-nowrap overflow-x-auto">
         {/* Acciones: NUEVA · Lista espera · Estados · Buscar — solo en vista día.
             En vista mes el bloque se oculta pero NO se colapsa: mantiene su
             hueco para que el resto de controles no cambie de sitio entre

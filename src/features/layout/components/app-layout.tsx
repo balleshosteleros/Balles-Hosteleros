@@ -308,11 +308,17 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
             onMouseEnter={() => puedeReplegar && setHoverBarraSuperior(true)}
             onMouseLeave={() => puedeReplegar && recogerBarraSuperior()}
             className={cn(
-              "sticky top-0 z-30 flex items-center bg-card px-3 md:px-4 shrink-0 gap-2 md:gap-3",
+              // Sin linea de separacion y del MISMO fondo que la pagina: la
+              // cabecera y la barra de herramientas de debajo se leen como una
+              // sola superficie. Antes la cabecera era blanco puro (`--card`)
+              // sobre el gris claro de la pagina y ademas llevaba `border-b`,
+              // asi que se veia un corte cruzando la pantalla justo encima de
+              // las herramientas (Ivan, 06-sep).
+              "sticky top-0 z-30 flex items-center bg-background px-3 md:px-4 shrink-0 gap-2 md:gap-3",
               "transition-[height,opacity] duration-200 ease-out",
               headerReplegado
-                ? "h-0 overflow-hidden border-b-0 opacity-0 invisible"
-                : "h-14 border-b opacity-100",
+                ? "h-0 overflow-hidden opacity-0 invisible"
+                : "h-14 opacity-100",
             )}
           >
             {/*
