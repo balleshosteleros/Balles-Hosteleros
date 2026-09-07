@@ -19,6 +19,11 @@ export type OrigenResena =
   | "qr"
   | "carta"
   | "google"
+  // Los canales propios: la página del restaurante (el formulario de la web y
+  // el de la newsletter con el sorteo mensual) y la app del móvil.
+  | "web"
+  | "app"
+  | "whatsapp"
   // Las dos que faltaban, y son las que más filas tienen: "encuesta" son las
   // 2.611 valoraciones traídas de CoverManager y "reserva" las que llegan por
   // el correo posterior a la visita. La base de datos siempre las aceptó; el
@@ -62,7 +67,20 @@ export interface Resena {
   email: string | null;
   comentario: string | null;
   estado: EstadoResena;
+  /**
+   * Nota GLOBAL, la que el cliente puso de una sola vez. Para pintar y para
+   * comparar manda la media de las tres preguntas cuando las contestó
+   * (`notaValoracion`): esta se queda como respaldo de quien solo dio una.
+   */
   rating: number | null;
+  /**
+   * Las TRES preguntas, por separado. Existían en la base desde agosto pero no
+   * en este tipo, así que la pantalla de Calidad no las leía y el desglose no se
+   * podía ver en ningún sitio: 2.112 valoraciones lo tienen.
+   */
+  rating_comida: number | null;
+  rating_servicio: number | null;
+  rating_ambiente: number | null;
   origen: OrigenResena;
   posicion: number;
   creado_por: string | null;
@@ -270,6 +288,8 @@ export const ESTADO_LABEL: Record<EstadoResena, string> = Object.fromEntries(
  */
 export const ESTADOS_SIN_VALORACION: EstadoResena[] = ["nuevo_comensal"];
 
+
+
 /** Para el `.not("estado", "in", …)` de PostgREST: `(nuevo_comensal)`. */
 export const FILTRO_ESTADOS_SIN_VALORACION = `(${ESTADOS_SIN_VALORACION.join(",")})`;
 
@@ -385,12 +405,28 @@ export const ESTADO_GESTION_CONFIG: Record<
   EstadoGestionConfig
 >;
 
+/**
+ * La VÍA por la que llegó la opinión, con el nombre que se lee en pantalla.
+ *
+ * No es `plataforma`, que es el programa del que salió el registro (Go High
+ * Level, CoverManager). Esto es cómo nos lo dijo el cliente: escribiendo por
+ * WhatsApp, contestando a la encuesta de su reserva, en Google, o desde la web
+ * o la app.
+ */
 export const ORIGEN_LABEL: Record<OrigenResena, string> = {
-  manual: "Manual",
+  whatsapp: "WhatsApp",
+  reserva: "Reservas",
+  google: "Google",
+  web: "Web",
+  app: "App",
   qr: "QR en mesa",
   carta: "Carta digital",
-  google: "Google",
   encuesta: "Encuesta",
-  reserva: "Tras la reserva",
+  manual: "Manual",
   otro: "Otro",
 };
+
+/** El mismo catálogo en lista, para los desplegables y los filtros. */
+export const ORIGENES_RESENA: { key: OrigenResena; label: string }[] = (
+  Object.keys(ORIGEN_LABEL) as OrigenResena[]
+).map((key) => ({ key, label: ORIGEN_LABEL[key] }));

@@ -1,35 +1,37 @@
 "use client";
 
+/**
+ * Las valoraciones de los clientes: la gráfica de evolución, la lista y la
+ * ficha de cada una.
+ *
+ * Era un kanban de cinco columnas heredado de Go High Level, donde cada comensal
+ * era una tarjeta que se arrastraba de "Nuevo comensal" a "Excelente". Con
+ * 8.849 valoraciones dejó de servir: no se pueden comparar dos notas que están
+ * en columnas distintas, y en una tarjeta no cabe lo que importa —el desglose
+ * por áreas, la vía por la que opinó, quién la gestionó—. La lista vive en
+ * `TablaResenas`; aquí quedan la gráfica, la configuración de Google y el
+ * detalle.
+ */
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   AlertCircle,
   Bot,
-  CalendarClock,
   Check,
   CheckCircle2,
   Copy,
   ExternalLink,
-  HeartHandshake,
   Loader2,
-  MessageCircle,
-  Phone,
-  PhoneOff,
-  PhoneOutgoing,
   RefreshCw,
-  Search,
   Settings,
   Sparkles,
   Star,
   Trash2,
-  UserCheck,
-  UserX,
-  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -48,13 +50,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/shared/components/ui/popover";
 import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
+import type {
+  ToolbarFiltroActivo,
+  ToolbarOrdenActivo,
+} from "@/shared/components/SubmoduleToolbar";
+import { TablaResenas } from "@/features/calidad/components/TablaResenas";
 import {
   actualizarResena,
   buscarPlaceCustom,
@@ -63,7 +69,6 @@ import {
   getEmpresaPlaceInfo,
   listEmpleadosGestores,
   listResenas,
-  moverResena,
   setEmpresaPlaceId,
   syncResenasGoogle,
   type EmpleadoGestor,
@@ -76,7 +81,6 @@ import {
 } from "@/features/calidad/actions/agentes-ia-actions";
 import {
   ESTADOS_RESENA,
-  ESTADO_GESTION_CONFIG,
   ORIGEN_LABEL,
   type CogeTelefono,
   type EstadoGestionResena,
@@ -138,7 +142,7 @@ function rangoDeMes(mes: string): { from: string; to: string } {
   };
 }
 
-export function ResenasPipeline() {
+export function ResenasView() {
   const [resenas, setResenas] = useState<Resena[]>([]);
   const [info, setInfo] = useState<EmpresaPlaceInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -162,7 +166,6 @@ export function ResenasPipeline() {
   }
   const [customFrom, setCustomFrom] = useState<string>(shiftIso(todayIso(), -6));
   const [customTo, setCustomTo] = useState<string>(todayIso());
-  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [detecting, setDetecting] = useState(false);
   useGlobalLoadingSync(loading || syncing || detecting);
@@ -174,6 +177,10 @@ export function ResenasPipeline() {
   const [manualMode, setManualMode] = useState(false);
   const [agentesOpen, setAgentesOpen] = useState(false);
   const [detalleResena, setDetalleResena] = useState<Resena | null>(null);
+  // Filtro y orden de la lista. Cada columna trae el suyo, como en el resto de
+  // los listados del programa.
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const { empresaActual } = useEmpresa();
 
   /**
@@ -240,39 +247,6 @@ export function ResenasPipeline() {
       return true;
     });
   }, [resenas, busqueda, rango]);
-
-  const porEstado = useMemo(() => {
-    const map = new Map<EstadoResena, Resena[]>();
-    for (const e of ESTADOS_RESENA) map.set(e.key, []);
-    for (const r of filtradas) {
-      const col = map.get(r.estado);
-      if (col) col.push(r);
-    }
-    return map;
-  }, [filtradas]);
-
-  // ─── Drag & drop ──────────────────────────────────────────────
-  const onDragStart = (id: string) => setDraggingId(id);
-  const onDragEnd = () => setDraggingId(null);
-
-  const onDrop = async (estado: EstadoResena) => {
-    if (!draggingId) return;
-    const r = resenas.find((x) => x.id === draggingId);
-    if (!r || r.estado === estado) {
-      setDraggingId(null);
-      return;
-    }
-    // Optimista
-    setResenas((prev) =>
-      prev.map((x) => (x.id === draggingId ? { ...x, estado } : x)),
-    );
-    setDraggingId(null);
-    const res = await moverResena(r.id, estado);
-    if (!res.ok) {
-      toast.error("No se pudo mover la reseña");
-      cargar();
-    }
-  };
 
   // ─── Sync Google ──────────────────────────────────────────────
   const onSync = async () => {
@@ -483,24 +457,16 @@ export function ResenasPipeline() {
         onCustomToChange={(v) => { setMesGrafica(null); setCustomTo(v); }}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-        {ESTADOS_RESENA.map((col) => (
-          <KanbanColumna
-            key={col.key}
-            label={col.label}
-            accent={col.accent}
-            badge={col.badge}
-            resenas={porEstado.get(col.key) ?? []}
-            draggingId={draggingId}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-            onDrop={() => onDrop(col.key)}
-            onCardClick={(r) => setDetalleResena(r)}
-            loading={loading}
-            nombreGestor={nombreGestor}
-          />
-        ))}
-      </div>
+      <TablaResenas
+        resenas={filtradas}
+        loading={loading}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
+        orden={orden}
+        onOrdenChange={setOrden}
+        nombreGestor={nombreGestor}
+        onAbrir={(r) => setDetalleResena(r)}
+      />
 
       <Dialog open={agentesOpen} onOpenChange={setAgentesOpen}>
         <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
@@ -800,288 +766,54 @@ function ManualLinkPanel({
   );
 }
 
-// ─── Columna kanban ───────────────────────────────────────────
+
+// ─── Diálogo: Detalle ─────────────────────────────────────────
 
 /**
- * Cuántas tarjetas se PINTAN por columna. El número de la cabecera es siempre
- * el total de verdad; esto solo limita el DOM.
+ * Lo que puntuó por áreas: comida, servicio y ambiente.
  *
- * Sin tope, "Excelente" de BACANAL son 4.392 tarjetas en una sola columna y el
- * navegador se arrastra al abrir la pantalla. Se pintan las más recientes, que
- * son las que se gestionan, y para llegar a las viejas están el filtro de
- * período y el buscador, que actúan sobre TODAS.
+ * Es la valoración que de verdad dice algo —el cliente se paró a puntuar tres
+ * cosas—, y hasta ahora no se veía en ninguna pantalla: los campos existían en
+ * la base desde agosto pero no en el tipo, así que 2.112 valoraciones tenían
+ * este detalle escondido. Quien solo dio una nota global no enseña nada aquí,
+ * que es lo honesto: no se inventan tres notas repitiendo la misma.
  */
-const TARJETAS_POR_COLUMNA = 150;
+function DesglosePreguntas({ resena }: { resena: Resena }) {
+  const areas = [
+    { label: "Comida", nota: resena.rating_comida },
+    { label: "Servicio", nota: resena.rating_servicio },
+    { label: "Ambiente", nota: resena.rating_ambiente },
+  ].filter((a) => typeof a.nota === "number");
 
-function KanbanColumna({
-  label,
-  accent,
-  badge,
-  resenas,
-  draggingId,
-  onDragStart,
-  onDragEnd,
-  onDrop,
-  onCardClick,
-  loading,
-  nombreGestor,
-}: {
-  label: string;
-  accent: string;
-  badge: string;
-  resenas: Resena[];
-  draggingId: string | null;
-  onDragStart: (id: string) => void;
-  onDragEnd: () => void;
-  onDrop: () => void;
-  onCardClick: (r: Resena) => void;
-  loading: boolean;
-  nombreGestor: (userId: string | null) => string | null;
-}) {
-  const [dragOver, setDragOver] = useState(false);
+  if (areas.length === 0) return null;
 
   return (
-    <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        onDrop();
-      }}
-      className={`flex flex-col min-w-0 overflow-hidden rounded-lg border bg-card border-t-4 ${accent} transition-colors ${
-        dragOver ? "ring-2 ring-primary/30 bg-primary/5" : ""
-      }`}
-    >
-      <div className="flex items-center justify-between px-3 py-2 border-b">
-        <div className="font-medium text-sm">{label}</div>
-        <Badge variant="secondary" className={`text-[10px] h-5 px-2 ${badge}`}>
-          {resenas.length}
-        </Badge>
-      </div>
-      <ScrollArea className="h-[calc(100vh-340px)] min-h-[300px]">
-        <div className="p-2 space-y-2">
-          {loading && resenas.length === 0 && (
-            <div className="text-center py-8 text-xs text-muted-foreground">
-              Cargando…
-            </div>
-          )}
-          {!loading && resenas.length === 0 && (
-            <div className="text-center py-8 text-xs text-muted-foreground/60">
-              Vacío
-            </div>
-          )}
-          {resenas.slice(0, TARJETAS_POR_COLUMNA).map((r) => (
-            <ResenaCard
-              key={r.id}
-              resena={r}
-              isDragging={draggingId === r.id}
-              onDragStart={() => onDragStart(r.id)}
-              onDragEnd={onDragEnd}
-              onClick={() => onCardClick(r)}
-              nombreGestor={nombreGestor}
-            />
-          ))}
-          {resenas.length > TARJETAS_POR_COLUMNA && (
-            <p className="py-3 text-center text-[11px] text-muted-foreground">
-              y {resenas.length - TARJETAS_POR_COLUMNA} más · acota por período o
-              busca para verlas
-            </p>
-          )}
-        </div>
-      </ScrollArea>
-    </div>
-  );
-}
-
-// ─── Iconos de seguimiento ────────────────────────────────────
-
-/** Los nombres de `ESTADOS_GESTION.icon` resueltos a componentes reales. */
-const ICONOS_GESTION: Record<string, LucideIcon> = {
-  PhoneOutgoing,
-  PhoneOff,
-  CalendarClock,
-  UserX,
-  MessageCircle,
-  HeartHandshake,
-  Search,
-};
-
-/**
- * Los dos indicadores que se ven SIN abrir la ficha:
- *  · el teléfono, verde si lo cogió y rojo si no (gris si no hay teléfono),
- *  · un único icono, el del estado de gestión en el que está la reseña.
- * Si no se ha gestionado todavía, no se pinta nada: no hay dato que enseñar.
- */
-function IconosSeguimiento({
-  cogeTelefono,
-  estadoGestion,
-}: {
-  cogeTelefono: CogeTelefono | null;
-  estadoGestion: EstadoGestionResena | null;
-}) {
-  if (!cogeTelefono && !estadoGestion) return null;
-
-  const cfg = estadoGestion ? ESTADO_GESTION_CONFIG[estadoGestion] : null;
-  const IconEstado = cfg ? ICONOS_GESTION[cfg.icon] : null;
-
-  const telefono =
-    cogeTelefono === "si"
-      ? { color: "text-emerald-600", title: "Cogió el teléfono", off: false }
-      : cogeTelefono === "no"
-        ? { color: "text-rose-600", title: "No cogió el teléfono", off: false }
-        : cogeTelefono === "sin_telefono"
-          ? {
-              color: "text-muted-foreground/50",
-              title: "Sin teléfono",
-              off: true,
-            }
-          : null;
-
-  return (
-    <div className="flex items-center gap-1.5 shrink-0">
-      {telefono &&
-        (telefono.off ? (
-          <PhoneOff
-            className={`h-3.5 w-3.5 ${telefono.color}`}
-            aria-label={telefono.title}
-          />
-        ) : (
-          <Phone
-            className={`h-3.5 w-3.5 fill-current ${telefono.color}`}
-            aria-label={telefono.title}
-          />
-        ))}
-      {IconEstado && cfg && (
-        <IconEstado
-          className={`h-3.5 w-3.5 ${cfg.color}`}
-          aria-label={cfg.label}
-        />
-      )}
-    </div>
-  );
-}
-
-// ─── Tarjeta ──────────────────────────────────────────────────
-
-function ResenaCard({
-  resena,
-  isDragging,
-  onDragStart,
-  onDragEnd,
-  onClick,
-  nombreGestor,
-}: {
-  resena: Resena;
-  isDragging: boolean;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onClick: () => void;
-  nombreGestor: (userId: string | null) => string | null;
-}) {
-  return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onClick={onClick}
-      className={`w-full min-w-0 overflow-hidden bg-background border rounded-md p-2.5 cursor-grab active:cursor-grabbing hover:border-primary/40 hover:shadow-sm transition-all ${
-        isDragging ? "opacity-40" : ""
-      }`}
-    >
-      <div className="flex items-start gap-2 min-w-0">
-        {resena.autor_avatar ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={resena.autor_avatar}
-            alt={resena.nombre_comensal}
-            className="h-7 w-7 rounded-full shrink-0 object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[11px] font-semibold shrink-0">
-            {resena.nombre_comensal.slice(0, 1).toUpperCase()}
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-medium text-xs truncate min-w-0 flex-1">
-              {resena.nombre_comensal}
-            </span>
-            <IconosSeguimiento
-              cogeTelefono={resena.coge_telefono}
-              estadoGestion={resena.estado_gestion}
-            />
-            {resena.origen === "google" && (
-              <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-sky-700 bg-sky-100 px-1 py-px rounded">
-                Google
-              </span>
-            )}
-          </div>
-          {resena.rating ? (
-            <div className="flex items-center gap-0.5 mt-0.5">
+    <div className="rounded-md border bg-muted/30 p-3">
+      <p className="mb-2 text-xs font-medium text-muted-foreground">
+        Lo que puntuó
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        {areas.map((a) => (
+          <div key={a.label} className="space-y-1">
+            <p className="text-[11px] text-muted-foreground">{a.label}</p>
+            <span className="flex items-center gap-0.5">
               {Array.from({ length: 5 }).map((_, i) => (
                 <Star
                   key={i}
-                  className={`h-3 w-3 ${
-                    i < (resena.rating ?? 0)
+                  className={`h-3.5 w-3.5 ${
+                    i < (a.nota ?? 0)
                       ? "fill-amber-400 text-amber-400"
-                      : "text-muted-foreground/20"
+                      : "text-muted-foreground/25"
                   }`}
                 />
               ))}
-            </div>
-          ) : null}
-          {resena.comentario && (
-            <p className="text-[11px] text-muted-foreground mt-1 line-clamp-3 break-words">
-              {resena.comentario}
-            </p>
-          )}
-          {/* Quién la gestionó, sin tener que abrirla: es lo que responde
-              "¿de quién es esta?" cuando el tablero lo llevan varias personas. */}
-          {nombreGestor(resena.gestionada_por) && (
-            <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
-              <UserCheck className="h-3 w-3 shrink-0" />
-              <span className="truncate">
-                Gestionada por {nombreGestor(resena.gestionada_por)}
-              </span>
-            </div>
-          )}
-          <CardFooterEstado resena={resena} />
-        </div>
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
-
-function CardFooterEstado({ resena }: { resena: Resena }) {
-  const tieneBorrador =
-    !!resena.respuesta_propietario && !!resena.respuesta_borrador_at;
-  const publicada = !!resena.respuesta_publicada_at;
-
-  if (publicada) {
-    return (
-      <div className="mt-1.5 flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
-        <CheckCircle2 className="h-3 w-3" />
-        Publicada en Google
-      </div>
-    );
-  }
-  if (tieneBorrador) {
-    return (
-      <div className="mt-1.5 flex items-center gap-1 text-[10px] text-violet-600 font-medium">
-        <Sparkles className="h-3 w-3" />
-        Borrador IA listo
-      </div>
-    );
-  }
-  return null;
-}
-
-// ─── Diálogo: Detalle ─────────────────────────────────────────
 
 function DetalleResenaDialog({
   resena,
@@ -1318,8 +1050,10 @@ function DetalleResenaDialog({
         </DialogHeader>
 
         <div className="space-y-3 py-2">
+          <DesglosePreguntas resena={resena} />
+
           <div>
-            <Label>Estado en pipeline</Label>
+            <Label>Estado</Label>
             <Select
               value={estado}
               onValueChange={(v) => setEstado(v as EstadoResena)}

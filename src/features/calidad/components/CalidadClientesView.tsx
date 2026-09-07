@@ -3,7 +3,7 @@
 import { Bot, MessageSquare } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useTabQuery } from "@/shared/hooks/use-tab-query";
-import { ResenasPipeline } from "./ResenasPipeline";
+import { ResenasView } from "./ResenasView";
 import { AgentesIAView } from "./AgentesIAView";
 
 const VISTAS = ["resenas", "agentes"] as const;
@@ -26,7 +26,7 @@ export function CalidadClientesView() {
         </TabsList>
 
         <TabsContent value="resenas" className="mt-4">
-          <ResenasPipeline />
+          <ResenasView />
         </TabsContent>
 
         <TabsContent value="agentes" className="mt-4">
