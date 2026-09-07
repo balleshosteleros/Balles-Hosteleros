@@ -14,6 +14,8 @@ export async function validarCuponAdminAction(args: {
   codigo: string;
   fecha: string;
   turno: "COMIDA" | "CENA" | null;
+  /** Comensales de la reserva: es lo que decide si se cumple el mínimo. */
+  personas?: number | null;
 }): Promise<CuponValidacionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -28,5 +30,6 @@ export async function validarCuponAdminAction(args: {
     codigo: args.codigo,
     fecha: args.fecha,
     turno: args.turno,
+    personas: args.personas ?? null,
   });
 }

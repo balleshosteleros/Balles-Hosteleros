@@ -15,6 +15,8 @@ export async function validarCuponPublicoAction(args: {
   codigo: string;
   fecha: string;
   turno: "COMIDA" | "CENA" | null;
+  /** Comensales de la reserva: es lo que decide si se cumple el mínimo. */
+  personas?: number | null;
 }): Promise<CuponValidacionResult> {
   const admin = createAdminClient();
   const { data: empresa } = await admin
@@ -28,5 +30,6 @@ export async function validarCuponPublicoAction(args: {
     codigo: args.codigo,
     fecha: args.fecha,
     turno: args.turno,
+    personas: args.personas ?? null,
   });
 }

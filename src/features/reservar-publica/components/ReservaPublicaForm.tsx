@@ -896,6 +896,7 @@ export function ReservaPublicaForm({
                     codigo: c,
                     fecha,
                     turno: turnoPorHora,
+                    personas,
                   })}
                   contextoSerial={`${fecha}|${turnoPorHora}|${personas}`}
                   onResult={(r) => setCuponValido(r === null ? null : r.ok)}

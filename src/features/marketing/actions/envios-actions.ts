@@ -18,11 +18,25 @@ export async function enviarCampanaDemoAction(campanaId: string) {
     // Cargar campaña + verificar que es de esta empresa
     const { data: campana, error: errCampana } = await supabase
       .from("campanas_marketing")
-      .select("id, empresa_id, canal, segmento_json, recurrencia_cron")
+      .select("id, empresa_id, canal, segmento_json, recurrencia_cron, payload")
       .eq("id", campanaId)
       .eq("empresa_id", empresaId)
       .single();
     if (errCampana || !campana) return { ok: false as const, error: "Campaña no encontrada", enviados: 0 };
+
+    // La de cumpleaños no admite ni siquiera la prueba: el motor diario mira
+    // estos mismos registros para saber a quién ya felicitó este año, así que
+    // una prueba dejaría a toda la base marcada como felicitada y nadie
+    // recibiría nada hasta el año que viene.
+    if ((campana.payload as Record<string, unknown> | null)?.claveSeed === "CUMPLEANOS") {
+      return {
+        ok: false as const,
+        error:
+          "La campaña de cumpleaños se envía sola, una por persona el día que le toca. " +
+          "Probarla aquí marcaría a todos los clientes como ya felicitados.",
+        enviados: 0,
+      };
+    }
 
     const segmento = (campana.segmento_json as SegmentoJson) ?? { operador: "AND", condiciones: [] };
     const clientes = await clienteIdsDelSegmento(supabase, empresaId, segmento);

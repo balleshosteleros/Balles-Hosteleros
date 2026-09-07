@@ -29,8 +29,18 @@ const SEGMENTO_VACIO: SegmentoJson = { operador: "AND", condiciones: [] };
 
 function rowToCampana(row: Row): Campana {
   const canal = row.canal as Campana["canal"];
+  const payloadRow = (row.payload as Record<string, unknown>) ?? {};
+  const reglas = payloadRow.claveSeed === "CUMPLEANOS"
+    ? {
+        diasAntes: Number(payloadRow.diasAntes ?? 7),
+        diasValidezDespues: Number(payloadRow.diasValidezDespues ?? 7),
+        minimoPersonas: Number(payloadRow.minimoPersonas ?? 6),
+      }
+    : null;
   const base = {
     id: row.id as string,
+    claveSeed: (payloadRow.claveSeed as string | null) ?? null,
+    reglasCumpleanos: reglas,
     empresaId: row.empresa_id as string,
     nombre: row.nombre as string,
     estado: row.estado as Campana["estado"],
@@ -55,7 +65,7 @@ function rowToCampana(row: Row): Campana {
       remitenteNombre: (payload.remitenteNombre as string) ?? "",
       remitenteEmail: (payload.remitenteEmail as string) ?? "",
       cuerpoHtml: (payload.cuerpoHtml as string) ?? "",
-      claveSeed: (payload.claveSeed as string | null) ?? null,
+      preheader: (payload.preheader as string) ?? "",
       mes: payload.mes == null ? null : Number(payload.mes),
       segmento: (row.segmento as string) ?? "todos",
       fechaEnvio: (row.fecha_envio as string | null) ?? null,
@@ -109,6 +119,13 @@ function rowToCampana(row: Row): Campana {
 }
 
 function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
+  // Lo que toda campaña arrastra en su payload, escriba quien escriba encima:
+  // sin la clave, una campaña sembrada deja de reconocerse y la de cumpleaños
+  // se podría disparar a mano.
+  const selloSeed = {
+    claveSeed: c.claveSeed,
+    ...(c.reglasCumpleanos ?? {}),
+  };
   const base = {
     id: c.id.length === 36 ? c.id : undefined, // UUIDs válidos, los IDs locales no
     empresa_id: empresaId,
@@ -132,13 +149,12 @@ function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
       segmento: c.segmento,
       fecha_envio: c.fechaEnvio,
       payload: {
+        ...selloSeed,
         asunto: c.asunto,
+        preheader: c.preheader,
         remitenteNombre: c.remitenteNombre,
         remitenteEmail: c.remitenteEmail,
         cuerpoHtml: c.cuerpoHtml,
-        // Se reescriben al guardar: si se perdieran, la campaña dejaría de
-        // saber a qué concurso pertenece y el enlace del correo no abriría nada.
-        claveSeed: c.claveSeed,
         mes: c.mes,
       },
     };
@@ -149,6 +165,7 @@ function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
       segmento: c.segmento,
       fecha_envio: c.fechaEnvio,
       payload: {
+        ...selloSeed,
         plantilla: c.plantilla,
         idioma: c.idioma,
         cuerpo: c.cuerpo,
@@ -162,6 +179,7 @@ function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
       segmento: c.segmento,
       fecha_envio: c.fechaEnvio,
       payload: {
+        ...selloSeed,
         cuerpo: c.cuerpo,
         remitente: c.remitente,
       },
@@ -178,6 +196,7 @@ function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
     meta_synced_at: c.metaSyncedAt,
     meta_sync_error: c.metaSyncError,
     payload: {
+      ...selloSeed,
       objetivo: c.objetivo,
       plataformas: c.plataformas,
       presupuestoDiario: c.presupuestoDiario,
@@ -271,11 +290,29 @@ export async function verificarIntegracionesAction() {
   };
 }
 
+/**
+ * La de cumpleaños no es una campaña de las de "enviar ahora": su texto lleva
+ * dentro el nombre y el código de cada persona, y sale sola el día que le toca a
+ * cada una. Dispararla a mano mandaría el mismo correo a toda la base con los
+ * huecos sin rellenar y regalaría una comida a nadie. Se bloquea en el servidor,
+ * no solo en el botón: el botón se puede saltar.
+ */
+const MOTIVO_CUMPLEANOS =
+  "La campaña de cumpleaños se envía sola: cada cliente recibe la suya el día que le toca. " +
+  "Ponla en marcha cambiando su estado a Activa.";
+
+function esCampanaCumpleanos(campana: { claveSeed?: string | null }): boolean {
+  return campana.claveSeed === "CUMPLEANOS";
+}
+
 export async function enviarEmailAction(campana: CampanaEmail) {
   const { supabase, empresaId } = await getMarketingContext();
   if (!empresaId) return { success: false, error: "Sin empresa" };
   if (campana.empresaId !== empresaId) {
     return { success: false, error: "Empresa no autorizada" };
+  }
+  if (esCampanaCumpleanos(campana)) {
+    return { success: false, error: MOTIVO_CUMPLEANOS };
   }
 
   // Las campañas del calendario anual llevan dentro el concurso del mes. La
@@ -316,6 +353,9 @@ export async function enviarWhatsAppAction(campana: CampanaWhatsApp) {
   if (!empresaId) return { success: false, error: "Sin empresa" };
   if (campana.empresaId !== empresaId) {
     return { success: false, error: "Empresa no autorizada" };
+  }
+  if (esCampanaCumpleanos(campana)) {
+    return { success: false, error: MOTIVO_CUMPLEANOS };
   }
   const result = await sendWhatsAppCampana(campana);
   if (result.success) revalidatePath("/marketing/campanas");

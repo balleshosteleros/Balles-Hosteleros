@@ -8,6 +8,7 @@ import {
   CUPON_CODIGO_REGEX,
   CUPON_MOTIVO_LABELS,
   describirBeneficio,
+  describirMinimo,
   type CuponMotivoInvalidez,
   type CuponPublico,
   type CuponValidacionResult,
@@ -36,7 +37,7 @@ type EstadoUI =
   | { kind: "idle" }
   | { kind: "validando" }
   | { kind: "ok"; cupon: CuponPublico }
-  | { kind: "error"; motivo: CuponMotivoInvalidez };
+  | { kind: "error"; motivo: CuponMotivoInvalidez; minimo?: number | null };
 
 export function CuponInputReserva({
   value,
@@ -70,7 +71,7 @@ export function CuponInputReserva({
         onResult({ ok: true, cuponId: res.cupon.id, cupon: res.cupon });
       } else {
         const motivo = res.motivo ?? "NO_EXISTE";
-        setEstado({ kind: "error", motivo });
+        setEstado({ kind: "error", motivo, minimo: res.cupon?.minimoPersonas ?? null });
         onResult({ ok: false });
       }
     }, 300);
@@ -105,10 +106,18 @@ export function CuponInputReserva({
             beneficioValor: estado.cupon.beneficioValor,
             productoDescripcion: estado.cupon.productoDescripcion,
           })}
+          {describirMinimo(estado.cupon.minimoPersonas) &&
+            ` · ${describirMinimo(estado.cupon.minimoPersonas).toLowerCase()}`}
         </p>
       )}
       {estado.kind === "error" && (
-        <p className="text-xs text-destructive">{CUPON_MOTIVO_LABELS[estado.motivo]}</p>
+        <p className="text-xs text-destructive">
+          {/* Un "no válido" a secas obliga a adivinar. Si lo que falla es el
+              número de comensales, se dice cuántos hacen falta. */}
+          {estado.motivo === "MINIMO_PERSONAS" && estado.minimo
+            ? `Este cupón necesita mesa de ${estado.minimo} personas o más`
+            : CUPON_MOTIVO_LABELS[estado.motivo]}
+        </p>
       )}
     </div>
   );

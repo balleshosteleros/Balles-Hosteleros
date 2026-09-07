@@ -20,12 +20,12 @@ import { renderCampanaEmail } from "@/lib/email/marketing/plantilla-campana";
 import { buildReservaUrl } from "@/features/sala/data/reserva-links";
 import type { MarcaEmpresa } from "@/lib/email/reservas/estilo";
 
-type Admin = SupabaseClient;
+export type Admin = SupabaseClient;
 
 /** Lo que se sortea cada mes. Tres cenas para dos, a los tres primeros. */
 export const PREMIO_CONCURSO = "una cena para dos";
 
-interface EmpresaMarca extends MarcaEmpresa {
+export interface EmpresaMarca extends MarcaEmpresa {
   id: string;
   slug: string;
 }
@@ -35,7 +35,7 @@ interface EmpresaMarca extends MarcaEmpresa {
  * `bacanalmadrid.com` y no al dominio del software. Mismo criterio que
  * `dominioPublicoDeEmpresa`, resuelto aquí con el cliente admin que ya tenemos.
  */
-async function dominioPropio(admin: Admin, empresaId: string): Promise<string | null> {
+export async function dominioPropioDeEmpresa(admin: Admin, empresaId: string): Promise<string | null> {
   const { data } = await admin
     .from("paginas_web_dominios")
     .select("hostname")
@@ -70,7 +70,7 @@ async function dominioPropio(admin: Admin, empresaId: string): Promise<string | 
  * Si la empresa no tiene ninguna foto se devuelve `null`: el correo sale sin
  * imagen, nunca con un hueco roto.
  */
-async function fotoDelMes(
+export async function fotoDeLaCarta(
   admin: Admin,
   empresaId: string,
   pistas: string[],
@@ -106,7 +106,7 @@ async function fotoDelMes(
  * enero. Sin un enlace por mes, todas las reservas caerían en el mismo saco y el
  * calendario no se podría evaluar.
  */
-async function enlaceReservaDelMes(
+export async function enlaceReservaConPalabra(
   admin: Admin,
   empresa: EmpresaMarca,
   palabraClave: string,
@@ -152,7 +152,7 @@ function urlConcurso(clave: string, dominio: string | null, slug: string): strin
 }
 
 /** Enlace de baja. El token real lo firma el envío; aquí queda el marcador. */
-function urlBaja(dominio: string | null, slug: string): string {
+export function urlBajaDeEmpresa(dominio: string | null, slug: string): string {
   const base =
     dominio ??
     (process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com").replace(/\/$/, "");
@@ -167,9 +167,9 @@ export async function construirCorreoDelMes(
   dominio: string | null,
   fotosUsadas: Set<string> = new Set(),
 ): Promise<{ html: string; ctaUrl: string; reservaLinkId: string; fotoUrl: string | null }> {
-  const foto = await fotoDelMes(admin, empresa.id, seed.fotoPistas, fotosUsadas);
+  const foto = await fotoDeLaCarta(admin, empresa.id, seed.fotoPistas, fotosUsadas);
   if (foto) fotosUsadas.add(foto.url);
-  const enlace = await enlaceReservaDelMes(admin, empresa, seed.palabraClave, dominio);
+  const enlace = await enlaceReservaConPalabra(admin, empresa, seed.palabraClave, dominio);
 
   const html = renderCampanaEmail({
     empresa,
@@ -184,10 +184,35 @@ export async function construirCorreoDelMes(
     ctaUrl: enlace.url,
     concursoPremio: PREMIO_CONCURSO,
     concursoUrl: urlConcurso(seed.clave, dominio, empresa.slug),
-    urlBaja: urlBaja(dominio, empresa.slug),
+    urlBaja: urlBajaDeEmpresa(dominio, empresa.slug),
   });
 
   return { html, ctaUrl: enlace.url, reservaLinkId: enlace.id, fotoUrl: foto?.url ?? null };
+}
+
+/**
+ * Marca de la empresa: color, isotipo y slug. La campaña es la misma para todas,
+ * pero el correo que sale por la puerta tiene que ser el de ESTE restaurante.
+ */
+export async function cargarEmpresaMarca(
+  admin: Admin,
+  empresaId: string,
+): Promise<EmpresaMarca | null> {
+  const { data: emp } = await admin
+    .from("empresas")
+    .select("id, nombre, slug, color, color_secundario, logo_url, isotipo_url")
+    .eq("id", empresaId)
+    .maybeSingle();
+  if (!emp) return null;
+  return {
+    id: emp.id as string,
+    slug: (emp.slug as string) ?? "",
+    nombre: (emp.nombre as string) ?? "",
+    color: (emp.color as string | null) ?? null,
+    color_secundario: (emp.color_secundario as string | null) ?? null,
+    logo_url: (emp.logo_url as string | null) ?? null,
+    isotipo_url: (emp.isotipo_url as string | null) ?? null,
+  };
 }
 
 /**
@@ -198,22 +223,8 @@ export async function sembrarCampanasAnualesAEmpresa(
   admin: Admin,
   empresaId: string,
 ): Promise<{ creadas: number }> {
-  const { data: emp } = await admin
-    .from("empresas")
-    .select("id, nombre, slug, color, color_secundario, logo_url, isotipo_url")
-    .eq("id", empresaId)
-    .maybeSingle();
-  if (!emp) return { creadas: 0 };
-
-  const empresa: EmpresaMarca = {
-    id: emp.id as string,
-    slug: (emp.slug as string) ?? "",
-    nombre: (emp.nombre as string) ?? "",
-    color: (emp.color as string | null) ?? null,
-    color_secundario: (emp.color_secundario as string | null) ?? null,
-    logo_url: (emp.logo_url as string | null) ?? null,
-    isotipo_url: (emp.isotipo_url as string | null) ?? null,
-  };
+  const empresa = await cargarEmpresaMarca(admin, empresaId);
+  if (!empresa) return { creadas: 0 };
 
   const { data: existentes } = await admin
     .from("campanas_marketing")
@@ -226,7 +237,7 @@ export async function sembrarCampanasAnualesAEmpresa(
       .filter(Boolean) as string[],
   );
 
-  const dominio = await dominioPropio(admin, empresaId);
+  const dominio = await dominioPropioDeEmpresa(admin, empresaId);
   const filas: Record<string, unknown>[] = [];
   // Memoria de fotos ya repartidas, para que ningún mes repita la del anterior.
   const fotosUsadas = new Set<string>(

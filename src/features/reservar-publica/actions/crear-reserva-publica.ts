@@ -238,6 +238,9 @@ export async function crearReservaPublicaAction(
       p_codigo: norm,
       p_fecha: fechaReserva,
       p_turno: turno,
+      // El mínimo se comprueba AQUÍ, no solo en el formulario: el navegador se
+      // puede saltar, esto no.
+      p_personas: data.personas,
     });
     if (vErr) {
       console.error("[reservar-publica] validar_cupon:", vErr);
@@ -248,6 +251,7 @@ export async function crearReservaPublicaAction(
       motivo: string | null;
       cupon_id: string | null;
       titulo_cliente_efectivo: string | null;
+      minimo_personas: number | null;
     } | undefined;
     if (!row?.ok) {
       const motivo = row?.motivo ?? "NO_EXISTE";
@@ -258,6 +262,9 @@ export async function crearReservaPublicaAction(
         AGOTADO: "Cupón agotado.",
         DIA_NO_PERMITIDO: "El cupón no es válido este día.",
         TURNO_NO_PERMITIDO: "El cupón no es válido para este turno.",
+        MINIMO_PERSONAS: row?.minimo_personas
+          ? `Este cupón necesita mesa de ${row.minimo_personas} personas o más.`
+          : "Sois menos de los que pide el cupón.",
       };
       return { ok: false, error: labelMap[motivo] ?? "Cupón no válido." };
     }

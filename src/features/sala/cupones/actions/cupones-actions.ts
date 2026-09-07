@@ -38,6 +38,9 @@ function rowToCupon(row: Record<string, unknown>): Cupon {
     stockTotal: row.stock_total as number,
     stockConsumido: row.stock_consumido as number,
     fechaCaducidad: (row.fecha_caducidad as string | null) ?? null,
+    minimoPersonas: (row.minimo_personas as number | null) ?? null,
+    clienteId: (row.cliente_id as string | null) ?? null,
+    origen: (row.origen as string | null) ?? null,
     diasSemana: ((row.dias_semana as string[]) ?? []) as DiaSemanaKey[],
     turnos: ((row.turnos as string[]) ?? []) as CuponTurno[],
     activo: (row.activo as boolean) ?? true,
@@ -63,6 +66,9 @@ function validarInput(input: CuponInput): string | null {
     if (!input.productoDescripcion?.trim()) return "Describe el producto regalado";
     if (input.productoDescripcion.length > 200) return "La descripción no puede pasar de 200 caracteres";
   }
+  if (input.minimoPersonas != null && (input.minimoPersonas < 1 || input.minimoPersonas > 50)) {
+    return "El mínimo de personas debe estar entre 1 y 50";
+  }
   if (input.diasSemana && input.diasSemana.length === 0) return "Selecciona al menos un día";
   if (input.turnos && input.turnos.length === 0) return "Selecciona al menos un turno";
   return null;
@@ -82,6 +88,10 @@ function inputToRow(input: Partial<CuponInput>): Record<string, unknown> {
   if (input.unidadStock !== undefined) row.unidad_stock = input.unidadStock;
   if (input.stockTotal !== undefined) row.stock_total = input.stockTotal;
   if (input.fechaCaducidad !== undefined) row.fecha_caducidad = input.fechaCaducidad || null;
+  if (input.minimoPersonas !== undefined) {
+    row.minimo_personas =
+      input.minimoPersonas && input.minimoPersonas > 1 ? input.minimoPersonas : null;
+  }
   if (input.diasSemana !== undefined) row.dias_semana = input.diasSemana;
   if (input.turnos !== undefined) row.turnos = input.turnos;
   if (input.activo !== undefined) row.activo = input.activo;

@@ -62,6 +62,60 @@ function remitente(nombreEmpresa: string): string {
   return nombre ? `${nombre} <${direccion}>` : base;
 }
 
+/**
+ * Un solo correo comercial, con su enlace de baja ya resuelto.
+ *
+ * Existe aparte del envío por lotes porque hay campañas que no salen de golpe:
+ * la de cumpleaños manda un correo al día a quien le toca, y meter treinta
+ * correos en la maquinaria del lote —con su troceado y su reintento por
+ * bloques— sería montar un camión para llevar una caja.
+ *
+ * Lo que sí comparte, porque no es opcional en un correo comercial: el
+ * remitente verificado y la cabecera `List-Unsubscribe`, que es lo que hace que
+ * Gmail pinte su propio "cancelar suscripción" en vez de empujar al cliente al
+ * botón de spam.
+ */
+export async function enviarCorreoMarketing(input: {
+  empresaNombre: string;
+  para: string;
+  asunto: string;
+  /** HTML con el token de baja YA sustituido. */
+  html: string;
+}): Promise<{ ok: true; proveedorId: string | null } | { ok: false; error: string }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { ok: false, error: "Falta RESEND_API_KEY" };
+
+  const enlaceBaja = extraerEnlaceBaja(input.html);
+
+  try {
+    const res = await fetch(`${RESEND_URL}/emails`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: remitente(input.empresaNombre),
+        to: [input.para],
+        subject: input.asunto,
+        html: input.html,
+        headers: enlaceBaja
+          ? {
+              "List-Unsubscribe": `<${enlaceBaja}>`,
+              "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+            }
+          : undefined,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { message?: string };
+      return { ok: false, error: err?.message ?? `HTTP ${res.status}` };
+    }
+    const data = (await res.json()) as { id?: string };
+    return { ok: true, proveedorId: data?.id ?? null };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Error de red" };
+  }
+}
+
 export async function sendEmailCampana(campana: CampanaEmail): Promise<ResendSendResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { success: false, error: "Falta RESEND_API_KEY" };

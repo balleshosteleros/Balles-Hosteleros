@@ -34,6 +34,7 @@ import { RECLUTAMIENTO_EMAIL_PLANTILLAS_SEED } from "./reclutamiento-email-plant
 import { RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED } from "./reclutamiento-plantilla-estados";
 import { RECLUTAMIENTO_CUESTIONARIO_DEFAULT_SEED } from "./reclutamiento-cuestionario-default";
 import { sembrarCampanasAnualesAEmpresa } from "@/features/marketing/services/campanas-anuales";
+import { sembrarCampanaCumpleanosAEmpresa } from "@/features/marketing/services/campana-cumpleanos";
 import {
   RESENAS_AGENTES_IA_SEED,
   normalizeAgenteIaNombre,
@@ -193,7 +194,6 @@ export async function syncPuestosAEmpresa(
       nombre: p.nombre,
       // El puesto nace COMPLETO: si no, al contratar da de alta empleados con
       // datos incompletos (sus condiciones se copian al empleado).
-      descripcion: p.descripcion,
       convenio_colectivo: CONVENIO_SEED,
       estado: "activo",
     });
@@ -1162,6 +1162,9 @@ export async function seedEmpresaDefaults(
   // Calendario anual de campañas de email: los doce meses en borrador, con la
   // marca y las fotos de esta empresa. No envía nada; solo deja el año montado.
   await sembrarCampanasAnualesAEmpresa(admin, empresaId);
+  // Cumpleaños: los tres canales en borrador. Tampoco envía nada; el motor
+  // diario solo mira las campañas que alguien haya puesto en marcha.
+  await sembrarCampanaCumpleanosAEmpresa(admin, empresaId);
 }
 
 /**

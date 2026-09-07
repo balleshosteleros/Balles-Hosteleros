@@ -53,6 +53,14 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
   const { confirm: confirmEnvio, dialog: confirmEnvioDialog } = useConfirmDelete();
   const { confirm: confirmDemo, dialog: confirmDemoDialog } = useConfirmDelete();
 
+  /**
+   * La de cumpleaños no se envía desde aquí: sale sola, una por persona, el día
+   * que le toca a cada una. Se le quitan los botones de envío —el texto lleva
+   * dentro el nombre y el código de cada cliente, mandarlo en bloque sería
+   * mandar huecos sin rellenar— y se explica en su lugar cómo se enciende.
+   */
+  const esCumpleanos = draft.claveSeed === "CUMPLEANOS";
+
   useEffect(() => { setDraft(campana); }, [campana]);
 
   useEffect(() => {
@@ -355,6 +363,13 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
           <Button variant="outline" onClick={onGuardar} disabled={guardando || !draft.nombre.trim()}>
             {guardando ? "Guardando..." : "Guardar"}
           </Button>
+          {esCumpleanos && (
+            <p className="text-xs text-muted-foreground sm:mr-auto sm:max-w-sm">
+              Esta campaña se envía sola: cada cliente recibe la suya siete días antes de su
+              cumpleaños, con su código. Para ponerla en marcha, cambia su estado a Activa.
+            </p>
+          )}
+          {!esCumpleanos && (
           <Button
             variant="outline"
             onClick={onEnviarDemo}
@@ -364,7 +379,8 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
             <Send className="h-4 w-4 mr-1" />
             {enviando ? "Enviando..." : `Probar (demo) — ${coincidencias ?? 0}`}
           </Button>
-          {draft.canal === "email" && (
+          )}
+          {!esCumpleanos && draft.canal === "email" && (
             <Button
               onClick={onEnviarReal}
               disabled={!validacion.ok || enviandoReal || !destinatarios}

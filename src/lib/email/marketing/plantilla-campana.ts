@@ -42,6 +42,20 @@ export interface CampanaEmailInput {
   /** Premio del concurso del mes. Vacío = el correo va sin bloque de concurso. */
   concursoPremio?: string | null;
   concursoUrl?: string | null;
+  /**
+   * Cupón personal que viaja dentro del correo (cumpleaños). El código puede ir
+   * como marcador —`{{CODIGO}}`— si el correo se guarda antes de saber a quién
+   * se envía: el motor lo sustituye persona a persona.
+   */
+  cupon?: {
+    codigo: string;
+    /** Qué regala, en una línea. */
+    concepto: string;
+    /** La condición que hay que cumplir, dicha sin rodeos. */
+    condiciones: string;
+    /** "Válido hasta el 21/09/2026". Vacío = sin fecha. */
+    caducidad?: string | null;
+  } | null;
   /** Enlace de baja. Obligatorio en todo correo comercial. */
   urlBaja: string;
   telefono?: string | null;
@@ -75,6 +89,35 @@ function bloqueConcurso(premio: string, url: string, colorMarca: string | null):
         </div>
         <div style="margin-top:6px;font-size:12px;color:#64748b;">Se responden mirando nuestra carta. No hace falta saber más.</div>
         <a href="${escapeAttr(url)}" style="display:inline-block;margin-top:14px;padding:11px 26px;border:2px solid ${primario};color:${primario};border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">Jugar ahora</a>
+      </td>
+    </tr>
+  </table>`;
+}
+
+/**
+ * El cupón, con el código en grande.
+ *
+ * Va DEBAJO del botón de reservar y no encima: el código no es la oferta, es el
+ * trámite. Primero se decide venir, luego se apunta el código. Y va en un
+ * recuadro de trazo discontinuo porque es lo que la gente reconoce como "esto se
+ * recorta y se usa", sin necesidad de explicarlo.
+ */
+function bloqueCupon(
+  cupon: NonNullable<CampanaEmailInput["cupon"]>,
+  colorMarca: string | null,
+): string {
+  const primario = sanitizarHex(colorMarca) ?? "#0f172a";
+  const caducidad = cupon.caducidad
+    ? `<div style="margin-top:10px;font-size:12px;color:#64748b;">${escapeHtml(cupon.caducidad)}</div>`
+    : "";
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border:2px dashed ${primario};border-radius:12px;margin-top:22px;">
+    <tr>
+      <td style="padding:20px;text-align:center;background:${withAlpha(primario, 0.05)};">
+        <div style="font-size:11px;color:${primario};letter-spacing:1px;text-transform:uppercase;font-weight:700;">Tu código</div>
+        <div style="margin-top:10px;font-size:30px;line-height:1.1;font-weight:700;letter-spacing:6px;color:#0f172a;font-family:'Courier New',Courier,monospace;">${escapeHtml(cupon.codigo)}</div>
+        <div style="margin-top:12px;font-size:15px;color:#0f172a;line-height:1.5;">${escapeHtml(cupon.concepto)}</div>
+        <div style="margin-top:4px;font-size:13px;color:#475569;line-height:1.5;">${escapeHtml(cupon.condiciones)}</div>
+        ${caducidad}
       </td>
     </tr>
   </table>`;
@@ -130,6 +173,8 @@ export function renderCampanaEmail(input: CampanaEmailInput): string {
   }
 
   partes.push(bloqueCta(input.ctaTexto, input.ctaUrl, color));
+
+  if (input.cupon) partes.push(bloqueCupon(input.cupon, color));
 
   if (input.concursoPremio && input.concursoUrl) {
     partes.push(bloqueConcurso(input.concursoPremio, input.concursoUrl, color));

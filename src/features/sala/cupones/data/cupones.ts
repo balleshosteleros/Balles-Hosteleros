@@ -35,6 +35,12 @@ export interface Cupon {
   stockTotal: number;
   stockConsumido: number;
   fechaCaducidad: string | null;
+  /** Comensales mínimos de la reserva para poder usarlo. null = sin mínimo. */
+  minimoPersonas: number | null;
+  /** Cliente dueño del cupón, cuando es personal (cumpleaños). */
+  clienteId: string | null;
+  /** Qué lo generó: 'CUMPLEANOS', o null si lo creó una persona. */
+  origen: string | null;
   diasSemana: DiaSemanaKey[];
   turnos: CuponTurno[];
   activo: boolean;
@@ -50,6 +56,7 @@ export interface CuponPublico {
   beneficioValor: number | null;
   productoDescripcion: string | null;
   fechaCaducidad: string | null;
+  minimoPersonas: number | null;
 }
 
 export type CuponMotivoInvalidez =
@@ -58,7 +65,8 @@ export type CuponMotivoInvalidez =
   | "CADUCADO"
   | "AGOTADO"
   | "DIA_NO_PERMITIDO"
-  | "TURNO_NO_PERMITIDO";
+  | "TURNO_NO_PERMITIDO"
+  | "MINIMO_PERSONAS";
 
 export const CUPON_MOTIVO_LABELS: Record<CuponMotivoInvalidez, string> = {
   NO_EXISTE: "No existe ningún cupón con ese código",
@@ -67,6 +75,7 @@ export const CUPON_MOTIVO_LABELS: Record<CuponMotivoInvalidez, string> = {
   AGOTADO: "Cupón agotado",
   DIA_NO_PERMITIDO: "Cupón no válido este día de la semana",
   TURNO_NO_PERMITIDO: "Cupón no válido para este turno",
+  MINIMO_PERSONAS: "Sois menos de los que pide el cupón",
 };
 
 export interface CuponValidacionResult {
@@ -84,6 +93,7 @@ export interface CuponInput {
   unidadStock: CuponUnidadStock;
   stockTotal: number;
   fechaCaducidad?: string | null;
+  minimoPersonas?: number | null;
   diasSemana?: DiaSemanaKey[];
   turnos?: CuponTurno[];
   activo?: boolean;
@@ -108,4 +118,16 @@ export function describirBeneficio(c: Pick<Cupon, "beneficioTipo" | "beneficioVa
     case "producto_gratis":
       return c.productoDescripcion ?? "Producto gratis";
   }
+}
+
+/**
+ * El mínimo dicho en cristiano: "para 6 personas o más".
+ *
+ * Se compone aquí y no en cada pantalla porque el mismo texto aparece en el
+ * listado de cupones, en el formulario de reserva y en el correo, y tres
+ * redacciones distintas del mismo requisito confunden a quien lo lee.
+ */
+export function describirMinimo(minimoPersonas: number | null): string {
+  if (!minimoPersonas || minimoPersonas < 2) return "";
+  return `Para ${minimoPersonas} personas o más`;
 }

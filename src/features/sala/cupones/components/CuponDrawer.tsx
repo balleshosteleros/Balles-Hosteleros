@@ -57,6 +57,7 @@ export function CuponDrawer({ open, onClose, cupon, onSaved }: Props) {
   const [unidadStock, setUnidadStock] = useState<CuponUnidadStock>("reservas");
   const [stockTotal, setStockTotal] = useState<string>("10");
   const [fechaCaducidad, setFechaCaducidad] = useState<string>("");
+  const [minimoPersonas, setMinimoPersonas] = useState<string>("");
   const [diasSemana, setDiasSemana] = useState<DiaSemanaKey[]>(["lun","mar","mie","jue","vie","sab","dom"]);
   const [turnos, setTurnos] = useState<CuponTurno[]>(["COMIDA","CENA"]);
   const [activo, setActivo] = useState(true);
@@ -72,6 +73,7 @@ export function CuponDrawer({ open, onClose, cupon, onSaved }: Props) {
       setUnidadStock(cupon.unidadStock);
       setStockTotal(String(cupon.stockTotal));
       setFechaCaducidad(cupon.fechaCaducidad ?? "");
+      setMinimoPersonas(cupon.minimoPersonas != null ? String(cupon.minimoPersonas) : "");
       setDiasSemana(cupon.diasSemana);
       setTurnos(cupon.turnos);
       setActivo(cupon.activo);
@@ -84,6 +86,7 @@ export function CuponDrawer({ open, onClose, cupon, onSaved }: Props) {
       setUnidadStock("reservas");
       setStockTotal("10");
       setFechaCaducidad("");
+      setMinimoPersonas("");
       setDiasSemana(["lun","mar","mie","jue","vie","sab","dom"]);
       setTurnos(["COMIDA","CENA"]);
       setActivo(true);
@@ -110,6 +113,7 @@ export function CuponDrawer({ open, onClose, cupon, onSaved }: Props) {
         unidadStock,
         stockTotal: Number(stockTotal),
         fechaCaducidad: fechaCaducidad || null,
+        minimoPersonas: minimoPersonas ? Number(minimoPersonas) : null,
         diasSemana,
         turnos,
         activo,
@@ -266,6 +270,23 @@ export function CuponDrawer({ open, onClose, cupon, onSaved }: Props) {
             <Label htmlFor="fc">Fecha de caducidad</Label>
             <Input id="fc" type="date" value={fechaCaducidad} onChange={e => setFechaCaducidad(e.target.value)} className="w-44" />
             <p className="text-xs text-muted-foreground">Si la dejas vacía, el cupón no caduca.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="mp">Mínimo de personas</Label>
+            <Input
+              id="mp"
+              type="number"
+              min={2}
+              max={50}
+              value={minimoPersonas}
+              onChange={e => setMinimoPersonas(e.target.value)}
+              className="w-44"
+            />
+            <p className="text-xs text-muted-foreground">
+              Si lo rellenas, el cupón se rechaza al reservar cuando la mesa es más pequeña.
+              Vacío = sin mínimo.
+            </p>
           </div>
 
           <div className="space-y-1.5">

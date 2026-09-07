@@ -2213,6 +2213,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                 codigo,
                 fecha: form.fecha,
                 turno: form.turno,
+                personas: form.comensales,
               })}
               contextoSerial={`${form.fecha}|${form.turno}|${form.comensales}`}
               onResult={(r) => setCuponValido(r === null ? null : r.ok)}

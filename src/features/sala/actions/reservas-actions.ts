@@ -572,14 +572,27 @@ export async function createReserva(input: {
         p_codigo: codigoCuponNorm,
         p_fecha: input.fecha,
         p_turno: input.turno ?? "COMIDA",
+        // El mínimo del cupón se juzga con los comensales de ESTA reserva.
+        p_personas: input.personas,
       });
       if (vErr) {
         console.error("[reservas] validar_cupon:", vErr);
         return { ok: false, error: "No se pudo validar el cupón." };
       }
-      const vRow = (vRows ?? [])[0] as { ok: boolean; motivo: string | null; cupon_id: string | null } | undefined;
+      const vRow = (vRows ?? [])[0] as {
+        ok: boolean;
+        motivo: string | null;
+        cupon_id: string | null;
+        minimo_personas: number | null;
+      } | undefined;
       if (!vRow?.ok) {
         const motivo = vRow?.motivo ?? "NO_EXISTE";
+        if (motivo === "MINIMO_PERSONAS") {
+          return {
+            ok: false,
+            error: `Este cupón necesita mesa de ${vRow?.minimo_personas ?? 0} personas o más.`,
+          };
+        }
         return { ok: false, error: `Cupón no válido (${motivo}).` };
       }
       const { error: cErr } = await admin.rpc("consumir_stock_cupon", {

@@ -19,17 +19,29 @@ interface RpcRow {
   beneficio_valor: number | null;
   producto_descripcion: string | null;
   fecha_caducidad: string | null;
+  minimo_personas: number | null;
 }
 
 export async function validarCuponServer(
   supabase: SupabaseClient,
-  args: { empresaId: string; codigo: string; fecha: string; turno: "COMIDA" | "CENA" | null },
+  args: {
+    empresaId: string;
+    codigo: string;
+    fecha: string;
+    turno: "COMIDA" | "CENA" | null;
+    /**
+     * Comensales de la reserva. Sin este dato el mínimo del cupón NO se juzga:
+     * un validador que no sabe cuántos son no puede decir que no.
+     */
+    personas?: number | null;
+  },
 ): Promise<CuponValidacionResult> {
   const { data, error } = await supabase.rpc("validar_cupon", {
     p_empresa_id: args.empresaId,
     p_codigo: args.codigo,
     p_fecha: args.fecha,
     p_turno: args.turno,
+    p_personas: args.personas ?? null,
   });
 
   if (error) {
@@ -51,6 +63,7 @@ export async function validarCuponServer(
         beneficioValor: row.beneficio_valor,
         productoDescripcion: row.producto_descripcion,
         fechaCaducidad: row.fecha_caducidad,
+        minimoPersonas: row.minimo_personas ?? null,
       }
     : null;
 
