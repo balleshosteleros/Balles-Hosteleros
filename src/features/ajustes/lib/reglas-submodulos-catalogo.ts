@@ -368,6 +368,7 @@ export const CATALOGO: ModuloDef[] = [
       placeholder("calendario", "Calendario"),
       placeholder("contenido", "Contenido"),
       placeholder("campanas", "Campañas"),
+      placeholder("automatizaciones", "Automatizaciones"),
       placeholder("carta_digital", "Carta digital"),
       placeholder("app_clientes", "App clientes"),
       placeholder("pagina_web", "Página web"),
@@ -432,6 +433,18 @@ export const CATALOGO: ModuloDef[] = [
         campos: CAMPOS_PROCESOS_JURIDICOS,
         obligatorios: ["titulo", "tipo", "fecha", "estado"],
       },
+    ],
+  },
+
+  // ─── PRODUCTO ──────────────────────────────────────────────
+  // Módulo interno de la empresa matriz: quien contrata el software y su
+  // formación. No existe en las empresas cliente.
+  {
+    key: "producto",
+    label: "PRODUCTO",
+    submodulos: [
+      placeholder("clientes", "Clientes"),
+      placeholder("escuela", "Escuela"),
     ],
   },
 ];

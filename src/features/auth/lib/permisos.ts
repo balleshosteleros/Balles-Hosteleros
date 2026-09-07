@@ -32,7 +32,16 @@ export const MODULOS_DEPARTAMENTO = [
   "CONTABILIDAD",
   "GESTORÍA",
   "JURÍDICO",
+  "PRODUCTO",
 ] as const;
+
+/**
+ * Módulos INTERNOS DEL PROVEEDOR: solo existen en la empresa matriz (la que
+ * gestiona el propio software, `empresas.es_matriz`). Una empresa cliente no
+ * los ve nunca, ni siquiera creando un departamento con ese nombre desde
+ * Ajustes → Departamentos: el catálogo del software no se los dibuja.
+ */
+export const MODULOS_SOLO_MATRIZ = ["PRODUCTO"] as const;
 
 const COMBINING_MARKS = /[̀-ͯ]/g;
 
@@ -125,4 +134,54 @@ export function departamentosVisibles(
   permisos: PermisoModulo[],
 ): string[] {
   return MODULOS_DEPARTAMENTO.filter((m) => puedeVerModulo(permisos, m));
+}
+
+// ─── Catálogo de módulos por EMPRESA ───────────────────────────────────────
+//
+// Los permisos del rol dicen qué PUEDE ver una persona; esto dice qué OFRECE
+// la empresa en la que está. Son dos llaves distintas y hacen falta las dos.
+//
+// El interruptor no es una lista aparte que haya que mantener: son los
+// DEPARTAMENTOS que la empresa tiene dados de alta (Ajustes → Departamentos).
+// Una empresa que no es un restaurante borra SALA y deja de ver el módulo SALA,
+// sin que eso roce a ninguna otra empresa ni a los clientes futuros, que nacen
+// con el sembrado canónico completo.
+
+/** Módulos internos del proveedor, normalizados (uso interno). */
+const MODULOS_SOLO_MATRIZ_NORM = MODULOS_SOLO_MATRIZ.map(normalizarModulo);
+
+/** ¿`modulo` es un módulo interno del proveedor (solo empresa matriz)? */
+export function esModuloSoloMatriz(modulo: string): boolean {
+  return MODULOS_SOLO_MATRIZ_NORM.includes(normalizarModulo(modulo));
+}
+
+/** Contexto de la empresa activa necesario para resolver su catálogo. */
+export interface CatalogoEmpresa {
+  /** Nombres de los departamentos ACTIVOS de la empresa (tal cual en BD). */
+  departamentos: string[];
+  /** `empresas.es_matriz`: la empresa que gestiona el propio software. */
+  esMatriz: boolean;
+}
+
+/**
+ * ¿La EMPRESA activa ofrece este módulo?
+ *
+ * Un módulo del menú existe en una empresa si esa empresa tiene el departamento
+ * homónimo. Los módulos internos del proveedor exigen además que la empresa sea
+ * la matriz — así un cliente que cree un departamento llamado PRODUCTO se queda
+ * con un departamento normal para organizar a su gente, pero sin módulo.
+ *
+ * Si la lista de departamentos llega vacía (fallo de carga, sesión a medio
+ * resolver) NO escondemos el software entero: se permiten todos los módulos
+ * salvo los internos del proveedor. Dejar a alguien sin menú por un fallo de red
+ * es peor que mostrar un módulo de más.
+ */
+export function moduloDisponibleEnEmpresa(
+  modulo: string,
+  catalogo: CatalogoEmpresa,
+): boolean {
+  if (esModuloSoloMatriz(modulo) && !catalogo.esMatriz) return false;
+  if (catalogo.departamentos.length === 0) return true;
+  const target = normalizarModulo(modulo);
+  return catalogo.departamentos.some((d) => normalizarModulo(d) === target);
 }

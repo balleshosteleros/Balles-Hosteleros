@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useModuloDisponible } from "@/features/empresa/contexts/catalogo-empresa-context";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -236,6 +237,12 @@ export function ClientesView() {
   const [tabFicha, setTabFicha] = useState<"datos" | "visitas" | "valoraciones">("datos");
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
+  // Esta pantalla vive en dos módulos según la empresa: SALA en los
+  // restaurantes y PRODUCTO en la matriz. Lo que dependa de Sala (volver al
+  // plano de mesas) solo aplica donde Sala existe.
+  const moduloDisponible = useModuloDisponible();
+  const haySala = moduloDisponible("SALA");
   const [showConfig, setShowConfig] = useState(false);
   const [pagina, setPagina] = useState(1);
 
@@ -430,12 +437,15 @@ export function ClientesView() {
       const params = new URLSearchParams(searchParams.toString());
       params.delete("cliente");
       const qs = params.toString();
-      router.replace(qs ? `/sala/clientes?${qs}` : "/sala/clientes", { scroll: false });
+      // Sobre la RUTA ACTUAL, no sobre "/sala/clientes": esta misma pantalla
+      // vive también en /producto/clientes (empresa matriz), y cerrar una ficha
+      // allí no puede echar al usuario al módulo de Sala.
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     }
     // Las etiquetas se guardan solas mientras la ficha está abierta; al cerrar
     // se recarga para que la tabla refleje lo que se haya tocado.
     loadClientes();
-  }, [searchParams, router, loadClientes]);
+  }, [searchParams, router, pathname, loadClientes]);
 
   const handleGuardarFicha = async () => {
     if (!borrador) return;
@@ -460,10 +470,12 @@ export function ClientesView() {
       // Guardar cierra y devuelve al plano: se entra aquí desde Sala para
       // arreglar un dato del cliente, y lo que se quiere después es volver a
       // las mesas, no quedarse en la tabla de clientes ni tener que buscar la X.
+      // En una empresa sin Sala (la matriz) no hay plano al que volver: se cierra
+      // la ficha y se queda en la lista.
       setSelectedCliente(null);
       setBorrador(null);
       setTabFicha("datos");
-      router.push("/sala/reservas");
+      if (haySala) router.push("/sala/reservas");
     } finally {
       setGuardando(false);
     }

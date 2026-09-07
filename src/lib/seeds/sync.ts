@@ -1192,10 +1192,14 @@ export async function syncSeedsToAllEmpresas(): Promise<{
 }> {
   try {
     const admin = createAdminClient();
+    // La EMPRESA MATRIZ (la que gestiona el propio software) queda fuera: no es
+    // un restaurante y se le han retirado departamentos a propósito. Sin este
+    // filtro, el modo aditivo se los devolvería en la siguiente propagación.
     const { data: empresas, error } = await admin
       .from("empresas")
       .select("id, slug, nombre")
-      .eq("is_demo", false);
+      .eq("is_demo", false)
+      .eq("es_matriz", false);
     if (error) throw error;
 
     const resumen: Array<{

@@ -4,7 +4,8 @@ import { getEmpleadoGuardStatus } from "@/features/primer-acceso/data/empleado-s
 import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
 import { AuthServerSeed, type AppRole, type AuthProfile } from "@/features/auth/contexts/auth-context";
 import { createClient } from "@/lib/supabase/server";
-import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { getEmpresaActivaForUser, getCatalogoEmpresa } from "@/features/empresa/lib/empresa-server";
+import { CatalogoEmpresaProvider } from "@/features/empresa/contexts/catalogo-empresa-context";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,11 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const empresaActivaKey = user
     ? await getEmpresaActivaForUser(supabase, user.id)
     : null;
+
+  // Catálogo de la empresa activa: qué módulos existen aquí. Se resuelve en
+  // servidor, junto a los permisos, para que el menú se pinte de una sola vez.
+  // No es lo mismo que los permisos del rol — ver catalogo-empresa-context.
+  const catalogoEmpresa = await getCatalogoEmpresa(empresaActivaKey);
 
   let seed: React.ReactNode = null;
   if (user) {
@@ -76,13 +82,18 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <AppLayout>
-      {seed}
+    <CatalogoEmpresaProvider
+      departamentos={catalogoEmpresa.departamentos}
+      esMatriz={catalogoEmpresa.esMatriz}
+    >
+      <AppLayout>
+        {seed}
       {/* key = empresa activa → remonta la página al cambiar de empresa, para
           que los client components recarguen sus datos con la nueva empresa. */}
-      <div key={empresaActivaKey ?? "sin-empresa"} className="contents">
-        {children}
-      </div>
-    </AppLayout>
+        <div key={empresaActivaKey ?? "sin-empresa"} className="contents">
+          {children}
+        </div>
+      </AppLayout>
+    </CatalogoEmpresaProvider>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useMemo, useTransition } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Rol } from "@/features/ajustes/data/ajustes";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -13,6 +13,8 @@ import { ChevronDown, ChevronRight, Settings, Users, Cctv, Rocket, Lock } from "
 import { toast } from "sonner";
 import { saveRolesToSupabase, loadRolesFromSupabase } from "@/features/ajustes/actions/roles-actions";
 import { getEmployees } from "@/actions/admin";
+import { MODULOS_DEPARTAMENTO } from "@/features/auth/lib/permisos";
+import { useModuloDisponible } from "@/features/empresa/contexts/catalogo-empresa-context";
 
 type UsuarioRol = {
   id: string;
@@ -22,20 +24,11 @@ type UsuarioRol = {
   rolLabel: string;
 };
 
-// Módulos que coinciden exactamente con el índice lateral (sidebar)
-const MODULOS_NAV = [
-  "DIRECCIÓN",
-  "SALA",
-  "COCINA",
-  "GERENCIA",
-  "CALIDAD",
-  "RECURSOS HUMANOS",
-  "MARKETING",
-  "LOGÍSTICA",
-  "CONTABILIDAD",
-  "GESTORÍA",
-  "JURÍDICO",
-];
+// Módulos que coinciden exactamente con el índice lateral (sidebar). Fuente
+// única: MODULOS_DEPARTAMENTO. Esta pantalla solo pinta los que la EMPRESA
+// ofrece de verdad (ver `modulosNav` más abajo) — no tiene sentido configurar
+// el permiso de SALA en una empresa que no tiene sala.
+const MODULOS_NAV: string[] = [...MODULOS_DEPARTAMENTO];
 const MODULO_AJUSTES = "AJUSTES";
 const MODULO_CAMARAS = "CÁMARAS";
 // Dos permisos independientes en la barra de herramientas:
@@ -44,7 +37,10 @@ const MODULO_CAMARAS = "CÁMARAS";
 const MODULO_APLICACIONES = "HERR_APLICACIONES";
 const MODULO_ACCESOS = "HERR_ACCESOS";
 
-function buildPermisosCompletos(overrides: Rol["permisos"] = []): {
+function buildPermisosCompletos(
+  overrides: Rol["permisos"] = [],
+  modulosNav: string[] = MODULOS_NAV,
+): {
   nav: Rol["permisos"];
   ajustes: Rol["permisos"][0];
   camaras: Rol["permisos"][0];
@@ -52,7 +48,7 @@ function buildPermisosCompletos(overrides: Rol["permisos"] = []): {
   accesos: Rol["permisos"][0];
 } {
   const find = (m: string) => overrides.find((p) => p.modulo === m);
-  const nav = MODULOS_NAV.map((m) => find(m) ?? { modulo: m, ver: false, editar: false });
+  const nav = modulosNav.map((m) => find(m) ?? { modulo: m, ver: false, editar: false });
   const ajustes = find(MODULO_AJUSTES) ?? { modulo: MODULO_AJUSTES, ver: false, editar: false };
   const camaras = find(MODULO_CAMARAS) ?? { modulo: MODULO_CAMARAS, ver: false, editar: false };
   const aplicaciones = find(MODULO_APLICACIONES) ?? { modulo: MODULO_APLICACIONES, ver: false, editar: false };
@@ -62,6 +58,13 @@ function buildPermisosCompletos(overrides: Rol["permisos"] = []): {
 
 export function RolesTab() {
   const { ajustes, setAjustes, empresaActual } = useEmpresa();
+  // Solo los módulos que existen en esta empresa (sus departamentos dados de
+  // alta, más los internos si es la matriz).
+  const moduloDisponible = useModuloDisponible();
+  const modulosNav = useMemo(
+    () => MODULOS_NAV.filter((m) => moduloDisponible(m)),
+    [moduloDisponible],
+  );
   const empresaDbId = empresaActual.dbId;
   const [expandedRol, setExpandedRol] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -141,14 +144,16 @@ export function RolesTab() {
   };
 
 
-  // Activa o desactiva de golpe los 11 departamentos de navegación (sin tocar AJUSTES).
+  // Activa o desactiva de golpe los departamentos de navegación de esta empresa
+  // (sin tocar AJUSTES). Los permisos de módulos que aquí no se pintan quedan
+  // intactos: viajan en `restantes`.
   const toggleTodosDepartamentos = (rolId: string, valor: boolean) => {
     let nextRoles: Rol[] = [];
     setAjustes((prev) => {
       nextRoles = prev.roles.map((r) => {
         if (r.id !== rolId) return r;
-        const restantes = r.permisos.filter((p) => !MODULOS_NAV.includes(p.modulo));
-        const navPermisos = MODULOS_NAV.map((m) => ({ modulo: m, ver: valor, editar: valor }));
+        const restantes = r.permisos.filter((p) => !modulosNav.includes(p.modulo));
+        const navPermisos = modulosNav.map((m) => ({ modulo: m, ver: valor, editar: valor }));
         return { ...r, permisos: [...navPermisos, ...restantes] };
       });
       return { ...prev, roles: nextRoles };
@@ -162,8 +167,8 @@ export function RolesTab() {
     <div className="space-y-2">
       {ajustes.roles.map((rol) => {
         const isOpen = expandedRol === rol.id;
-        const { nav: permisosNav, ajustes: permisoAjustes, camaras: permisoCamaras, aplicaciones: permisoAplicaciones, accesos: permisoAccesos } = buildPermisosCompletos(rol.permisos);
-        const TOTAL_MODULOS = MODULOS_NAV.length + 4; // 11 nav + AJUSTES + CÁMARAS + APLICACIONES + ACCESOS
+        const { nav: permisosNav, ajustes: permisoAjustes, camaras: permisoCamaras, aplicaciones: permisoAplicaciones, accesos: permisoAccesos } = buildPermisosCompletos(rol.permisos, modulosNav);
+        const TOTAL_MODULOS = modulosNav.length + 4; // nav de la empresa + AJUSTES + CÁMARAS + APLICACIONES + ACCESOS
         const accesosCount = [...permisosNav, permisoAjustes, permisoCamaras, permisoAplicaciones, permisoAccesos].filter((p) => p.ver).length;
         const usuariosConRol = usuariosSupabase.filter(
           (u) => u.rolLabel.toLowerCase() === rol.nombre.trim().toLowerCase()

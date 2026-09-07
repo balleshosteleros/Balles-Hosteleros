@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { Card } from "@/components/ui/card";
+import { useModuloDisponible } from "@/features/empresa/contexts/catalogo-empresa-context";
 import {
   Crown, UtensilsCrossed, ChefHat, Briefcase, CheckCircle2, User, Camera,
-  Package, Calculator, FileText, Scale, type LucideIcon,
+  Package, Calculator, FileText, Scale, Boxes, type LucideIcon,
 } from "lucide-react";
 
 const MESES_LARGOS = [
@@ -51,6 +52,7 @@ const ALL_DEPARTAMENTOS: DepartamentoTileExt[] = [
   { key: "contabilidad", modulo: "CONTABILIDAD",     label: "CONTABILIDAD", href: "/contabilidad", icon: Calculator,      description: "Facturas, transacciones, conciliación",      color: "text-cyan-600" },
   { key: "gestoria",     modulo: "GESTORÍA",         label: "GESTORÍA",     href: "/gestoria",     icon: FileText,        description: "Fiscal y laboral",                   color: "text-sky-600" },
   { key: "juridico",     modulo: "JURÍDICO",         label: "JURÍDICO",     href: "/juridico",     icon: Scale,           description: "Procesos legales",                           color: "text-fuchsia-600" },
+  { key: "producto",     modulo: "PRODUCTO",         label: "PRODUCTO",     href: "/producto",     icon: Boxes,           description: "Clientes del software, escuela",             color: "text-indigo-600" },
 ];
 
 // Subtítulo según el nivel real de acceso: DIRECCIÓN (admin de plataforma) ve
@@ -66,6 +68,7 @@ export function MisDepartamentosView() {
     profile, user, puedeVer, permisosLoaded, loading,
     esAdminPlataforma, tieneAccesoDepartamentos, accesoDeptosServidor,
   } = useAuth();
+  const moduloDisponible = useModuloDisponible();
   const router = useRouter();
 
   // Acceso a esta vista: quien tiene ≥1 departamento permitido (o es admin de
@@ -106,14 +109,18 @@ export function MisDepartamentosView() {
   }, [accesoDeptosServidor, router]);
 
   const tiles = useMemo(() => {
+    // El catálogo de la EMPRESA se aplica siempre, admin incluido: si una
+    // empresa no tiene departamento SALA, ahí no hay módulo SALA para nadie.
+    // El bypass de dirección salta permisos de rol, no la realidad de la empresa.
+    const enLaEmpresa = ALL_DEPARTAMENTOS.filter((d) => moduloDisponible(d.modulo));
     // Admin de plataforma (DIRECCIÓN) tiene bypass total — ve todos los deptos.
-    if (esAdminPlataforma) return ALL_DEPARTAMENTOS;
+    if (esAdminPlataforma) return enLaEmpresa;
     // Hasta que carguen permisos no mostramos nada para evitar el parpadeo
     // "todo abierto" → "filtrado".
     if (!permisosLoaded) return [];
     // El resto: solo los departamentos que sus permisos reales permiten ver.
-    return ALL_DEPARTAMENTOS.filter((d) => puedeVer(d.modulo));
-  }, [esAdminPlataforma, permisosLoaded, puedeVer]);
+    return enLaEmpresa.filter((d) => puedeVer(d.modulo));
+  }, [esAdminPlataforma, permisosLoaded, puedeVer, moduloDisponible]);
 
   // Loading hasta que (a) el componente esté montado, (b) auth deje de cargar y
   // (c) los permisos hayan resuelto (`rolesPendientes = !permisosLoaded`).

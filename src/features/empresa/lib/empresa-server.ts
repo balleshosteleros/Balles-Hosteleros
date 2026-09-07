@@ -82,3 +82,55 @@ export function zonaHorariaDeConfig(config: unknown): string {
   const tz = cfg && typeof cfg.zonaHoraria === "string" ? cfg.zonaHoraria.trim() : "";
   return tz || ZONA_HORARIA_DEFAULT;
 }
+
+// ─── Catálogo de módulos de la empresa ─────────────────────────────────────
+
+/** Qué ofrece la empresa activa: sus departamentos y si es la empresa matriz. */
+export interface CatalogoEmpresaData {
+  departamentos: string[];
+  esMatriz: boolean;
+}
+
+/**
+ * Lee el catálogo de la empresa: los nombres de sus departamentos ACTIVOS y si
+ * es la matriz (la que gestiona el propio software).
+ *
+ * Es lo que decide qué módulos existen en esa empresa — ver
+ * `moduloDisponibleEnEmpresa()`. Va con cliente admin, igual que el resto de
+ * lecturas de Ajustes: es un dato de estructura, no de negocio, y el layout lo
+ * necesita resuelto antes del primer paint del menú.
+ *
+ * Ante cualquier fallo devuelve la lista vacía, que el catálogo interpreta como
+ * "no lo sé" y deja pasar todos los módulos salvo los internos del proveedor:
+ * un error de lectura nunca debe dejar a nadie sin menú.
+ */
+export async function getCatalogoEmpresa(
+  empresaId: string | null,
+): Promise<CatalogoEmpresaData> {
+  const vacio: CatalogoEmpresaData = { departamentos: [], esMatriz: false };
+  if (!empresaId) return vacio;
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+    const [deptosRes, empresaRes] = await Promise.all([
+      admin
+        .from("departamentos")
+        .select("nombre, estado")
+        .eq("empresa_id", empresaId),
+      admin
+        .from("empresas")
+        .select("es_matriz")
+        .eq("id", empresaId)
+        .maybeSingle(),
+    ]);
+    const departamentos = ((deptosRes.data ?? []) as Array<{ nombre: string; estado: string }>)
+      .filter((d) => d.estado !== "Inactivo")
+      .map((d) => d.nombre);
+    return {
+      departamentos,
+      esMatriz: Boolean(empresaRes.data?.es_matriz),
+    };
+  } catch {
+    return vacio;
+  }
+}

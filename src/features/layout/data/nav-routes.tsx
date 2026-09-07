@@ -12,7 +12,7 @@ import {
   Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard, FileQuestion,
   LayoutGrid, CalendarClock, AlertTriangle, HelpCircle, MessageSquareWarning,
   Video, Mail, MessageSquare, Banknote, Building2, Smartphone, Trash2,
-  Bell, ArrowLeftRight, PackageCheck, Handshake,
+  Bell, ArrowLeftRight, PackageCheck, Handshake, Boxes,
 } from "lucide-react";
 
 // ─── Icons custom ──────────────────────────────────────────────────────────
@@ -172,6 +172,7 @@ export const marketingSubs: SubItem[] = [
   { title: "CALENDARIO", url: "/marketing/calendario", icon: CalendarDays },
   { title: "CONTENIDO", url: "/marketing/contenido", icon: Folder },
   { title: "CAMPAÑAS", url: "/marketing/campanas", icon: Send },
+  { title: "AUTOMATIZACIONES", url: "/marketing/automatizaciones", icon: Zap },
   { title: "CARTA DIGITAL", url: "/marketing/carta-digital", icon: QrCode },
   { title: "CÓDIGOS QR", url: "/marketing/qr", icon: Link2 },
   { title: "APP CLIENTES", url: "/marketing/app-clientes", icon: Smartphone },
@@ -202,6 +203,14 @@ export const juridicoSubs: SubItem[] = [
   { title: "PROCESOS", url: "/juridico/procesos", icon: Gavel },
 ];
 
+// PRODUCTO — módulo interno de la empresa matriz (la que gestiona el propio
+// software). No existe en ninguna empresa cliente: ver MODULOS_SOLO_MATRIZ en
+// features/auth/lib/permisos.ts.
+export const productoSubs: SubItem[] = [
+  { title: "CLIENTES", url: "/producto/clientes", icon: Contact },
+  { title: "ESCUELA", url: "/producto/escuela", icon: GraduationCap },
+];
+
 // ─── Secciones del sidebar (departamentos) ─────────────────────────────────
 
 export const allSections: Section[] = [
@@ -216,6 +225,7 @@ export const allSections: Section[] = [
   { key: "calidad", modulo: "CALIDAD", icon: CheckCircle2, label: "CALIDAD", prefix: "/calidad", items: calidadSubs, linkTo: "/calidad" },
   { key: "gestoria", modulo: "GESTORÍA", icon: FileText, label: "GESTORÍA", prefix: "/gestoria", items: gestoriaSubs, linkTo: "/gestoria" },
   { key: "juridico", modulo: "JURÍDICO", icon: Scale, label: "JURÍDICO", prefix: "/juridico", items: juridicoSubs, linkTo: "/juridico" },
+  { key: "producto", modulo: "PRODUCTO", icon: Boxes, label: "PRODUCTO", prefix: "/producto", items: productoSubs, linkTo: "/producto" },
 ];
 
 // ─── Módulos (raíz: icono + label corto) ───────────────────────────────────
@@ -237,6 +247,7 @@ const MODULE_META: Record<string, ModuleMeta> = {
   "/contabilidad": { label: "CONTABILIDAD", icon: Calculator },
   "/gestoria": { label: "GESTORÍA", icon: FileText },
   "/juridico": { label: "JURÍDICO", icon: Scale },
+  "/producto": { label: "PRODUCTO", icon: Boxes },
   "/ajustes": { label: "AJUSTES", icon: Settings },
   "/ayuda": { label: "AYUDA", icon: HelpCircle },
   "/accesos": { label: "ACCESOS", icon: KeyRound },
@@ -285,6 +296,7 @@ const ALL_SUBS: SubItem[] = [
   ...contabilidadSubs,
   ...gestoriaSubs,
   ...juridicoSubs,
+  ...productoSubs,
 ];
 
 const ROUTE_INDEX: Record<string, { title: string; icon?: IconType }> =

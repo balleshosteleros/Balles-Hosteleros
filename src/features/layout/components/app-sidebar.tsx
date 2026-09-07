@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { NavLink } from "@/features/layout/components/nav-link";
 import { useAuth } from "@/features/auth/contexts/auth-context";
+import { useModuloDisponible } from "@/features/empresa/contexts/catalogo-empresa-context";
 import { useViewMode, type ViewMode } from "@/features/layout/contexts/view-mode-context";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -122,6 +123,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { mode, setMode } = useViewMode();
   const { puedeVer, permisosLoaded, esAdminPlataforma } = useAuth();
+  const moduloDisponible = useModuloDisponible();
 
   // Evitar hydration mismatch: useAuth y useViewMode leen localStorage en el
   // render inicial (caché de roles/permisos y modo de vista). En SSR esos lookups
@@ -159,9 +161,13 @@ export function AppSidebar() {
 
   // Sin atajo de director: el menú se filtra SIEMPRE por los permisos del rol.
   // Antes, dirección veía todas las secciones aunque las tuviera apagadas.
+  // Dos llaves, y hacen falta las dos: el ROL dice qué puede ver esta persona y
+  // la EMPRESA dice qué módulos existen aquí (los departamentos que tiene dados
+  // de alta). Una empresa que no es un restaurante no tiene departamento SALA y
+  // por tanto no tiene módulo SALA, aunque el rol lo permita en otra empresa.
   const permisosListos = permisosListosRef.current;
   const sections = permisosListos
-    ? allSections.filter((s) => puedeVer(s.modulo))
+    ? allSections.filter((s) => moduloDisponible(s.modulo) && puedeVer(s.modulo))
     : [];
   // Mientras se resuelven los permisos (primer login sin caché en localStorage)
   // o aún no hemos montado, `sections` es [] y el menú salía en blanco → parecía

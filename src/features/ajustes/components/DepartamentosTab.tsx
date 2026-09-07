@@ -51,6 +51,7 @@ const ORDEN_DEPARTAMENTOS = [
   "CALIDAD",
   "GESTORIA",
   "JURIDICO",
+  "PRODUCTO",
 ];
 
 function normalizarNombreDept(nombre: string): string {

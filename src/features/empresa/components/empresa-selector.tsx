@@ -6,6 +6,8 @@ import { Check } from "lucide-react";
 import { useEmpresa, type Empresa } from "@/features/empresa/contexts/empresa-context";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { resolveDestinoCambioEmpresa } from "@/features/layout/data/nav-routes";
+import { getCatalogoEmpresaAction } from "@/features/empresa/actions/catalogo-actions";
+import { moduloDisponibleEnEmpresa } from "@/features/auth/lib/permisos";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,17 +49,33 @@ export function EmpresaSelector() {
   // acceso a él en la nueva empresa; si no, llevarle a "Mis Departamentos"
   // para que elija entre los disponibles. La decisión se calcula con la ruta
   // actual + permisos del usuario (misma lógica que el sidebar).
-  const cambiarEmpresa = (id: string) => {
+  const cambiarEmpresa = async (id: string) => {
+    setOpen(false);
+
+    // Catálogo de la empresa de DESTINO: hace falta para no dejar al usuario en
+    // un módulo que allí no existe (SALA en una empresa que no es restaurante).
+    // El contexto del navegador todavía tiene el catálogo de la empresa actual,
+    // así que se pregunta al servidor. Si no llega, seguimos decidiendo solo con
+    // los permisos: es como se comportaba antes y nunca deja a nadie tirado.
+    const destinoEmpresa = empresas.find((e) => e.id === id);
+    const catalogo = destinoEmpresa?.dbId
+      ? await getCatalogoEmpresaAction(destinoEmpresa.dbId)
+      : null;
+
     // Solo decidimos el destino si los permisos están CARGADOS. Con los
     // permisos a medias `puedeVer()` devuelve false para todo — no porque
     // falte el permiso, sino porque aún no ha llegado — y el usuario acababa
     // expulsado del submódulo en el que estaba. Sin veredicto fiable pasamos
     // `null`: se queda donde está y solo se refrescan los datos.
     const destino = permisosLoaded
-      ? resolveDestinoCambioEmpresa(pathname, puedeVer)
+      ? resolveDestinoCambioEmpresa(
+          pathname,
+          (modulo) =>
+            (catalogo ? moduloDisponibleEnEmpresa(modulo, catalogo) : true) &&
+            puedeVer(modulo),
+        )
       : null;
     setEmpresaId(id, destino);
-    setOpen(false);
   };
 
   return (
@@ -84,7 +102,7 @@ export function EmpresaSelector() {
         {empresas.map((e) => (
           <DropdownMenuItem
             key={e.id}
-            onSelect={() => cambiarEmpresa(e.id)}
+            onSelect={() => void cambiarEmpresa(e.id)}
             className="flex items-center gap-2 cursor-pointer"
           >
             <EmpresaAvatar empresa={e} logoUrl={getIsotipoUrl(e.id)} size="sm" />

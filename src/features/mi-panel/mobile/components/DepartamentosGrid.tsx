@@ -14,9 +14,11 @@ import {
   Calculator,
   FileText,
   Scale,
+  Boxes,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/features/auth/contexts/auth-context";
+import { useModuloDisponible } from "@/features/empresa/contexts/catalogo-empresa-context";
 
 /**
  * Cuadraditos de "Mis Departamentos" (móvil). Mismo lenguaje visual que
@@ -51,19 +53,24 @@ const DEPARTAMENTOS: Depto[] = [
   { key: "contabilidad", modulo: "CONTABILIDAD", label: "Contabilidad", icon: Calculator, hue: 231 },
   { key: "gestoria", modulo: "GESTORÍA", label: "Gestoría", icon: FileText, hue: 231 },
   { key: "juridico", modulo: "JURÍDICO", label: "Jurídico", icon: Scale, hue: 252 },
+  { key: "producto", modulo: "PRODUCTO", label: "Producto", icon: Boxes, hue: 252 },
 ];
 
 export function DepartamentosGrid() {
   const { puedeVer, permisosLoaded, esAdminPlataforma } = useAuth();
+  const moduloDisponible = useModuloDisponible();
 
   const tiles = useMemo(() => {
+    // El catálogo de la EMPRESA manda incluso para dirección: si aquí no existe
+    // ese departamento, no hay módulo que enseñar a nadie.
+    const enLaEmpresa = DEPARTAMENTOS.filter((d) => moduloDisponible(d.modulo));
     // Admin de plataforma (DIRECCIÓN): bypass total, ve todos los departamentos.
-    if (esAdminPlataforma) return DEPARTAMENTOS;
+    if (esAdminPlataforma) return enLaEmpresa;
     // Hasta que carguen permisos no mostramos nada para evitar el parpadeo
     // "todo abierto" → "filtrado".
     if (!permisosLoaded) return [];
-    return DEPARTAMENTOS.filter((d) => puedeVer(d.modulo));
-  }, [esAdminPlataforma, permisosLoaded, puedeVer]);
+    return enLaEmpresa.filter((d) => puedeVer(d.modulo));
+  }, [esAdminPlataforma, permisosLoaded, puedeVer, moduloDisponible]);
 
   if (permisosLoaded && tiles.length === 0) {
     return (

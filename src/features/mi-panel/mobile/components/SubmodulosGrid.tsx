@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { Building2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/features/auth/contexts/auth-context";
+import { useModuloDisponible } from "@/features/empresa/contexts/catalogo-empresa-context";
 import { allSections, type SubItem } from "@/features/layout/data/nav-routes";
 
 /**
@@ -72,6 +73,7 @@ interface Props {
 
 export function SubmodulosGrid({ deptoKey }: Props) {
   const { puedeVer, permisosLoaded, esAdminPlataforma } = useAuth();
+  const moduloDisponible = useModuloDisponible();
 
   const section = allSections.find((s) => s.key === deptoKey);
   const hue = HUE_POR_KEY[deptoKey] ?? 220;
@@ -87,10 +89,12 @@ export function SubmodulosGrid({ deptoKey }: Props) {
 
   const permitido = useMemo(() => {
     if (!section) return false;
+    // El módulo tiene que existir en esta empresa, sea quien sea el que mira.
+    if (!moduloDisponible(section.modulo)) return false;
     if (esAdminPlataforma) return true;
     if (!permisosLoaded) return null; // aún cargando
     return puedeVer(section.modulo);
-  }, [section, esAdminPlataforma, permisosLoaded, puedeVer]);
+  }, [section, esAdminPlataforma, permisosLoaded, puedeVer, moduloDisponible]);
 
   // Sin acceso (o departamento sin submódulos): estado vacío neutro.
   if (permitido === false || (permitido && items.length === 0)) {

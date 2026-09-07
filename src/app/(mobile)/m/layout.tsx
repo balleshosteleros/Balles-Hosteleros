@@ -8,6 +8,8 @@ import { VersionAutoUpdate } from "@/features/mi-panel/mobile/components/Version
 import { MobileIdentidadProvider } from "@/features/mi-panel/mobile/components/MobileIdentidadProvider";
 import { WidgetBoundary } from "@/shared/components/WidgetBoundary";
 import { getMobileIdentidad } from "@/features/mi-panel/mobile/lib/mobile-identidad-data";
+import { getCatalogoEmpresa } from "@/features/empresa/lib/empresa-server";
+import { CatalogoEmpresaProvider } from "@/features/empresa/contexts/catalogo-empresa-context";
 // import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate"; // desactivado en pruebas
 
 export const dynamic = "force-dynamic";
@@ -78,6 +80,10 @@ export default async function MobileLayout({ children }: { children: React.React
   // junto al del empleado, para poder cambiar de empresa desde donde estés.
   const identidad = await getMobileIdentidad();
 
+  // Qué módulos ofrece la empresa activa. Mismo criterio que en escritorio: una
+  // empresa sin departamento SALA no tiene módulo SALA tampoco en el móvil.
+  const catalogoEmpresa = await getCatalogoEmpresa(identidad.empresaActual?.id ?? null);
+
   return (
     // Columna a altura de pantalla: el contenido crece y la barra queda abajo
     // pegada por `sticky`. Antes era `pb-24` a ojo sobre una barra `fixed`, y en
@@ -89,6 +95,10 @@ export default async function MobileLayout({ children }: { children: React.React
     // pantalla de 720px). Es `clip` y NO `hidden` a propósito: `hidden` crea un
     // contenedor de scroll y rompería el `position: sticky` de la cabecera y de
     // la barra inferior.
+    <CatalogoEmpresaProvider
+      departamentos={catalogoEmpresa.departamentos}
+      esMatriz={catalogoEmpresa.esMatriz}
+    >
     <MobileIdentidadProvider value={identidad}>
     <div
       className="flex min-h-dvh flex-col overflow-x-clip bg-background text-foreground antialiased [--nav-h:calc(3.5rem+env(safe-area-inset-bottom))]"
@@ -123,5 +133,6 @@ export default async function MobileLayout({ children }: { children: React.React
       {/* <NotificacionesGate /> */}
     </div>
     </MobileIdentidadProvider>
+    </CatalogoEmpresaProvider>
   );
 }
