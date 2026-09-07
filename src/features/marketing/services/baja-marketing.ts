@@ -64,6 +64,8 @@ export interface ResultadoBaja {
   ok: boolean;
   /** Nombre de la empresa de la que se ha dado de baja, para la pantalla. */
   empresaNombre?: string;
+  /** Slug de esa empresa, para llevar al cliente a SU pantalla de baja. */
+  empresaSlug?: string;
   color?: string | null;
   isotipoUrl?: string | null;
   yaEstaba?: boolean;
@@ -107,7 +109,7 @@ export async function darDeBaja(token: string): Promise<ResultadoBaja> {
 
   const { data: empresa } = await admin
     .from("empresas")
-    .select("nombre, color, isotipo_url, logo_url")
+    .select("nombre, slug, color, isotipo_url, logo_url")
     .eq("id", cliente.empresa_id)
     .maybeSingle();
 
@@ -115,6 +117,7 @@ export async function darDeBaja(token: string): Promise<ResultadoBaja> {
     ok: true,
     yaEstaba,
     empresaNombre: (empresa?.nombre as string) ?? "",
+    empresaSlug: (empresa?.slug as string) ?? "",
     color: (empresa?.color as string | null) ?? null,
     isotipoUrl:
       ((empresa?.isotipo_url as string | null) || (empresa?.logo_url as string | null)) ?? null,

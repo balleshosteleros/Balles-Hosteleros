@@ -29,6 +29,19 @@ import type { CampanaEmail } from "@/features/marketing/data/campanas";
 const RESEND_URL = "https://api.resend.com";
 /** Tope de correos por llamada a `/emails/batch` que admite Resend. */
 const POR_LOTE = 100;
+/**
+ * Espera entre lotes. Resend admite 10 llamadas por segundo; una campaña de seis
+ * mil son sesenta llamadas seguidas y, sin freno, salen todas de golpe. 150 ms
+ * dejan el ritmo en unas 7 por segundo, con margen, y alargan el envío entero
+ * apenas diez segundos: barato a cambio de no perder un lote.
+ */
+const ESPERA_ENTRE_LOTES_MS = 150;
+/** Reintentos de un lote rechazado por ir demasiado rápido. */
+const REINTENTOS = 3;
+
+function esperar(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 /** Marcador que el HTML de la campaña trae donde va el token de cada persona. */
 const MARCADOR_BAJA = "{{TOKEN_BAJA}}";
 
@@ -85,7 +98,7 @@ export async function enviarCorreoMarketing(input: {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { ok: false, error: "Falta RESEND_API_KEY" };
 
-  const enlaceBaja = extraerEnlaceBaja(input.html);
+  const enlaceBaja = urlBajaUnClic(input.html);
 
   try {
     const res = await fetch(`${RESEND_URL}/emails`, {
@@ -161,7 +174,7 @@ export async function sendEmailCampana(campana: CampanaEmail): Promise<ResendSen
       // a quién dar de baja al pulsarlo.
       const token = tokenDeBaja(d.id);
       const html = campana.cuerpoHtml.split(MARCADOR_BAJA).join(token);
-      const enlaceBaja = extraerEnlaceBaja(html);
+      const enlaceBaja = urlBajaUnClic(html);
 
       return {
         from,
@@ -180,11 +193,27 @@ export async function sendEmailCampana(campana: CampanaEmail): Promise<ResendSen
     });
 
     try {
-      const res = await fetch(`${RESEND_URL}/emails/batch`, {
+      if (i > 0) await esperar(ESPERA_ENTRE_LOTES_MS);
+
+      // Un 429 significa "vas demasiado rápido", no "este correo está mal": el
+      // mismo lote sale bien esperando un poco. Sin reintento, cien personas se
+      // quedaban sin su correo por un problema de ritmo nuestro.
+      let res = await fetch(`${RESEND_URL}/emails/batch`, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(correos),
       });
+
+      for (let intento = 1; intento <= REINTENTOS && res.status === 429; intento++) {
+        // Cada espera dobla a la anterior: si el primer segundo no bastó, seguir
+        // insistiendo al mismo ritmo tampoco va a bastar.
+        await esperar(1000 * 2 ** (intento - 1));
+        res = await fetch(`${RESEND_URL}/emails/batch`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify(correos),
+        });
+      }
 
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { message?: string };
@@ -248,11 +277,23 @@ export async function sendEmailCampana(campana: CampanaEmail): Promise<ResendSen
 }
 
 /**
- * Saca del HTML ya personalizado la dirección de baja, para repetirla en la
- * cabecera. Se lee del propio correo en vez de recomponerla aquí: si algún día
- * cambia la ruta, la cabecera y el enlace del pie no pueden discrepar.
+ * Dirección que Gmail llama al pulsar SU botón de cancelar suscripción.
+ *
+ * No es la misma que la del pie del correo, y no puede serlo: ese botón no abre
+ * una página, hace un POST silencioso y espera un 200. Por eso apunta a la ruta
+ * de API, que responde a un POST.
+ *
+ * El token se saca del enlace que el correo ya lleva —es el último tramo de la
+ * dirección, con o sin el nombre del local delante— para que la cabecera y el
+ * pie no puedan hablar de clientes distintos.
  */
-function extraerEnlaceBaja(html: string): string | null {
-  const m = html.match(/https?:\/\/[^"'\s]*\/baja\/[^"'\s]+/i);
-  return m ? m[0] : null;
+function urlBajaUnClic(html: string): string | null {
+  const m = html.match(/https?:\/\/[^"'\s]*\/baja\/([^"'\s]+)/i);
+  if (!m) return null;
+  const token = m[1].split("/").pop();
+  if (!token) return null;
+  const base = (
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com"
+  ).replace(/\/$/, "");
+  return `${base}/api/baja/${token}`;
 }
