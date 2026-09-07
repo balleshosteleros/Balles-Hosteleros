@@ -7,7 +7,7 @@ import { useEmpresa, type Empresa } from "@/features/empresa/contexts/empresa-co
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { resolveDestinoCambioEmpresa } from "@/features/layout/data/nav-routes";
 import { getCatalogoEmpresaAction } from "@/features/empresa/actions/catalogo-actions";
-import { moduloDisponibleEnEmpresa } from "@/features/auth/lib/permisos";
+import { moduloDisponibleEnEmpresa, type CatalogoEmpresa } from "@/features/auth/lib/permisos";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,9 +58,17 @@ export function EmpresaSelector() {
     // así que se pregunta al servidor. Si no llega, seguimos decidiendo solo con
     // los permisos: es como se comportaba antes y nunca deja a nadie tirado.
     const destinoEmpresa = empresas.find((e) => e.id === id);
-    const catalogo = destinoEmpresa?.dbId
-      ? await getCatalogoEmpresaAction(destinoEmpresa.dbId)
-      : null;
+    let catalogo: CatalogoEmpresa | null = null;
+    try {
+      if (destinoEmpresa?.dbId) {
+        catalogo = await getCatalogoEmpresaAction(destinoEmpresa.dbId);
+      }
+    } catch {
+      // Averiguar el catálogo es una MEJORA del destino, nunca un requisito:
+      // si falla, se cambia igual de empresa con el criterio de siempre. Antes
+      // esta llamada iba sin red y un fallo suyo dejaba el selector muerto.
+      catalogo = null;
+    }
 
     // Solo decidimos el destino si los permisos están CARGADOS. Con los
     // permisos a medias `puedeVer()` devuelve false para todo — no porque

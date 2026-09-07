@@ -88,8 +88,8 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     >
       <AppLayout>
         {seed}
-      {/* key = empresa activa → remonta la página al cambiar de empresa, para
-          que los client components recarguen sus datos con la nueva empresa. */}
+        {/* key = empresa activa → remonta la página al cambiar de empresa, para
+            que los client components recarguen sus datos con la nueva empresa. */}
         <div key={empresaActivaKey ?? "sin-empresa"} className="contents">
           {children}
         </div>
