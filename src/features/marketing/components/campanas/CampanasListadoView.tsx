@@ -210,9 +210,6 @@ export function CampanasListadoView({ canal }: Props) {
                               {r.origen}
                             </span>
                           )}
-                          {r.demoMode && (
-                            <span className="text-[10px] uppercase font-semibold text-amber-600 dark:text-amber-400">demo</span>
-                          )}
                           {abriendo === r.campanaId && (
                             <span className="text-[10px] text-muted-foreground">abriendo…</span>
                           )}

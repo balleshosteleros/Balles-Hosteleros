@@ -10,7 +10,6 @@ export interface CampanaAtribucionRow {
   canal: CanalCampana;
   estado: EstadoCampana;
   ultimaEjecucion: string | null;
-  demoMode: boolean;
   origen: string | null;
   enviados: number;
   abiertos: number;
@@ -27,7 +26,6 @@ function mapRow(row: Row): CampanaAtribucionRow {
     canal: row.canal as CanalCampana,
     estado: row.estado as EstadoCampana,
     ultimaEjecucion: (row.ultima_ejecucion as string | null) ?? null,
-    demoMode: (row.demo_mode as boolean) ?? true,
     origen: (row.origen as string | null) ?? null,
     enviados: Number(row.enviados ?? 0),
     abiertos: Number(row.abiertos ?? 0),

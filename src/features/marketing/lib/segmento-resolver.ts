@@ -93,31 +93,6 @@ export async function contarSegmento(
   return count ?? 0;
 }
 
-export async function clienteIdsDelSegmento(
-  supabase: SupabaseClient,
-  empresaId: string,
-  segmento: SegmentoJson,
-): Promise<Array<{ id: string; email: string | null; telefono: string | null }>> {
-  const base = supabase
-    .from("clientes_sala")
-    .select("id, email, telefono")
-    .eq("empresa_id", empresaId) as unknown as FB;
-
-  let q: FB;
-  if (!segmento.condiciones.length) {
-    q = base;
-  } else if (segmento.operador === "AND") {
-    q = aplicarAnd(base, segmento.condiciones);
-  } else {
-    const ors = segmento.condiciones.map(condicionAOrString).filter(Boolean) as string[];
-    q = ors.length ? base.or(ors.join(",")) : base;
-  }
-
-  const { data, error } = await (q as unknown as PromiseLike<{ data: unknown; error: unknown }>);
-  if (error) throw error;
-  return (data ?? []) as Array<{ id: string; email: string | null; telefono: string | null }>;
-}
-
 /**
  * Destinatarios REALES de una campaña, para el canal y el alcance elegidos.
  *

@@ -7,6 +7,9 @@
  * que se usa una vez. El token lleva dentro a quién da de baja y una firma que
  * solo puede haber hecho el servidor: se verifica sin consultar nada.
  *
+ * La baja afecta SOLO al correo: es de donde sale el enlace. Y deja fecha, que
+ * es lo que separa a quien dijo que no de quien nunca fue preguntado.
+ *
  * ── Por qué la baja no pide confirmación ───────────────────────────────────
  * El cliente que pulsa "darme de baja" ya ha decidido. Una pantalla de "¿seguro?"
  * no le retiene, le enfada, y el siguiente correo lo marca como spam — que es
@@ -78,17 +81,27 @@ export async function darDeBaja(token: string): Promise<ResultadoBaja> {
   const admin = createAdminClient();
   const { data: cliente } = await admin
     .from("clientes_sala")
-    .select("id, empresa_id, acepta_marketing_email")
+    .select("id, empresa_id, marketing_baja_email_at")
     .eq("id", clienteId)
     .maybeSingle();
   if (!cliente) return { ok: false };
 
-  const yaEstaba = cliente.acepta_marketing_email === false;
+  const yaEstaba = !!cliente.marketing_baja_email_at;
 
   if (!yaEstaba) {
+    // Se apaga el permiso Y se deja la fecha. La fecha es lo que distingue a
+    // quien dijo que no de quien nunca fue preguntado, y es lo que hay que poder
+    // enseñar si algún día reclama.
+    //
+    // Solo el correo: este enlace sale de un correo y dice "no recibir más
+    // correos". Cortarle también el WhatsApp sería decidir por él en un canal
+    // del que no ha dicho nada.
     await admin
       .from("clientes_sala")
-      .update({ acepta_marketing_email: false, acepta_marketing_sms: false })
+      .update({
+        acepta_marketing_email: false,
+        marketing_baja_email_at: new Date().toISOString(),
+      })
       .eq("id", clienteId);
   }
 

@@ -53,7 +53,6 @@ function rowToCampana(row: Row): Campana {
     segmentoJson: (row.segmento_json as SegmentoJson) ?? SEGMENTO_VACIO,
     mediaUrls: (row.media_urls as string[]) ?? [],
     ultimaEjecucion: (row.ultima_ejecucion as string | null) ?? null,
-    demoMode: (row.demo_mode as boolean) ?? true,
   };
   const payload = (row.payload as Record<string, unknown>) ?? {};
 
@@ -67,7 +66,6 @@ function rowToCampana(row: Row): Campana {
       cuerpoHtml: (payload.cuerpoHtml as string) ?? "",
       preheader: (payload.preheader as string) ?? "",
       mes: payload.mes == null ? null : Number(payload.mes),
-      segmento: (row.segmento as string) ?? "todos",
       fechaEnvio: (row.fecha_envio as string | null) ?? null,
     } as CampanaEmail;
   }
@@ -79,7 +77,6 @@ function rowToCampana(row: Row): Campana {
       idioma: (payload.idioma as string) ?? "es",
       cuerpo: (payload.cuerpo as string) ?? "",
       variables: (payload.variables as Record<string, string>) ?? {},
-      segmento: (row.segmento as string) ?? "todos",
       fechaEnvio: (row.fecha_envio as string | null) ?? null,
     } as CampanaWhatsApp;
   }
@@ -89,7 +86,6 @@ function rowToCampana(row: Row): Campana {
       canal: "sms",
       cuerpo: (payload.cuerpo as string) ?? "",
       remitente: (payload.remitente as string) ?? "",
-      segmento: (row.segmento as string) ?? "todos",
       fechaEnvio: (row.fecha_envio as string | null) ?? null,
     } as CampanaSms;
   }
@@ -140,13 +136,11 @@ function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
     segmento_json: c.segmentoJson,
     media_urls: c.mediaUrls,
     ultima_ejecucion: c.ultimaEjecucion,
-    demo_mode: c.demoMode,
   };
 
   if (c.canal === "email") {
     return {
       ...base,
-      segmento: c.segmento,
       fecha_envio: c.fechaEnvio,
       payload: {
         ...selloSeed,
@@ -162,7 +156,6 @@ function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
   if (c.canal === "whatsapp") {
     return {
       ...base,
-      segmento: c.segmento,
       fecha_envio: c.fechaEnvio,
       payload: {
         ...selloSeed,
@@ -176,7 +169,6 @@ function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
   if (c.canal === "sms") {
     return {
       ...base,
-      segmento: c.segmento,
       fecha_envio: c.fechaEnvio,
       payload: {
         ...selloSeed,

@@ -260,7 +260,6 @@ export async function sembrarCampanasAnualesAEmpresa(
       recurrencia_cron: `0 11 1 ${seed.mes} *`,
       segmento_json: { operador: "AND", condiciones: [] },
       media_urls: correo.fotoUrl ? [correo.fotoUrl] : [],
-      demo_mode: true,
       payload: {
         claveSeed: seed.clave,
         mes: seed.mes,

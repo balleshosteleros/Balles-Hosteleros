@@ -7,7 +7,6 @@ interface CampanaExport {
   nombre: string;
   canal: string;
   estado: string;
-  segmento: string;
   fechaEnvio: string | null;
 }
 
@@ -16,7 +15,6 @@ const campanaSchema = z.object({
   nombre: z.string().min(1),
   canal: z.string(),
   estado: z.string(),
-  segmento: z.string(),
   fechaEnvio: z.string().nullable(),
 });
 
@@ -34,7 +32,6 @@ export const campanasIO: ModuleIO<CampanaExport> = {
     { key: "nombre", label: "Nombre", required: true, unique: true },
     { key: "canal", label: "Canal", type: "enum", values: ["email", "whatsapp", "meta"], required: true },
     { key: "estado", label: "Estado" },
-    { key: "segmento", label: "Segmento" },
     { key: "fechaEnvio", label: "Fecha envío", type: "date" },
   ],
   fetchAll: async () => {
@@ -49,7 +46,6 @@ export const campanasIO: ModuleIO<CampanaExport> = {
         nombre: String(r.nombre ?? ""),
         canal: String(r.canal ?? ""),
         estado: String(r.estado ?? ""),
-        segmento: String(r.segmento ?? ""),
         fechaEnvio: (r.fechaEnvio as string | null) ?? null,
       };
     });

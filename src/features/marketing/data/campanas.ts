@@ -60,7 +60,6 @@ export interface CamposComunesPRP046 {
   mediaUrls: string[];
   // Tracking
   ultimaEjecucion: string | null;
-  demoMode: boolean;
 }
 
 const SEGMENTO_VACIO: SegmentoJson = { operador: "AND", condiciones: [] };
@@ -74,7 +73,6 @@ function camposComunesVacios(): CamposComunesPRP046 {
     segmentoJson: SEGMENTO_VACIO,
     mediaUrls: [],
     ultimaEjecucion: null,
-    demoMode: true,
   };
 }
 
@@ -92,7 +90,6 @@ export interface CampanaEmail extends CamposComunesPRP046 {
   preheader: string;
   /** 1-12. Solo en las campañas del calendario anual. */
   mes: number | null;
-  segmento: string; // legacy string (compat con UI previa)
   fechaEnvio: string | null;
   estado: EstadoCampana;
   estadisticas: {
@@ -117,7 +114,6 @@ export interface CampanaWhatsApp extends CamposComunesPRP046 {
   idioma: string;
   cuerpo: string;
   variables: Record<string, string>;
-  segmento: string;
   fechaEnvio: string | null;
   estado: EstadoCampana;
   estadisticas: {
@@ -139,7 +135,6 @@ export interface CampanaSms extends CamposComunesPRP046 {
   nombre: string;
   cuerpo: string; // máx 160 caracteres recomendado
   remitente: string; // sender ID (alfanumérico hasta 11 car. en España)
-  segmento: string;
   fechaEnvio: string | null;
   estado: EstadoCampana;
   estadisticas: {
@@ -227,14 +222,6 @@ export const CTA_META: { value: CampanaMeta["creatividad"]["cta"]; label: string
   { value: "CONTACTAR", label: "Contactar" },
 ];
 
-export const SEGMENTOS_CLIENTE: { value: string; label: string }[] = [
-  { value: "todos", label: "Todos los clientes" },
-  { value: "vip", label: "Clientes VIP" },
-  { value: "recurrentes", label: "Clientes recurrentes" },
-  { value: "inactivos", label: "Clientes inactivos (30d+)" },
-  { value: "nuevos", label: "Clientes nuevos" },
-];
-
 export function crearCampanaEmailVacia(empresaId: string): CampanaEmail {
   const now = new Date().toISOString();
   return {
@@ -251,7 +238,6 @@ export function crearCampanaEmailVacia(empresaId: string): CampanaEmail {
     // a ningún concurso: eso solo lo trae el seed (ver `claveSeed`, que
     // `camposComunesVacios` deja en null).
     mes: null,
-    segmento: "todos",
     fechaEnvio: null,
     estado: "borrador",
     estadisticas: { enviados: 0, entregados: 0, abiertos: 0, clicks: 0, rebotes: 0, bajas: 0 },
@@ -272,7 +258,6 @@ export function crearCampanaWhatsAppVacia(empresaId: string): CampanaWhatsApp {
     idioma: "es",
     cuerpo: "",
     variables: {},
-    segmento: "todos",
     fechaEnvio: null,
     estado: "borrador",
     estadisticas: { enviados: 0, entregados: 0, leidos: 0, respuestas: 0, fallidos: 0 },
@@ -291,7 +276,6 @@ export function crearCampanaSmsVacia(empresaId: string): CampanaSms {
     nombre: "",
     cuerpo: "",
     remitente: "",
-    segmento: "todos",
     fechaEnvio: null,
     estado: "borrador",
     estadisticas: { enviados: 0, entregados: 0, fallidos: 0, clicks: 0 },

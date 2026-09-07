@@ -142,7 +142,6 @@ export async function sembrarCampanaCumpleanosAEmpresa(
     // años hoy no es un filtro de la ficha, es una cuenta de días. La hace el
     // motor.
     segmento_json: { operador: "AND", condiciones: [] },
-    demo_mode: true,
   };
 
   const filas: Record<string, unknown>[] = [];

@@ -6,15 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, Plus, Send, Link2, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Plus, Send, Link2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { guardarCampanaAction } from "@/features/marketing/actions/campanas-actions";
 import { listReservaLinks, createReservaLink } from "@/features/sala/actions/reserva-links-actions";
 import { validarPalabraClave, type ReservaLink } from "@/features/sala/data/reserva-links";
 import type { Campana, RecurrenciaCampana } from "@/features/marketing/data/campanas";
 import { EditorSegmento } from "./editor/EditorSegmento";
-import { enviarCampanaDemoAction, contarDestinatariosAction } from "@/features/marketing/actions/envios-actions";
+import { contarDestinatariosAction } from "@/features/marketing/actions/envios-actions";
 import { enviarEmailAction } from "@/features/marketing/actions/campanas-actions";
 import { previewSegmentoAction } from "@/features/marketing/actions/segmento-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -41,7 +40,6 @@ function cronARecurrencia(cron: string | null): RecurrenciaCampana {
 export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: Props) {
   const [draft, setDraft] = useState<Campana>(campana);
   const [guardando, startSave] = useTransition();
-  const [enviando, startSend] = useTransition();
   const [links, setLinks] = useState<ReservaLink[]>([]);
   const [nuevoLink, setNuevoLink] = useState("");
   const [creandoLink, setCreandoLink] = useState(false);
@@ -51,7 +49,6 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
   const [destinatarios, setDestinatarios] = useState<number | null>(null);
   const [enviandoReal, startEnviarReal] = useTransition();
   const { confirm: confirmEnvio, dialog: confirmEnvioDialog } = useConfirmDelete();
-  const { confirm: confirmDemo, dialog: confirmDemoDialog } = useConfirmDelete();
 
   /**
    * La de cumpleaños no se envía desde aquí: sale sola, una por persona, el día
@@ -160,25 +157,6 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
     });
   }
 
-  async function onEnviarDemo() {
-    if (!validacion.ok) return;
-    const ok = await confirmDemo({
-      title: "Modo demo",
-      description: `Se registrarán ${coincidencias} envíos sin llamar a ningún proveedor.`,
-      confirmLabel: "Continuar",
-    });
-    if (!ok) return;
-    startSend(async () => {
-      // Primero guardar para tener UUID válido si es nueva
-      const saved = await guardarCampanaAction(draft);
-      if (!saved.ok || !saved.data) { toast.error(saved.error ?? "Error al guardar"); return; }
-      const r = await enviarCampanaDemoAction(saved.data.id);
-      if (!r.ok) { toast.error(r.error ?? "Error al enviar"); return; }
-      toast.success(`${r.enviados} envíos registrados (modo demo)`);
-      onGuardada();
-    });
-  }
-
   /**
    * Envío DE VERDAD. Pide confirmación con el número de personas delante: es
    * irreversible y, en el calendario anual, además abre el concurso del mes.
@@ -222,7 +200,6 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      {confirmDemoDialog}
       {confirmEnvioDialog}
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
@@ -231,9 +208,7 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
             Nueva campaña — {draft.canal.toUpperCase()}
           </SheetTitle>
           <SheetDescription>
-            <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 mt-2">
-              <AlertTriangle className="h-3 w-3 mr-1" /> Modo demo — sin envío real
-            </Badge>
+            Al enviar, los correos salen de verdad a los clientes del segmento.
           </SheetDescription>
         </SheetHeader>
 
@@ -368,17 +343,6 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
               Esta campaña se envía sola: cada cliente recibe la suya siete días antes de su
               cumpleaños, con su código. Para ponerla en marcha, cambia su estado a Activa.
             </p>
-          )}
-          {!esCumpleanos && (
-          <Button
-            variant="outline"
-            onClick={onEnviarDemo}
-            disabled={!validacion.ok || enviando}
-            title={validacion.ok ? "Registrar envío demo" : validacion.msg ?? ""}
-          >
-            <Send className="h-4 w-4 mr-1" />
-            {enviando ? "Enviando..." : `Probar (demo) — ${coincidencias ?? 0}`}
-          </Button>
           )}
           {!esCumpleanos && draft.canal === "email" && (
             <Button
