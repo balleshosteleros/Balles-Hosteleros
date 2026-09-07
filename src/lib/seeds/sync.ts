@@ -33,6 +33,7 @@ import { RESERVA_EMAIL_PLANTILLAS_SEED } from "./reserva-email-plantillas";
 import { RECLUTAMIENTO_EMAIL_PLANTILLAS_SEED } from "./reclutamiento-email-plantillas";
 import { RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED } from "./reclutamiento-plantilla-estados";
 import { RECLUTAMIENTO_CUESTIONARIO_DEFAULT_SEED } from "./reclutamiento-cuestionario-default";
+import { sembrarCampanasAnualesAEmpresa } from "@/features/marketing/services/campanas-anuales";
 import {
   RESENAS_AGENTES_IA_SEED,
   normalizeAgenteIaNombre,
@@ -1158,6 +1159,9 @@ export async function seedEmpresaDefaults(
   await syncReclutamientoPlantillaEstadoAEmpresa(admin, empresaId);
   await syncReclutamientoCuestionarioDefaultAEmpresa(admin, empresaId);
   await syncResenasAgentesIaAEmpresa(admin, empresaId);
+  // Calendario anual de campañas de email: los doce meses en borrador, con la
+  // marca y las fotos de esta empresa. No envía nada; solo deja el año montado.
+  await sembrarCampanasAnualesAEmpresa(admin, empresaId);
 }
 
 /**
