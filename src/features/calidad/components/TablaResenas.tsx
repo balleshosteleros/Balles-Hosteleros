@@ -26,7 +26,6 @@ import {
   type Resena,
 } from "@/features/calidad/types/resenas";
 import {
-  aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
   type ToolbarFiltroActivo,
   type ToolbarOrdenActivo,
@@ -88,7 +87,34 @@ const COLOR_ESTADO: Record<string, string> = {
   nuevo_comensal: "text-sky-700",
 };
 
+/**
+ * Cómo se lee cada columna para filtrarla y ordenarla: lo que se compara es lo
+ * que se VE, no el dato crudo —por origen se busca "Google", no "google", y por
+ * nota el número, no las estrellas—.
+ *
+ * Vive fuera de la tabla porque el marcador de arriba tiene que filtrar
+ * exactamente igual que la lista. Si cada uno interpretara las columnas a su
+ * manera, la nota media de la cabecera no cuadraría con las filas de debajo.
+ */
+export function crearAccesoResena(
+  nombreGestor: (userId: string | null) => string | null,
+) {
+  return (r: Resena, campo: string): unknown => {
+    if (campo === "cliente") return r.nombre_comensal;
+    if (campo === "nota") return notaDe(r) ?? 0;
+    if (campo === "origen") return ORIGEN_LABEL[r.origen] ?? r.origen;
+    if (campo === "estado") return ESTADO_LABEL[r.estado] ?? r.estado;
+    if (campo === "preguntas") return preguntasContestadas(r) === 3 ? "Sí" : "No";
+    if (campo === "fecha") return r.fecha_registro ?? r.fecha_reseña ?? "";
+    if (campo === "comentario") return r.comentario ?? "";
+    if (campo === "gestionada") return nombreGestor(r.gestionada_por) ?? "";
+    return (r as unknown as Record<string, unknown>)[campo];
+  };
+}
+
 export interface TablaResenasProps {
+  /** Ya filtradas: el filtrado se hace en la vista, que es quien lo comparte
+   *  con el marcador. Aquí solo se ordena y se pinta. */
   resenas: Resena[];
   loading: boolean;
   filtros: ToolbarFiltroActivo[];
@@ -109,27 +135,9 @@ export function TablaResenas({
   nombreGestor,
   onAbrir,
 }: TablaResenasProps) {
-  /**
-   * Lo que se filtra y ordena es lo que se VE, no la columna cruda: por origen
-   * se busca "WhatsApp", no "whatsapp", y por nota el número, no las estrellas.
-   */
-  const acceso = (r: Resena, campo: string): unknown => {
-    if (campo === "cliente") return r.nombre_comensal;
-    if (campo === "nota") return notaDe(r) ?? 0;
-    if (campo === "origen") return ORIGEN_LABEL[r.origen] ?? r.origen;
-    if (campo === "estado") return ESTADO_LABEL[r.estado] ?? r.estado;
-    if (campo === "preguntas") return preguntasContestadas(r) === 3 ? "Sí" : "No";
-    if (campo === "fecha") return r.fecha_registro ?? r.fecha_reseña ?? "";
-    if (campo === "comentario") return r.comentario ?? "";
-    if (campo === "gestionada") return nombreGestor(r.gestionada_por) ?? "";
-    return (r as unknown as Record<string, unknown>)[campo];
-  };
+  const acceso = crearAccesoResena(nombreGestor);
 
-  const visibles = aplicarOrdenToolbar(
-    aplicarFiltrosToolbar(resenas, filtros, acceso),
-    orden,
-    acceso,
-  );
+  const visibles = aplicarOrdenToolbar(resenas, orden, acceso);
 
   const cabecera = (
     campo: string,

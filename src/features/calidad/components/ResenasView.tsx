@@ -55,12 +55,20 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/shared/components/ui/popover";
-import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
+import {
+  SubmoduleToolbar,
+  aplicarFiltrosToolbar,
+} from "@/shared/components/SubmoduleToolbar";
 import type {
   ToolbarFiltroActivo,
   ToolbarOrdenActivo,
 } from "@/shared/components/SubmoduleToolbar";
-import { TablaResenas } from "@/features/calidad/components/TablaResenas";
+import {
+  TablaResenas,
+  crearAccesoResena,
+} from "@/features/calidad/components/TablaResenas";
+import { ResumenResenas } from "@/features/calidad/components/ResumenResenas";
+import { calcularResumenResenas } from "@/features/calidad/lib/resumen-resenas";
 import {
   actualizarResena,
   buscarPlaceCustom,
@@ -180,7 +188,13 @@ export function ResenasView() {
   // Filtro y orden de la lista. Cada columna trae el suyo, como en el resto de
   // los listados del programa.
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
-  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  // Lo último que ha entrado, arriba. Sin orden de salida la lista llegaba en
+  // el orden en que la devuelve la base de datos, que no dice nada: lo primero
+  // que se quiere ver al abrir es lo que han escrito hoy.
+  const [orden, setOrden] = useState<ToolbarOrdenActivo | null>({
+    campo: "fecha",
+    direccion: "desc",
+  });
   const { empresaActual } = useEmpresa();
 
   /**
@@ -247,6 +261,20 @@ export function ResenasView() {
       return true;
     });
   }, [resenas, busqueda, rango]);
+
+  // Los filtros de columna se aplican AQUÍ, no dentro de la tabla, para que el
+  // marcador y la lista miren exactamente las mismas valoraciones: si el
+  // marcador se calculara sobre otro conjunto, enseñaría una nota media que no
+  // cuadra con las filas que hay debajo.
+  const visibles = useMemo(() => {
+    const acceso = crearAccesoResena(nombreGestor);
+    return aplicarFiltrosToolbar(filtradas, filtros, acceso);
+  }, [filtradas, filtros, nombreGestor]);
+
+  const resumen = useMemo(() => calcularResumenResenas(visibles), [visibles]);
+
+  const hayFiltros =
+    filtros.length > 0 || busqueda.trim().length > 0 || periodo !== "todo";
 
   // ─── Sync Google ──────────────────────────────────────────────
   const onSync = async () => {
@@ -457,8 +485,14 @@ export function ResenasView() {
         onCustomToChange={(v) => { setMesGrafica(null); setCustomTo(v); }}
       />
 
+      {/* Mientras carga no se pinta: un marcador a cero durante un segundo se
+          lee como "no tenemos ninguna valoración", que es justo lo contrario. */}
+      {!(loading && resenas.length === 0) && (
+        <ResumenResenas resumen={resumen} filtrado={hayFiltros} />
+      )}
+
       <TablaResenas
-        resenas={filtradas}
+        resenas={visibles}
         loading={loading}
         filtros={filtros}
         onFiltrosChange={setFiltros}
