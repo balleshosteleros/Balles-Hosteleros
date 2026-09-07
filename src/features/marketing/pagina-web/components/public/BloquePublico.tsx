@@ -774,7 +774,11 @@ function CollageCartaPublico({
           <p className="mt-5 max-w-xl text-sm text-white/80 md:text-base">{frase}</p>
         ) : null}
         <a
-          href={`/carta`}
+          // `?web=1`: se llega desde la web, no desde el QR de la mesa. Con
+          // esa marca la carta enseña también el menú del día fuera de su
+          // horario —con la franja escrita—, que es justo lo que viene a
+          // consultar quien está decidiendo si reserva.
+          href={`/carta?web=1`}
           className="mt-9 inline-block rounded-full px-10 py-4 text-xs font-bold uppercase tracking-[0.2em] text-black transition-transform hover:scale-105 md:text-sm"
           style={{ backgroundColor: "var(--pw-primario)" }}
         >

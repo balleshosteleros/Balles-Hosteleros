@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Bloque, BrandingSnapshot } from "../../types";
+import { Fragment } from "react";
 import { BloquePublico } from "./BloquePublico";
 import { BannerCookies, EnlaceConfigurarCookies } from "./BannerCookies";
 import { MedidorWeb } from "./MedidorWeb";
@@ -68,6 +69,63 @@ export function PaginaPublicaShell({
   // el valor viejo "serif" no era una fuente real, así que caía al serif del
   // navegador y por eso no se parecían.
   const tipografia = branding?.tipografia?.trim() || "Montserrat";
+
+  /**
+   * Foto para el sorteo. Se busca en la propia web —galería, collage de la
+   * carta, historia, y el cartel del hero como último recurso— para que sea una
+   * foto de la casa sin tener que configurar nada. El hero va al final porque en
+   * estas webs suele ser un vídeo y su `foto_url` es solo el fotograma de
+   * respaldo.
+   */
+  const fotoSorteo = (() => {
+    // Se buscan primero las fotos con GENTE: la sección invita a venir con
+    // alguien, y un plato solo en un plato. Se reconocen por su texto
+    // alternativo, que es donde está descrito lo que sale ("Brindis bajo el neón
+    // de Bacanal", "Brindis con gin tonic"). Es más fiable que quedarse con la
+    // primera de la galería, que suele ser el plato estrella.
+    // En ORDEN de preferencia, no como una lista suelta: un brindis son dos
+    // personas y es exactamente la escena que invita a venir acompañado; una
+    // terraza vacía, en cambio, es un sitio bonito y nada más. Sin este orden
+    // ganaba la primera que apareciera en la galería.
+    const PREFERENCIA = [
+      /brindis/i,
+      /celebraci|compartir/i,
+      /ambiente|barra/i,
+      /mesa|terraza/i,
+    ];
+    const candidatas: { url: string; alt: string }[] = [];
+    for (const b of ordenados) {
+      if (b.tipo === "galeria" && b.datos.imagenes?.length) {
+        candidatas.push(...b.datos.imagenes);
+      }
+      if (b.tipo === "collage_carta" && b.datos.imagenes?.length) {
+        candidatas.push(...b.datos.imagenes);
+      }
+      if (b.tipo === "historia" && b.datos.imagen_url) {
+        candidatas.push({ url: b.datos.imagen_url, alt: "" });
+      }
+    }
+    for (const patron of PREFERENCIA) {
+      const elegida = candidatas.find((i) => patron.test(i.alt ?? ""));
+      if (elegida?.url) return elegida.url;
+    }
+    if (candidatas[0]?.url) return candidatas[0].url;
+    // Último recurso: el cartel del hero. Va al final porque en estas webs el
+    // hero suele ser un vídeo y su foto es solo el fotograma de respaldo.
+    const heroBloque = ordenados.find((b) => b.tipo === "hero");
+    return heroBloque?.tipo === "hero" ? heroBloque.datos.foto_url ?? null : null;
+  })();
+
+  const hayMapa = ordenados.some((b) => b.tipo === "mapa" && b.visible);
+  const sorteo = contexto?.empresaSlug ? (
+    <SorteoMensual
+      key="sorteo-mensual"
+      empresaSlug={contexto.empresaSlug}
+      premio={premioMensualDe(contexto.empresaNombre).plural}
+      color={primario}
+      fotoUrl={fotoSorteo}
+    />
+  ) : null;
 
   const hero = ordenados.find((b) => b.tipo === "hero");
   const tituloNav = hero?.tipo === "hero" ? hero.datos.subtitulo ?? "" : "";
@@ -173,19 +231,18 @@ export function PaginaPublicaShell({
       <NavPublica logo={logo} titulo={tituloNav} hrefReservar={hrefReservar} enlaces={nav} />
       <main>
         {bloquesLimpios.map((b) => (
-          <BloquePublico key={b.id} bloque={b} contexto={contexto} />
+          <Fragment key={b.id}>
+            <BloquePublico bloque={b} contexto={contexto} />
+            {/* El sorteo va justo DEBAJO DE LA UBICACIÓN: el mapa es donde se
+                para quien ya ha decidido venir, y es el momento de pedirle el
+                correo. Después solo quedan los enlaces legales. */}
+            {b.tipo === "mapa" && sorteo}
+          </Fragment>
         ))}
+        {/* Si esa web no monta mapa, el sorteo cierra el contenido: es preferible
+            a que desaparezca por no existir el bloque del que cuelga. */}
+        {!hayMapa && sorteo}
       </main>
-      {/* El sorteo del mes va DESPUÉS de todo el contenido y antes de lo legal:
-          quien llega hasta aquí ya ha visto la carta y las fotos, y es el
-          momento en que se le puede pedir algo. Arriba estorbaría. */}
-      {contexto?.empresaSlug ? (
-        <SorteoMensual
-          empresaSlug={contexto.empresaSlug}
-          premio={premioMensualDe(contexto.empresaNombre).plural}
-          color={primario}
-        />
-      ) : null}
       <PieLegal redes={contexto?.redes ?? null} textoLegal={textoLegal} />
       <BotonWhatsApp url={contexto?.redes?.whatsapp ?? null} />
       <BannerCookies hrefPolitica={hrefPoliticaCookies} />
