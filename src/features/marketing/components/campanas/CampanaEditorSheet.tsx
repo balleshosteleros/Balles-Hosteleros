@@ -6,12 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Send, Link2, Sparkles } from "lucide-react";
+import { CalendarClock, Plus, Send, Link2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { guardarCampanaAction } from "@/features/marketing/actions/campanas-actions";
 import { listReservaLinks, createReservaLink } from "@/features/sala/actions/reserva-links-actions";
 import { validarPalabraClave, type ReservaLink } from "@/features/sala/data/reserva-links";
-import type { Campana, RecurrenciaCampana } from "@/features/marketing/data/campanas";
+import type { Campana } from "@/features/marketing/data/campanas";
+import {
+  FRECUENCIAS,
+  camposAProgramacion,
+  describirProgramacion,
+  programacionACampos,
+  type Frecuencia,
+} from "@/features/marketing/lib/programacion";
 import { EditorSegmento } from "./editor/EditorSegmento";
 import { contarDestinatariosAction } from "@/features/marketing/actions/envios-actions";
 import { enviarEmailAction } from "@/features/marketing/actions/campanas-actions";
@@ -23,18 +30,6 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   campana: Campana;
   onGuardada: () => void;
-}
-
-const RECURRENCIAS: { value: RecurrenciaCampana; label: string; cron: string | null }[] = [
-  { value: "una_vez", label: "Una vez", cron: null },
-  { value: "diaria", label: "Diaria (cada día 9:00)", cron: "0 9 * * *" },
-  { value: "semanal", label: "Semanal (lunes 9:00)", cron: "0 9 * * 1" },
-  { value: "mensual", label: "Mensual (día 1 a las 9:00)", cron: "0 9 1 * *" },
-];
-
-function cronARecurrencia(cron: string | null): RecurrenciaCampana {
-  const r = RECURRENCIAS.find((x) => x.cron === cron);
-  return r?.value ?? "una_vez";
 }
 
 export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: Props) {
@@ -82,7 +77,38 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
     contarDestinatariosAction(draft.id).then((r) => setDestinatarios(r.ok ? r.total : null));
   }, [open, draft.id, draft.canal]);
 
-  const recurrencia = useMemo(() => cronARecurrencia(draft.recurrenciaCron), [draft.recurrenciaCron]);
+  /**
+   * Cuándo sale la campaña, leído de lo guardado. El usuario no ve un cron:
+   * elige "cada año" y una fecha, y de ahí se compone.
+   */
+  // Meta no tiene fecha de envío: sus anuncios corren entre dos fechas, no
+  // salen un día a una hora.
+  const fechaEnvioDraft = draft.canal === "meta" ? null : draft.fechaEnvio;
+  const programacion = useMemo(
+    () => camposAProgramacion(draft.recurrenciaCron, fechaEnvioDraft ?? null),
+    [draft.recurrenciaCron, fechaEnvioDraft],
+  );
+
+  /**
+   * Tocar la hora NO pone la campaña en marcha.
+   *
+   * El estado se cambia en un paso aparte y a propósito: si elegir "cada mes"
+   * dejara la campaña activa sin más, un ajuste de la hora en una campaña vieja
+   * mandaría un correo a nueve mil personas sin que nadie lo haya pedido, y eso
+   * no se puede deshacer.
+   */
+  function cambiarProgramacion(patch: Partial<typeof programacion>) {
+    const campos = programacionACampos({ ...programacion, ...patch });
+    updateDraft({
+      recurrenciaCron: campos.recurrenciaCron,
+      fechaEnvio: campos.fechaEnvioIso,
+      // Una campaña ya en marcha sí sigue el estado que le toca a la nueva
+      // programación: pasar de "un día" a "cada mes" es activa, no programada.
+      ...(draft.estado === "borrador" ? {} : { estado: campos.estado }),
+    } as Partial<Campana>);
+  }
+
+  const enMarcha = draft.estado === "programada" || draft.estado === "activa";
 
   const mensaje = useMemo(() => {
     if (draft.canal === "email") return draft.cuerpoHtml;
@@ -302,25 +328,118 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
             </div>
           </div>
 
-          {/* Recurrencia */}
-          <div>
-            <Label>Recurrencia</Label>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {RECURRENCIAS.map((r) => (
-                <button
-                  key={r.value}
-                  type="button"
-                  onClick={() => updateDraft({ recurrenciaCron: r.cron })}
-                  className={`text-xs px-3 h-8 rounded border ${recurrencia === r.value ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
-                >
-                  {r.label}
-                </button>
-              ))}
+          {/* ── Cuándo sale ────────────────────────────────────────────
+              Tres formas y solo tres: a mano, un día concreto, o cada
+              día/semana/mes/año. La hora es siempre la del restaurante. */}
+          {!esCumpleanos && (
+            <div>
+              <Label className="flex items-center gap-1">
+                <CalendarClock className="h-3.5 w-3.5" /> Cuándo se envía
+              </Label>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {FRECUENCIAS.map((f) => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    onClick={() => cambiarProgramacion({ frecuencia: f.value as Frecuencia })}
+                    title={f.ayuda}
+                    className={`h-8 rounded border px-3 text-xs ${
+                      programacion.frecuencia === f.value
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border hover:bg-muted"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {programacion.frecuencia !== "manual" && (
+                <div className="mt-2 flex flex-wrap items-end gap-3">
+                  {programacion.frecuencia !== "diaria" && (
+                    <div className="space-y-1">
+                      <Label htmlFor="prog-fecha" className="text-xs text-muted-foreground">
+                        {programacion.frecuencia === "un_dia"
+                          ? "Día"
+                          : programacion.frecuencia === "semanal"
+                            ? "Un día de esa semana"
+                            : programacion.frecuencia === "mensual"
+                              ? "Un día de ese mes"
+                              : "El día del año"}
+                      </Label>
+                      <Input
+                        id="prog-fecha"
+                        type="date"
+                        className="h-8 w-40"
+                        value={programacion.fecha}
+                        onChange={(e) => cambiarProgramacion({ fecha: e.target.value })}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <Label htmlFor="prog-hora" className="text-xs text-muted-foreground">
+                      Hora
+                    </Label>
+                    <Input
+                      id="prog-hora"
+                      type="time"
+                      className="h-8 w-28"
+                      value={programacion.hora}
+                      onChange={(e) => cambiarProgramacion({ hora: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                {describirProgramacion(programacion)}
+                {programacion.frecuencia !== "manual" && " · en la hora del restaurante"}
+              </p>
+
+              {/* Poner en marcha es un acto aparte, con su botón: es lo que
+                  separa "he dejado esto preparado" de "esto sale solo". */}
+              {programacion.frecuencia !== "manual" && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-2">
+                  {enMarcha ? (
+                    <>
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                        En marcha: saldrá sola cuando le toque.
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="ml-auto h-7"
+                        onClick={() => updateDraft({ estado: "borrador" } as Partial<Campana>)}
+                      >
+                        Detener
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs text-muted-foreground">
+                        Está en borrador: no saldrá sola hasta que la pongas en marcha.
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="ml-auto h-7"
+                        disabled={!validacion.ok}
+                        title={validacion.ok ? "" : (validacion.msg ?? "")}
+                        onClick={() =>
+                          updateDraft({
+                            estado: programacionACampos(programacion).estado,
+                          } as Partial<Campana>)
+                        }
+                      >
+                        Poner en marcha
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              v1 sin scheduler — la recurrencia queda guardada pero el envío se dispara manualmente.
-            </p>
-          </div>
+          )}
 
           {/* Segmento */}
           <div>
