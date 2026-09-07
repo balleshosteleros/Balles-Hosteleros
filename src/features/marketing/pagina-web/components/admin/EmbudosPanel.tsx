@@ -1,28 +1,21 @@
 "use client";
 
 /**
- * Los embudos, con sus pasos EN ORDEN (PRP-088).
+ * Los embudos de la empresa, uno por tarjeta (PRP-088).
  *
- * En la lista de páginas los pasos salen sueltos y ordenados por fecha, que es
- * justo como no se entiende un embudo: lo que importa es por dónde entra la
- * gente y en qué orden avanza.
+ * Aquí solo el NOMBRE y cómo va: cuánta gente entra, cuánta llega al final y
+ * cuántos pasos tiene. El recorrido paso a paso se ve al entrar.
  */
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronRight, Eye, Filter, Pencil } from "lucide-react";
+import { ChevronRight, Filter } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { formatNumero, formatPorcentaje } from "@/shared/lib/numero";
 import { listarEmbudos, type EmbudoConPasos } from "../../actions/embudos-actions";
 
-const ESTADO_LABEL: Record<string, string> = {
-  BORRADOR: "Borrador",
-  PUBLICADA: "Publicada",
-  ARCHIVADA: "Archivada",
-};
-
 export function EmbudosPanel({ recargar }: { recargar?: number }) {
+  const router = useRouter();
   const [embudos, setEmbudos] = useState<EmbudoConPasos[]>([]);
 
   const cargar = useCallback(async () => {
@@ -38,69 +31,80 @@ export function EmbudosPanel({ recargar }: { recargar?: number }) {
   if (embudos.length === 0) return null;
 
   return (
-    <div className="space-y-3">
-      {embudos.map((embudo) => (
-        <Card key={embudo.id} className="p-4">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold">{embudo.nombre}</h2>
-            <span className="text-xs text-muted-foreground">
-              {embudo.pasos.length} {embudo.pasos.length === 1 ? "paso" : "pasos"}
-            </span>
-          </div>
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {embudos.map((embudo) => {
+        const entran = embudo.pasos[0]?.visitas ?? 0;
+        const final = embudo.pasos[embudo.pasos.length - 1]?.visitas ?? 0;
+        const conversion = entran > 0 ? (final / entran) * 100 : null;
+        const publicados = embudo.pasos.filter((p) => p.estado === "PUBLICADA").length;
 
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch">
-            {embudo.pasos.map((paso, i) => (
-              <div key={paso.id} className="flex items-center gap-2 lg:flex-1">
-                <div className="min-w-0 flex-1 rounded-lg border p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium" title={paso.nombre}>
-                        {paso.nombre}
-                      </p>
-                      <p className="truncate font-mono text-[11px] text-muted-foreground">
-                        /{paso.slug_interno}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={paso.estado === "PUBLICADA" ? "secondary" : "outline"}
-                      className="shrink-0 font-normal"
-                    >
-                      {ESTADO_LABEL[paso.estado] ?? paso.estado}
-                    </Badge>
-                  </div>
-
-                  <div className="mt-2 flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title="Ver la página"
-                      onClick={() =>
-                        window.open(`/pagina-web-preview/${paso.id}`, "_blank", "noopener,noreferrer")
-                      }
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
-                    <Link href={`/marketing/pagina-web/${paso.id}`}>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Abrir">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    </Link>
-                    {paso.replica_origen_url && (
-                      <span className="ml-auto text-[10px] text-muted-foreground">Copia</span>
-                    )}
-                  </div>
-                </div>
-
-                {i < embudo.pasos.length - 1 && (
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                )}
+        return (
+          <Card
+            key={embudo.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => router.push(`/marketing/pagina-web/embudo/${embudo.id}`)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                router.push(`/marketing/pagina-web/embudo/${embudo.id}`);
+              }
+            }}
+            className="cursor-pointer p-4 transition-colors hover:border-foreground/25 hover:bg-muted/40"
+          >
+            <div className="flex items-start gap-2">
+              <Filter className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium" title={embudo.nombre}>
+                  {embudo.nombre}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {embudo.pasos.length} {embudo.pasos.length === 1 ? "paso" : "pasos"}
+                  {publicados > 0 ? ` · ${publicados} en directo` : " · sin publicar"}
+                </p>
               </div>
-            ))}
-          </div>
-        </Card>
-      ))}
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </div>
+
+            <div className="mt-3 flex items-end gap-5">
+              <Dato etiqueta="Entran" valor={formatNumero(entran)} />
+              <Dato etiqueta="Al final" valor={formatNumero(final)} />
+              <Dato
+                etiqueta="Convierte"
+                valor={conversion === null ? "—" : formatPorcentaje(conversion, { max: 1 })}
+              />
+            </div>
+
+            {/* El recorrido, en pequeño: cada barra es un paso y su altura, su gente. */}
+            <div className="mt-3 flex items-end gap-1">
+              {embudo.pasos.map((p) => {
+                const alto = entran > 0 ? Math.max(8, (p.visitas / entran) * 100) : 8;
+                return (
+                  <div
+                    key={p.id}
+                    className="h-10 flex-1 rounded-sm bg-muted"
+                    title={`${p.nombre}: ${formatNumero(p.visitas)}`}
+                  >
+                    <div
+                      className="w-full rounded-sm bg-primary/70"
+                      style={{ height: `${alto}%`, marginTop: `${100 - alto}%` }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{etiqueta}</p>
+      <p className="text-base font-semibold tabular-nums leading-tight">{valor}</p>
     </div>
   );
 }
