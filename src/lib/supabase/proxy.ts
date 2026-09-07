@@ -72,7 +72,13 @@ const PUBLIC_PREFIXES = ['/carta', '/sitio-publico', '/api/google/connect', '/ap
   // `/software/legal/...`, pero el proxy ve la ruta ORIGINAL: sin esta entrada
   // las mandaría al login y el revisor de Google se encontraría la pantalla de
   // acceso en vez de la política de privacidad.
-  '/legal']
+  '/legal',
+  // Concurso mensual de las campañas de email y baja de esos correos. Los abre
+  // un cliente del restaurante desde su correo, sin cuenta en el sistema: si
+  // pidieran login, el enlace del correo llevaría a la pantalla de acceso de un
+  // software de gestión que esa persona no conoce.
+  '/concurso',
+  '/baja']
 
 /**
  * Rutas que en el dominio de un cliente se sirven TAL CUAL, sin mandarlas al
@@ -89,6 +95,8 @@ const RUTAS_PUBLICAS_EN_DOMINIO_CLIENTE = [
   '/empleo',
   '/reservar',
   '/ticket',
+  '/concurso',
+  '/baja',
   '/formacion',
   '/documentacion',
   '/firmar',

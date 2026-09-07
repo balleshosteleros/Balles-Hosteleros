@@ -71,6 +71,13 @@ export interface CampanaEmail extends CamposComunesPRP046 {
   remitenteNombre: string;
   remitenteEmail: string;
   cuerpoHtml: string;
+  /**
+   * Mes del calendario anual del que salió esta campaña (OCTUBRE_HALLOWEEN), o
+   * `null` si es una campaña suelta. Es lo que ata el correo con su concurso.
+   */
+  claveSeed: string | null;
+  /** 1-12. Solo en las campañas del calendario anual. */
+  mes: number | null;
   segmento: string; // legacy string (compat con UI previa)
   fechaEnvio: string | null;
   estado: EstadoCampana;
@@ -225,6 +232,10 @@ export function crearCampanaEmailVacia(empresaId: string): CampanaEmail {
     remitenteNombre: "",
     remitenteEmail: "",
     cuerpoHtml: "",
+    // Una campaña creada a mano no pertenece al calendario anual ni, por tanto,
+    // a ningún concurso: eso solo lo trae el seed.
+    claveSeed: null,
+    mes: null,
     segmento: "todos",
     fechaEnvio: null,
     estado: "borrador",

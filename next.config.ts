@@ -68,6 +68,12 @@ const PORTALES = [
   { ruta: 'empleo', campo: 'empleo_slug', ficha: true },
   { ruta: 'reservar', campo: 'slug' },
   { ruta: 'ticket', campo: 'slug' },
+  // Concurso mensual de las campañas de email: la ficha es la clave del mes
+  // (`/concurso/octubre_halloween`). Va en el dominio del restaurante porque el
+  // enlace lo abre su cliente, y ahí no pinta nada la marca de la gestora.
+  { ruta: 'concurso', campo: 'slug', ficha: true },
+  // Baja de los correos comerciales: la ficha es el token firmado del cliente.
+  { ruta: 'baja', campo: 'slug', ficha: true },
 ] as const
 
 async function portalesSinSlug() {
@@ -288,7 +294,7 @@ const nextConfig: NextConfig = {
             // software, no páginas del CMS. Los sirve `portalesSinSlug()` justo
             // arriba, que les pone el slug de la empresa dueña del dominio.
             source:
-              '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap|carta|reservar|empleo|ticket)[^/.]+)',
+              '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap|carta|reservar|empleo|ticket|concurso|baja)[^/.]+)',
             has: [{ type: 'host' as const, value: host }],
             destination: '/sitio-publico/:ruta',
           },

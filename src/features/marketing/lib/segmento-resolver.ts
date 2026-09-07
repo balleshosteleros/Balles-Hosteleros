@@ -111,3 +111,65 @@ export async function clienteIdsDelSegmento(
   if (error) throw error;
   return (data ?? []) as Array<{ id: string; email: string | null; telefono: string | null }>;
 }
+
+/**
+ * Destinatarios REALES de una campaña de email.
+ *
+ * Tres cosas que `clienteIdsDelSegmento` no hace y aquí son obligatorias:
+ *
+ *  1. **Consentimiento.** Solo entra quien marcó que se le puede escribir
+ *     (`acepta_marketing_email`). Tener el correo de alguien porque reservó una
+ *     vez no da derecho a mandarle publicidad.
+ *  2. **Paginado.** PostgREST corta en 1.000 filas. Sin paginar, una campaña a
+ *     seis mil clientes salía a mil y parecía enviada entera.
+ *  3. **Sin duplicados.** El mismo correo en dos fichas —pasa: el cliente
+ *     reservó con dos teléfonos— recibiría el correo dos veces.
+ */
+export async function destinatariosDeCampana(
+  supabase: SupabaseClient,
+  empresaId: string,
+  segmento: SegmentoJson,
+): Promise<Array<{ id: string; email: string }>> {
+  const PAGINA = 1000;
+  const salida: Array<{ id: string; email: string }> = [];
+  const vistos = new Set<string>();
+
+  for (let desde = 0; ; desde += PAGINA) {
+    const base = supabase
+      .from("clientes_sala")
+      .select("id, email")
+      .eq("empresa_id", empresaId)
+      .eq("acepta_marketing_email", true)
+      .not("email", "is", null)
+      .order("id")
+      .range(desde, desde + PAGINA - 1) as unknown as FB;
+
+    let q: FB;
+    if (!segmento.condiciones.length) {
+      q = base;
+    } else if (segmento.operador === "AND") {
+      q = aplicarAnd(base, segmento.condiciones);
+    } else {
+      const ors = segmento.condiciones.map(condicionAOrString).filter(Boolean) as string[];
+      q = ors.length ? base.or(ors.join(",")) : base;
+    }
+
+    const { data, error } = await (q as unknown as PromiseLike<{
+      data: Array<{ id: string; email: string | null }> | null;
+      error: unknown;
+    }>);
+    if (error) throw error;
+
+    const lote = data ?? [];
+    for (const c of lote) {
+      const email = (c.email ?? "").trim().toLowerCase();
+      if (!email || vistos.has(email)) continue;
+      vistos.add(email);
+      salida.push({ id: c.id, email });
+    }
+
+    if (lote.length < PAGINA) break;
+  }
+
+  return salida;
+}

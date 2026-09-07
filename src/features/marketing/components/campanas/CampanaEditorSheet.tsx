@@ -14,7 +14,8 @@ import { listReservaLinks, createReservaLink } from "@/features/sala/actions/res
 import { validarPalabraClave, type ReservaLink } from "@/features/sala/data/reserva-links";
 import type { Campana, RecurrenciaCampana } from "@/features/marketing/data/campanas";
 import { EditorSegmento } from "./editor/EditorSegmento";
-import { enviarCampanaDemoAction } from "@/features/marketing/actions/envios-actions";
+import { enviarCampanaDemoAction, contarDestinatariosAction } from "@/features/marketing/actions/envios-actions";
+import { enviarEmailAction } from "@/features/marketing/actions/campanas-actions";
 import { previewSegmentoAction } from "@/features/marketing/actions/segmento-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
@@ -45,6 +46,11 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
   const [nuevoLink, setNuevoLink] = useState("");
   const [creandoLink, setCreandoLink] = useState(false);
   const [coincidencias, setCoincidencias] = useState<number | null>(null);
+  // Cuántos lo recibirían de verdad: los del segmento que ADEMÁS dieron
+  // permiso. Es siempre menor que las coincidencias, y es el número real.
+  const [destinatarios, setDestinatarios] = useState<number | null>(null);
+  const [enviandoReal, startEnviarReal] = useTransition();
+  const { confirm: confirmEnvio, dialog: confirmEnvioDialog } = useConfirmDelete();
   const { confirm: confirmDemo, dialog: confirmDemoDialog } = useConfirmDelete();
 
   useEffect(() => { setDraft(campana); }, [campana]);
@@ -62,6 +68,14 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
     }, 400);
     return () => clearTimeout(handle);
   }, [draft.segmentoJson, open]);
+
+  useEffect(() => {
+    if (!open || draft.canal !== "email" || draft.id.length !== 36) {
+      setDestinatarios(null);
+      return;
+    }
+    contarDestinatariosAction(draft.id).then((r) => setDestinatarios(r.ok ? r.total : null));
+  }, [open, draft.id, draft.canal]);
 
   const recurrencia = useMemo(() => cronARecurrencia(draft.recurrenciaCron), [draft.recurrenciaCron]);
 
@@ -157,11 +171,51 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
     });
   }
 
+  /**
+   * Envío DE VERDAD. Pide confirmación con el número de personas delante: es
+   * irreversible y, en el calendario anual, además abre el concurso del mes.
+   */
+  async function onEnviarReal() {
+    if (draft.canal !== "email") return;
+    const total = destinatarios ?? 0;
+    if (!total) {
+      toast.error("No hay nadie a quien enviar: ningún cliente del segmento ha dado permiso");
+      return;
+    }
+    const ok = await confirmEnvio({
+      title: `Enviar a ${total.toLocaleString("es-ES")} clientes`,
+      description: draft.claveSeed
+        ? "Los correos salen ahora y el concurso del mes queda abierto en ese momento. No se puede deshacer."
+        : "Los correos salen ahora. No se puede deshacer.",
+      confirmLabel: "Enviar",
+    });
+    if (!ok) return;
+
+    startEnviarReal(async () => {
+      const guardada = await guardarCampanaAction(draft);
+      if (!guardada.ok || !guardada.data) {
+        toast.error(guardada.error ?? "Error al guardar");
+        return;
+      }
+      const r = await enviarEmailAction(guardada.data as typeof draft & { canal: "email" });
+      if (!r.success) {
+        toast.error(r.error ?? "No se pudo enviar");
+        return;
+      }
+      toast.success(
+        `${(r.enviados ?? 0).toLocaleString("es-ES")} correos enviados` +
+          (r.fallidos ? ` · ${r.fallidos} fallaron` : ""),
+      );
+      onGuardada();
+    });
+  }
+
   const linkActivo = links.find((l) => l.id === draft.reservaLinkId);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       {confirmDemoDialog}
+      {confirmEnvioDialog}
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
@@ -203,6 +257,23 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
             <div>
               <Label htmlFor="plantilla">Plantilla WhatsApp (nombre aprobado)</Label>
               <Input id="plantilla" value={draft.plantilla} onChange={(e) => updateDraft({ plantilla: e.target.value } as Partial<Campana>)} placeholder="reactivacion_es" />
+            </div>
+          )}
+
+          {/* Vista previa: los correos del calendario anual son un documento
+              HTML entero, y en un cuadro de texto solo se ve código. Aquí se ve
+              tal cual le llega al cliente. */}
+          {draft.canal === "email" && mensaje.trim().startsWith("<!doctype") && (
+            <div>
+              <Label>Así le llega al cliente</Label>
+              <div className="mt-1 rounded-lg border overflow-hidden bg-white">
+                <iframe
+                  title="Vista previa del correo"
+                  srcDoc={mensaje}
+                  sandbox=""
+                  className="w-full h-[520px] border-0"
+                />
+              </div>
             </div>
           )}
 
@@ -285,13 +356,30 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
             {guardando ? "Guardando..." : "Guardar"}
           </Button>
           <Button
+            variant="outline"
             onClick={onEnviarDemo}
             disabled={!validacion.ok || enviando}
             title={validacion.ok ? "Registrar envío demo" : validacion.msg ?? ""}
           >
             <Send className="h-4 w-4 mr-1" />
-            {enviando ? "Enviando..." : `Enviar (demo) — ${coincidencias ?? 0}`}
+            {enviando ? "Enviando..." : `Probar (demo) — ${coincidencias ?? 0}`}
           </Button>
+          {draft.canal === "email" && (
+            <Button
+              onClick={onEnviarReal}
+              disabled={!validacion.ok || enviandoReal || !destinatarios}
+              title={
+                destinatarios
+                  ? `Enviar de verdad a ${destinatarios} clientes con permiso`
+                  : "Guarda la campaña para saber a cuántos se enviaría"
+              }
+            >
+              <Send className="h-4 w-4 mr-1" />
+              {enviandoReal
+                ? "Enviando..."
+                : `Enviar — ${(destinatarios ?? 0).toLocaleString("es-ES")}`}
+            </Button>
+          )}
         </SheetFooter>
       </SheetContent>
     </Sheet>

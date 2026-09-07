@@ -9,6 +9,8 @@ import {
   isMetaConfigured,
 } from "@/features/marketing/services/meta-ads-service";
 import { sendEmailCampana, isResendConfigured } from "@/features/marketing/services/resend-service";
+import { abrirEdicion } from "@/features/marketing/services/concurso";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sendWhatsAppCampana, isWhatsAppConfigured } from "@/features/marketing/services/whatsapp-service";
 import type {
   Campana,
@@ -53,6 +55,8 @@ function rowToCampana(row: Row): Campana {
       remitenteNombre: (payload.remitenteNombre as string) ?? "",
       remitenteEmail: (payload.remitenteEmail as string) ?? "",
       cuerpoHtml: (payload.cuerpoHtml as string) ?? "",
+      claveSeed: (payload.claveSeed as string | null) ?? null,
+      mes: payload.mes == null ? null : Number(payload.mes),
       segmento: (row.segmento as string) ?? "todos",
       fechaEnvio: (row.fecha_envio as string | null) ?? null,
     } as CampanaEmail;
@@ -132,6 +136,10 @@ function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
         remitenteNombre: c.remitenteNombre,
         remitenteEmail: c.remitenteEmail,
         cuerpoHtml: c.cuerpoHtml,
+        // Se reescriben al guardar: si se perdieran, la campaña dejaría de
+        // saber a qué concurso pertenece y el enlace del correo no abriría nada.
+        claveSeed: c.claveSeed,
+        mes: c.mes,
       },
     };
   }
@@ -264,13 +272,42 @@ export async function verificarIntegracionesAction() {
 }
 
 export async function enviarEmailAction(campana: CampanaEmail) {
-  const { empresaId } = await getMarketingContext();
+  const { supabase, empresaId } = await getMarketingContext();
   if (!empresaId) return { success: false, error: "Sin empresa" };
   if (campana.empresaId !== empresaId) {
     return { success: false, error: "Empresa no autorizada" };
   }
+
+  // Las campañas del calendario anual llevan dentro el concurso del mes. La
+  // edición se abre AQUÍ, en el mismo acto de enviar: antes no, porque quien
+  // adivinara la dirección jugaría sin haber recibido el correo y se llevaría
+  // los tres premios; después tampoco, porque el primero en abrir el correo se
+  // encontraría el concurso cerrado.
+  const claveSeed = campana.claveSeed;
+  if (claveSeed && campana.mes) {
+    const admin = createAdminClient();
+    const abierta = await abrirEdicion(admin, empresaId, claveSeed, campana.mes);
+    if (!abierta.ok) {
+      return {
+        success: false,
+        error: `No se puede enviar: el concurso del mes no ha podido abrirse (${abierta.error})`,
+      };
+    }
+  }
+
   const result = await sendEmailCampana(campana);
-  if (result.success) revalidatePath("/marketing/campanas");
+  if (result.success) {
+    await supabase
+      .from("campanas_marketing")
+      .update({
+        estado: "finalizada",
+        ultima_ejecucion: new Date().toISOString(),
+        fecha_envio: new Date().toISOString(),
+      })
+      .eq("id", campana.id)
+      .eq("empresa_id", empresaId);
+    revalidatePath("/marketing/campanas");
+  }
   return result;
 }
 

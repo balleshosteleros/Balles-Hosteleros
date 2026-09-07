@@ -13,6 +13,7 @@ import { crearCampanaEmailVacia, crearCampanaWhatsAppVacia, crearCampanaSmsVacia
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { listarCampanasConAtribucionAction, type CampanaAtribucionRow } from "@/features/marketing/actions/atribucion-actions";
+import { listCampanasAction } from "@/features/marketing/actions/campanas-actions";
 import { CampanaEditorSheet } from "./CampanaEditorSheet";
 
 interface Props {
@@ -73,6 +74,25 @@ export function CampanasListadoView({ canal }: Props) {
   const [busqueda, setBusqueda] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorCampana, setEditorCampana] = useState<Campana | null>(null);
+  const [abriendo, setAbriendo] = useState<string | null>(null);
+
+  /**
+   * Abre una campaña ya creada. La tabla solo trae el resumen (nombre, envíos,
+   * aperturas); para editarla o enviarla hace falta la campaña entera, con su
+   * cuerpo y su segmento.
+   */
+  async function abrirCampana(campanaId: string) {
+    setAbriendo(campanaId);
+    const r = await listCampanasAction();
+    setAbriendo(null);
+    const campana = r.ok ? r.data.find((c) => c.id === campanaId) : undefined;
+    if (!campana) {
+      toast.error("No se ha podido abrir la campaña");
+      return;
+    }
+    setEditorCampana(campana);
+    setEditorOpen(true);
+  }
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({
     nombre: true, enviados: true, abiertos: true, tasaApertura: true, reservasGeneradas: true, estado: true, ultimaEjecucion: true,
   });
@@ -175,7 +195,11 @@ export function CampanasListadoView({ canal }: Props) {
               {!loading && filtrados.map((r) => {
                 const tasa = r.enviados > 0 ? Math.round((r.abiertos / r.enviados) * 100) : null;
                 return (
-                  <tr key={r.campanaId} className="border-b last:border-b-0 hover:bg-muted/20">
+                  <tr
+                    key={r.campanaId}
+                    onClick={() => abrirCampana(r.campanaId)}
+                    className="border-b last:border-b-0 hover:bg-muted/20 cursor-pointer"
+                  >
                     {ordenVisible.includes("nombre") && (
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
@@ -188,6 +212,9 @@ export function CampanasListadoView({ canal }: Props) {
                           )}
                           {r.demoMode && (
                             <span className="text-[10px] uppercase font-semibold text-amber-600 dark:text-amber-400">demo</span>
+                          )}
+                          {abriendo === r.campanaId && (
+                            <span className="text-[10px] text-muted-foreground">abriendo…</span>
                           )}
                         </div>
                       </td>
