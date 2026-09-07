@@ -4,7 +4,9 @@
  * paginas_web_versiones y leads_web.
  */
 
-export type PaginaWebTipo = "WEB_PRINCIPAL" | "ONE_PAGE";
+/** `EMBUDO_PASO`: un paso de embudo. No es una web: no lleva menú ni
+ * navegación, y cada paso tiene un único objetivo (PRP-088). */
+export type PaginaWebTipo = "WEB_PRINCIPAL" | "ONE_PAGE" | "EMBUDO_PASO";
 export type PaginaWebEstado = "BORRADOR" | "PUBLICADA" | "ARCHIVADA";
 export type DominioEstado = "PENDIENTE_DNS" | "VERIFICADO" | "ERROR";
 
@@ -323,10 +325,31 @@ export interface PaginaWeb {
    */
   legal_tipo: "privacidad" | "aviso_legal" | "cookies" | null;
   legal_generada_at: string | null;
+  /**
+   * PRP-088 — Copia fiel de una web externa, con las rutas ya apuntando a R2.
+   * Si tiene contenido, el sitio público sirve ESTE html y no los bloques.
+   */
+  /** No viaja en las consultas normales: pesa cientos de KB (ver COLUMNAS_PAGINA). */
+  html_replica?: string | null;
+  replica_origen_url: string | null;
+  replica_capturada_at: string | null;
+  replica_assets?: Array<{ clave: string; tipo: string; bytes: number }> | null;
+  /** Embudo al que pertenece el paso, y su posición dentro de él. */
+  embudo_id: string | null;
+  embudo_orden: number | null;
   publicada_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** PRP-088 — Agrupa los pasos de un embudo (Registro → VSL → Agendar → …). */
+export interface PaginaWebEmbudo {
+  id: string;
+  empresa_id: string;
+  nombre: string;
+  origen_url: string | null;
+  created_at: string;
 }
 
 export interface PaginaWebDominio {

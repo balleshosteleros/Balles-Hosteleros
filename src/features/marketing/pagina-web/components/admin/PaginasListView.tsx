@@ -14,6 +14,7 @@ import {
   Settings,
   FileText,
   Lock,
+  Filter,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { listarPaginas, borrarPagina } from "../../actions/paginas-actions";
 import { NuevaPaginaModal } from "./NuevaPaginaModal";
+import { EmbudosPanel } from "./EmbudosPanel";
 import { GenerarLegalesDialog } from "./GenerarLegalesDialog";
 import { PaginaEstadisticasDialog } from "./PaginaEstadisticasDialog";
 import type { PaginaWeb, PaginaWebEstado } from "../../types";
@@ -65,6 +67,12 @@ const ESTADO_COLOR: Record<PaginaWebEstado, string> = {
   BORRADOR: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   PUBLICADA: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
   ARCHIVADA: "bg-muted text-muted-foreground",
+};
+
+const ETIQUETA_TIPO: Record<string, string> = {
+  WEB_PRINCIPAL: "Web principal",
+  ONE_PAGE: "One-page",
+  EMBUDO_PASO: "Paso de embudo",
 };
 
 export function PaginasListView() {
@@ -113,7 +121,7 @@ export function PaginasListView() {
 
   const acceso = (p: PaginaWeb, campo: string): unknown => {
     if (campo === "estado") return ESTADO_LABEL[p.estado];
-    if (campo === "tipo") return p.tipo === "WEB_PRINCIPAL" ? "Web principal" : "One-page";
+    if (campo === "tipo") return ETIQUETA_TIPO[p.tipo];
     if (campo === "nombre") return p.nombre;
     if (campo === "updated_at") return p.updated_at;
     return (p as unknown as Record<string, unknown>)[campo];
@@ -121,6 +129,9 @@ export function PaginasListView() {
 
   const filtered = useMemo(() => {
     let r = items.filter((p) => {
+      // Los pasos de un embudo ya se ven arriba, en su orden: repetirlos aquí
+      // sueltos solo confunde.
+      if (p.embudo_id) return false;
       if (!search) return true;
       const s = search.toLowerCase();
       return p.nombre.toLowerCase().includes(s) || p.slug_interno.includes(s);
@@ -178,6 +189,10 @@ export function PaginasListView() {
             {p.tipo === "WEB_PRINCIPAL" ? (
               <>
                 <Globe className="h-3 w-3 mr-1" /> Web principal
+              </>
+            ) : p.tipo === "EMBUDO_PASO" ? (
+              <>
+                <Filter className="h-3 w-3 mr-1" /> Paso de embudo
               </>
             ) : (
               <>
@@ -269,6 +284,10 @@ export function PaginasListView() {
           </>
         }
       />
+
+      {/* Los embudos, con sus pasos en orden. Sueltos en la tabla no se
+          entienden: de un embudo importa por dónde se entra y qué va después. */}
+      <EmbudosPanel recargar={items.length} />
 
       {/* Tabla */}
       <Card>

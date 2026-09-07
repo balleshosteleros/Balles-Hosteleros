@@ -24,6 +24,16 @@ function slugify(raw: string): string {
     .slice(0, 60);
 }
 
+/**
+ * Columnas de una página SIN `html_replica`.
+ *
+ * Una copia fiel ocupa cientos de KB de html (PRP-088). Con `select("*")` la
+ * lista de páginas se traía todas esas copias enteras para no enseñar ninguna.
+ * El html solo lo lee quien lo sirve.
+ */
+const COLUMNAS_PAGINA =
+  "id, empresa_id, tipo, nombre, slug_interno, bloques, branding, seo, estado, legal_tipo, legal_generada_at, publicada_at, created_by, created_at, updated_at, replica_origen_url, replica_capturada_at, embudo_id, embudo_orden";
+
 function revalidar() {
   revalidatePath("/marketing/pagina-web");
 }
@@ -35,7 +45,7 @@ export async function listarPaginas(): Promise<ActionResult<PaginaWeb[]>> {
 
     const { data, error } = await supabase
       .from("paginas_web")
-      .select("*")
+      .select(COLUMNAS_PAGINA)
       .eq("empresa_id", empresaId)
       .order("updated_at", { ascending: false });
 
@@ -57,7 +67,7 @@ export async function obtenerPagina(id: string): Promise<ActionResult<PaginaWeb>
 
     const { data, error } = await supabase
       .from("paginas_web")
-      .select("*")
+      .select(COLUMNAS_PAGINA)
       .eq("id", id)
       .eq("empresa_id", empresaId)
       .maybeSingle();

@@ -168,6 +168,77 @@ async function portalesSinSlug() {
 }
 
 /**
+ * PRP-088 — Páginas CLONADAS de otra web: se sirven como documento propio.
+ *
+ * Una copia trae su CSS entero; si se metiera en el sitio público normal, los
+ * estilos globales de la app (el reset de Tailwind) la cambiarían y dejaría de
+ * ser idéntica. Estos rewrites mandan la dirección real del cliente
+ * (`sudominio.com/vsl`) a la ruta que devuelve el documento tal cual.
+ *
+ * Igual que `portalesSinSlug()`, se calcula al arrancar: una copia recién
+ * publicada necesita un despliegue para quedar servida.
+ */
+async function replicasComoRutas() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return []
+
+  try {
+    const { createClient } = await import('@supabase/supabase-js')
+    const db = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+
+    const { data: replicas } = await db
+      .from('paginas_web')
+      .select('id, empresa_id, slug_interno')
+      .eq('estado', 'PUBLICADA')
+      .not('html_replica', 'is', null)
+    if (!replicas?.length) return []
+
+    const { data: doms } = await db
+      .from('paginas_web_dominios')
+      .select('hostname, pagina_id')
+      .eq('estado', 'VERIFICADO')
+    if (!doms?.length) return []
+
+    // El dominio cuelga de UNA página (la portada); de ahí se saca su empresa,
+    // que es la que manda: un dominio nunca puede servir copias de otra.
+    const { data: portadas } = await db
+      .from('paginas_web')
+      .select('id, empresa_id')
+      .in('id', [...new Set(doms.map((d) => d.pagina_id))])
+    const empresaDePortada = new Map((portadas ?? []).map((p) => [p.id, p.empresa_id]))
+
+    const reglas: Array<{
+      source: string
+      has: Array<{ type: 'host'; value: string }>
+      destination: string
+    }> = []
+
+    for (const dom of doms) {
+      const empresaId = empresaDePortada.get(dom.pagina_id)
+      if (!empresaId) continue
+      for (const rep of replicas) {
+        if (rep.empresa_id !== empresaId) continue
+        // La copia que ES la portada del dominio responde en la raíz.
+        const source = rep.id === dom.pagina_id ? '/' : `/${rep.slug_interno}`
+        reglas.push({
+          source,
+          has: [{ type: 'host', value: dom.hostname }],
+          destination: `/api/replica/${rep.id}`,
+        })
+      }
+    }
+
+    return reglas
+  } catch (err) {
+    console.error('[next.config] replicasComoRutas:', err)
+    return []
+  }
+}
+
+/**
  * Subdominios del software que sirven la web de un cliente, con el dominio
  * propio al que hay que mandarlos.
  *
@@ -283,6 +354,9 @@ const nextConfig: NextConfig = {
         // su nombre: `bacanalmadrid.com/carta` en vez de `.../carta/bacanal`.
         // Esa es la URL que acaba impresa en el QR de la mesa.
         ...(await portalesSinSlug()),
+        // Las copias fieles van ANTES del rewrite genérico a `/sitio-publico`:
+        // si no, la página de bloques ganaría y la copia no se vería nunca.
+        ...(await replicasComoRutas()),
         ...PREVIEW_WEB_HOSTS.flatMap((host) => [
           {
             source: '/',

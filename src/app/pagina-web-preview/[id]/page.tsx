@@ -31,6 +31,20 @@ export default async function PaginaPreviewPage({ params }: Props) {
     );
   }
 
+  // Una página CLONADA no son bloques: es un documento entero con su propio
+  // CSS. Se enseña tal cual, en un marco a pantalla completa, porque montarlo
+  // dentro de la app le aplicaría los estilos globales y dejaría de verse como
+  // la web de verdad (PRP-088).
+  if (res.data.replica_origen_url) {
+    return (
+      <iframe
+        src={`/api/replica/${id}/preview`}
+        title={res.data.nombre}
+        className="h-screen w-screen border-0"
+      />
+    );
+  }
+
   // El slug hace falta para que el bloque de reservas monte el motor propio
   // (/reservar/[slug]/embed) también dentro de la vista previa.
   const admin = createAdminClient();

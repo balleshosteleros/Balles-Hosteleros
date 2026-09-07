@@ -208,6 +208,7 @@ export const juridicoSubs: SubItem[] = [
 // features/auth/lib/permisos.ts.
 export const productoSubs: SubItem[] = [
   { title: "CLIENTES", url: "/producto/clientes", icon: Contact },
+  { title: "CITAS", url: "/producto/citas", icon: CalendarClock },
   { title: "ESCUELA", url: "/producto/escuela", icon: GraduationCap },
 ];
 
