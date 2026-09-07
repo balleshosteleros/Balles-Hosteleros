@@ -22,6 +22,7 @@
 import { useState } from "react";
 import { Check, Gift, Loader2 } from "lucide-react";
 import { suscribirSorteo } from "@/features/marketing/actions/sorteo-publico-actions";
+import { SelectorFecha } from "@/shared/components/ui/selector-fecha";
 
 export interface SorteoMensualProps {
   empresaSlug: string;
@@ -178,19 +179,35 @@ export function SorteoMensual({
                 >
                   {c.label}
                 </label>
-                <input
-                  id={`sorteo-${c.id}`}
-                  type={c.tipo}
-                  autoComplete={c.auto}
-                  value={datos[c.id]}
-                  max={
-                    c.tipo === "date"
-                      ? new Date().toISOString().slice(0, 10)
-                      : undefined
-                  }
-                  onChange={(e) => setDatos({ ...datos, [c.id]: e.target.value })}
-                  className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-slate-900"
-                />
+                {c.tipo === "date" ? (
+                  /* Calendario PROPIO, nunca el del navegador: ese sale con la
+                     pinta y el idioma de cada equipo, y en una web de marca se
+                     nota. Este va siempre igual, en español, en día/mes/año y
+                     con el color del restaurante en el día elegido. */
+                  <SelectorFecha
+                    id={`sorteo-${c.id}`}
+                    value={datos[c.id]}
+                    onChange={(v) => setDatos({ ...datos, [c.id]: v })}
+                    max={new Date().toISOString().slice(0, 10)}
+                    // Sin esto el calendario abre por el mes actual y deja a
+                    // quien busca su año de nacimiento a decenas de clics.
+                    mesPorDefecto="1990-01-01"
+                    colorMarca={marca}
+                    className="h-11 w-full rounded-lg border-slate-300 bg-white text-sm text-slate-900"
+                    aria-label={c.label}
+                  />
+                ) : (
+                  <input
+                    id={`sorteo-${c.id}`}
+                    type={c.tipo}
+                    autoComplete={c.auto}
+                    value={datos[c.id]}
+                    onChange={(e) =>
+                      setDatos({ ...datos, [c.id]: e.target.value })
+                    }
+                    className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-slate-900"
+                  />
+                )}
               </div>
             ))}
           </div>
