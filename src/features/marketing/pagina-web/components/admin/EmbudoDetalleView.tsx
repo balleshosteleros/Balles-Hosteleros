@@ -1,17 +1,17 @@
 "use client";
 
 /**
- * Un embudo, de izquierda a derecha (PRP-088).
+ * Un embudo, de arriba abajo (PRP-088).
  *
  * Un embudo se entiende viendo por dónde entra la gente, cuánta llega a cada
- * paso y dónde se cae. Por eso los pasos van en fila, con sus visitas, el
- * porcentaje que sigue respecto al paso anterior y una barra que se estrecha:
- * el hueco entre barras ES la gente que se ha perdido.
+ * paso y dónde se cae. Los pasos van en columna y cada uno lleva una barra
+ * centrada cuyo ancho es su gente: al bajar se estrecha, y ese estrechamiento
+ * ES lo que se pierde por el camino.
  */
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, ChevronRight, Eye, Pencil, TrendingDown, Users } from "lucide-react";
+import { ArrowLeft, ChevronDown, Eye, Pencil, TrendingDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -91,84 +91,98 @@ export function EmbudoDetalleView({ embudoId }: { embudoId: string }) {
         />
       </div>
 
-      {/* Los pasos, en fila. En pantallas estrechas se desliza a lo ancho:
-          la página nunca se desplaza entera. */}
-      <div className="overflow-x-auto pb-2">
-        <div className="flex min-w-max items-stretch gap-2">
-          {embudo.pasos.map((paso, i) => {
-            return (
-              <div key={paso.id} className="flex items-center gap-2">
-                <Card className="flex w-64 flex-col p-4">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Paso {i + 1}
-                  </span>
-                  <p className="mt-0.5 truncate text-sm font-medium" title={paso.nombre}>
-                    {paso.nombre}
-                  </p>
-                  <p className="truncate font-mono text-[11px] text-muted-foreground">
-                    /{paso.slug_interno}
-                  </p>
+      {/* Los pasos, en columna: el embudo se lee de arriba abajo. */}
+      <div className="space-y-1">
+        {embudo.pasos.map((paso, i) => {
+          const anchoBarra = Math.max(6, (paso.visitas / masVisitado) * 100);
+          const sigue = porcentajeQueSigue(paso, embudo.pasos[i - 1]);
 
-                  <div className="mt-3 flex items-baseline gap-1.5">
-                    <span className="text-2xl font-semibold tabular-nums">
-                      {formatNumero(paso.visitas)}
-                    </span>
-                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    {formatNumero(paso.visitas30)} en los últimos 30 días
-                  </p>
-
-                  {/* La barra es el embudo: se estrecha con la gente que queda. */}
-                  <div className="mt-3 h-2 w-full rounded-full bg-muted">
-                    <div
-                      className="h-2 rounded-full bg-primary"
-                      style={{ width: `${Math.max(4, (paso.visitas / masVisitado) * 100)}%` }}
-                    />
-                  </div>
-
-                  <div className="mt-3 flex items-center gap-1">
-                    <Badge
-                      variant={paso.estado === "PUBLICADA" ? "secondary" : "outline"}
-                      className="font-normal"
-                    >
-                      {ESTADO_LABEL[paso.estado] ?? paso.estado}
-                    </Badge>
-                    <div className="ml-auto flex items-center">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        title="Ver la página"
-                        onClick={() =>
-                          window.open(`/pagina-web-preview/${paso.id}`, "_blank", "noopener,noreferrer")
-                        }
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                      </Button>
-                      <Link href={`/marketing/pagina-web/${paso.id}`}>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Abrir">
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </Card>
-
-                {i < embudo.pasos.length - 1 && (
-                  <div className="flex w-16 shrink-0 flex-col items-center justify-center text-muted-foreground">
-                    <ChevronRight className="h-5 w-5" />
-                    {porcentajeQueSigue(embudo.pasos[i + 1], paso) !== null && (
-                      <span className="mt-0.5 text-[11px] tabular-nums">
-                        {formatPorcentaje(porcentajeQueSigue(embudo.pasos[i + 1], paso) ?? 0, { max: 0 })}
+          return (
+            <div key={paso.id}>
+              {/* Entre paso y paso, cuánta gente sigue y cuánta se cae. */}
+              {i > 0 && (
+                <div className="flex items-center justify-center gap-2 py-1 text-xs text-muted-foreground">
+                  <ChevronDown className="h-4 w-4" />
+                  {sigue === null ? (
+                    <span>Sin datos todavía</span>
+                  ) : (
+                    <>
+                      <span className="tabular-nums font-medium text-foreground">
+                        {formatPorcentaje(sigue, { max: 0 })} sigue
                       </span>
-                    )}
+                      {sigue < 100 && (
+                        <span className="tabular-nums">
+                          · se caen {formatPorcentaje(100 - sigue, { max: 0 })}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              <Card className="p-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums">
+                    {i + 1}
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium" title={paso.nombre}>
+                      {paso.nombre}
+                    </p>
+                    <p className="truncate font-mono text-[11px] text-muted-foreground">
+                      /{paso.slug_interno}
+                    </p>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+
+                  <div className="text-right">
+                    <p className="text-xl font-semibold leading-tight tabular-nums">
+                      {formatNumero(paso.visitas)}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {formatNumero(paso.visitas30)} en 30 días
+                    </p>
+                  </div>
+
+                  <Badge
+                    variant={paso.estado === "PUBLICADA" ? "secondary" : "outline"}
+                    className="shrink-0 font-normal"
+                  >
+                    {ESTADO_LABEL[paso.estado] ?? paso.estado}
+                  </Badge>
+
+                  <div className="flex shrink-0 items-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Ver la página"
+                      onClick={() =>
+                        window.open(`/pagina-web-preview/${paso.id}`, "_blank", "noopener,noreferrer")
+                      }
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Link href={`/marketing/pagina-web/${paso.id}`}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Abrir">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+
+                {/* La barra, centrada: al bajar se estrecha. Eso es el embudo. */}
+                <div className="mt-3 flex justify-center">
+                  <div
+                    className="h-3 rounded-full bg-primary transition-all"
+                    style={{ width: `${anchoBarra}%` }}
+                    title={`${formatNumero(paso.visitas)} visitas`}
+                  />
+                </div>
+              </Card>
+            </div>
+          );
+        })}
       </div>
 
       {entradas === 0 && (
