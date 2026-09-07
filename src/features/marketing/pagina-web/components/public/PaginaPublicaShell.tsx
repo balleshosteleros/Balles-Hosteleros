@@ -5,11 +5,15 @@ import type { Bloque, BrandingSnapshot } from "../../types";
 import { BloquePublico } from "./BloquePublico";
 import { BannerCookies, EnlaceConfigurarCookies } from "./BannerCookies";
 import { MedidorWeb } from "./MedidorWeb";
+import { SorteoMensual } from "./SorteoMensual";
+import { premioMensualDe } from "@/features/marketing/data/premio-mensual";
 
 export interface PaginaContexto {
   empresaId: string | null;
   paginaId: string | null;
   empresaSlug?: string | null;
+  /** Nombre de la empresa. Decide qué se sortea: no es lo mismo en las dos casas. */
+  empresaNombre?: string | null;
   /** Isotipo de la empresa: marcador del mapa. */
   logoUrl?: string | null;
   /**
@@ -139,7 +143,7 @@ export function PaginaPublicaShell({
       (b) => b.tipo === "collage_carta" && b.visible && (b.datos.imagenes?.length ?? 0) > 0,
     ) || visible("menu");
   if (contexto?.empresaSlug && hayCarta) {
-    nav.push({ href: `/carta`, label: "Carta" });
+    nav.push({ href: `/carta?web=1`, label: "Carta" });
   }
   if (visible("mapa")) nav.push({ href: "#mapa", label: "Ubicación" });
   if (visible("footer")) nav.push({ href: "#contacto", label: "Contacto" });
@@ -172,6 +176,16 @@ export function PaginaPublicaShell({
           <BloquePublico key={b.id} bloque={b} contexto={contexto} />
         ))}
       </main>
+      {/* El sorteo del mes va DESPUÉS de todo el contenido y antes de lo legal:
+          quien llega hasta aquí ya ha visto la carta y las fotos, y es el
+          momento en que se le puede pedir algo. Arriba estorbaría. */}
+      {contexto?.empresaSlug ? (
+        <SorteoMensual
+          empresaSlug={contexto.empresaSlug}
+          premio={premioMensualDe(contexto.empresaNombre).plural}
+          color={primario}
+        />
+      ) : null}
       <PieLegal redes={contexto?.redes ?? null} textoLegal={textoLegal} />
       <BotonWhatsApp url={contexto?.redes?.whatsapp ?? null} />
       <BannerCookies hrefPolitica={hrefPoliticaCookies} />
