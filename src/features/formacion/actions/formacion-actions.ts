@@ -275,7 +275,11 @@ export async function getFormacionData(): Promise<{ ok: boolean; data: Formacion
     if (!empresaId) return { ok: true, data: vacio };
 
     const [cursosR, seccionesR, leccionesR, novedadesR, puestosR, progresoR] = await Promise.all([
-      supabase.from("formacion_cursos").select("*").eq("empresa_id", empresaId),
+      // Los cursos de LA ESCUELA (portal de alumnos de la empresa matriz) viven
+      // en estas mismas tablas y NO son formación de empleados: quedan fuera de
+      // RRHH y de Mi panel. Sin este filtro, al trabajar con la matriz activa
+      // los cursos del portal se mezclarían con los de los puestos.
+      supabase.from("formacion_cursos").select("*").eq("empresa_id", empresaId).neq("ambito", "escuela"),
       supabase.from("formacion_secciones").select("*").eq("empresa_id", empresaId),
       supabase.from("formacion_lecciones").select("*").eq("empresa_id", empresaId),
       supabase.from("formacion_novedades").select("*").eq("empresa_id", empresaId),

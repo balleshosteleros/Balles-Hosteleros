@@ -183,6 +183,10 @@ ALTER TABLE public.escuela_accesos    ENABLE ROW LEVEL SECURITY;
 5. ~~**Qué pasa con GoHighLevel**~~ — **CERRADA (07-sep-2026, Iván): se APAGA del todo.** Era lo último que quedaba allí.
    - Orden obligatorio y sin atajos: migrar → **verificar curso por curso y vídeo por vídeo** que está todo → repuntar `laescuela` al software → dar de baja la cuenta.
    - Nada de cerrar GHL antes de la verificación: los vídeos originales solo existen ahí, y una vez cerrada la cuenta no hay vuelta atrás.
+   - ⚠️ **Al apagar GHL se caen DOS subdominios a la vez**, no solo la escuela. Hoy `balleshosteleros.com` tiene en SiteGround un único registro A → `162.159.140.166` (el Cloudflare de GHL, que NO es de Iván), y `www` no tiene ningún registro. Cerrar GHL deja la raíz sin nada: no vuelve sola a SiteGround.
+   - **Decidido (07-sep-2026, Iván): la raíz pasará a servir la web alojada en SiteGround.** Hay que verla y confirmar que sigue valiendo antes del corte, y dar de alta el `www`, que hoy no existe.
+
+6. **Portal de alumnos: se replica el de GHL a partir de capturas de Iván, y por dentro debe ser CONFIGURABLE** (no cableado): lo que hoy es fijo en el portal viejo aquí se ajusta desde el back-office.
 
 ---
 
