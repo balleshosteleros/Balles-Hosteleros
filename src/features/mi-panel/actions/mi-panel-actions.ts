@@ -47,6 +47,7 @@ import {
   type SolicitudParaSaldo,
 } from "@/features/rrhh/data/vacaciones-saldo";
 import { horasSegunTipo } from "@/features/rrhh/services/horas/computa-tiempo";
+import { horasEntre, salidaNoAnterior } from "@/features/rrhh/services/horas/salida-coherente";
 import {
   getHorarioDia,
   getDiasConHorarioAsignado,
@@ -1108,8 +1109,10 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
 
     // La SALIDA no se redondea: si el empleado pulsa el botón, esa hora es la
     // que vale y la que cuenta (decisión de Iván). Se guarda al minuto como
-    // oficial y con los segundos exactos como registro real.
-    const ahora = ahoraAlMinuto();
+    // oficial y con los segundos exactos como registro real. El único tope es
+    // no quedar por detrás de la ENTRADA, que sí pudo adelantarse a la hora del
+    // turno por la cortesía: si no, salen horas negativas.
+    const ahora = salidaNoAnterior(fichaje.hora_entrada as string | null, ahoraAlMinuto());
     const instanteReal = new Date();
     if (!fichaje.hora_entrada) {
       // Sin hora de entrada no hay nada que repartir ni cronometrar.
@@ -1137,7 +1140,7 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
       supabase,
       fichaje.empresa_id as string | null,
       fichaje.tipo as string | null,
-      redondearHoras(ahora.getTime() - entradaMs),
+      horasEntre(entrada, ahora),
     );
 
     // ─── Reparto de jornada partida entre empresas ─────────────────────────
@@ -1334,15 +1337,17 @@ export async function paralizarFichajePersonal(
       }
     }
 
-    const ahora = ahoraAlMinuto();
+    const ahora = salidaNoAnterior(
+      (fichaje?.hora_entrada as string | null) ?? null,
+      ahoraAlMinuto(),
+    );
     let horasTotales = 0;
     if (fichaje?.hora_entrada) {
-      const entrada = new Date(fichaje.hora_entrada as string);
       horasTotales = await horasSegunTipo(
         supabase,
         fichaje.empresa_id as string | null,
         fichaje.tipo as string | null,
-        Math.round(((ahora.getTime() - entrada.getTime()) / 3600000) * 10000) / 10000,
+        horasEntre(fichaje.hora_entrada as string, ahora),
       );
     }
     const { error } = await supabase

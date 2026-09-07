@@ -14,6 +14,7 @@ import {
   codigosQueNoComputan,
   noComputa,
 } from "@/features/rrhh/services/horas/computa-tiempo";
+import { horasEntre, salidaNoAnterior } from "@/features/rrhh/services/horas/salida-coherente";
 import { revalidatePath } from "next/cache";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
@@ -702,11 +703,11 @@ export async function cerrarFichajesAbiertos() {
         } else {
           const horas = noComputa(noComputanCodigos, ctx.tipo)
             ? 0
-            : Math.round(((salida.getTime() - new Date(horaEntrada).getTime()) / 3600000) * 100) / 100;
+            : horasEntre(horaEntrada, salida, { decimales: 2 });
           await admin
             .from("fichajes")
             .update({
-              hora_salida: salida.toISOString(),
+              hora_salida: salidaNoAnterior(horaEntrada, salida).toISOString(),
               horas_totales: horas,
               estado: "completado",
               requiere_revision: true,

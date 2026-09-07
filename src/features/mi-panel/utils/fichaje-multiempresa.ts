@@ -16,6 +16,7 @@ import { getHorarioDia, hhmmAMinutos, type HorarioDia } from "@/features/rrhh/ut
 import { minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { tipoComputaTiempo } from "@/features/rrhh/services/horas/computa-tiempo";
+import { salidaNoAnterior } from "@/features/rrhh/services/horas/salida-coherente";
 
 /** Una fila de empleado del usuario en una empresa concreta. */
 export interface FilaEmpleadoEmpresa {
@@ -591,7 +592,11 @@ export async function cerrarConReparto(
   },
 ): Promise<{ horas: number; repartido: number }> {
   const entradaMs = new Date(ctx.horaEntrada).getTime();
-  const salidaMs = salida.getTime();
+  // La entrada pudo redondearse a la hora del turno (cortesía): cerrar por
+  // detrás de ella daría horas negativas. La oficial no baja de la entrada; el
+  // instante en que se pulsó queda en `hora_salida_real`.
+  const salidaOficial = salidaNoAnterior(ctx.horaEntrada, salida);
+  const salidaMs = salidaOficial.getTime();
   // Un tipo de fichaje que no computa tiempo se cierra igual, pero con 0 horas:
   // el fichaje se ve en el listado y no suma en ningún total.
   const computa = await tipoComputaTiempo(client, ctx.empresaId, ctx.tipo);
@@ -601,6 +606,7 @@ export async function cerrarConReparto(
   const geo = opts?.geo ?? null;
   const auto = opts?.autoCierre ?? false;
   const horaSalidaReal = auto ? null : salida.toISOString();
+
 
   // Minutos del día en la zona horaria de la empresa del fichaje (PRP-069).
   const tz = await getZonaHorariaEmpresa(client, ctx.empresaId);
@@ -625,7 +631,7 @@ export async function cerrarConReparto(
     await client
       .from("fichajes")
       .update({
-        hora_salida: salida.toISOString(),
+        hora_salida: salidaOficial.toISOString(),
         hora_salida_real: horaSalidaReal,
         horas_totales: horas,
         estado: "completado",
@@ -658,7 +664,7 @@ export async function cerrarConReparto(
     const horasSeg = computa
       ? Math.round((((seg.finMin - seg.inicioMin) * 60000) / 3600000) * 10000) / 10000
       : 0;
-    const finISO = esUltimo ? salida.toISOString() : isoDeMin(seg.finMin);
+    const finISO = esUltimo ? salidaOficial.toISOString() : isoDeMin(seg.finMin);
     // El auto-cierre NO marca revisión (se guarda como fichaje normal); solo la
     // marca un tramo realmente no cubierto por el horario, que es otra anomalía.
     const revision = !seg.cubierto;

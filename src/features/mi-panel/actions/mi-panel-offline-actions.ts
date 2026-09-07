@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { horasSegunTipo } from "@/features/rrhh/services/horas/computa-tiempo";
+import { horasEntre, salidaNoAnterior } from "@/features/rrhh/services/horas/salida-coherente";
 
 const DRIFT_MAX_SEG = Number(process.env.FICHAJE_OFFLINE_DRIFT_MAX_SEG ?? 300);
 
@@ -134,21 +135,26 @@ export async function sincronizarFichajesOffline(
           .eq("id", item.fichajeId)
           .maybeSingle();
 
+        // La entrada pudo redondearse a la hora del turno (cortesía): la salida
+        // que llega del dispositivo nunca puede quedar por detrás de ella.
+        const salida = salidaNoAnterior(
+          (fichaje?.hora_entrada as string | null) ?? null,
+          deviceDate,
+        );
         let horasTotales = 0;
         if (fichaje?.hora_entrada) {
-          const entrada = new Date(fichaje.hora_entrada as string);
           horasTotales = await horasSegunTipo(
             supabase,
             fichaje.empresa_id as string | null,
             fichaje.tipo as string | null,
-            Math.round(((deviceDate.getTime() - entrada.getTime()) / 3600000) * 10000) / 10000,
+            horasEntre(fichaje.hora_entrada as string, salida),
           );
         }
 
         const { error } = await supabase
           .from("fichajes")
           .update({
-            hora_salida: item.deviceTimestampIso,
+            hora_salida: salida.toISOString(),
             horas_totales: horasTotales,
             estado: "completado",
             lat_salida: item.geo?.lat ?? null,
