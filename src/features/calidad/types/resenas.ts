@@ -1,6 +1,15 @@
+/**
+ * Las columnas del tablero de Calidad.
+ *
+ * "No contesta" existió mientras esto vivía en Go High Level y se quitó el
+ * 07-09-2026: quien no respondía al WhatsApp no había valorado nada, igual que
+ * un cliente que reservó por Cover y no contestó a la encuesta no tiene ninguna
+ * ficha que diga "no valoró". Eran 11.458 tarjetas vacías. Si hace falta saber
+ * a quién se le preguntó y no contestó, eso son los ENVÍOS de petición de
+ * valoración, no una valoración.
+ */
 export type EstadoResena =
   | "nuevo_comensal"
-  | "no_contesta"
   | "excelente"
   | "regular"
   | "malo";
@@ -224,12 +233,6 @@ export const ESTADOS_RESENA: EstadoConfig[] = [
     badge: "bg-sky-100 text-sky-700",
   },
   {
-    key: "no_contesta",
-    label: "No contesta",
-    accent: "border-t-zinc-400",
-    badge: "bg-zinc-100 text-zinc-700",
-  },
-  {
     key: "excelente",
     label: "Excelente",
     accent: "border-t-emerald-400",
@@ -256,6 +259,19 @@ export const ESTADOS_RESENA_ORDER: EstadoResena[] = ESTADOS_RESENA.map(
 export const ESTADO_LABEL: Record<EstadoResena, string> = Object.fromEntries(
   ESTADOS_RESENA.map((e) => [e.key, e.label]),
 ) as Record<EstadoResena, string>;
+
+/**
+ * La columna del tablero que NO es una opinión.
+ *
+ * "Nuevo comensal" es el que acaba de venir y a quien todavía no se le ha
+ * preguntado. En el tablero tiene todo el sentido —es la cola de trabajo de
+ * calidad—, pero no es una valoración: no cuenta en la nota del local, ni en el
+ * volumen de opiniones, ni sale en la ficha del cliente.
+ */
+export const ESTADOS_SIN_VALORACION: EstadoResena[] = ["nuevo_comensal"];
+
+/** Para el `.not("estado", "in", …)` de PostgREST: `(nuevo_comensal)`. */
+export const FILTRO_ESTADOS_SIN_VALORACION = `(${ESTADOS_SIN_VALORACION.join(",")})`;
 
 // ─── Catálogos de seguimiento de calidad ──────────────────────
 

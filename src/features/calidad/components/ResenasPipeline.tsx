@@ -22,6 +22,7 @@ import {
   Sparkles,
   Star,
   Trash2,
+  UserCheck,
   UserX,
   type LucideIcon,
 } from "lucide-react";
@@ -175,14 +176,27 @@ export function ResenasPipeline() {
   const [detalleResena, setDetalleResena] = useState<Resena | null>(null);
   const { empresaActual } = useEmpresa();
 
+  /**
+   * Quién gestionó cada reseña, para poder poner su nombre en la tarjeta sin
+   * abrirla. La reseña solo guarda el id del usuario; el nombre está aquí.
+   */
+  const [gestores, setGestores] = useState<EmpleadoGestor[]>([]);
+  const nombreGestor = useCallback(
+    (userId: string | null) =>
+      userId ? (gestores.find((g) => g.userId === userId)?.nombre ?? null) : null,
+    [gestores],
+  );
+
   const cargar = useCallback(async () => {
     setLoading(true);
-    const [data, place] = await Promise.all([
+    const [data, place, empleados] = await Promise.all([
       listResenas(),
       getEmpresaPlaceInfo(),
+      listEmpleadosGestores(),
     ]);
     setResenas(data);
     setInfo(place);
+    setGestores(empleados);
     setLoading(false);
   }, []);
 
@@ -483,6 +497,7 @@ export function ResenasPipeline() {
             onDrop={() => onDrop(col.key)}
             onCardClick={(r) => setDetalleResena(r)}
             loading={loading}
+            nombreGestor={nombreGestor}
           />
         ))}
       </div>
@@ -504,6 +519,7 @@ export function ResenasPipeline() {
         resena={detalleResena}
         onClose={() => setDetalleResena(null)}
         onSaved={cargar}
+        empleados={gestores}
       />
     </div>
   );
@@ -797,6 +813,7 @@ function KanbanColumna({
   onDrop,
   onCardClick,
   loading,
+  nombreGestor,
 }: {
   label: string;
   accent: string;
@@ -808,6 +825,7 @@ function KanbanColumna({
   onDrop: () => void;
   onCardClick: (r: Resena) => void;
   loading: boolean;
+  nombreGestor: (userId: string | null) => string | null;
 }) {
   const [dragOver, setDragOver] = useState(false);
 
@@ -853,6 +871,7 @@ function KanbanColumna({
               onDragStart={() => onDragStart(r.id)}
               onDragEnd={onDragEnd}
               onClick={() => onCardClick(r)}
+              nombreGestor={nombreGestor}
             />
           ))}
         </div>
@@ -937,12 +956,14 @@ function ResenaCard({
   onDragStart,
   onDragEnd,
   onClick,
+  nombreGestor,
 }: {
   resena: Resena;
   isDragging: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
   onClick: () => void;
+  nombreGestor: (userId: string | null) => string | null;
 }) {
   return (
     <div
@@ -1002,6 +1023,16 @@ function ResenaCard({
               {resena.comentario}
             </p>
           )}
+          {/* Quién la gestionó, sin tener que abrirla: es lo que responde
+              "¿de quién es esta?" cuando el tablero lo llevan varias personas. */}
+          {nombreGestor(resena.gestionada_por) && (
+            <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+              <UserCheck className="h-3 w-3 shrink-0" />
+              <span className="truncate">
+                Gestionada por {nombreGestor(resena.gestionada_por)}
+              </span>
+            </div>
+          )}
           <CardFooterEstado resena={resena} />
         </div>
       </div>
@@ -1039,10 +1070,14 @@ function DetalleResenaDialog({
   resena,
   onClose,
   onSaved,
+  empleados,
 }: {
   resena: Resena | null;
   onClose: () => void;
   onSaved: () => void;
+  /** Los mismos que usa el tablero para poner el nombre en cada tarjeta: se
+      cargan una vez arriba en lugar de otra vez al abrir la primera ficha. */
+  empleados: EmpleadoGestor[];
 }) {
   const [comentario, setComentario] = useState("");
   const [respuesta, setRespuesta] = useState("");
@@ -1059,7 +1094,6 @@ function DetalleResenaDialog({
   );
   const [observaciones, setObservaciones] = useState("");
   const [gestionadaPor, setGestionadaPor] = useState("");
-  const [empleados, setEmpleados] = useState<EmpleadoGestor[]>([]);
   const [saving, setSaving] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [publicando, setPublicando] = useState(false);
@@ -1082,14 +1116,6 @@ function DetalleResenaDialog({
       setGestionadaPor(resena.gestionada_por ?? "");
     }
   }, [resena]);
-
-  // Los empleados no cambian entre reseñas: se piden una sola vez, al abrir
-  // la primera ficha.
-  const abierto = !!resena;
-  useEffect(() => {
-    if (!abierto || empleados.length > 0) return;
-    listEmpleadosGestores().then(setEmpleados);
-  }, [abierto, empleados.length]);
 
   if (!resena) return null;
 

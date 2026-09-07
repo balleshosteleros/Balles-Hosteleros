@@ -67,6 +67,17 @@ export function validarTelefono(
     };
   }
 
+  // Un solo "+", y al principio. "+34 +612345678" —el país escrito dos veces,
+  // porque alguien pegó el número entero en el campo del número— pasaba este
+  // control: el primer "+" estaba en su sitio y las nueve cifras finales eran
+  // válidas. Se guardaba un teléfono al que no se puede llamar.
+  if (bruto.trim().slice(1).includes("+")) {
+    return {
+      ok: false,
+      error: "El teléfono lleva el prefijo dos veces. Deja solo el número.",
+    };
+  }
+
   const internacional = /^\s*(\+|00)/.test(bruto) && !/^\s*(\+34|0034)/.test(bruto);
   const d = normalizarTelefono(bruto);
 

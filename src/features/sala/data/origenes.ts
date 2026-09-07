@@ -181,6 +181,32 @@ const PALETA_EXTRA = [
 export const ORIGENES_ALTA_SALA: readonly string[] = ["TELEFONO", "INSTAGRAM", "FACEBOOK"];
 
 /**
+ * Canales por los que una PERSONA puede dejarnos sus datos por primera vez
+ * (`clientes_sala.origen`), para el desplegable de su ficha.
+ *
+ * Es una lista más ancha que `ORIGENES_ALTA_SALA`, que solo cubre por dónde
+ * puede nacer una RESERVA: un cliente puede escribir por WhatsApp y no reservar
+ * nunca, o dejar el correo en una landing de newsletter sin pisar el
+ * restaurante. Esos casos no tenían dónde anotarse.
+ *
+ * No es un catálogo cerrado: la ficha añade a esta lista los canales que ya
+ * estén en uso en los datos (campañas, orígenes heredados de Cover), para no
+ * borrar de un desplegable un valor que sí existe en la base.
+ */
+export const ORIGENES_CLIENTE: readonly string[] = [
+  "WEB",
+  "GOOGLE",
+  "WHATSAPP",
+  "EMAIL",
+  "TELEFONO",
+  "WALKIN",
+  "INSTAGRAM",
+  "FACEBOOK",
+  "TIKTOK",
+  "MARKETING",
+];
+
+/**
  * Normaliza cualquier string crudo de `reservas.origen` a su clave estable.
  * - null / "" → `SIN_DATO` (reserva antigua sin canal registrado)
  * - Aplica los alias conocidos.

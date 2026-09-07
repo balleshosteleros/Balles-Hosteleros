@@ -57,6 +57,12 @@ export const PREFIJOS_TELEFONO: readonly PrefijoTelefono[] = [
   { prefijo: "+352",  flag: "🇱🇺", label: "Luxemburgo" },
   { prefijo: "+356",  flag: "🇲🇹", label: "Malta" },
   { prefijo: "+380",  flag: "🇺🇦", label: "Ucrania" },
+  { prefijo: "+358",  flag: "🇫🇮", label: "Finlandia" },
+  { prefijo: "+420",  flag: "🇨🇿", label: "Chequia" },
+  { prefijo: "+36",   flag: "🇭🇺", label: "Hungría" },
+  { prefijo: "+386",  flag: "🇸🇮", label: "Eslovenia" },
+  { prefijo: "+372",  flag: "🇪🇪", label: "Estonia" },
+  { prefijo: "+373",  flag: "🇲🇩", label: "Moldavia" },
   // América.
   { prefijo: "+1",    flag: "🇺🇸", label: "Estados Unidos / Canadá" },
   { prefijo: "+52",   flag: "🇲🇽", label: "México" },
@@ -70,6 +76,9 @@ export const PREFIJOS_TELEFONO: readonly PrefijoTelefono[] = [
   { prefijo: "+506",  flag: "🇨🇷", label: "Costa Rica" },
   { prefijo: "+502",  flag: "🇬🇹", label: "Guatemala" },
   { prefijo: "+1809", flag: "🇩🇴", label: "República Dominicana" },
+  { prefijo: "+507",  flag: "🇵🇦", label: "Panamá" },
+  { prefijo: "+595",  flag: "🇵🇾", label: "Paraguay" },
+  { prefijo: "+598",  flag: "🇺🇾", label: "Uruguay" },
   // África, Asia y Oriente Medio.
   { prefijo: "+212",  flag: "🇲🇦", label: "Marruecos" },
   { prefijo: "+225",  flag: "🇨🇮", label: "Costa de Marfil" },
@@ -79,6 +88,12 @@ export const PREFIJOS_TELEFONO: readonly PrefijoTelefono[] = [
   { prefijo: "+86",   flag: "🇨🇳", label: "China" },
   { prefijo: "+81",   flag: "🇯🇵", label: "Japón" },
   { prefijo: "+61",   flag: "🇦🇺", label: "Australia" },
+  { prefijo: "+20",   flag: "🇪🇬", label: "Egipto" },
+  { prefijo: "+234",  flag: "🇳🇬", label: "Nigeria" },
+  { prefijo: "+240",  flag: "🇬🇶", label: "Guinea Ecuatorial" },
+  { prefijo: "+92",   flag: "🇵🇰", label: "Pakistán" },
+  { prefijo: "+84",   flag: "🇻🇳", label: "Vietnam" },
+  { prefijo: "+66",   flag: "🇹🇭", label: "Tailandia" },
 ];
 
 /** Prefijo que sale marcado si no hay otro. */
@@ -105,10 +120,16 @@ export function separarPrefijo(telefono: string | null | undefined): {
 
   for (const prefijo of candidatos) {
     if (limpio.startsWith(prefijo)) {
-      return { prefijo, numero: limpio.slice(prefijo.length).trim() };
+      // El resto se devuelve en dígitos: hay fichas guardadas con el país
+      // repetido ("+34 +612345678") y, sin limpiarlo, al abrir esa ficha el
+      // campo del número volvía a enseñar el "+" y al guardar se perpetuaba.
+      return {
+        prefijo,
+        numero: limpio.slice(prefijo.length).replace(/\D/g, ""),
+      };
     }
   }
-  return { prefijo: PREFIJO_POR_DEFECTO, numero: limpio };
+  return { prefijo: PREFIJO_POR_DEFECTO, numero: limpio.replace(/\D/g, "") };
 }
 
 /**
@@ -123,7 +144,32 @@ export function componerTelefono(
   const n = (numero ?? "").trim();
   if (!n) return "";
   const p = (prefijo ?? PREFIJO_POR_DEFECTO).trim() || PREFIJO_POR_DEFECTO;
-  return `${p} ${n}`;
+
+  // El número se queda en dígitos pelados. Lo que la gente escribe o pega en
+  // ese campo no siempre es solo el número: viene con espacios, con guiones, o
+  // con el país delante otra vez. Pegar "+612345678" con el prefijo +34
+  // seleccionado guardaba "+34 +612345678" — un teléfono al que no se puede
+  // llamar ni mandar un WhatsApp, y que encima pasaba el validador porque el
+  // primer "+" estaba en su sitio.
+  const soloDigitos = n.replace(/\D/g, "");
+  if (!soloDigitos) return "";
+
+  const digitosPrefijo = p.replace(/\D/g, "");
+  let nacional = soloDigitos;
+  // País repetido: "0034612345678" o "34612345678" con +34 elegido. Se pide que
+  // sobren al menos 8 cifras para no descabezar un número que empiece igual que
+  // su propio prefijo (un francés que empiece por 33, por ejemplo).
+  if (nacional.startsWith(`00${digitosPrefijo}`)) {
+    nacional = nacional.slice(2 + digitosPrefijo.length);
+  } else if (
+    digitosPrefijo &&
+    nacional.startsWith(digitosPrefijo) &&
+    nacional.length - digitosPrefijo.length >= 8
+  ) {
+    nacional = nacional.slice(digitosPrefijo.length);
+  }
+
+  return `${p} ${nacional}`;
 }
 
 /**

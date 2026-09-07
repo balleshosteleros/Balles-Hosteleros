@@ -142,7 +142,11 @@ async function crearCuponCumpleanos(
 
   const caducidad = sumarDias(args.fechaCumple, args.reglas.diasValidezDespues);
   const anio = args.fechaCumple.slice(0, 4);
-  const nombre = `${args.cliente.nombre} ${args.cliente.apellidos ?? ""}`.trim();
+  // Hay fichas sin nombre (las que entraron por WhatsApp con un emoji por
+  // nombre). Interpolar directo escribía "null" en el título del cupón.
+  const nombre =
+    [args.cliente.nombre, args.cliente.apellidos].filter(Boolean).join(" ").trim() ||
+    "Cliente";
 
   const { data, error } = await admin
     .from("reserva_codigos")

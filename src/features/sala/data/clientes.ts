@@ -3,6 +3,12 @@ export type ClasificacionCliente = "REGULAR" | "VIP" | "NUEVO";
 
 export interface Cliente {
   id: string;
+  /**
+   * Puede venir vacío. Los contactos que entran por WhatsApp traen el nombre
+   * del perfil, que a veces es un emoji o una inicial y no es un nombre: se
+   * guarda vacío y en pantalla se lee "Sin nombre". Se les identifica por el
+   * teléfono.
+   */
   nombre: string;
   apellidos: string;
   telefono: string;
@@ -22,6 +28,28 @@ export interface Cliente {
   /** Prefijo internacional; el número va en `telefono`. */
   /** Consentimiento para comunicaciones comerciales (RGPD). */
   aceptaMarketing?: boolean;
+  /**
+   * Canal por el que la persona nos dejó sus datos la PRIMERA vez: WEB,
+   * GOOGLE, WHATSAPP, EMAIL (una landing de newsletter), TELEFONO, WALKIN…
+   *
+   * NO es el origen de sus reservas: un cliente puede escribirnos por WhatsApp
+   * y no reservar nunca, o dejar el correo en una landing sin pisar el
+   * restaurante. Se lee con `origenLabel()`, igual que en reservas, para que el
+   * mismo canal no se llame de dos formas en dos pantallas.
+   *
+   * `null` = no se sabe por dónde entró. No es un canal.
+   */
+  origen?: string | null;
+  /**
+   * Nombre del perfil de WhatsApp, tal cual, con sus emojis.
+   *
+   * No es el nombre del cliente: es como aparece esa persona en el móvil del
+   * restaurante, y es lo único que permite casar un chat con esta ficha. De él
+   * se saca `nombre` cuando debajo hay un nombre de verdad
+   * (`shared/lib/nombre-desde-perfil.ts`); cuando no, la ficha se queda sin
+   * nombre y esto es lo único que hay.
+   */
+  nombreWhatsapp?: string | null;
 }
 
 export const SAMPLE_CLIENTES: Cliente[] = [

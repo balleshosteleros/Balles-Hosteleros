@@ -96,7 +96,15 @@ export async function searchClientes(
       .order("visitas", { ascending: false, nullsFirst: false })
       .limit(limit);
     if (error) throw error;
-    return { ok: true, data: (data ?? []) as ClienteSugerencia[] };
+    // `nombre` y `apellidos` pueden venir vacíos (fichas de WhatsApp sin nombre
+    // aprovechable). Se normalizan a "" para que el buscador no pinte "null".
+    const filas = (data ?? []).map((row) => ({
+      ...(row as Record<string, unknown>),
+      nombre: ((row as Record<string, unknown>).nombre as string | null) ?? "",
+      apellidos:
+        ((row as Record<string, unknown>).apellidos as string | null) ?? "",
+    }));
+    return { ok: true, data: filas as unknown as ClienteSugerencia[] };
   } catch (err) {
     console.error("[clientes] searchClientes:", err);
     return { ok: false, data: [], error: friendlyError(err, "q") };

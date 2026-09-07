@@ -26,12 +26,13 @@ import { validarTelefono } from "@/shared/lib/validar-contacto";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 
 const Schema = z.object({
-  nombre: z
-    .string()
-    .trim()
-    .min(1, "El nombre es obligatorio.")
-    .max(120)
-    .transform(normalizarNombre),
+  // El nombre puede quedar vacío. NO es una relajación del alta: dar de alta a
+  // alguien sigue exigiendo nombre. Es que ya hay fichas legítimas sin él —los
+  // 6.294 contactos que entraron por WhatsApp traían el nombre del perfil, y
+  // 449 eran un emoji o una inicial, que se descartó al importar. Exigirlo aquí
+  // dejaba esas fichas congeladas: no se les podía ni apuntar una alergia sin
+  // inventarles antes un nombre.
+  nombre: z.string().trim().max(120).default("").transform(normalizarNombre),
   apellidos: z.string().trim().max(120).default("").transform(normalizarNombre),
   telefono: z.string().trim().max(40).default(""),
   email: z
@@ -52,6 +53,19 @@ const Schema = z.object({
     .nullable()
     .optional(),
   aceptaMarketing: z.boolean().optional(),
+  /**
+   * Canal por el que entró la persona. Catálogo abierto (igual que el de las
+   * reservas), así que se valida la forma, no la lista: se guarda en mayúsculas
+   * y sin espacios para que "whatsapp" y "WhatsApp" no acaben siendo dos
+   * canales distintos en la analítica.
+   */
+  origen: z
+    .string()
+    .trim()
+    .max(40)
+    .transform((v) => v.toUpperCase().replace(/\s+/g, "_"))
+    .nullable()
+    .optional(),
 });
 
 export type GuardarFichaClienteInput = z.input<typeof Schema>;
@@ -88,7 +102,7 @@ export async function guardarFichaCliente(
     );
     if (!empresaId) return { ok: false, error: "Sin empresa activa." };
 
-    const nombre = d.nombre;
+    const nombre = d.nombre || null;
     const apellidos = d.apellidos || null;
     const email = d.email || null;
     const telefono = d.telefono || null;
@@ -161,6 +175,7 @@ export async function guardarFichaCliente(
               acepta_marketing_sms: d.aceptaMarketing,
             }
           : {}),
+        ...(d.origen !== undefined ? { origen: d.origen || null } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", clienteId)

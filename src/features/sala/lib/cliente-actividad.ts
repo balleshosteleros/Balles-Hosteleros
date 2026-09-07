@@ -51,7 +51,17 @@ export async function registrarCambioDatosCliente(
     despues: DatosContactoCliente;
     usuarioId: string | null;
     usuarioNombre: string | null;
-    origen?: "MANUAL" | "AUTOMATICO" | "PORTAL_PUBLICO" | "GOOGLE_RWG";
+    /**
+     * `PERFIL_WHATSAPP` marca el dato deducido del nombre de perfil de
+     * WhatsApp, que nadie ha confirmado todavía. Ver
+     * `shared/lib/nombre-desde-perfil.ts`.
+     */
+    origen?:
+      | "MANUAL"
+      | "AUTOMATICO"
+      | "PORTAL_PUBLICO"
+      | "GOOGLE_RWG"
+      | "PERFIL_WHATSAPP";
   },
 ): Promise<void> {
   try {
@@ -145,7 +155,17 @@ export async function registrarVinculacionAutomatica(
     /** Lo que escribió, sólo en los campos que difieren de la ficha. */
     declarados: { nombre?: string; apellidos?: string; email?: string; telefono?: string };
     motivo: "email" | "telefono";
-    origen?: "MANUAL" | "AUTOMATICO" | "PORTAL_PUBLICO" | "GOOGLE_RWG";
+    /**
+     * `PERFIL_WHATSAPP` marca el dato deducido del nombre de perfil de
+     * WhatsApp, que nadie ha confirmado todavía. Ver
+     * `shared/lib/nombre-desde-perfil.ts`.
+     */
+    origen?:
+      | "MANUAL"
+      | "AUTOMATICO"
+      | "PORTAL_PUBLICO"
+      | "GOOGLE_RWG"
+      | "PERFIL_WHATSAPP";
     usuarioId?: string | null;
     usuarioNombre?: string | null;
   },

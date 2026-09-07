@@ -306,6 +306,12 @@ export function ClientesView() {
       if (campo === "origen") return origenLabel(c.origen);
       if (campo === "proximas") return extraDe(c.id).proximas.length;
       if (campo === "resenas") return extraDe(c.id).ratingMedio ?? 0;
+      // "¿Ha valorado?" en palabras, no en número: es lo que se filtra para
+      // sacar la lista de a quién se le pidió opinión y no contestó. A todo el
+      // mundo se le pide, por correo si reservó o por WhatsApp si entró por ahí,
+      // así que no tener valoración es exactamente no haber contestado.
+      if (campo === "valorada")
+        return extraDe(c.id).resenas.length > 0 ? "Sí" : "No";
       // Array: el filtro de lista casa si coincide CUALQUIERA de las etiquetas.
       if (campo === "etiquetas")
         return extraDe(c.id).etiquetas.map((e) => e.nombre);
@@ -472,6 +478,7 @@ export function ClientesView() {
     { campo: "etiquetas", label: "Etiquetas" },
     { campo: "proximas", label: "Próximas reservas" },
     { campo: "resenas", label: "Nota media" },
+    { campo: "valorada", label: "Valorada" },
     { campo: "reservas", label: "Reservas" },
     { campo: "visitas", label: "Visitas" },
     { campo: "ultimaVisita", label: "Última visita" },
@@ -699,6 +706,37 @@ export function ClientesView() {
                   : "reservas más"}
               </span>
             )}
+          </td>
+        );
+      },
+    },
+    valorada: {
+      th: (
+        <TableColumnHeader
+          key="valorada"
+          label="Valorada"
+          campo="valorada"
+          filtroTipo="lista"
+          opciones={["Sí", "No"]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (c) => {
+        const valorada = extraDe(c.id).resenas.length > 0;
+        return (
+          <td key="valorada" className="p-3">
+            <span
+              className={cn(
+                "text-xs",
+                valorada ? "text-emerald-700" : "text-muted-foreground",
+              )}
+            >
+              {valorada ? "Sí" : "No"}
+            </span>
           </td>
         );
       },

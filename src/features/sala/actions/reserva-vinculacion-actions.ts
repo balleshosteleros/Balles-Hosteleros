@@ -109,7 +109,9 @@ export async function getVinculacionPendiente(
         motivo: (r.vinculacion_motivo as "email" | "telefono" | null) ?? "telefono",
         ficha: {
           id: c.id as string,
-          nombre: c.nombre as string,
+          // Puede no tener nombre: hay fichas que entraron por WhatsApp sin uno
+          // aprovechable. Vacío, no "null" escrito en el panel de revisión.
+          nombre: (c.nombre as string | null) ?? "",
           apellidos: (c.apellidos as string | null) ?? null,
           email: (c.email as string | null) ?? null,
           telefono: (c.telefono as string | null) ?? null,
