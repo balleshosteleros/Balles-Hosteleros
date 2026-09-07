@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SegmentoJson, SegmentoCondicion } from "@/features/marketing/data/campanas";
+import {
+  COLUMNAS_PERMISO,
+  ALCANCE_POR_DEFECTO,
+  type AlcanceCampana,
+  type CanalPublicidad,
+} from "./permiso-publicidad";
 
 /**
  * Construye filtros sobre `clientes_sala` a partir del AST de segmento.
@@ -113,34 +119,99 @@ export async function clienteIdsDelSegmento(
 }
 
 /**
- * Destinatarios REALES de una campaña de email.
+ * Destinatarios REALES de una campaña, para el canal y el alcance elegidos.
  *
- * Tres cosas que `clienteIdsDelSegmento` no hace y aquí son obligatorias:
+ * Cuatro cosas que `clienteIdsDelSegmento` no hace y aquí son obligatorias:
  *
- *  1. **Consentimiento.** Solo entra quien marcó que se le puede escribir
- *     (`acepta_marketing_email`). Tener el correo de alguien porque reservó una
- *     vez no da derecho a mandarle publicidad.
- *  2. **Paginado.** PostgREST corta en 1.000 filas. Sin paginar, una campaña a
+ *  1. **Permiso del canal.** Cada canal lleva su casilla: el sí del correo no
+ *     autoriza un WhatsApp. Con alcance "solo los que lo aceptan" entran los que
+ *     dijeron que sí; con "todos menos las bajas" entran también aquellos a los
+ *     que nunca se preguntó.
+ *  2. **Las bajas, fuera siempre.** Quien pidió no recibir más no entra con
+ *     ningún alcance. No es una opción que se pueda activar.
+ *  3. **Paginado.** PostgREST corta en 1.000 filas. Sin paginar, una campaña a
  *     seis mil clientes salía a mil y parecía enviada entera.
- *  3. **Sin duplicados.** El mismo correo en dos fichas —pasa: el cliente
- *     reservó con dos teléfonos— recibiría el correo dos veces.
+ *  4. **Sin duplicados.** El mismo correo en dos fichas —pasa: el cliente
+ *     reservó con dos teléfonos— recibiría el mensaje dos veces.
  */
 export async function destinatariosDeCampana(
   supabase: SupabaseClient,
   empresaId: string,
   segmento: SegmentoJson,
+  canal: CanalPublicidad = "email",
+  alcance: AlcanceCampana = ALCANCE_POR_DEFECTO,
 ): Promise<Array<{ id: string; email: string }>> {
   const PAGINA = 1000;
+  const cols = COLUMNAS_PERMISO[canal];
   const salida: Array<{ id: string; email: string }> = [];
+  const vistos = new Set<string>();
+
+  for (let desde = 0; ; desde += PAGINA) {
+    let base = supabase
+      .from("clientes_sala")
+      .select(`id, ${cols.contacto}`)
+      .eq("empresa_id", empresaId)
+      // La baja es innegociable, mande el alcance lo que mande.
+      .is(cols.bajaAt, null)
+      .not(cols.contacto, "is", null);
+
+    if (alcance === "con_permiso") base = base.eq(cols.acepta, true);
+
+    const paginada = base.order("id").range(desde, desde + PAGINA - 1) as unknown as FB;
+
+    let q: FB;
+    if (!segmento.condiciones.length) {
+      q = paginada;
+    } else if (segmento.operador === "AND") {
+      q = aplicarAnd(paginada, segmento.condiciones);
+    } else {
+      const ors = segmento.condiciones.map(condicionAOrString).filter(Boolean) as string[];
+      q = ors.length ? paginada.or(ors.join(",")) : paginada;
+    }
+
+    const { data, error } = await (q as unknown as PromiseLike<{
+      data: Array<Record<string, unknown>> | null;
+      error: unknown;
+    }>);
+    if (error) throw error;
+
+    const lote = data ?? [];
+    for (const c of lote) {
+      const contacto = String(c[cols.contacto] ?? "").trim().toLowerCase();
+      if (!contacto || vistos.has(contacto)) continue;
+      vistos.add(contacto);
+      salida.push({ id: String(c.id), email: contacto });
+    }
+
+    if (lote.length < PAGINA) break;
+  }
+
+  return salida;
+}
+
+/**
+ * Destinatarios de una campaña de WHATSAPP.
+ *
+ * Mismas tres reglas que el correo —consentimiento, paginado y sin repetidos—,
+ * pero sobre el teléfono y el permiso de WhatsApp, que es otro distinto: quien
+ * autorizó correos no autorizó que le escriban al móvil.
+ */
+export async function destinatariosWhatsAppDeCampana(
+  supabase: SupabaseClient,
+  empresaId: string,
+  segmento: SegmentoJson,
+): Promise<Array<{ id: string; telefono: string }>> {
+  const PAGINA = 1000;
+  const salida: Array<{ id: string; telefono: string }> = [];
   const vistos = new Set<string>();
 
   for (let desde = 0; ; desde += PAGINA) {
     const base = supabase
       .from("clientes_sala")
-      .select("id, email")
+      .select("id, telefono")
       .eq("empresa_id", empresaId)
-      .eq("acepta_marketing_email", true)
-      .not("email", "is", null)
+      .eq("acepta_marketing_whatsapp", true)
+      .not("telefono", "is", null)
       .order("id")
       .range(desde, desde + PAGINA - 1) as unknown as FB;
 
@@ -155,17 +226,17 @@ export async function destinatariosDeCampana(
     }
 
     const { data, error } = await (q as unknown as PromiseLike<{
-      data: Array<{ id: string; email: string | null }> | null;
+      data: Array<{ id: string; telefono: string | null }> | null;
       error: unknown;
     }>);
     if (error) throw error;
 
     const lote = data ?? [];
     for (const c of lote) {
-      const email = (c.email ?? "").trim().toLowerCase();
-      if (!email || vistos.has(email)) continue;
-      vistos.add(email);
-      salida.push({ id: c.id, email });
+      const telefono = (c.telefono ?? "").replace(/\s+/g, "");
+      if (!telefono || vistos.has(telefono)) continue;
+      vistos.add(telefono);
+      salida.push({ id: c.id, telefono });
     }
 
     if (lote.length < PAGINA) break;

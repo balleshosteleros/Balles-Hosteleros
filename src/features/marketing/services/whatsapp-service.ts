@@ -12,9 +12,19 @@
  *
  * IMPORTANTE: para enviar mensajes plantilla (HSM) la plantilla debe estar
  * previamente aprobada en el WhatsApp Manager.
+ *
+ * ── A quién escribe ────────────────────────────────────────────────────────
+ * A los clientes de sala que dieron permiso para recibir WhatsApp, y a nadie
+ * más. Antes leía de una tabla `clientes` que no existe y, al no encontrarla,
+ * caía a `usuarios`: una campaña comercial habría salido a los EMPLEADOS de la
+ * empresa, sin permiso de nadie y sin dejar rastro.
+ *
+ * Cada envío queda registrado en `campanas_envios` con su cliente, que es lo
+ * que hace que la campaña salga en las Comunicaciones de su ficha.
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { destinatariosWhatsAppDeCampana } from "@/features/marketing/lib/segmento-resolver";
 import type { CampanaWhatsApp } from "@/features/marketing/data/campanas";
 
 const API_VERSION = process.env.WHATSAPP_API_VERSION ?? "v19.0";
@@ -31,42 +41,6 @@ export interface WhatsAppSendResult {
   jobId?: string;
 }
 
-async function obtenerTelefonos(empresaId: string, segmento: string): Promise<string[]> {
-  const admin = createAdminClient();
-  const telefonos = new Set<string>();
-
-  // Primero busca en `clientes` (si existe).
-  try {
-    const { data: clientes } = await admin
-      .from("clientes")
-      .select("telefono, segmento")
-      .eq("empresa_id", empresaId)
-      .limit(500);
-    for (const c of clientes ?? []) {
-      if (!c.telefono) continue;
-      if (segmento === "todos" || c.segmento === segmento) {
-        telefonos.add(String(c.telefono).replace(/\s+/g, ""));
-      }
-    }
-  } catch {
-    // tabla clientes no existe aún
-  }
-
-  // Fallback: teléfonos en profiles
-  if (telefonos.size === 0) {
-    const { data: profiles } = await admin
-      .from("usuarios")
-      .select("telefono")
-      .eq("empresa_id", empresaId)
-      .limit(500);
-    for (const p of profiles ?? []) {
-      if (p.telefono) telefonos.add(String(p.telefono).replace(/\s+/g, ""));
-    }
-  }
-
-  return Array.from(telefonos);
-}
-
 export async function sendWhatsAppCampana(campana: CampanaWhatsApp): Promise<WhatsAppSendResult> {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -77,9 +51,28 @@ export async function sendWhatsAppCampana(campana: CampanaWhatsApp): Promise<Wha
     return { success: false, error: "Debes indicar el nombre de la plantilla aprobada por Meta" };
   }
 
-  const destinatarios = await obtenerTelefonos(campana.empresaId, campana.segmento);
+  const admin = createAdminClient();
+
+  let destinatarios: Array<{ id: string; telefono: string }>;
+  try {
+    destinatarios = await destinatariosWhatsAppDeCampana(
+      admin,
+      campana.empresaId,
+      campana.segmentoJson,
+    );
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Error al leer los clientes",
+    };
+  }
+
   if (destinatarios.length === 0) {
-    return { success: false, error: "No hay teléfonos en el segmento seleccionado" };
+    return {
+      success: false,
+      error:
+        "No hay ningún cliente al que escribir: el segmento está vacío o nadie ha dado permiso para recibir WhatsApp",
+    };
   }
 
   const url = `https://graph.facebook.com/${API_VERSION}/${phoneId}/messages`;
@@ -91,8 +84,11 @@ export async function sendWhatsAppCampana(campana: CampanaWhatsApp): Promise<Wha
 
   let enviados = 0;
   let fallidos = 0;
+  const ahora = new Date().toISOString();
+  const registros: Record<string, unknown>[] = [];
 
-  for (const tel of destinatarios) {
+  for (const destinatario of destinatarios) {
+    const tel = destinatario.telefono;
     const body: Record<string, unknown> = {
       messaging_product: "whatsapp",
       to: tel,
@@ -114,11 +110,46 @@ export async function sendWhatsAppCampana(campana: CampanaWhatsApp): Promise<Wha
         },
         body: JSON.stringify(body),
       });
-      if (res.ok) enviados++;
-      else fallidos++;
-    } catch {
+      if (res.ok) {
+        enviados++;
+        registros.push({
+          campana_id: campana.id,
+          empresa_id: campana.empresaId,
+          cliente_id: destinatario.id,
+          destinatario: tel,
+          estado: "enviado",
+          enviado_en: ahora,
+        });
+      } else {
+        const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+        fallidos++;
+        registros.push({
+          campana_id: campana.id,
+          empresa_id: campana.empresaId,
+          cliente_id: destinatario.id,
+          destinatario: tel,
+          estado: "fallido",
+          error: err?.error?.message ?? `HTTP ${res.status}`,
+        });
+      }
+    } catch (err) {
       fallidos++;
+      registros.push({
+        campana_id: campana.id,
+        empresa_id: campana.empresaId,
+        cliente_id: destinatario.id,
+        destinatario: tel,
+        estado: "fallido",
+        error: err instanceof Error ? err.message : "Error de red",
+      });
     }
+  }
+
+  // El registro se guarda pase lo que pase: es lo que hace que la campaña
+  // aparezca en las Comunicaciones de cada cliente, y sin él no hay forma de
+  // saber a quién llegó ni de reintentar solo con los que fallaron.
+  for (let i = 0; i < registros.length; i += 500) {
+    await admin.from("campanas_envios").insert(registros.slice(i, i + 500));
   }
 
   if (enviados === 0) {

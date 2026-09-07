@@ -30,6 +30,12 @@ import {
   zonaLabel,
   type EstadoReserva,
 } from "@/features/sala/data/reservas";
+import {
+  colorOrigen,
+  labelOrigen,
+  normalizarOrigen,
+  ORIGENES_CLIENTE,
+} from "@/features/sala/data/origenes";
 import { Button } from "@/components/ui/button";
 import {
   PREFIJOS_TELEFONO,
@@ -41,6 +47,7 @@ import { Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
 import { listClientes } from "@/features/sala/actions/clientes-actions";
 import { guardarFichaCliente } from "@/features/sala/actions/cliente-ficha-actions";
 import { ActividadCliente } from "@/features/sala/components/clientes/ActividadCliente";
+import { ComunicacionesCliente } from "@/features/sala/components/clientes/ComunicacionesCliente";
 import { HistorialVisitasCliente } from "@/features/sala/components/clientes/HistorialVisitasCliente";
 import {
   listClientesEnriquecidos,
@@ -117,7 +124,22 @@ function mapDbToCliente(row: Record<string, unknown>): Cliente {
     notasInternas: (row.notas_internas as string) ?? "",
     fechaNacimiento: (row.fecha_nacimiento as string) ?? "",
     aceptaMarketing: (row.acepta_marketing_email as boolean) ?? false,
+    origen: (row.origen as string | null) ?? null,
+    nombreWhatsapp: (row.nombre_whatsapp as string | null) ?? null,
   };
+}
+
+/**
+ * Nombre para pintar en pantalla, o "Sin nombre" si la ficha no lo tiene.
+ *
+ * Hay clientes sin nombre a propósito: los que entraron por WhatsApp traían
+ * como nombre lo que tuvieran en su perfil ("❤️", "S.", un punto), y eso se
+ * descarta al importar. La celda en blanco parecía un error de carga; el
+ * rótulo dice que el dato falta, que es la verdad.
+ */
+function nombreVisible(c: Cliente): { texto: string; falta: boolean } {
+  const completo = [c.nombre, c.apellidos].filter(Boolean).join(" ").trim();
+  return completo ? { texto: completo, falta: false } : { texto: "Sin nombre", falta: true };
 }
 
 /** "12 sept · 21:00" — corto para que quepa en la celda. */
@@ -269,6 +291,9 @@ export function ClientesView() {
       // por "nombre" tiene que casar con lo que se ve, no solo con el de pila.
       if (campo === "nombre")
         return [c.nombre, c.apellidos].filter(Boolean).join(" ");
+      // Se filtra y se ordena por la etiqueta que se VE ("Walk-in"), no por la
+      // clave cruda que hay en la base ("WALKIN").
+      if (campo === "origen") return origenLabel(c.origen);
       if (campo === "proximas") return extraDe(c.id).proximas.length;
       if (campo === "resenas") return extraDe(c.id).ratingMedio ?? 0;
       // Array: el filtro de lista casa si coincide CUALQUIERA de las etiquetas.
@@ -320,6 +345,28 @@ export function ClientesView() {
       ),
     [filtrados, paginaActual],
   );
+
+  /** Canales por los que ha entrado gente de verdad, para el filtro. */
+  const opcionesOrigen = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of clientes) set.add(origenLabel(c.origen));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }, [clientes]);
+
+  /**
+   * Canales del desplegable de la ficha: los habituales más los que ya estén
+   * en uso en la base. Si solo se ofrecieran los habituales, abrir una ficha
+   * cuyo origen es una campaña vieja y guardar se lo llevaría por delante.
+   */
+  const opcionesOrigenFicha = useMemo(() => {
+    const set = new Set<string>(ORIGENES_CLIENTE);
+    for (const c of clientes) {
+      if (c.origen) set.add(normalizarOrigen(c.origen));
+    }
+    return Array.from(set).sort((a, b) =>
+      labelOrigen(a).localeCompare(labelOrigen(b), "es"),
+    );
+  }, [clientes]);
 
   /** Etiquetas realmente en uso, para el desplegable del filtro. */
   const opcionesEtiquetas = useMemo(() => {
@@ -387,6 +434,7 @@ export function ClientesView() {
         notasInternas: borrador.notasInternas,
         fechaNacimiento: borrador.fechaNacimiento || null,
         aceptaMarketing: borrador.aceptaMarketing ?? false,
+        origen: borrador.origen || null,
       });
       if (!res.ok) {
         toast.error(res.error ?? "No se pudo guardar");
@@ -409,6 +457,7 @@ export function ClientesView() {
     { campo: "nombre", label: "Nombre", bloqueada: true },
     { campo: "telefono", label: "Teléfono" },
     { campo: "email", label: "Email" },
+    { campo: "origen", label: "Origen" },
     { campo: "clasificacion", label: "Clasificación" },
     { campo: "etiquetas", label: "Etiquetas" },
     { campo: "proximas", label: "Próximas reservas" },
@@ -434,11 +483,28 @@ export function ClientesView() {
           onOrdenChange={setOrden}
         />
       ),
-      td: (c) => (
-        <td key="nombre" className="p-3 font-medium">
-          {[c.nombre, c.apellidos].filter(Boolean).join(" ")}
-        </td>
-      ),
+      td: (c) => {
+        const n = nombreVisible(c);
+        return (
+          <td key="nombre" className="p-3">
+            <span
+              className={cn(
+                "font-medium",
+                n.falta && "font-normal italic text-muted-foreground",
+              )}
+            >
+              {n.texto}
+            </span>
+            {/* Sin nombre, lo único que identifica a esa persona es como se
+                llama en WhatsApp: es lo que verá quien abra el chat. */}
+            {n.falta && c.nombreWhatsapp && (
+              <span className="ml-1.5 text-xs text-muted-foreground">
+                {c.nombreWhatsapp}
+              </span>
+            )}
+          </td>
+        );
+      },
     },
     telefono: {
       th: (
@@ -477,6 +543,41 @@ export function ClientesView() {
         />
       ),
       td: (c) => <td key="email" className="p-3">{c.email || "—"}</td>,
+    },
+    origen: {
+      th: (
+        <TableColumnHeader
+          key="origen"
+          label="Origen"
+          campo="origen"
+          filtroTipo="lista"
+          opciones={opcionesOrigen}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (c) => {
+        const clave = normalizarOrigen(c.origen);
+        return (
+          <td key="origen" className="p-3 whitespace-nowrap">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5",
+                !c.origen && "text-muted-foreground",
+              )}
+            >
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: colorOrigen(clave) }}
+              />
+              {labelOrigen(clave)}
+            </span>
+          </td>
+        );
+      },
     },
     clasificacion: {
       th: (
@@ -847,6 +948,16 @@ export function ClientesView() {
                         setBorrador({ ...borrador, nombre: e.target.value })
                       }
                     />
+                    {/* Como se llama en WhatsApp. No se edita: es lo que tiene
+                        puesto el cliente en su perfil, no una opinión nuestra.
+                        Se enseña para poder encontrarle en el chat, y porque
+                        cuando el nombre está vacío es lo único que hay. */}
+                    {borrador.nombreWhatsapp &&
+                      borrador.nombreWhatsapp !== borrador.nombre && (
+                        <p className="text-xs text-muted-foreground">
+                          En WhatsApp: {borrador.nombreWhatsapp}
+                        </p>
+                      )}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="cli-apellidos">Apellidos</Label>
@@ -933,6 +1044,31 @@ export function ClientesView() {
                         setBorrador({ ...borrador, fechaNacimiento: e.target.value })
                       }
                     />
+                  </div>
+                  {/*
+                    Origen: por dónde nos dejó sus datos la PRIMERA vez. No es el
+                    canal de sus reservas —hay quien escribe por WhatsApp y no
+                    reserva nunca—, por eso se guarda en la ficha y no se deduce.
+                    "Sin dato" es una opción real: no hay que rellenarlo a la
+                    fuerza inventando un canal.
+                  */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cli-origen">Origen</Label>
+                    <select
+                      id="cli-origen"
+                      value={borrador.origen ?? ""}
+                      onChange={(e) =>
+                        setBorrador({ ...borrador, origen: e.target.value || null })
+                      }
+                      className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      <option value="">Sin dato</option>
+                      {opcionesOrigenFicha.map((clave) => (
+                        <option key={clave} value={clave}>
+                          {labelOrigen(clave)}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -1236,6 +1372,14 @@ export function ClientesView() {
                     actividad de cada reserva va en su propia ficha. */}
                 <div className="pt-2 border-t">
                   <ActividadCliente clienteId={borrador.id} />
+                </div>
+
+                {/* Comunicaciones DEL CLIENTE: las campañas que se le han
+                    mandado a él. Es la misma caja que sale en la ficha de
+                    cualquiera de sus reservas: la ficha de un cliente se lee
+                    igual venga de donde venga. */}
+                <div className="pt-2 border-t">
+                  <ComunicacionesCliente clienteId={borrador.id} />
                 </div>
                 </TabsContent>
 

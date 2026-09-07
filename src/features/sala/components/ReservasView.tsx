@@ -174,6 +174,7 @@ import { HistoricoEmailsReserva } from "@/features/sala/components/reservas/Hist
 import { ActividadReserva } from "@/features/sala/components/reservas/ActividadReserva";
 import { RevisionVinculacion } from "@/features/sala/components/reservas/RevisionVinculacion";
 import { ActividadCliente } from "@/features/sala/components/clientes/ActividadCliente";
+import { ComunicacionesCliente } from "@/features/sala/components/clientes/ComunicacionesCliente";
 import {
   getObservacionesCliente,
   guardarObservacionesCliente,
@@ -7395,29 +7396,36 @@ export function ReservasView() {
               </div>
 
               {/* ── Comunicaciones, a la misma altura que el resto ───────
-                  Los correos que se le han mandado por ESTA reserva. Va en la
-                  MISMA banda de dos columnas que los comentarios, la actividad
-                  y las etiquetas: iba sola a todo lo ancho y era la única
-                  franja de la ficha que no cuadraba con las de al lado.
-                  A la derecha se mantiene el hueco —los correos son de la
-                  RESERVA, el cliente no tiene una lista propia aquí— para que
-                  el recuadro de la izquierda mida lo mismo que los de arriba. */}
-              {/* Las dos bandas se escriben IGUAL: mismo rotulo con su sobre
-                  delante, mismo tamano de letra y el mismo relleno corto. La de
-                  la derecha no despliega nada —no hay correos por cliente— pero
-                  ocupa lo mismo, asi que las dos columnas siguen cuadrando. */}
+                  Misma banda de dos columnas que los comentarios, la actividad
+                  y las etiquetas, y el mismo reparto que ellas: a la izquierda
+                  lo de ESTA reserva (confirmación, recordatorio, cancelación) y
+                  a la derecha lo que se le ha mandado a LA PERSONA —las
+                  campañas—, que la acompaña en todas sus reservas.
+                  La de la derecha estuvo vacía mientras ninguna campaña iba
+                  dirigida al cliente; ahora todas lo hacen, así que enseña lo
+                  mismo que su ficha en Clientes: idéntica se abra donde se
+                  abra. */}
               <div className="grid shrink-0 items-start gap-3 md:grid-cols-2">
                 <div className="rounded-lg border bg-muted/25 px-2.5 py-2">
                   <HistoricoEmailsReserva reservaId={selectedReserva.id} />
                 </div>
                 <div className="rounded-lg border border-sky-500/25 bg-sky-500/[0.06] px-2.5 py-2">
-                  <span className="flex w-full items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <Mail className="h-3.5 w-3.5 shrink-0" />
-                    <span>Comunicaciones</span>
-                  </span>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
-                    Se envían por reserva, no por cliente.
-                  </p>
+                  {/* Un walk-in sin ficha no ha recibido ninguna campaña, pero
+                      el hueco se mantiene para que la columna de la izquierda
+                      no se descoloque. */}
+                  {selectedReserva.clienteId ? (
+                    <ComunicacionesCliente clienteId={selectedReserva.clienteId} />
+                  ) : (
+                    <>
+                      <span className="flex w-full items-center gap-2 text-xs font-medium text-muted-foreground">
+                        <Mail className="h-3.5 w-3.5 shrink-0" />
+                        <span>Comunicaciones</span>
+                      </span>
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        Esta reserva no tiene ficha de cliente.
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
 
