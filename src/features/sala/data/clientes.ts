@@ -1,4 +1,6 @@
 /** NUEVO 0-1 visitas · REGULAR 2-4 · VIP 5+. Ver `clasificacion-cliente.ts`. */
+import type { EstadoPermiso } from "@/features/marketing/lib/permiso-publicidad";
+
 export type ClasificacionCliente = "REGULAR" | "VIP" | "NUEVO";
 
 export interface Cliente {
@@ -27,7 +29,14 @@ export interface Cliente {
   fechaNacimiento?: string;
   /** Prefijo internacional; el número va en `telefono`. */
   /** Consentimiento para comunicaciones comerciales (RGPD). */
-  aceptaMarketing?: boolean;
+  /**
+   * Permiso de publicidad, uno por canal. Tres estados, no dos: "sin preguntar"
+   * (la mayoría de la base, que entró migrada) no es lo mismo que "baja", que es
+   * una negativa expresa y no admite volver a escribir.
+   */
+  permisoEmail?: EstadoPermiso;
+  permisoSms?: EstadoPermiso;
+  permisoWhatsapp?: EstadoPermiso;
   /**
    * Canal por el que la persona nos dejó sus datos la PRIMERA vez: WEB,
    * GOOGLE, WHATSAPP, EMAIL (una landing de newsletter), TELEFONO, WALKIN…

@@ -150,6 +150,13 @@ export async function completarFichaCliente(
       patch.acepta_marketing_sms = true;
       patch.marketing_optin_origen = datos.origen ?? "RESERVA_WEB";
       patch.marketing_optin_at = new Date().toISOString();
+      // Se borra la baja anterior, si la había. Quien se dio de baja y hoy marca
+      // la casilla al reservar está volviendo a dar permiso él mismo, y es el
+      // único que puede hacerlo. Sin esto la fecha de baja lo dejaría fuera de
+      // las campañas para siempre, aunque su ficha dijera que acepta: una
+      // contradicción imposible de entender desde la pantalla de Clientes.
+      patch.marketing_baja_email_at = null;
+      patch.marketing_baja_sms_at = null;
     }
 
     if (Object.keys(patch).length === 0) return;

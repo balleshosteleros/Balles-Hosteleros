@@ -3,6 +3,11 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useModuloDisponible } from "@/features/empresa/contexts/catalogo-empresa-context";
+import {
+  estadoPermiso,
+  ETIQUETA_PERMISO,
+  type EstadoPermiso,
+} from "@/features/marketing/lib/permiso-publicidad";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -134,7 +139,9 @@ function mapDbToCliente(row: Record<string, unknown>): Cliente {
     observaciones: (row.observaciones as string) ?? "",
     notasInternas: (row.notas_internas as string) ?? "",
     fechaNacimiento: (row.fecha_nacimiento as string) ?? "",
-    aceptaMarketing: (row.acepta_marketing_email as boolean) ?? false,
+    permisoEmail: estadoPermiso(row as never, "email"),
+    permisoSms: estadoPermiso(row as never, "sms"),
+    permisoWhatsapp: estadoPermiso(row as never, "whatsapp"),
     origen: (row.origen as string | null) ?? null,
     nombreWhatsapp: (row.nombre_whatsapp as string | null) ?? null,
   };
@@ -301,6 +308,12 @@ export function ClientesView() {
   const acceso = useCallback(
     (c: Cliente, campo: string): unknown => {
       if (campo === "clasificacion") return clasifDe(c);
+      // Por la etiqueta visible ("Sin preguntar"), no por la clave interna: se
+      // filtra por lo que se lee en la columna.
+      if (campo === "permisoEmail") return ETIQUETA_PERMISO[c.permisoEmail ?? "sin_preguntar"];
+      if (campo === "permisoSms") return ETIQUETA_PERMISO[c.permisoSms ?? "sin_preguntar"];
+      if (campo === "permisoWhatsapp")
+        return ETIQUETA_PERMISO[c.permisoWhatsapp ?? "sin_preguntar"];
       if (campo === "reservas") return extraDe(c.id).historico.length;
       if (campo === "visitas") return extraDe(c.id).visitas;
       if (campo === "ultimaVisita") return extraDe(c.id).ultimaVisita ?? "";
@@ -459,7 +472,17 @@ export function ClientesView() {
         observaciones: borrador.observaciones,
         notasInternas: borrador.notasInternas,
         fechaNacimiento: borrador.fechaNacimiento || null,
-        aceptaMarketing: borrador.aceptaMarketing ?? false,
+        // Los que están de baja NO se mandan: esa decisión es del cliente y se
+        // queda como está, mande lo que mande esta pantalla.
+        ...(borrador.permisoEmail !== "baja"
+          ? { permisoEmail: borrador.permisoEmail ?? "sin_preguntar" }
+          : {}),
+        ...(borrador.permisoSms !== "baja"
+          ? { permisoSms: borrador.permisoSms ?? "sin_preguntar" }
+          : {}),
+        ...(borrador.permisoWhatsapp !== "baja"
+          ? { permisoWhatsapp: borrador.permisoWhatsapp ?? "sin_preguntar" }
+          : {}),
         origen: borrador.origen || null,
       });
       if (!res.ok) {
@@ -481,6 +504,17 @@ export function ClientesView() {
     }
   };
 
+  /**
+   * El color dice lo que hay que hacer con cada uno: verde se le puede escribir,
+   * gris está pendiente de que alguien le pregunte, rojo no se le vuelve a
+   * escribir nunca.
+   */
+  const permisoBadge: Record<EstadoPermiso, string> = {
+    acepta: "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 border-emerald-600/30",
+    sin_preguntar: "bg-muted text-muted-foreground border-border",
+    baja: "bg-red-600/15 text-red-700 dark:text-red-400 border-red-600/30",
+  };
+
   const columnasDef: ToolbarColumna[] = [
     { campo: "nombre", label: "Nombre", bloqueada: true },
     { campo: "telefono", label: "Teléfono" },
@@ -494,6 +528,9 @@ export function ClientesView() {
     { campo: "reservas", label: "Reservas" },
     { campo: "visitas", label: "Visitas" },
     { campo: "ultimaVisita", label: "Última visita" },
+    { campo: "permisoEmail", label: "Publicidad" },
+    { campo: "permisoSms", label: "Publicidad SMS" },
+    { campo: "permisoWhatsapp", label: "Publicidad WhatsApp" },
     { campo: "observaciones", label: "Observaciones" },
   ];
 
@@ -604,6 +641,84 @@ export function ClientesView() {
               />
               {labelOrigen(clave)}
             </span>
+          </td>
+        );
+      },
+    },
+    permisoEmail: {
+      th: (
+        <TableColumnHeader
+          key="permisoEmail"
+          label="Publicidad"
+          campo="permisoEmail"
+          filtroTipo="lista"
+          opciones={["Acepta", "Sin preguntar", "Baja"]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (c) => {
+        const estado = c.permisoEmail ?? "sin_preguntar";
+        return (
+          <td key="permisoEmail" className="p-3">
+            <Badge className={permisoBadge[estado]} variant="outline">
+              {ETIQUETA_PERMISO[estado]}
+            </Badge>
+          </td>
+        );
+      },
+    },
+    permisoSms: {
+      th: (
+        <TableColumnHeader
+          key="permisoSms"
+          label="Publicidad SMS"
+          campo="permisoSms"
+          filtroTipo="lista"
+          opciones={["Acepta", "Sin preguntar", "Baja"]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (c) => {
+        const estado = c.permisoSms ?? "sin_preguntar";
+        return (
+          <td key="permisoSms" className="p-3">
+            <Badge className={permisoBadge[estado]} variant="outline">
+              {ETIQUETA_PERMISO[estado]}
+            </Badge>
+          </td>
+        );
+      },
+    },
+    permisoWhatsapp: {
+      th: (
+        <TableColumnHeader
+          key="permisoWhatsapp"
+          label="Publicidad WhatsApp"
+          campo="permisoWhatsapp"
+          filtroTipo="lista"
+          opciones={["Acepta", "Sin preguntar", "Baja"]}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (c) => {
+        const estado = c.permisoWhatsapp ?? "sin_preguntar";
+        return (
+          <td key="permisoWhatsapp" className="p-3">
+            <Badge className={permisoBadge[estado]} variant="outline">
+              {ETIQUETA_PERMISO[estado]}
+            </Badge>
           </td>
         );
       },
@@ -1163,18 +1278,50 @@ export function ClientesView() {
                   </div>
                 </div>
 
-                {/* Consentimiento comercial: lo da el cliente al reservar, pero
-                    se puede retirar desde aquí si lo pide por teléfono. */}
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={borrador.aceptaMarketing ?? false}
-                    onChange={(e) =>
-                      setBorrador({ ...borrador, aceptaMarketing: e.target.checked })
-                    }
-                  />
-                  <span>Acepta recibir comunicaciones comerciales</span>
-                </label>
+                {/*
+                  Permiso de publicidad, uno por canal. Lo normal es que alguien
+                  quiera los correos y no que le escriban al móvil, así que un
+                  solo interruptor para los tres decidía por él.
+
+                  Quien pidió la baja aparece bloqueado: retirarlo lo puede hacer
+                  cualquiera desde aquí, pero volver a activarlo tendría que
+                  pedirlo el cliente, y esta pantalla no puede demostrar que lo
+                  pidió. Se marca en rojo para que se vea por qué no se toca.
+                */}
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Publicidad</Label>
+                  {([
+                    ["email", "permisoEmail", "Correo"],
+                    ["sms", "permisoSms", "SMS"],
+                    ["whatsapp", "permisoWhatsapp", "WhatsApp"],
+                  ] as const).map(([canal, campo, etiqueta]) => {
+                    const estado = borrador[campo] ?? "sin_preguntar";
+                    const esBaja = estado === "baja";
+                    return (
+                      <label
+                        key={canal}
+                        className="flex items-center gap-2 text-sm"
+                        title={esBaja ? "Pidió no recibir más: solo él puede volver a darse de alta" : undefined}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={esBaja}
+                          checked={estado === "acepta"}
+                          onChange={(e) =>
+                            setBorrador({
+                              ...borrador,
+                              [campo]: e.target.checked ? "acepta" : "sin_preguntar",
+                            })
+                          }
+                        />
+                        <span className={esBaja ? "text-red-600 dark:text-red-400" : undefined}>
+                          {etiqueta}
+                          {esBaja ? " — se dio de baja" : ""}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
 
                 {/*
                   Clasificación: dato CALCULADO por visitas, no editable. Antes se

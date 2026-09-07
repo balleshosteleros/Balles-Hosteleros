@@ -52,7 +52,14 @@ const Schema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha de nacimiento no es válida.")
     .nullable()
     .optional(),
-  aceptaMarketing: z.boolean().optional(),
+  /**
+   * Permiso de publicidad por canal. "baja" no se acepta desde aquí: darse de
+   * baja es cosa del cliente, por su enlace, y esta pantalla no puede demostrar
+   * que lo haya pedido.
+   */
+  permisoEmail: z.enum(["acepta", "sin_preguntar"]).optional(),
+  permisoSms: z.enum(["acepta", "sin_preguntar"]).optional(),
+  permisoWhatsapp: z.enum(["acepta", "sin_preguntar"]).optional(),
   /**
    * Canal por el que entró la persona. Catálogo abierto (igual que el de las
    * reservas), así que se valida la forma, no la lista: se guarda en mayúsculas
@@ -167,13 +174,21 @@ export async function guardarFichaCliente(
         ...(d.fechaNacimiento !== undefined
           ? { fecha_nacimiento: d.fechaNacimiento || null }
           : {}),
-        // Aquí sí se puede RETIRAR el consentimiento: si el cliente lo pide por
-        // teléfono, alguien tiene que poder desmarcarlo.
-        ...(d.aceptaMarketing !== undefined
-          ? {
-              acepta_marketing_email: d.aceptaMarketing,
-              acepta_marketing_sms: d.aceptaMarketing,
-            }
+        // Aquí sí se puede dar y retirar el permiso: si el cliente lo pide por
+        // teléfono, alguien tiene que poder marcarlo o desmarcarlo. Canal por
+        // canal, porque querer los correos no es querer un WhatsApp.
+        //
+        // Lo que NO se toca es la fecha de baja: quien pidió no recibir más
+        // sigue de baja aunque alguien marque la casilla desde aquí, y por eso
+        // en la ficha aparece bloqueada.
+        ...(d.permisoEmail !== undefined
+          ? { acepta_marketing_email: d.permisoEmail === "acepta" }
+          : {}),
+        ...(d.permisoSms !== undefined
+          ? { acepta_marketing_sms: d.permisoSms === "acepta" }
+          : {}),
+        ...(d.permisoWhatsapp !== undefined
+          ? { acepta_marketing_whatsapp: d.permisoWhatsapp === "acepta" }
           : {}),
         ...(d.origen !== undefined ? { origen: d.origen || null } : {}),
         updated_at: new Date().toISOString(),
