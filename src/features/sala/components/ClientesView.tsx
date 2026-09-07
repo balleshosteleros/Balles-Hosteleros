@@ -19,8 +19,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import Link from "next/link";
-import { Settings, Star } from "lucide-react";
+import { CalendarDays, ChevronDown, Settings, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ESTADOS_RESERVA,
@@ -82,13 +87,18 @@ import { formatearFechaEs } from "@/shared/lib/fecha";
 const POR_PAGINA = 50;
 
 /**
- * Enlace al día de una reserva en el plano de sala.
+ * Enlace a una reserva concreta en el plano de sala.
  *
- * Lleva el turno además de la fecha: la lista de reservas filtra por turno, así
- * que abrir una de comida con el turno en cena la dejaría fuera de pantalla.
+ * Lleva tres cosas y las tres hacen falta: la FECHA abre ese día, el TURNO
+ * evita que una reserva de comida quede fuera de pantalla con la lista puesta
+ * en cena, y el ID hace que al llegar se abra su ficha. Sin el id se aterriza
+ * en el día correcto y hay que buscarla a ojo entre las sesenta del turno.
  */
-function enlaceReserva(fecha: string, turno: string | null): string {
-  return `/sala/reservas?fecha=${fecha}${turno ? `&turno=${turno}` : ""}`;
+function enlaceReserva(fecha: string, turno: string | null, reservaId?: string): string {
+  const partes = [`fecha=${fecha}`];
+  if (turno) partes.push(`turno=${turno}`);
+  if (reservaId) partes.push(`reserva=${reservaId}`);
+  return `/sala/reservas?${partes.join("&")}`;
 }
 
 const clasificacionBadge: Record<ClasificacionCliente, string> = {
@@ -809,6 +819,37 @@ export function ClientesView() {
 
   const fichaExtra = borrador ? extraDe(borrador.id) : ENRIQUECIDO_VACIO;
 
+  /** El desplegable de reservas de la ficha, plegado por defecto. */
+  const [reservasAbiertas, setReservasAbiertas] = useState(false);
+
+  /**
+   * Las reservas del cliente ordenadas como se buscan: primero las que aún no
+   * han pasado —de la más próxima a la más lejana, que es la pregunta con
+   * prisa: "¿cuándo vuelve?"— y debajo las anteriores, de la más reciente a la
+   * más antigua.
+   *
+   * "Aún no ha pasado" se decide contra el día de HOY en la zona de la EMPRESA,
+   * no la del navegador: a las 01:00 de Indonesia en el restaurante todavía es
+   * la tarde anterior, y la reserva de esta noche se habría pintado como
+   * pasada.
+   */
+  const reservasDeLaFicha = useMemo(() => {
+    const hoy = new Date().toLocaleDateString("en-CA", { timeZone: zonaHoraria });
+    const proximas = fichaExtra.historico
+      .filter((r) => r.fecha >= hoy)
+      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora));
+    const pasadas = fichaExtra.historico
+      .filter((r) => r.fecha < hoy)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.hora.localeCompare(a.hora));
+    return {
+      proximas,
+      todas: [
+        ...proximas.map((r) => ({ ...r, esProxima: true })),
+        ...pasadas.map((r) => ({ ...r, esProxima: false })),
+      ],
+    };
+  }, [fichaExtra.historico, zonaHoraria]);
+
   const clasifFicha = clasificacionEfectiva({
     visitas: fichaExtra.visitas,
     umbrales,
@@ -1199,35 +1240,6 @@ export function ClientesView() {
                   )}
                 </div>
 
-                {/* Próximas reservas del cliente */}
-                <div className="pt-2 border-t space-y-1.5">
-                  <Label className="text-muted-foreground">Próximas reservas</Label>
-                  {fichaExtra.proximas.length === 0 ? (
-                    <p className="text-muted-foreground">Sin reservas próximas.</p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {fichaExtra.proximas.map((r) => (
-                        <li key={r.id}>
-                          <Link
-                            href={enlaceReserva(r.fecha, r.turno)}
-                            className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 hover:bg-muted/40 transition-colors"
-                          >
-                            <span>
-                              <span className="font-medium">{fechaLarga(r.fecha)}</span>
-                              <span className="text-muted-foreground"> · {r.hora}</span>
-                            </span>
-                            <span className="shrink-0 text-muted-foreground text-xs">
-                              {r.personas} {r.personas === 1 ? "persona" : "personas"}
-                              {r.zona ? ` · ${r.zona}` : ""}
-                              {r.mesa ? ` · Mesa ${r.mesa}` : ""}
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
                 <div className="space-y-1.5">
                   <Label htmlFor="cli-observaciones">Observaciones</Label>
                   <Textarea
@@ -1252,24 +1264,50 @@ export function ClientesView() {
                 </div>
 
                 {/*
-                  Histórico de reservas: TODAS, en cualquier estado, de la más
-                  reciente a la más antigua. En columnas y no en una línea de
-                  texto corrida porque así se lee en vertical — se ve de un
-                  vistazo cuántas canceló o en qué canal reserva siempre.
+                  RESERVAS del cliente: TODAS en un solo desplegable, en
+                  cualquier estado. Primero las que aún no han pasado —que es lo
+                  que se mira con prisa— y debajo las anteriores, de la más
+                  reciente a la más antigua.
 
-                  Cada fila lleva al día de esa reserva en el plano de sala
-                  (`/sala/reservas?fecha=…`), que es donde se ve en su mesa y en
-                  su contexto.
+                  Va plegado y con el número en la cabecera: un habitual acumula
+                  cientos y desplegadas empujaban fuera de pantalla las
+                  etiquetas y el botón de guardar. En columnas y no en línea
+                  corrida porque así se lee en vertical: se ve de un vistazo
+                  cuántas canceló o por qué canal reserva siempre.
+
+                  Cada fila abre ESA reserva en el plano de sala, en su día y su
+                  turno, con su ficha ya abierta.
                 */}
                 <div className="pt-2 border-t space-y-1.5">
-                  <Label className="text-muted-foreground">
-                    Histórico de reservas
-                    {fichaExtra.historico.length > 0 && (
-                      <span className="ml-1.5 font-normal">
-                        ({fichaExtra.historico.length})
-                      </span>
-                    )}
-                  </Label>
+                  <Collapsible
+                    open={reservasAbiertas}
+                    onOpenChange={setReservasAbiertas}
+                    className="space-y-1.5"
+                  >
+                    <CollapsibleTrigger className="flex w-full items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+                      <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+                      <span>Reservas</span>
+                      {fichaExtra.historico.length > 0 && (
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                          {fichaExtra.historico.length}
+                        </span>
+                      )}
+                      {reservasDeLaFicha.proximas.length > 0 && (
+                        <span className="text-xs font-normal text-emerald-600 dark:text-emerald-400">
+                          {reservasDeLaFicha.proximas.length}{" "}
+                          {reservasDeLaFicha.proximas.length === 1
+                            ? "próxima"
+                            : "próximas"}
+                        </span>
+                      )}
+                      <ChevronDown
+                        className={cn(
+                          "ml-auto h-3.5 w-3.5 shrink-0 transition-transform",
+                          reservasAbiertas && "rotate-180",
+                        )}
+                      />
+                    </CollapsibleTrigger>
+                  <CollapsibleContent>
                   {fichaExtra.historico.length === 0 ? (
                     <p className="text-muted-foreground">Sin reservas todavía.</p>
                   ) : (
@@ -1295,10 +1333,15 @@ export function ClientesView() {
                           </tr>
                         </thead>
                         <tbody>
-                          {fichaExtra.historico.map((r) => (
+                          {reservasDeLaFicha.todas.map((r) => (
                             <tr
                               key={r.id}
-                              className="border-t hover:bg-muted/40 transition-colors"
+                              className={cn(
+                                "border-t transition-colors hover:bg-muted/40",
+                                // Las que aún no han pasado, marcadas: son las
+                                // que se buscan con prisa.
+                                r.esProxima && "bg-emerald-500/[0.07]",
+                              )}
                             >
                               {/*
                                 El enlace va dentro de la primera celda: envolver
@@ -1307,8 +1350,9 @@ export function ClientesView() {
                               */}
                               <td className="px-2 py-1.5 whitespace-nowrap">
                                 <Link
-                                  href={enlaceReserva(r.fecha, r.turno)}
+                                  href={enlaceReserva(r.fecha, r.turno, r.id)}
                                   className="font-medium hover:underline"
+                                  title="Abrir esta reserva en el plano de sala"
                                 >
                                   {fechaConAnio(r.fecha)}
                                 </Link>
@@ -1353,6 +1397,8 @@ export function ClientesView() {
                       </table>
                     </div>
                   )}
+                  </CollapsibleContent>
+                  </Collapsible>
                 </div>
 
                 <div className="pt-2 border-t space-y-1.5">

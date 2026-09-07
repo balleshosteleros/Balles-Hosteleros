@@ -3402,6 +3402,15 @@ export function ReservasView() {
   useEffect(() => {
     if (turnoPedidoValido) setTurno(turnoPedidoValido);
   }, [turnoPedidoValido]);
+  /**
+   * Una reserva concreta pedida en la URL (`?reserva=<id>`), que es como llega
+   * quien pulsa una línea del desplegable de reservas de la ficha del cliente.
+   *
+   * Abrir el día no basta: quien pincha una reserva quiere ver ESA, y buscarla
+   * a ojo entre las sesenta del turno es justo el trabajo que se pretendía
+   * ahorrar. Así que además del día se abre su ficha.
+   */
+  const reservaPedida = searchParams?.get("reserva") ?? null;
   const [busqueda, setBusqueda] = useState("");
   /**
    * Reservas señaladas desde el aviso de cobros. Manda sobre el resto de
@@ -5409,6 +5418,23 @@ export function ReservasView() {
     setSelectedReserva(r);
     setShowDetalleReserva(true);
   };
+
+  /**
+   * Abre la reserva que venía en la URL, una vez cargado su día.
+   *
+   * Se recuerda cuál se abrió ya: sin eso, cerrar la ficha la volvería a abrir
+   * en el siguiente render —la URL sigue diciendo lo mismo— y no habría forma
+   * de quitarla de en medio.
+   */
+  const reservaYaAbierta = useRef<string | null>(null);
+  useEffect(() => {
+    if (!reservaPedida || loading) return;
+    if (reservaYaAbierta.current === reservaPedida) return;
+    const r = reservas.find((x) => x.id === reservaPedida);
+    if (!r) return;
+    reservaYaAbierta.current = reservaPedida;
+    abrirDetalleReserva(r);
+  }, [reservaPedida, reservas, loading]);
 
   // "Bloquear": deja la mesa fuera de juego solo para el día y turno que hay en
   // pantalla (bloqueo puntual, no recurrente). Si la mesa tiene reservas activas
