@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { leerTodas } from "@/shared/lib/supabase-paginado";
 import {
   findPlaceByText,
   getPlaceDetails,
@@ -206,20 +207,32 @@ export async function buscarPlaceCustom(query: string): Promise<
 
 // ─── Pipeline: read ─────────────────────────────────────────────
 
+/**
+ * TODAS las valoraciones de la empresa, por tandas.
+ *
+ * `leerTodas` no es opcional aquí: Supabase corta en 1.000 filas y no avisa. Con
+ * 8.849 valoraciones entre los dos restaurantes, el tablero enseñaba mil y el
+ * contador de arriba ponía "1000 acumuladas" como si fuera el total. Peor aún:
+ * el número de cada columna y el de la gráfica —que sí las lee todas— no
+ * cuadraban, y no había forma de saber cuál de los dos mentía.
+ */
 export async function listResenas(): Promise<Resena[]> {
   const { supabase, empresaId } = await getContext();
   if (!empresaId) return [];
-  const { data, error } = await supabase
-    .from("resenas")
-    .select("*")
-    .eq("empresa_id", empresaId)
-    .order("posicion", { ascending: true })
-    .order("created_at", { ascending: false });
-  if (error) {
-    console.error("[resenas] list:", error.message);
+  try {
+    return await leerTodas<Resena>(() =>
+      supabase
+        .from("resenas")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .order("posicion", { ascending: true })
+        .order("created_at", { ascending: false }),
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[resenas] list:", msg);
     return [];
   }
-  return (data ?? []) as Resena[];
 }
 
 // ─── Pipeline: write ────────────────────────────────────────────
@@ -318,25 +331,66 @@ export interface EmpleadoGestor {
  * Vía RPC SECURITY DEFINER: `usuarios` tiene RLS que solo deja ver el propio
  * perfil, así que sin la RPC el desplegable saldría con una sola persona.
  */
+/**
+ * Los EMPLEADOS de la empresa, para el desplegable "Gestionada por".
+ *
+ * Sale de `empleados`, no de `usuarios`: son dos cosas distintas. En `usuarios`
+ * están las cuentas que entran al software, y ahí dentro hay cosas que no son
+ * una persona del equipo —la cuenta de la integración de Ágora, por ejemplo—,
+ * además de gente sin ficha ni puesto. Una reseña la gestiona alguien de la
+ * plantilla, así que la lista se saca de la plantilla.
+ *
+ * Se piden los ACTIVOS con cuenta: `resenas.gestionada_por` guarda el usuario
+ * (`auth.users.id`), así que quien no puede entrar al software no puede
+ * aparecer como responsable. Hoy los 21 empleados activos de los dos
+ * restaurantes tienen cuenta, así que no se queda nadie fuera.
+ *
+ * El puesto sale de `empleado_puestos` (el principal), y si esa ficha aún no
+ * está montada se cae al texto suelto de `empleados.puesto`.
+ */
 export async function listEmpleadosGestores(): Promise<EmpleadoGestor[]> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return [];
-    const { data, error } = await supabase.rpc("chat_empleados", {
-      p_empresa: empresaId,
-    });
+    const { data, error } = await supabase
+      .from("empleados")
+      .select(
+        // `departamentos` va con la FK nombrada: `empleados` tiene dos hacia esa
+        // tabla (el departamento y el validador) y sin nombrarla PostgREST no
+        // sabe cuál es y tumba la consulta entera.
+        `user_id, nombre, apellidos, puesto,
+         departamentos!empleados_departamento_id_fkey ( nombre ),
+         empleado_puestos ( es_principal, puesto_nombre, puestos ( nombre ) )`,
+      )
+      .eq("empresa_id", empresaId)
+      .eq("estado", "Activo")
+      .not("user_id", "is", null);
     if (error) throw error;
+
     return (data ?? [])
-      .filter((r: Record<string, unknown>) => !!r.user_id)
-      .map((r: Record<string, unknown>) => ({
-        userId: r.user_id as string,
-        nombre: [r.nombre as string, r.apellidos as string]
-          .filter(Boolean)
-          .join(" ")
-          .trim(),
-        puesto: (r.puesto as string | null) ?? null,
-        departamento: (r.departamento as string | null) ?? null,
-      }))
+      .map((r: Record<string, unknown>) => {
+        const asignaciones = (r.empleado_puestos ?? []) as {
+          es_principal: boolean | null;
+          puesto_nombre: string | null;
+          puestos: { nombre: string | null } | null;
+        }[];
+        const principal =
+          asignaciones.find((a) => a.es_principal) ?? asignaciones[0] ?? null;
+        const depto = r.departamentos as { nombre: string | null } | null;
+        return {
+          userId: r.user_id as string,
+          nombre: [r.nombre as string, r.apellidos as string]
+            .filter(Boolean)
+            .join(" ")
+            .trim(),
+          puesto:
+            principal?.puestos?.nombre ??
+            principal?.puesto_nombre ??
+            (r.puesto as string | null) ??
+            null,
+          departamento: depto?.nombre ?? null,
+        };
+      })
       .sort((a: EmpleadoGestor, b: EmpleadoGestor) =>
         a.nombre.localeCompare(b.nombre, "es"),
       );

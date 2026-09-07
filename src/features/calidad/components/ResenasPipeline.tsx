@@ -802,6 +802,17 @@ function ManualLinkPanel({
 
 // ─── Columna kanban ───────────────────────────────────────────
 
+/**
+ * Cuántas tarjetas se PINTAN por columna. El número de la cabecera es siempre
+ * el total de verdad; esto solo limita el DOM.
+ *
+ * Sin tope, "Excelente" de BACANAL son 4.392 tarjetas en una sola columna y el
+ * navegador se arrastra al abrir la pantalla. Se pintan las más recientes, que
+ * son las que se gestionan, y para llegar a las viejas están el filtro de
+ * período y el buscador, que actúan sobre TODAS.
+ */
+const TARJETAS_POR_COLUMNA = 150;
+
 function KanbanColumna({
   label,
   accent,
@@ -863,7 +874,7 @@ function KanbanColumna({
               Vacío
             </div>
           )}
-          {resenas.map((r) => (
+          {resenas.slice(0, TARJETAS_POR_COLUMNA).map((r) => (
             <ResenaCard
               key={r.id}
               resena={r}
@@ -874,6 +885,12 @@ function KanbanColumna({
               nombreGestor={nombreGestor}
             />
           ))}
+          {resenas.length > TARJETAS_POR_COLUMNA && (
+            <p className="py-3 text-center text-[11px] text-muted-foreground">
+              y {resenas.length - TARJETAS_POR_COLUMNA} más · acota por período o
+              busca para verlas
+            </p>
+          )}
         </div>
       </ScrollArea>
     </div>
