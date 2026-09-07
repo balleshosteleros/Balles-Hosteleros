@@ -35,20 +35,42 @@ interface FilaSegmento {
 
 const SEGMENTO_VACIO: SegmentoJson = { operador: "AND", condiciones: [] };
 
+/**
+ * Tamaño de página al leer del servidor.
+ *
+ * PostgREST corta CUALQUIER respuesta en mil filas, también las de una función.
+ * Sin pedir las páginas siguientes, una campaña a doce mil clientes salía a mil
+ * y devolvía "enviado" sin más: el resto no recibía nada y nadie se enteraba.
+ * La función ordena por `id`, así que las páginas no se solapan ni se saltan
+ * fichas.
+ */
+const PAGINA = 1000;
+
 async function resolver(
   supabase: SupabaseClient,
   empresaId: string,
   segmento: SegmentoJson | null | undefined,
   canal: CanalContacto | null,
 ): Promise<FilaSegmento[]> {
-  const { data, error } = await supabase.rpc("clientes_del_segmento", {
-    p_empresa_id: empresaId,
-    p_segmento: segmento ?? SEGMENTO_VACIO,
-    p_canal: canal,
-    p_con_permiso: exigePermiso(segmento),
-  });
-  if (error) throw error;
-  return (data ?? []) as FilaSegmento[];
+  const todas: FilaSegmento[] = [];
+
+  for (let desde = 0; ; desde += PAGINA) {
+    const { data, error } = await supabase
+      .rpc("clientes_del_segmento", {
+        p_empresa_id: empresaId,
+        p_segmento: segmento ?? SEGMENTO_VACIO,
+        p_canal: canal,
+        p_con_permiso: exigePermiso(segmento),
+      })
+      .range(desde, desde + PAGINA - 1);
+    if (error) throw error;
+
+    const lote = (data ?? []) as FilaSegmento[];
+    todas.push(...lote);
+    if (lote.length < PAGINA) break;
+  }
+
+  return todas;
 }
 
 /**
