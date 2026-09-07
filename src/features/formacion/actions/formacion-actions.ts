@@ -268,18 +268,34 @@ export interface FormacionData {
   progresoLeccionIds: string[];
 }
 
-export async function getFormacionData(): Promise<{ ok: boolean; data: FormacionData; error?: string }> {
+/**
+ * Carga la formación de la empresa activa.
+ *
+ * `ambito` decide QUÉ cursos entran, y son dos mundos que no se mezclan nunca:
+ *   - sin pasar nada → formación de la plantilla (RRHH y Mi panel).
+ *   - `"escuela"`    → solo los cursos del portal de alumnos (back-office de
+ *                      PRODUCTO → ESCUELA, empresa matriz).
+ * Las secciones y lecciones se traen enteras y las filtra quien las pinta, que
+ * es lo que ya hacía: van indexadas por curso.
+ */
+export async function getFormacionData(
+  opciones?: { ambito?: "escuela" },
+): Promise<{ ok: boolean; data: FormacionData; error?: string }> {
   const vacio: FormacionData = { cursos: [], secciones: [], lecciones: [], novedades: [], progresoLeccionIds: [] };
+  const soloEscuela = opciones?.ambito === "escuela";
   try {
     const { supabase, userId, empresaId } = await ctx();
     if (!empresaId) return { ok: true, data: vacio };
 
     const [cursosR, seccionesR, leccionesR, novedadesR, puestosR, progresoR] = await Promise.all([
       // Los cursos de LA ESCUELA (portal de alumnos de la empresa matriz) viven
-      // en estas mismas tablas y NO son formación de empleados: quedan fuera de
-      // RRHH y de Mi panel. Sin este filtro, al trabajar con la matriz activa
-      // los cursos del portal se mezclarían con los de los puestos.
-      supabase.from("formacion_cursos").select("*").eq("empresa_id", empresaId).neq("ambito", "escuela"),
+      // en estas mismas tablas y NO son formación de empleados: por defecto
+      // quedan fuera de RRHH y de Mi panel. Sin este filtro, al trabajar con la
+      // matriz activa los cursos del portal se mezclarían con los de los puestos.
+      // El back-office de la Escuela pide justo lo contrario: solo los suyos.
+      soloEscuela
+        ? supabase.from("formacion_cursos").select("*").eq("empresa_id", empresaId).eq("ambito", "escuela")
+        : supabase.from("formacion_cursos").select("*").eq("empresa_id", empresaId).neq("ambito", "escuela"),
       supabase.from("formacion_secciones").select("*").eq("empresa_id", empresaId),
       supabase.from("formacion_lecciones").select("*").eq("empresa_id", empresaId),
       supabase.from("formacion_novedades").select("*").eq("empresa_id", empresaId),

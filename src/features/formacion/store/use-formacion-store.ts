@@ -33,11 +33,13 @@ interface State {
   /** key = `${userKey}:${leccionId}` */
   completadas: Record<string, boolean>;
   hydrated: boolean;
+  /** Qué mundo hay cargado ahora mismo: la plantilla o la Escuela. */
+  ambito: "plantilla" | "escuela";
   userKey: string;
 }
 
 interface Actions {
-  hydrate: (userKey: string) => Promise<void>;
+  hydrate: (userKey: string, opciones?: { ambito?: "plantilla" | "escuela" }) => Promise<void>;
 
   addCurso: (c: Omit<Curso, "id">) => string;
   updateCurso: (id: string, patch: Partial<Curso>) => void;
@@ -73,10 +75,17 @@ export const useFormacionStore = create<State & Actions>()((set, get) => ({
   novedades: [],
   completadas: {},
   hydrated: false,
+  ambito: "plantilla",
   userKey: "",
 
-  hydrate: async (userKey) => {
-    const res = await getFormacionData();
+  // El store es único y lo comparten dos pantallas que NUNCA deben ver lo del
+  // otro: la formación de la plantilla y el back-office de la Escuela. Por eso
+  // se recuerda qué ámbito está cargado; si se entra en el otro, se recarga
+  // aunque ya estuviera hidratado. Sin esto, abrir la Escuela después de RRHH
+  // enseñaba los cursos de los puestos (y al revés).
+  hydrate: async (userKey, opciones) => {
+    const ambito = opciones?.ambito ?? "plantilla";
+    const res = await getFormacionData(ambito === "escuela" ? { ambito: "escuela" } : undefined);
     const completadas: Record<string, boolean> = {};
     if (res.ok) {
       for (const lid of res.data.progresoLeccionIds) completadas[`${userKey}:${lid}`] = true;
@@ -88,6 +97,7 @@ export const useFormacionStore = create<State & Actions>()((set, get) => ({
       novedades: res.data.novedades,
       completadas,
       hydrated: true,
+      ambito,
       userKey,
     });
   },

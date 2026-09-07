@@ -42,9 +42,16 @@ interface Props {
   cursoId: string;
   /** Vista de administración (RRHH). Reservado para acciones de edición. */
   admin?: boolean;
+  /**
+   * De qué mundo es este curso. El store es único y lo comparten la formación
+   * de la plantilla y la Escuela, así que hay que decírselo: si lo cargado es
+   * del otro ámbito, se recarga. Sin esto, abrir un curso de la Escuela justo
+   * después de pasar por RRHH mostraba «curso no encontrado».
+   */
+  ambito?: "plantilla" | "escuela";
 }
 
-export function CursoVista({ cursoId, admin = false }: Props) {
+export function CursoVista({ cursoId, admin = false, ambito = "plantilla" }: Props) {
   const router = useRouter();
   const search = useSearchParams();
   const { profile } = useAuth();
@@ -58,11 +65,13 @@ export function CursoVista({ cursoId, admin = false }: Props) {
   const desmarcarCompletada = useFormacionStore((s) => s.desmarcarCompletada);
   const hydrate = useFormacionStore((s) => s.hydrate);
   const hydrated = useFormacionStore((s) => s.hydrated);
+  const ambitoCargado = useFormacionStore((s) => s.ambito);
 
-  // Si se entra directo a la URL del curso, carga el módulo desde BD.
+  // Si se entra directo a la URL del curso, carga el módulo desde BD. También
+  // si lo que hay cargado es del otro ámbito (ver `ambito` en Props).
   useEffect(() => {
-    if (!hydrated) void hydrate(userKey);
-  }, [hydrated, hydrate, userKey]);
+    if (!hydrated || ambitoCargado !== ambito) void hydrate(userKey, { ambito });
+  }, [hydrated, ambitoCargado, ambito, hydrate, userKey]);
 
   const curso = cursos.find((c) => c.id === cursoId);
   // El admin ve todo; el alumno solo temas y lecciones publicados.

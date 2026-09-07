@@ -91,7 +91,20 @@ export async function clonar(url, urlDe) {
     }
   });
 
-  await pagina.goto(url, { waitUntil: "networkidle", timeout: 90_000 });
+  // Se prefiere esperar a que la red quede en silencio, porque así se garantiza
+  // que han entrado los archivos que la página pide sola. Pero hay webs que no
+  // callan nunca —un chat, una analítica que reintenta, un iframe vivo— y ahí
+  // esa espera SIEMPRE agota el tiempo y la página no se clona. Las de
+  // herramientas de balleshosteleros.com son justo así. En ese caso basta con
+  // esperar a que termine de cargar: el recorrido de scroll que viene después
+  // dispara igualmente la carga perezosa.
+  try {
+    await pagina.goto(url, { waitUntil: "networkidle", timeout: 45_000 });
+  } catch {
+    console.log("  · la red no se queda en silencio; se espera solo a que cargue");
+    await pagina.goto(url, { waitUntil: "load", timeout: 90_000 });
+    await pagina.waitForTimeout(3_000);
+  }
 
   // Bajar hasta el final: sin esto no se disparan ni la carga perezosa de
   // imágenes ni las animaciones de entrada, y la copia sale a medias.
