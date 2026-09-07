@@ -7,7 +7,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/shared/components/NumberInput";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,8 +22,6 @@ type FormState = {
   computa_tiempo: boolean;
   color: string;
   requiere_solicitud: boolean;
-  margen_antes_min: number;
-  margen_despues_min: number;
   activo: boolean;
 };
 
@@ -35,8 +32,6 @@ const EMPTY_FORM: FormState = {
   computa_tiempo: true,
   color: "sky",
   requiere_solicitud: false,
-  margen_antes_min: 15,
-  margen_despues_min: 15,
   activo: true,
 };
 
@@ -60,8 +55,6 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
           computa_tiempo: editando.computa_tiempo,
           color: editando.color ?? "sky",
           requiere_solicitud: editando.requiere_solicitud ?? false,
-          margen_antes_min: editando.margen_antes_min ?? 0,
-          margen_despues_min: editando.margen_despues_min ?? 0,
           activo: editando.activo,
         });
       } else {
@@ -144,9 +137,7 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
                     {t.requiere_solicitud ? (
                       <Badge variant="outline" className="text-xs">Solo por solicitud</Badge>
                     ) : (
-                      <span className="text-sm text-muted-foreground">
-                        Normal · −{t.margen_antes_min ?? 0}/+{t.margen_despues_min ?? 0} min
-                      </span>
+                      <span className="text-sm text-muted-foreground">Normal</span>
                     )}
                   </TableCell>
                   <TableCell><Badge variant={t.computa_tiempo ? "default" : "outline"} className="text-xs">{t.computa_tiempo ? "Sí" : "No"}</Badge></TableCell>
@@ -215,31 +206,6 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
                 <Switch checked={form.requiere_solicitud} onCheckedChange={v => setForm(f => ({ ...f, requiere_solicitud: v }))} />
               </div>
 
-              {!form.requiere_solicitud && (
-                <div className="space-y-2 pt-1 border-t">
-                  <p className="text-[11px] text-muted-foreground pt-2">Fichaje normal: el empleado debe tener horario asignado ese día. Sin horario no podrá fichar con este tipo. Define el margen permitido respecto a su horario.</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-sm font-medium">Margen antes (min)</label>
-                      <NumberInput
-                        min={0}
-                        decimales={false}
-                        value={form.margen_antes_min}
-                        onValueChange={v => setForm(f => ({ ...f, margen_antes_min: v }))}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Margen después (min)</label>
-                      <NumberInput
-                        min={0}
-                        decimales={false}
-                        value={form.margen_despues_min}
-                        onValueChange={v => setForm(f => ({ ...f, margen_despues_min: v }))}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex items-center justify-between"><span className="text-sm">Computa tiempo</span><Switch checked={form.computa_tiempo} onCheckedChange={v => setForm(f => ({ ...f, computa_tiempo: v }))} /></div>

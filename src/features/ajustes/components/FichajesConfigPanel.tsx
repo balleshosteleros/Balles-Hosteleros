@@ -12,6 +12,11 @@ import { FICHAJE_POLICY_DEFAULT, type FichajePolicy } from "@/features/rrhh/data
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const MINUTOS_OPCIONES = [5, 10, 15, 20, 25, 30];
+// La CORTESÍA (el margen que se redondea a la hora del turno) no pasa de 15
+// min: el mínimo para poder cerrar un fichaje son 30, y si la cortesía pudiera
+// llegar a 30 las dos ventanas se pisarían. Los demás márgenes de esta pantalla
+// (aviso del móvil, auto-salida) no redondean nada y conservan su lista.
+const CORTESIA_OPCIONES = [5, 10, 15];
 const REAVISO_OPCIONES = [1, 2, 3, 5, 10, 15];
 
 /**
@@ -116,7 +121,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                     value={policy.margenAntesMin}
                     onChange={(e) => setPolicy((p) => ({ ...p, margenAntesMin: Number(e.target.value) }))}
                   >
-                    {MINUTOS_OPCIONES.map((m) => (
+                    {CORTESIA_OPCIONES.map((m) => (
                       <option key={m} value={m}>{m} min</option>
                     ))}
                   </select>
@@ -156,7 +161,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                     value={policy.margenDespuesMin}
                     onChange={(e) => setPolicy((p) => ({ ...p, margenDespuesMin: Number(e.target.value) }))}
                   >
-                    {MINUTOS_OPCIONES.map((m) => (
+                    {CORTESIA_OPCIONES.map((m) => (
                       <option key={m} value={m}>{m} min</option>
                     ))}
                   </select>

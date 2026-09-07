@@ -742,7 +742,7 @@ async function evaluarEntradaFichaje(
 
   const { data: tiposData } = await supabase
     .from("tipos_fichaje")
-    .select("codigo, nombre, requiere_solicitud, margen_antes_min, margen_despues_min")
+    .select("codigo, nombre, requiere_solicitud")
     .eq("empresa_id", empresaId)
     .eq("activo", true)
     .order("orden", { ascending: true });
@@ -750,8 +750,6 @@ async function evaluarEntradaFichaje(
     codigo: string;
     nombre: string;
     requiere_solicitud: boolean;
-    margen_antes_min: number;
-    margen_despues_min: number;
   }[];
 
   let tipoSel = tipoCodigo

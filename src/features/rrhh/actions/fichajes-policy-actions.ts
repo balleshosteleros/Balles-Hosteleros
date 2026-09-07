@@ -12,6 +12,17 @@ function clampMargen(n: number): number {
   return Math.min(120, Math.max(0, Math.round(n)));
 }
 
+/**
+ * Cortesía (el margen que se redondea a la hora del turno): tope de 15 min.
+ * El mínimo para poder cerrar un fichaje son 30, así que por encima de 15 las
+ * dos ventanas se pisarían. El desplegable ya no ofrece más, pero quien manda
+ * es el servidor: aquí se corta venga de donde venga.
+ */
+function clampCortesia(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(15, Math.max(0, Math.round(n)));
+}
+
 function clampIntervalo(n: number): number {
   if (!Number.isFinite(n)) return 5;
   return Math.min(60, Math.max(1, Math.round(n)));
@@ -71,9 +82,9 @@ export async function saveFichajePolicy(input: FichajePolicy) {
       {
         empresa_id: empresaId,
         permitir_antes: input.permitirAntes,
-        margen_antes_min: clampMargen(input.margenAntesMin),
+        margen_antes_min: clampCortesia(input.margenAntesMin),
         permitir_despues: input.permitirDespues,
-        margen_despues_min: clampMargen(input.margenDespuesMin),
+        margen_despues_min: clampCortesia(input.margenDespuesMin),
         redondear_antes: input.redondearAntes,
         redondear_despues: input.redondearDespues,
         popup_margen_antes_min: clampMargen(input.popupMargenAntesMin),
