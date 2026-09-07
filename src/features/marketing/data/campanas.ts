@@ -22,16 +22,63 @@ export const ESTADOS_CAMPANA: { value: EstadoCampana; label: string; color: stri
 
 export type RecurrenciaCampana = "una_vez" | "diaria" | "semanal" | "mensual";
 
-// AST del segmento dinámico. Se rellenará el builder en Fase 8.
+// ── A quién se le manda una campaña ─────────────────────────────
+//
+// El segmento se evalúa contra la ficha del cliente. Cada condición es un dato
+// que ya está en su ficha: no hay listas que mantener a mano, así que un cliente
+// entra o sale del segmento solo, según lo que hace.
+
 export type SegmentoOperador = "AND" | "OR";
+
 export type SegmentoCondicion =
-  | { tipo: "ultima_visita_hace_dias"; max: 7 | 30 | 90 | 365 }
-  | { tipo: "sin_visitar_desde_dias"; min: number }
+  // ── Cómo de cliente es ──
   | { tipo: "clasificacion"; valores: Array<"REGULAR" | "VIP" | "NUEVO"> }
-  | { tipo: "visitas_min"; min: number };
+  | { tipo: "visitas_min"; min: number }
+  | { tipo: "visitas_max"; max: number }
+  // ── Cuándo vino ──
+  | { tipo: "ultima_visita_hace_dias"; max: number }
+  | { tipo: "sin_visitar_desde_dias"; min: number }
+  | { tipo: "ultima_visita_antes"; fecha: string }
+  | { tipo: "ultima_visita_despues"; fecha: string }
+  // ── Desde cuándo es cliente ──
+  | { tipo: "alta_antes"; fecha: string }
+  | { tipo: "alta_despues"; fecha: string }
+  // ── Etiquetas de su ficha ──
+  | { tipo: "etiquetas"; etiquetaIds: string[]; modo: "alguna" | "todas" }
+  // ── Lo que opina ──
+  | { tipo: "valoracion_min"; min: number }
+  | { tipo: "valoracion_max"; max: number }
+  | { tipo: "ha_valorado"; valor: boolean }
+  // ── Su cumpleaños ──
+  | { tipo: "cumple_mes"; meses: number[] }
+  | { tipo: "cumple_en_dias"; dias: number }
+  // ── Cómo se porta ──
+  | { tipo: "no_shows_max"; max: number }
+  | { tipo: "cancelaciones_max"; max: number };
+
+export type TipoSegmentoCondicion = SegmentoCondicion["tipo"];
+
 export interface SegmentoJson {
   operador: SegmentoOperador;
   condiciones: SegmentoCondicion[];
+  /**
+   * Escribir SOLO a quien dio permiso comercial en el canal de la campaña.
+   *
+   * Nace encendido y es lo que debe quedarse: el permiso es lo que separa una
+   * campaña de un correo no deseado, y apagarlo manda publicidad a quien nunca
+   * la pidió —con lo que eso significa ante la ley y ante el filtro de spam,
+   * que acaba tirando también las confirmaciones de reserva—. Se puede apagar
+   * porque el negocio es quien responde de sus envíos, no el software; pero se
+   * apaga a sabiendas.
+   *
+   * `undefined` en las campañas viejas se lee como ENCENDIDO.
+   */
+  soloConPermiso?: boolean;
+}
+
+/** Cómo se lee el permiso de una campaña guardada antes de que existiera. */
+export function exigePermiso(segmento: SegmentoJson | null | undefined): boolean {
+  return segmento?.soloConPermiso !== false;
 }
 
 /** Reglas de la campaña de cumpleaños. Viajan con ella en los tres canales. */
@@ -62,7 +109,11 @@ export interface CamposComunesPRP046 {
   ultimaEjecucion: string | null;
 }
 
-const SEGMENTO_VACIO: SegmentoJson = { operador: "AND", condiciones: [] };
+const SEGMENTO_VACIO: SegmentoJson = {
+  operador: "AND",
+  condiciones: [],
+  soloConPermiso: true,
+};
 
 function camposComunesVacios(): CamposComunesPRP046 {
   return {

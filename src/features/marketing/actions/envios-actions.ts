@@ -1,7 +1,10 @@
 "use server";
 
 import { getMarketingContext } from "@/features/marketing/lib/supabase-context";
-import { destinatariosDeCampana } from "@/features/marketing/lib/segmento-resolver";
+import {
+  contarDestinatariosPorCanal,
+  type CanalContacto,
+} from "@/features/marketing/lib/segmento-resolver";
 import type { SegmentoJson } from "@/features/marketing/data/campanas";
 
 /**
@@ -19,15 +22,26 @@ export async function contarDestinatariosAction(campanaId: string) {
 
     const { data: campana } = await supabase
       .from("campanas_marketing")
-      .select("segmento_json")
+      .select("segmento_json, canal")
       .eq("id", campanaId)
       .eq("empresa_id", empresaId)
       .maybeSingle();
     if (!campana) return { ok: false as const, total: 0, error: "Campaña no encontrada" };
 
     const segmento = (campana.segmento_json as SegmentoJson) ?? { operador: "AND", condiciones: [] };
-    const destinatarios = await destinatariosDeCampana(supabase, empresaId, segmento);
-    return { ok: true as const, total: destinatarios.length };
+    // El permiso se cuenta POR CANAL: los que aceptaron correos no son los
+    // mismos que aceptaron WhatsApp, y enseñar la cifra del correo en una
+    // campaña de WhatsApp haría prometer un alcance que no existe.
+    const canal = (campana.canal as string) ?? "email";
+    const canalContacto: CanalContacto =
+      canal === "whatsapp" || canal === "sms" ? canal : "email";
+    const total = await contarDestinatariosPorCanal(
+      supabase,
+      empresaId,
+      segmento,
+      canalContacto,
+    );
+    return { ok: true as const, total };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
     return { ok: false as const, total: 0, error: msg };

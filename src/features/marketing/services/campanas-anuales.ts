@@ -253,12 +253,13 @@ export async function sembrarCampanasAnualesAEmpresa(
       canal: "email",
       nombre: seed.nombre,
       estado: "borrador",
-      segmento: "todos",
       reserva_link_id: correo.reservaLinkId,
       // Un envío al mes, el día 1 a las 11:00. La hora exacta la decide quien
       // lo envía: el día sorpresa del concurso es parte del juego.
       recurrencia_cron: `0 11 1 ${seed.mes} *`,
-      segmento_json: { operador: "AND", condiciones: [] },
+      // Sin condiciones: el correo del mes va a toda la casa, y solo a quien
+      // dio permiso.
+      segmento_json: { operador: "AND", condiciones: [], soloConPermiso: true },
       media_urls: correo.fotoUrl ? [correo.fotoUrl] : [],
       payload: {
         claveSeed: seed.clave,

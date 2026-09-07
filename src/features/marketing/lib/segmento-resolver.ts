@@ -1,221 +1,169 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { SegmentoJson, SegmentoCondicion } from "@/features/marketing/data/campanas";
-import {
-  COLUMNAS_PERMISO,
-  ALCANCE_POR_DEFECTO,
-  type AlcanceCampana,
-  type CanalPublicidad,
-} from "./permiso-publicidad";
+import { exigePermiso, type SegmentoJson } from "@/features/marketing/data/campanas";
 
 /**
- * Construye filtros sobre `clientes_sala` a partir del AST de segmento.
+ * A quién le toca una campaña.
  *
- * Operador AND: encadenamos `.eq/.gte/.lt/.in` directamente.
- * Operador OR: usamos `.or(...)` con cláusula PostgREST string-encoded.
+ * ── Por qué el filtro lo resuelve la base de datos ─────────────────────────
+ * La primera versión se traía las fichas de la empresa y las juzgaba aquí. Se
+ * leía bien y daba el resultado correcto, pero con veinte mil clientes tardaba
+ * veinte segundos por consulta —veinte páginas de mil filas, una detrás de
+ * otra— y el contador de "a cuánta gente le llega" se recalcula cada vez que se
+ * toca un filtro. Ahora lo hace `clientes_del_segmento` de una pasada y con los
+ * índices: instantáneo, y sigue siéndolo cuando la base de clientes doble.
  *
- * Aprendizaje: nunca extraer `ReturnType<SupabaseClient["from"]>` para reutilizar
- * un query builder entre funciones — `.from()` devuelve QueryBuilder pero el
- * `.select()` lo convierte en FilterBuilder y los tipos no encajan. Mejor
- * construir la query localmente en cada función.
+ * Este archivo es solo la puerta: traduce la campaña a los argumentos de esa
+ * función. Las condiciones viven en la migración
+ * `20260907220000_segmento_clientes_en_base_de_datos.sql`, y añadir una nueva es
+ * añadir un WHEN allí y una línea en el desplegable del editor.
+ *
+ * ── El permiso ────────────────────────────────────────────────────────────
+ * Por defecto solo entra quien dio permiso comercial EN EL CANAL de la campaña:
+ * quien aceptó correos no aceptó que le escriban al móvil. Se puede desactivar
+ * (`soloConPermiso: false`) porque el negocio responde de sus envíos, pero es
+ * una decisión suya y consciente, nunca el punto de partida. El dato de
+ * contacto se exige siempre: sin dirección no hay a dónde escribir.
  */
 
-function diasISO(daysAgo: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return d.toISOString().split("T")[0];
+export type CanalContacto = "email" | "whatsapp" | "sms";
+
+interface FilaSegmento {
+  id: string;
+  email: string | null;
+  telefono: string | null;
 }
 
-function condicionAOrString(c: SegmentoCondicion): string | null {
-  switch (c.tipo) {
-    case "ultima_visita_hace_dias":
-      return `ultima_visita.gte.${diasISO(c.max)}`;
-    case "sin_visitar_desde_dias":
-      return `ultima_visita.lt.${diasISO(c.min)}`;
-    case "clasificacion":
-      if (!c.valores.length) return null;
-      return `clasificacion.in.(${c.valores.join(",")})`;
-    case "visitas_min":
-      return `visitas.gte.${c.min}`;
-  }
+const SEGMENTO_VACIO: SegmentoJson = { operador: "AND", condiciones: [] };
+
+async function resolver(
+  supabase: SupabaseClient,
+  empresaId: string,
+  segmento: SegmentoJson | null | undefined,
+  canal: CanalContacto | null,
+): Promise<FilaSegmento[]> {
+  const { data, error } = await supabase.rpc("clientes_del_segmento", {
+    p_empresa_id: empresaId,
+    p_segmento: segmento ?? SEGMENTO_VACIO,
+    p_canal: canal,
+    p_con_permiso: exigePermiso(segmento),
+  });
+  if (error) throw error;
+  return (data ?? []) as FilaSegmento[];
 }
 
-// FilterBuilder mínimo que necesitamos (evita acoplarnos a tipos internos del SDK).
-type FB = {
-  eq: (col: string, v: unknown) => FB;
-  gte: (col: string, v: unknown) => FB;
-  lt: (col: string, v: unknown) => FB;
-  in: (col: string, v: unknown[]) => FB;
-  or: (filters: string) => FB;
-};
-
-function aplicarAnd(q: FB, condiciones: SegmentoCondicion[]): FB {
-  let cur = q;
-  for (const c of condiciones) {
-    switch (c.tipo) {
-      case "ultima_visita_hace_dias":
-        cur = cur.gte("ultima_visita", diasISO(c.max));
-        break;
-      case "sin_visitar_desde_dias":
-        cur = cur.lt("ultima_visita", diasISO(c.min));
-        break;
-      case "clasificacion":
-        if (c.valores.length) cur = cur.in("clasificacion", c.valores);
-        break;
-      case "visitas_min":
-        cur = cur.gte("visitas", c.min);
-        break;
-    }
-  }
-  return cur;
+/**
+ * Cuántas fichas encajan, contando en la base de datos.
+ *
+ * Se cuenta allí y no aquí porque traerse veinte mil filas para pedirles el
+ * `length` son dos segundos de red por cada filtro que se toca, y este número se
+ * recalcula mientras el usuario escribe.
+ */
+async function contar(
+  supabase: SupabaseClient,
+  empresaId: string,
+  segmento: SegmentoJson | null | undefined,
+  canal: CanalContacto | null,
+): Promise<number> {
+  const { data, error } = await supabase.rpc("contar_clientes_del_segmento", {
+    p_empresa_id: empresaId,
+    p_segmento: segmento ?? SEGMENTO_VACIO,
+    p_canal: canal,
+    p_con_permiso: exigePermiso(segmento),
+  });
+  if (error) throw error;
+  return (data as number | null) ?? 0;
 }
 
+/**
+ * Cuántas fichas encajan en el filtro, sin mirar permisos ni datos de contacto.
+ * Es la cifra de "a cuánta gente describe esto", SIEMPRE mayor que la de los que
+ * van a recibir el mensaje.
+ */
 export async function contarSegmento(
   supabase: SupabaseClient,
   empresaId: string,
   segmento: SegmentoJson,
 ): Promise<number> {
-  const base = supabase
-    .from("clientes_sala")
-    .select("id", { count: "exact", head: true })
-    .eq("empresa_id", empresaId) as unknown as FB;
-
-  let q: FB;
-  if (!segmento.condiciones.length) {
-    q = base;
-  } else if (segmento.operador === "AND") {
-    q = aplicarAnd(base, segmento.condiciones);
-  } else {
-    const ors = segmento.condiciones.map(condicionAOrString).filter(Boolean) as string[];
-    q = ors.length ? base.or(ors.join(",")) : base;
-  }
-
-  const { count } = await (q as unknown as { count: Promise<number> } & PromiseLike<{ count: number | null }>);
-  return count ?? 0;
+  return contar(supabase, empresaId, segmento, null);
 }
 
-/**
- * Destinatarios REALES de una campaña, para el canal y el alcance elegidos.
- *
- * Cuatro cosas que `clienteIdsDelSegmento` no hace y aquí son obligatorias:
- *
- *  1. **Permiso del canal.** Cada canal lleva su casilla: el sí del correo no
- *     autoriza un WhatsApp. Con alcance "solo los que lo aceptan" entran los que
- *     dijeron que sí; con "todos menos las bajas" entran también aquellos a los
- *     que nunca se preguntó.
- *  2. **Las bajas, fuera siempre.** Quien pidió no recibir más no entra con
- *     ningún alcance. No es una opción que se pueda activar.
- *  3. **Paginado.** PostgREST corta en 1.000 filas. Sin paginar, una campaña a
- *     seis mil clientes salía a mil y parecía enviada entera.
- *  4. **Sin duplicados.** El mismo correo en dos fichas —pasa: el cliente
- *     reservó con dos teléfonos— recibiría el mensaje dos veces.
- */
-export async function destinatariosDeCampana(
+/** Cuántos lo recibirían DE VERDAD por ese canal: con permiso y con contacto. */
+export async function contarDestinatariosPorCanal(
   supabase: SupabaseClient,
   empresaId: string,
   segmento: SegmentoJson,
-  canal: CanalPublicidad = "email",
-  alcance: AlcanceCampana = ALCANCE_POR_DEFECTO,
-): Promise<Array<{ id: string; email: string }>> {
-  const PAGINA = 1000;
-  const cols = COLUMNAS_PERMISO[canal];
-  const salida: Array<{ id: string; email: string }> = [];
+  canal: CanalContacto,
+): Promise<number> {
+  return contar(supabase, empresaId, segmento, canal);
+}
+
+export async function clienteIdsDelSegmento(
+  supabase: SupabaseClient,
+  empresaId: string,
+  segmento: SegmentoJson,
+): Promise<FilaSegmento[]> {
+  return resolver(supabase, empresaId, segmento, null);
+}
+
+/**
+ * Destinatarios REALES de una campaña, por canal: con permiso (salvo que la
+ * campaña lo desactive), con dato de contacto y sin repetidos.
+ *
+ * Lo de los repetidos no lo hace la base de datos y aquí sí: el mismo correo en
+ * dos fichas —pasa, el cliente reservó con dos teléfonos— recibiría el mensaje
+ * dos veces.
+ */
+export async function destinatariosDeCampanaPorCanal(
+  supabase: SupabaseClient,
+  empresaId: string,
+  segmento: SegmentoJson,
+  canal: CanalContacto,
+): Promise<Array<{ id: string; contacto: string }>> {
+  const filas = await resolver(supabase, empresaId, segmento, canal);
+
+  const salida: Array<{ id: string; contacto: string }> = [];
   const vistos = new Set<string>();
 
-  for (let desde = 0; ; desde += PAGINA) {
-    let base = supabase
-      .from("clientes_sala")
-      .select(`id, ${cols.contacto}`)
-      .eq("empresa_id", empresaId)
-      // La baja es innegociable, mande el alcance lo que mande.
-      .is(cols.bajaAt, null)
-      .not(cols.contacto, "is", null);
-
-    if (alcance === "con_permiso") base = base.eq(cols.acepta, true);
-
-    const paginada = base.order("id").range(desde, desde + PAGINA - 1) as unknown as FB;
-
-    let q: FB;
-    if (!segmento.condiciones.length) {
-      q = paginada;
-    } else if (segmento.operador === "AND") {
-      q = aplicarAnd(paginada, segmento.condiciones);
-    } else {
-      const ors = segmento.condiciones.map(condicionAOrString).filter(Boolean) as string[];
-      q = ors.length ? paginada.or(ors.join(",")) : paginada;
-    }
-
-    const { data, error } = await (q as unknown as PromiseLike<{
-      data: Array<Record<string, unknown>> | null;
-      error: unknown;
-    }>);
-    if (error) throw error;
-
-    const lote = data ?? [];
-    for (const c of lote) {
-      const contacto = String(c[cols.contacto] ?? "").trim().toLowerCase();
-      if (!contacto || vistos.has(contacto)) continue;
-      vistos.add(contacto);
-      salida.push({ id: String(c.id), email: contacto });
-    }
-
-    if (lote.length < PAGINA) break;
+  for (const f of filas) {
+    const bruto = canal === "email" ? f.email : f.telefono;
+    const contacto =
+      canal === "email"
+        ? (bruto ?? "").trim().toLowerCase()
+        : (bruto ?? "").replace(/\s+/g, "");
+    if (!contacto || vistos.has(contacto)) continue;
+    vistos.add(contacto);
+    salida.push({ id: f.id, contacto });
   }
 
   return salida;
 }
 
-/**
- * Destinatarios de una campaña de WHATSAPP.
- *
- * Mismas tres reglas que el correo —consentimiento, paginado y sin repetidos—,
- * pero sobre el teléfono y el permiso de WhatsApp, que es otro distinto: quien
- * autorizó correos no autorizó que le escriban al móvil.
- */
+/** Destinatarios de una campaña de CORREO. */
+export async function destinatariosDeCampana(
+  supabase: SupabaseClient,
+  empresaId: string,
+  segmento: SegmentoJson,
+): Promise<Array<{ id: string; email: string }>> {
+  const filas = await destinatariosDeCampanaPorCanal(supabase, empresaId, segmento, "email");
+  return filas.map((f) => ({ id: f.id, email: f.contacto }));
+}
+
+/** Destinatarios de una campaña de WHATSAPP. */
 export async function destinatariosWhatsAppDeCampana(
   supabase: SupabaseClient,
   empresaId: string,
   segmento: SegmentoJson,
 ): Promise<Array<{ id: string; telefono: string }>> {
-  const PAGINA = 1000;
-  const salida: Array<{ id: string; telefono: string }> = [];
-  const vistos = new Set<string>();
+  const filas = await destinatariosDeCampanaPorCanal(supabase, empresaId, segmento, "whatsapp");
+  return filas.map((f) => ({ id: f.id, telefono: f.contacto }));
+}
 
-  for (let desde = 0; ; desde += PAGINA) {
-    const base = supabase
-      .from("clientes_sala")
-      .select("id, telefono")
-      .eq("empresa_id", empresaId)
-      .eq("acepta_marketing_whatsapp", true)
-      .not("telefono", "is", null)
-      .order("id")
-      .range(desde, desde + PAGINA - 1) as unknown as FB;
-
-    let q: FB;
-    if (!segmento.condiciones.length) {
-      q = base;
-    } else if (segmento.operador === "AND") {
-      q = aplicarAnd(base, segmento.condiciones);
-    } else {
-      const ors = segmento.condiciones.map(condicionAOrString).filter(Boolean) as string[];
-      q = ors.length ? base.or(ors.join(",")) : base;
-    }
-
-    const { data, error } = await (q as unknown as PromiseLike<{
-      data: Array<{ id: string; telefono: string | null }> | null;
-      error: unknown;
-    }>);
-    if (error) throw error;
-
-    const lote = data ?? [];
-    for (const c of lote) {
-      const telefono = (c.telefono ?? "").replace(/\s+/g, "");
-      if (!telefono || vistos.has(telefono)) continue;
-      vistos.add(telefono);
-      salida.push({ id: c.id, telefono });
-    }
-
-    if (lote.length < PAGINA) break;
-  }
-
-  return salida;
+/** Destinatarios de una campaña de SMS. */
+export async function destinatariosSmsDeCampana(
+  supabase: SupabaseClient,
+  empresaId: string,
+  segmento: SegmentoJson,
+): Promise<Array<{ id: string; telefono: string }>> {
+  const filas = await destinatariosDeCampanaPorCanal(supabase, empresaId, segmento, "sms");
+  return filas.map((f) => ({ id: f.id, telefono: f.contacto }));
 }

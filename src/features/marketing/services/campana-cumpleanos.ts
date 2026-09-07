@@ -135,13 +135,16 @@ export async function sembrarCampanaCumpleanosAEmpresa(
   const comun = {
     empresa_id: empresaId,
     estado: "borrador",
-    segmento: "cumpleaneros",
     reserva_link_id: correo.reservaLinkId,
     recurrencia_cron: CRON_DIARIO,
-    // El segmento no se resuelve con el constructor de segmentos: quién cumple
-    // años hoy no es un filtro de la ficha, es una cuenta de días. La hace el
-    // motor.
-    segmento_json: { operador: "AND", condiciones: [] },
+    // El segmento deja escrito a quién describe la campaña, para que la cifra
+    // que se ve al abrirla tenga sentido. Quién la recibe HOY lo decide el
+    // motor, que escoge el día exacto y no toda la ventana.
+    segmento_json: {
+      operador: "AND",
+      condiciones: [{ tipo: "cumple_en_dias", dias: seed.diasAntes }],
+      soloConPermiso: true,
+    },
   };
 
   const filas: Record<string, unknown>[] = [];
