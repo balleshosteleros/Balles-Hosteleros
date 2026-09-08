@@ -9,14 +9,16 @@
  * a otra: en qué PIPELINE está, en qué FASE de ese pipeline, y en qué ESTADO
  * (activo, ganado, perdido o abandonado).
  *
- * Si la persona no está en ningún pipeline no se pinta nada: en los
- * restaurantes no hay tablero comercial y la ficha no debe llenarse de huecos.
+ * Es de la MATRIZ y solo de la matriz: el pipeline es el comercial del propio
+ * software, no algo de un restaurante. En una empresa cliente ni se pinta ni se
+ * pregunta a la base de datos, aunque la ficha de cliente sea la misma vista.
  */
 import { useEffect, useState } from "react";
 import { GitBranch } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useCatalogoEmpresa } from "@/features/empresa/contexts/catalogo-empresa-context";
 import { formatEur } from "@/shared/lib/numero";
 import {
   listOportunidadesDeCliente,
@@ -25,6 +27,7 @@ import {
 import { OPORTUNIDAD_ESTADO_CLASE, OPORTUNIDAD_ESTADO_LABEL } from "../types";
 
 export function PipelinesCliente({ clienteId }: { clienteId: string }) {
+  const { esMatriz } = useCatalogoEmpresa();
   // Se guarda de qué cliente son las filas que hay en mano: así al abrir otra
   // ficha no se enseña un instante lo del cliente anterior.
   const [cargado, setCargado] = useState<{
@@ -33,6 +36,7 @@ export function PipelinesCliente({ clienteId }: { clienteId: string }) {
   } | null>(null);
 
   useEffect(() => {
+    if (!esMatriz) return;
     let vigente = true;
     listOportunidadesDeCliente(clienteId).then((res) => {
       if (!vigente) return;
@@ -41,7 +45,7 @@ export function PipelinesCliente({ clienteId }: { clienteId: string }) {
     return () => {
       vigente = false;
     };
-  }, [clienteId]);
+  }, [clienteId, esMatriz]);
 
   const filas = cargado?.clienteId === clienteId ? cargado.filas : [];
   if (filas.length === 0) return null;

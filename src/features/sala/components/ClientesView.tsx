@@ -1614,8 +1614,8 @@ export function ClientesView() {
                 {/* En qué pipelines está. La ficha es UNA y las tarjetas son
                     muchas, igual que las reservas: quien contrata Ágora y
                     Sesame es la misma persona con dos tarjetas, no dos fichas.
-                    En los restaurantes no hay tablero comercial, así que ahí
-                    esto no pinta nada. */}
+                    Solo en la MATRIZ: el pipeline es el comercial del propio
+                    software. */}
                 <div className="pt-2 border-t empty:hidden">
                   <PipelinesCliente clienteId={borrador.id} />
                 </div>
