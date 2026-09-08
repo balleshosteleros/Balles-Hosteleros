@@ -26,7 +26,9 @@ export type TipoDocumento =
   // Actas del ciclo del material: recibirlo, devolverlo o darlo de baja.
   | "entrega_material"
   | "devolucion_material"
-  | "merma_material";
+  | "merma_material"
+  // Cajón de sastre: cualquier documento que no encaje en los conceptos de arriba.
+  | "otros";
 
 export type EstadoFirma =
   | "pendiente"
@@ -87,6 +89,7 @@ export const TIPO_LABEL: Record<TipoDocumento, string> = {
   entrega_material: "Entrega de material",
   devolucion_material: "Devolución de material",
   merma_material: "Baja de material por deterioro",
+  otros: "Otros",
 };
 
 export const MODALIDAD_LABEL: Record<ModalidadFirma, string> = {
@@ -131,6 +134,7 @@ export const TIPOS_DOCUMENTO: TipoDocumento[] = [
   "finiquito",
   "vacaciones",
   "modificacion_contrato",
+  "otros",
 ];
 
 export const MODALIDADES_FIRMA: ModalidadFirma[] = [
