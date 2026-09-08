@@ -35,6 +35,15 @@ const WEB_HOSTS_FIJOS = [
   'www.bacanalmadrid.com',
   'grupohabana.es',
   'www.grupohabana.es',
+  // El dominio RAÍZ sirve la web del grupo, no la app: `esHostPrincipal()` da
+  // por app todo lo que acabe en el dominio principal, y eso incluiría la
+  // propia raíz. Se comprueba por coincidencia EXACTA, así que `sistema.` y
+  // `software.` siguen siendo la app.
+  //
+  // OJO: `www.` NO puede entrar aquí. Acaba en `.balleshosteleros.com`, que el
+  // sistema trata como subdominio interno, y al añadirlo se caían los rewrites
+  // de TODOS los dominios: las webs de BACANAL y HABANA devolvían 404.
+  'balleshosteleros.com',
 ]
 
 const PREVIEW_WEB_HOSTS = Array.from(

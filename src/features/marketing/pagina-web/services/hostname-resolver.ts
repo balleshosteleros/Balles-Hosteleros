@@ -304,6 +304,17 @@ const WEB_HOSTS_FIJOS = [
   "www.bacanalmadrid.com",
   "grupohabana.es",
   "www.grupohabana.es",
+  // El dominio RAÍZ sirve la web del grupo, no la app. Es la excepción a la
+  // regla de al lado: `esHostPrincipal()` da por app todo lo que acabe en el
+  // dominio principal, y eso incluiría la propia raíz. Aquí se comprueba por
+  // coincidencia EXACTA y antes que el sufijo, así que `sistema.` y `software.`
+  // siguen siendo la app: solo se desvía la raíz.
+  //
+  // `www.balleshosteleros.com` NO va aquí: acaba en `.balleshosteleros.com` y el
+  // sistema lo trata como subdominio interno. Metido en esta lista tumbaba los
+  // rewrites de TODOS los dominios —BACANAL y HABANA incluidos— y sus webs
+  // devolvían 404. El `www` se resuelve con la redirección de siempre.
+  "balleshosteleros.com",
 ];
 
 export function hostsPreviewWeb(): string[] {
