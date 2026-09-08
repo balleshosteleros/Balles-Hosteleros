@@ -100,12 +100,32 @@ Si no lo es, mejor no activarlo todavía.
 
 | | |
 |---|---|
-| **Formulario enviado el** | ⏳ pendiente |
-| **Nº de caso de Google** | ⏳ pendiente |
-| **Estado** | ⏳ sin enviar |
+| **Formulario enviado el** | ✅ **8 de septiembre de 2026** |
+| **Enviado desde** | `balleshosteleros@gmail.com` |
+| **Nº de caso** | ❌ **no hay** — este formulario no da número |
+| **Respuesta de Google en pantalla** | *"Thank you. Your information has been sent to Google. A member of the team will be in touch shortly."* |
+| **Estado** | ⏳ esperando que Google contacte |
 
-*(Rellenar en cuanto se envíe, para que no pase como con las reseñas.)*
+**⚠️ Este trámite NO funciona como el de las reseñas.** Aquel era un caso de
+soporte con número (`8-…`, `9-…`) que se podía reclamar. Este es un formulario
+de interés: no da número, no manda acuse, y el propio formulario avisa de que
+*"las respuestas se revisan pero puede que no recibas una respuesta directa"*.
 
+O sea: **no hay nada que reclamar ni a dónde llamar.** Lo único que se puede
+hacer es vigilar `balleshosteleros@gmail.com`. Si Google escribe, escribirá ahí.
+
+**Qué hacer y cuándo:**
+
+- **Semanas 1-6:** esperar. Google no da plazo para esto.
+- **Si a los ~2 meses (≈ 8-nov-2026) no ha escrito nadie:** volver a enviarlo no
+  sirve de nada (es el mismo formulario sin seguimiento). La vía alternativa
+  real es entrar por un contacto de Google — un comercial de Google Ads, o el
+  soporte de Google Business Profile — y pedir que deriven al equipo del
+  Actions Center.
+- **Si Google escribe pidiendo datos: contestar el mismo día.** Esto es lo que
+  mató los dos intentos anteriores.
+
+---|---|
 ---
 
 ## Y mientras tanto — Instagram y Facebook ya funcionan
