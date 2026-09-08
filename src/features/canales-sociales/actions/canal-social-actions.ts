@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildReservaUrl, buildEmbedUrl } from "@/features/sala/data/reserva-links";
+import { dominioPublicoDeEmpresa } from "@/features/marketing/pagina-web/services/dominio-empresa";
 import {
   CANALES_SOCIALES,
   esCanalSocial,
@@ -16,11 +17,18 @@ async function getCtx() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null, empresaSlug: null, empresaNombre: null };
+  if (!user) {
+    return { supabase, user: null, empresaId: null, empresaSlug: null, empresaNombre: null, dominioPropio: null };
+  }
   const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
   let empresaSlug: string | null = null;
   let empresaNombre: string | null = null;
+  // El enlace se pega en la ficha de Google o en el perfil de Instagram del
+  // restaurante, donde lo ve su cliente: tiene que llevar SU dominio, no el de
+  // la gestora. Ver `buildReservaUrl`.
+  let dominioPropio: string | null = null;
   if (empresaId) {
+    dominioPropio = await dominioPublicoDeEmpresa(empresaId);
     const { data } = await supabase
       .from("empresas")
       .select("slug, nombre")
@@ -29,7 +37,7 @@ async function getCtx() {
     empresaSlug = (data?.slug as string | null) ?? null;
     empresaNombre = (data?.nombre as string | null) ?? null;
   }
-  return { supabase, user, empresaId, empresaSlug, empresaNombre };
+  return { supabase, user, empresaId, empresaSlug, empresaNombre, dominioPropio };
 }
 
 export interface EstadoCanalSocial {
@@ -65,7 +73,7 @@ export async function getEstadoCanalSocial(
   canalId: string,
 ): Promise<EstadoCanalSocial | null> {
   if (!esCanalSocial(canalId)) return null;
-  const { supabase, empresaId, empresaSlug, empresaNombre } = await getCtx();
+  const { supabase, empresaId, empresaSlug, empresaNombre, dominioPropio } = await getCtx();
   if (!empresaId) return null;
 
   const canal = CANALES_SOCIALES[canalId];
@@ -96,7 +104,7 @@ export async function getEstadoCanalSocial(
     empresaNombre: empresaNombre ?? "",
     activo: Boolean(data?.activo),
     existe: Boolean(data),
-    url: empresaSlug ? buildReservaUrl(empresaSlug, canal.palabraClave) : null,
+    url: empresaSlug ? buildReservaUrl(empresaSlug, canal.palabraClave, dominioPropio) : null,
     embedUrl: empresaSlug ? buildEmbedUrl(empresaSlug, canal.palabraClave) : null,
     reservas,
     activoDesde,
@@ -112,13 +120,13 @@ export async function getEstadoCanalSocial(
 export async function setCanalSocialActivo(canalId: string, activo: boolean) {
   try {
     if (!esCanalSocial(canalId)) return { ok: false as const, error: "Canal desconocido" };
-    const { supabase, user, empresaId, empresaSlug } = await getCtx();
+    const { supabase, user, empresaId, empresaSlug, dominioPropio } = await getCtx();
     if (!empresaId) return { ok: false as const, error: "Sin empresa" };
     if (!empresaSlug) {
       return { ok: false as const, error: "La empresa no tiene slug configurado" };
     }
     const canal = CANALES_SOCIALES[canalId];
-    const url = buildReservaUrl(empresaSlug, canal.palabraClave);
+    const url = buildReservaUrl(empresaSlug, canal.palabraClave, dominioPropio);
 
     const { data: existente } = await supabase
       .from("reserva_links")

@@ -66,7 +66,11 @@ const PORTALES = [
   // `ficha: true` = dentro del portal hay una página por elemento
   // (`/empleo/<id-vacante>`), y por tanto necesita su propia regla de reescritura.
   { ruta: 'empleo', campo: 'empleo_slug', ficha: true },
-  { ruta: 'reservar', campo: 'slug' },
+  // `ficha: true` porque la palabra clave del canal es una ficha:
+  // `/reservar/google`, `/reservar/instagram`. Sin ella, bajo el dominio del
+  // restaurante la keyword se perdía y la reserva entraba SIN canal (origen
+  // null), justo lo que estos enlaces existen para medir (08-sep).
+  { ruta: 'reservar', campo: 'slug', ficha: true },
   { ruta: 'ticket', campo: 'slug' },
   // Concurso mensual de las campañas de email: la ficha es la clave del mes
   // (`/concurso/octubre_halloween`). Va en el dominio del restaurante porque el
@@ -144,7 +148,7 @@ async function portalesSinSlug() {
         // dominio propio tomaba el ID por el nombre del local y lo borraba: el
         // candidato tocaba una vacante y volvía siempre a la lista (05-sep).
         // Solo en los portales que tienen ficha: en los demás (`carta`,
-        // `reservar`, `ticket`) esa ruta no existe y la regla sobraría.
+        // `ticket`) esa ruta no existe y la regla sobraría.
         if ('ficha' in portal && portal.ficha) {
           // El patrón excluye el propio slug: los rewrites se aplican en
           // CADENA, así que sin esa exclusión la regla volvía a capturar el
