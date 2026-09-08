@@ -332,7 +332,12 @@ const nextConfig: NextConfig = {
   // Módulos nativos (bindings .node) que Turbopack no puede empaquetar en
   // chunks ESM: se cargan en runtime desde node_modules. `ssh2` lo arrastra
   // `ssh2-sftp-client`, usado solo en el cron server-only de canales-google-rwg.
-  serverExternalPackages: ['ssh2', 'ssh2-sftp-client'],
+  // `sharp` (recorte del favicon redondo) es un BINARIO NATIVO: si el bundler
+  // lo empaqueta, en el servidor de Vercel no carga y la ruta se cae en
+  // silencio al icono sin recortar —funcionando en local, cuadrado en
+  // producción—. Declararlo externo hace que se cargue desde node_modules tal
+  // cual, con su binario de Linux.
+  serverExternalPackages: ['ssh2', 'ssh2-sftp-client', 'sharp'],
   // Activa el MCP server en /_next/mcp (Next.js 16+)
   experimental: {
     mcpServer: true,
