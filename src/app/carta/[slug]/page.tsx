@@ -29,6 +29,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     // con el logo de Balles Hosteleros.
     icons: iconsDeUrl(
       carta.empresa.isotipo_url || carta.empresa.logo_alt_url || carta.empresa.logo_url || null,
+      carta.empresa.color_primario,
     ),
   };
 }

@@ -120,7 +120,7 @@ export async function generateMetadata({
     title: `${detalle.oferta.titulo} · ${detalle.empresa.nombre}`,
     description: desc,
     // Favicon = isotipo de ESTA empresa, no el del software.
-    icons: iconsDeUrl(detalle.empresa.isotipo_url || detalle.empresa.logo_url),
+    icons: iconsDeUrl(detalle.empresa.isotipo_url || detalle.empresa.logo_url, detalle.empresa.color),
     openGraph: {
       title: `${detalle.oferta.titulo} — ${detalle.empresa.nombre}`,
       description: desc,

@@ -55,6 +55,6 @@ export async function generateMetadata({
   return {
     title: "Tu formación",
     robots: { index: false, follow: false },
-    icons: iconsDeUrl(datos ? datos.empresa.isotipo_url || datos.empresa.logo_url : null),
+    icons: iconsDeUrl(datos ? datos.empresa.isotipo_url || datos.empresa.logo_url : null, datos?.empresa.color),
   };
 }

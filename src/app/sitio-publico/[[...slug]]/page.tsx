@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { iconsDeUrl } from "@/shared/lib/favicon-empresa";
 import type { Metadata } from "next";
 import { resolverHostname } from "@/features/marketing/pagina-web/services/hostname-resolver";
 import { PaginaPublicaShell } from "@/features/marketing/pagina-web/components/public/PaginaPublicaShell";
@@ -62,10 +63,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title: match.nombre_empresa,
       statusBarStyle: "black-translucent",
     },
-    // iOS ignora el manifest para el icono: usa apple-touch-icon.
-    icons: logo
-      ? { icon: logo, shortcut: logo, apple: logo }
-      : undefined,
+    // Pestaña y marcadores: el isotipo recortado en CÍRCULO (norma: ningún
+    // favicon nuestro sale cuadrado). iOS va aparte con el cuadrado de siempre,
+    // porque la pantalla de inicio lo recorta ella y pinta de negro lo
+    // transparente — ver `iconsDeUrl` en `favicon-empresa`.
+    icons: iconsDeUrl(logo, match.branding?.color_primario),
     openGraph: {
       url: canonical,
       title: match.seo?.title,

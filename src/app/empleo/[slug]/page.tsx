@@ -41,7 +41,7 @@ export async function generateMetadata({
     title: `Empleo · ${portal.empresa.nombre}`,
     description: desc,
     // Favicon = isotipo de ESTA empresa, no el del software.
-    icons: iconsDeUrl(portal.empresa.isotipo_url || portal.empresa.logo_url),
+    icons: iconsDeUrl(portal.empresa.isotipo_url || portal.empresa.logo_url, portal.empresa.color),
     openGraph: {
       title: `Empleo en ${portal.empresa.nombre}`,
       description: desc,
