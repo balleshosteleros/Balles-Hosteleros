@@ -117,7 +117,21 @@ export async function restaurarVersion(input: {
       .maybeSingle();
     if (vErr || !ver) return { ok: false, error: "Versión no encontrada." };
 
-    const snapshot = (ver as { snapshot: { bloques: unknown; seo: unknown; branding: unknown } }).snapshot;
+    const snapshot = (
+      ver as {
+        snapshot: {
+          bloques: unknown;
+          seo: unknown;
+          branding: unknown;
+          // Solo lo llevan las versiones de una web COPIADA de otra: ahí el
+          // diseño no está en los bloques, está en el documento entero.
+          html_replica?: string | null;
+          replica_origen_url?: string | null;
+          replica_capturada_at?: string | null;
+          replica_assets?: unknown;
+        };
+      }
+    ).snapshot;
 
     const { error } = await supabase
       .from("paginas_web")
@@ -125,6 +139,14 @@ export async function restaurarVersion(input: {
         bloques: snapshot.bloques,
         seo: snapshot.seo,
         branding: snapshot.branding,
+        ...(snapshot.html_replica
+          ? {
+              html_replica: snapshot.html_replica,
+              replica_origen_url: snapshot.replica_origen_url ?? null,
+              replica_capturada_at: snapshot.replica_capturada_at ?? null,
+              replica_assets: snapshot.replica_assets ?? null,
+            }
+          : {}),
       })
       .eq("id", input.paginaId)
       .eq("empresa_id", empresaId);

@@ -473,10 +473,11 @@ if (process.argv[1]?.endsWith("clonar-web.mjs")) {
   const slugForzado = leer("--slug")?.trim().toLowerCase() || null;
   const pedirDatos = args.includes("--pedir-datos");
   const soloLocal = args.includes("--solo-local");
+  const forzar = args.includes("--forzar");
   const urls = args.filter((a) => a.startsWith("http"));
 
   if (urls.length === 0) {
-    console.error("Uso: node scripts/clonar-web.mjs --empresa <uuid> [--embudo \"Nombre\"] [--slug nombre-interno] [--paso-siguiente /vsl] [--pedir-datos] <url> [url…]");
+    console.error("Uso: node scripts/clonar-web.mjs --empresa <uuid> [--embudo \"Nombre\"] [--slug nombre-interno] [--paso-siguiente /vsl] [--pedir-datos] [--forzar] <url> [url…]");
     process.exit(1);
   }
   if (!soloLocal && !empresaId) {
@@ -543,10 +544,71 @@ if (process.argv[1]?.endsWith("clonar-web.mjs")) {
       // devolvía a BORRADOR: pasó de verdad al rehacer el embudo de Balles.
       const { data: previa } = await sb
         .from("paginas_web")
-        .select("tipo, estado, embudo_id, embudo_orden")
+        .select(
+          "id, tipo, estado, embudo_id, embudo_orden, html_replica, replica_origen_url, replica_capturada_at, replica_assets, bloques, seo, branding",
+        )
         .eq("empresa_id", empresaId)
         .eq("slug_interno", slug)
         .maybeSingle();
+
+      // No pisar una copia BUENA con una rota.
+      //
+      // Pasó de verdad el 08-09-2026: se borró la web de origen y al volver a
+      // copiarla se trajo la página de «esto ya no existe». La copia buena
+      // (101.568 bytes, 13 archivos) se quedó en 3.914 bytes y 1 archivo. Si el
+      // origen ya no está, o está caído, o pide contraseña, lo que llega es una
+      // página diminuta: eso no se guarda encima de nada.
+      if (previa?.html_replica && !forzar) {
+        const antes = previa.html_replica.length;
+        const archivosAntes = Array.isArray(previa.replica_assets)
+          ? previa.replica_assets.length
+          : 0;
+        const encogio = html.length < antes * 0.5;
+        const perdioArchivos = archivosAntes >= 3 && inventario.length < archivosAntes / 2;
+        if (encogio || perdioArchivos) {
+          throw new Error(
+            `La copia nueva de «${slug}» viene mucho más pobre que la que ya había ` +
+              `(${html.length} bytes y ${inventario.length} archivos, frente a ${antes} y ${archivosAntes}). ` +
+              `Suele significar que la web de origen ya no existe, está caída o pide contraseña. ` +
+              `No se ha tocado nada. Si de verdad quieres pisarla, repite con --forzar.`,
+          );
+        }
+      }
+
+      // Guardar la foto ANTERIOR antes de pisarla.
+      //
+      // Volver a copiar una web la sobrescribe entera, y con ella cualquier
+      // retoque hecho a mano encima. El historial que ya existía solo se
+      // dispara al publicar y solo guarda los bloques —- que en una copia están
+      // vacíos—-, así que de 21 copias, 19 no tenían absolutamente nada a lo
+      // que volver. Se guarda solo la web que se vuelve a copiar: las demás ni
+      // se tocan.
+      if (previa?.html_replica) {
+        const { data: ultima } = await sb
+          .from("paginas_web_versiones")
+          .select("version")
+          .eq("pagina_id", previa.id)
+          .order("version", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const { error: errVer } = await sb.from("paginas_web_versiones").insert({
+          pagina_id: previa.id,
+          version: (ultima?.version ?? 0) + 1,
+          snapshot: {
+            bloques: previa.bloques ?? [],
+            seo: previa.seo ?? null,
+            branding: previa.branding ?? null,
+            html_replica: previa.html_replica,
+            replica_origen_url: previa.replica_origen_url,
+            replica_capturada_at: previa.replica_capturada_at,
+            replica_assets: previa.replica_assets,
+          },
+        });
+        // Si el guardado falla, mejor parar: la alternativa es pisar la copia
+        // anterior sin red.
+        if (errVer) throw new Error(`No se pudo guardar la copia anterior: ${errVer.message}`);
+        console.log(`  ✓ copia anterior guardada (version ${(ultima?.version ?? 0) + 1})`);
+      }
 
       const fila = {
         empresa_id: empresaId,
