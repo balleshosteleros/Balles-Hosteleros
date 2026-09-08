@@ -17,6 +17,13 @@
  *   npx tsx scripts/importar-pipeline-ghl.ts BALLES "~/Downloads/Oportunidades Evergren Master 2.csv"
  *   npx tsx scripts/importar-pipeline-ghl.ts BALLES "...csv" --aplicar
  *
+ * Vale para cualquier tablero de GHL, no solo el comercial: el nombre sale de la
+ * columna "secuencia" del CSV y se puede forzar con `--pipeline`, y `--orden`
+ * dice en qué sitio del selector se coloca.
+ *
+ *   npx tsx scripts/importar-pipeline-ghl.ts BALLES "~/Downloads/Sesame.csv" \
+ *     --pipeline "Sistema - Sesame" --orden 6 --aplicar
+ *
  * Sin `--aplicar` no escribe nada: cuenta qué haría, columna por columna. Con
  * miles de personas reales delante, mirar antes no es un lujo.
  *
@@ -41,13 +48,29 @@ const ORTOGRAFIA: Record<string, string> = {
   "reunion": "Reunión",
 };
 
-/** Orden de las columnas del embudo comercial, de izquierda a derecha. */
+/**
+ * Orden de las columnas, de izquierda a derecha. Están los pasos del embudo
+ * comercial (EVERGREEN - MASTER) y los de los tableros de cada software
+ * (SISTEMA - ÁGORA, SESAME…), que no son pasos de venta sino en qué situación
+ * está el cliente: primero lo contratado, luego lo que se cayó.
+ *
+ * Una fase que no esté en la lista se pone detrás, en el orden en que apareció
+ * en el CSV, así que añadir un tablero nuevo no obliga a tocar esto.
+ */
 const ORDEN_FASES = [
+  // Embudo comercial: del primer contacto al cierre.
   "nuevo lead",
   "seguimiento setter",
   "reunión",
   "pendiente decisión",
   "seguimiento closer",
+  // Tablero de un software: en qué situación está cada cliente.
+  "contratado",
+  "contratado mensual",
+  "contratado anual",
+  "descontratado",
+  "termina año contrato",
+  "no interesado",
 ];
 
 const EMOJI = /[\p{Extended_Pictographic}️‍]+/gu;
@@ -172,6 +195,7 @@ async function asegurarPipeline(
   supabase: SupabaseClient,
   empresaId: string,
   nombre: string,
+  orden: number,
 ): Promise<string> {
   const { data: existente } = await supabase
     .from("pipelines")
@@ -179,11 +203,20 @@ async function asegurarPipeline(
     .eq("empresa_id", empresaId)
     .ilike("nombre", nombre)
     .maybeSingle();
-  if (existente?.id) return existente.id as string;
+  if (existente?.id) {
+    // El selector de arriba los pinta por `orden`: reimportar tiene que poder
+    // recolocar un tablero sin borrarlo y volver a crearlo.
+    const { error } = await supabase
+      .from("pipelines")
+      .update({ orden })
+      .eq("id", existente.id);
+    if (error) throw error;
+    return existente.id as string;
+  }
 
   const { data, error } = await supabase
     .from("pipelines")
-    .insert({ empresa_id: empresaId, nombre, orden: 0, activo: true })
+    .insert({ empresa_id: empresaId, nombre, orden, activo: true })
     .select("id")
     .single();
   if (error) throw error;
@@ -248,10 +281,12 @@ async function main() {
   const aplicar = process.argv.includes("--aplicar");
   const iPipeline = process.argv.indexOf("--pipeline");
   const nombrePipeline = iPipeline > -1 ? process.argv[iPipeline + 1] : null;
+  const iOrden = process.argv.indexOf("--orden");
+  const orden = iOrden > -1 ? Number.parseInt(process.argv[iOrden + 1], 10) || 0 : 0;
 
   if (!empresaNombre || !ruta) {
     console.error(
-      'Uso: npx tsx scripts/importar-pipeline-ghl.ts <EMPRESA> "<oportunidades.csv>" [--pipeline "Nombre"] [--aplicar]',
+      'Uso: npx tsx scripts/importar-pipeline-ghl.ts <EMPRESA> "<oportunidades.csv>" [--pipeline "Nombre"] [--orden N] [--aplicar]',
     );
     process.exit(1);
   }
@@ -317,7 +352,7 @@ async function main() {
   }
 
   // ─── Embudo y columnas ───
-  const pipelineId = await asegurarPipeline(supabase, empresaId, nombre);
+  const pipelineId = await asegurarPipeline(supabase, empresaId, nombre, orden);
   const faseIdPorBruta = await asegurarFases(
     supabase,
     pipelineId,
