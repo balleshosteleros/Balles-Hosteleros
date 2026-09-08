@@ -541,7 +541,9 @@ export function ReservaPublicaForm({
       className={
         embedded
           ? "bg-transparent"
-          : "min-h-[100dvh] bg-white sm:bg-gradient-to-b sm:from-zinc-50 sm:to-zinc-100 sm:py-8 sm:px-6"
+          : // `px-3` en móvil: sin él la tarjeta llegaba pegada a los bordes de la
+            // pantalla y su marco no se veía. A partir de tablet manda `sm:px-6`.
+            "min-h-[100dvh] bg-white sm:bg-gradient-to-b sm:from-zinc-50 sm:to-zinc-100 px-3 py-3 sm:py-8 sm:px-6"
       }
       style={styleVars}
     >
