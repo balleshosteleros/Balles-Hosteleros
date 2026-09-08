@@ -64,6 +64,82 @@ function nombreDeArchivo(url, contentType) {
 }
 
 /**
+ * Devuelve la vida al menú del teléfono.
+ *
+ * La copia va sin los scripts del original, así que el botón de la hamburguesa
+ * se queda mudo y en el móvil no hay manera de llegar al menú. Los enlaces SÍ
+ * están en el documento (ocultos para pantalla pequeña), así que basta con
+ * enseñarlos al pulsar. Si la web no tiene ese botón, el añadido no hace nada.
+ */
+function reanimarMenuDeMovil(html) {
+  const guion = `<script>
+(function () {
+  var boton = null;
+  document.querySelectorAll("button[aria-label]").forEach(function (b) {
+    if (!boton && /men[u\\u00fa]/i.test(b.getAttribute("aria-label") || "")) boton = b;
+  });
+  if (!boton) return;
+  var panel = boton.previousElementSibling;
+  while (panel && !/(^|\\s)hidden(\\s|$)/.test(String(panel.className || ""))) {
+    panel = panel.previousElementSibling;
+  }
+  if (!panel || !panel.querySelector("a")) return;
+  var barra = boton.closest("nav") || boton.parentElement;
+  // La capa cuelga del BODY, no de la barra: las barras llevan desenfoque de
+  // fondo y eso encierra dentro de ellas todo lo que se pone "fixed" — el menú
+  // salía aplastado en la franja de la barra.
+  //
+  // El color se busca subiendo desde el propio menú hasta dar con uno opaco:
+  // la barra suele ser translúcida y se veía la página por debajo.
+  function fondoOpaco(el) {
+    for (var n = el; n; n = n.parentElement) {
+      var c = getComputedStyle(n).backgroundColor || "";
+      if (c.indexOf("rgba") === 0) {
+        var alfa = parseFloat(c.slice(c.lastIndexOf(",") + 1));
+        if (alfa >= 0.99) return c;
+      } else if (c.indexOf("rgb") === 0) {
+        return c;
+      }
+    }
+    return "#000";
+  }
+  var iconoCerrado = boton.innerHTML;
+  var equis =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"' +
+    ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"' +
+    ' stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+  var capa = null;
+  function cerrar() {
+    if (capa) { capa.remove(); capa = null; }
+    boton.innerHTML = iconoCerrado;
+    document.body.style.overflow = "";
+  }
+  boton.addEventListener("click", function (e) {
+    e.preventDefault();
+    if (capa) return cerrar();
+    var alto = barra ? Math.round(barra.getBoundingClientRect().height) : 0;
+    capa = document.createElement("div");
+    capa.style.cssText =
+      "position:fixed;top:" + alto + "px;left:0;right:0;bottom:0;z-index:49;" +
+      "display:flex;flex-direction:column;align-items:center;justify-content:center;" +
+      "gap:2rem;padding:2rem;text-align:center;overflow-y:auto;background:" +
+      fondoOpaco(panel);
+    panel.querySelectorAll("a").forEach(function (a) {
+      var copia = a.cloneNode(true);
+      copia.addEventListener("click", cerrar);
+      capa.appendChild(copia);
+    });
+    document.body.appendChild(capa);
+    boton.innerHTML = equis;
+    document.body.style.overflow = "hidden";
+  });
+  window.addEventListener("resize", function () { if (capa) cerrar(); });
+})();
+<\/script>`;
+  return html.includes("</body>") ? html.replace("</body>", guion + "</body>") : html + guion;
+}
+
+/**
  * Abre la web, la recorre entera y devuelve el diseño ya pintado más todos sus
  * archivos. `urlDe(nombre)` decide con qué dirección queda cada archivo en la
  * copia (una carpeta local, o R2).
@@ -223,6 +299,16 @@ export async function clonar(url, urlDe) {
         cont.replaceChildren(el);
       }
 
+      // La insignia del constructor (Lovable, Framer…) no es de la web: es
+      // publicidad de la herramienta y enlaza al proyecto PRIVADO de su dueño.
+      // En una copia servida bajo dominio propio no pinta nada.
+      document
+        .querySelectorAll('[id*="lovable-badge"], a[href*="lovable.dev"]')
+        .forEach((el) => el.remove());
+      document.querySelectorAll("style").forEach((el) => {
+        if (/lovable-badge/.test(el.textContent ?? "")) el.remove();
+      });
+
       return "<!doctype html>\n" + document.documentElement.outerHTML;
     },
     { videos, urls: Object.fromEntries(videos.flatMap((v) => [[v.mp4, urlDe(v.mp4)], [v.poster, urlDe(v.poster)]])) },
@@ -335,6 +421,7 @@ export async function clonar(url, urlDe) {
     .filter((u) => /\.(jpg|jpeg|png|webp|avif|gif|svg|mp4|woff2?|css)(\?|$)/i.test(u))
     .filter((u) => !u.startsWith(nuestro));
 
+  html = reanimarMenuDeMovil(html);
   return { html, archivos, videos, titulo, sinTraer };
 }
 
@@ -379,16 +466,25 @@ if (process.argv[1]?.endsWith("clonar-web.mjs")) {
   const nombreEmbudo = leer("--embudo");
   // Qué hacen los botones que se quedaron mudos al quitar los scripts del origen.
   const pasoSiguiente = leer("--paso-siguiente");
+  // Nombre interno de la copia. Sin esto se saca de la ruta de la
+  // dirección, y una web sin ruta ("https://ejemplo.com/") se llamaría
+  // siempre "principal": al guardar machacaría la web principal que esa
+  // empresa ya tuviera. Solo vale clonando UNA dirección.
+  const slugForzado = leer("--slug")?.trim().toLowerCase() || null;
   const pedirDatos = args.includes("--pedir-datos");
   const soloLocal = args.includes("--solo-local");
   const urls = args.filter((a) => a.startsWith("http"));
 
   if (urls.length === 0) {
-    console.error("Uso: node scripts/clonar-web.mjs --empresa <uuid> [--embudo \"Nombre\"] [--paso-siguiente /vsl] [--pedir-datos] <url> [url…]");
+    console.error("Uso: node scripts/clonar-web.mjs --empresa <uuid> [--embudo \"Nombre\"] [--slug nombre-interno] [--paso-siguiente /vsl] [--pedir-datos] <url> [url…]");
     process.exit(1);
   }
   if (!soloLocal && !empresaId) {
     console.error("Falta --empresa (o usa --solo-local para no tocar R2 ni la base de datos)");
+    process.exit(1);
+  }
+  if (slugForzado && urls.length > 1) {
+    console.error("--slug solo vale con UNA dirección: con varias, todas se guardarían encima de la misma página");
     process.exit(1);
   }
 
@@ -412,7 +508,7 @@ if (process.argv[1]?.endsWith("clonar-web.mjs")) {
   }
 
   for (const [indice, url] of urls.entries()) {
-    const slug = (new URL(url).pathname.replace(/^\/+|\/+$/g, "") || "principal").toLowerCase();
+    const slug = slugForzado ?? (new URL(url).pathname.replace(/^\/+|\/+$/g, "") || "principal").toLowerCase();
     const prefijo = soloLocal ? "" : `empresa_${empresaId}/web/replica/${slug}/`;
     const urlDe = (nombre) => (soloLocal ? `./assets/${nombre}` : `${PUBLIC_URL}/${prefijo}${nombre}`);
 

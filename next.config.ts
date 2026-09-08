@@ -248,6 +248,11 @@ async function replicasComoRutas() {
  *
  * Solo devuelve los que TIENEN dominio propio verificado: redirigir uno que no
  * lo tenga dejaría a ese restaurante sin web accesible.
+ *
+ * El emparejamiento es por PÁGINA, no por empresa. Una empresa puede tener más
+ * de una web (el grupo montó la suya aparte de la del restaurante): agrupando
+ * por empresa, el subdominio de la segunda web saltaba al dominio propio de la
+ * primera y esa web no se podía ver nunca.
  */
 async function subdominiosSoftwareARedirigir() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -262,17 +267,17 @@ async function subdominiosSoftwareARedirigir() {
 
     const { data: doms } = await db
       .from('paginas_web_dominios')
-      .select('hostname, empresa_id')
+      .select('hostname, pagina_id')
       .eq('estado', 'VERIFICADO')
     if (!doms?.length) return []
 
-    const porEmpresa = new Map<string, { software: string[]; propios: string[] }>()
+    const porPagina = new Map<string, { software: string[]; propios: string[] }>()
     for (const d of doms) {
       const host = String(d.hostname ?? '').trim().toLowerCase()
-      const empresaId = d.empresa_id as string | null
-      if (!host || !empresaId) continue
-      if (!porEmpresa.has(empresaId)) porEmpresa.set(empresaId, { software: [], propios: [] })
-      const grupo = porEmpresa.get(empresaId)!
+      const paginaId = d.pagina_id as string | null
+      if (!host || !paginaId) continue
+      if (!porPagina.has(paginaId)) porPagina.set(paginaId, { software: [], propios: [] })
+      const grupo = porPagina.get(paginaId)!
       if (host.endsWith('.balleshosteleros.com')) grupo.software.push(host)
       else grupo.propios.push(host)
     }
@@ -284,7 +289,7 @@ async function subdominiosSoftwareARedirigir() {
       permanent: boolean
     }> = []
 
-    for (const { software, propios } of porEmpresa.values()) {
+    for (const { software, propios } of porPagina.values()) {
       if (!software.length || !propios.length) continue
       const destinoHost = propios.find((h) => !h.startsWith('www.')) ?? propios[0]
       for (const host of software) {
