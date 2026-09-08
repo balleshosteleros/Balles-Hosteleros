@@ -16,11 +16,24 @@ export const OPORTUNIDAD_ESTADOS: OportunidadEstado[] = [
   "ABANDONADA",
 ];
 
+/**
+ * Cómo se llama cada estado en pantalla. En la base de datos la fila se guarda
+ * como ABIERTA/GANADA/…, pero lo que se lee es "Activo", igual que el resto del
+ * software dice Activo/Inactivo y no "abierto".
+ */
 export const OPORTUNIDAD_ESTADO_LABEL: Record<OportunidadEstado, string> = {
-  ABIERTA: "Abierta",
-  GANADA: "Ganada",
-  PERDIDA: "Perdida",
-  ABANDONADA: "Abandonada",
+  ABIERTA: "Activo",
+  GANADA: "Ganado",
+  PERDIDA: "Perdido",
+  ABANDONADA: "Abandonado",
+};
+
+/** El color con el que se pinta cada estado, igual en tablero, lista y ficha. */
+export const OPORTUNIDAD_ESTADO_CLASE: Record<OportunidadEstado, string> = {
+  ABIERTA: "bg-sky-500/10 text-sky-700 border-sky-500/30",
+  GANADA: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
+  PERDIDA: "bg-red-500/10 text-red-700 border-red-500/30",
+  ABANDONADA: "bg-muted text-muted-foreground border-border",
 };
 
 export interface Pipeline {

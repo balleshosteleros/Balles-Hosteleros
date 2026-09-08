@@ -17,15 +17,8 @@ import type {
 import { formatearFechaEs } from "@/shared/lib/fecha";
 import { formatEur } from "@/shared/lib/numero";
 import { cn } from "@/lib/utils";
-import type { Oportunidad, OportunidadEstado, PipelineFase } from "../types";
-import { OPORTUNIDAD_ESTADO_LABEL } from "../types";
-
-const ESTADO_CLASE: Record<OportunidadEstado, string> = {
-  ABIERTA: "bg-sky-500/10 text-sky-700 border-sky-500/30",
-  GANADA: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
-  PERDIDA: "bg-red-500/10 text-red-700 border-red-500/30",
-  ABANDONADA: "bg-muted text-muted-foreground border-border",
-};
+import type { Oportunidad, PipelineFase } from "../types";
+import { OPORTUNIDAD_ESTADO_CLASE as ESTADO_CLASE, OPORTUNIDAD_ESTADO_LABEL } from "../types";
 
 interface Props {
   oportunidades: Oportunidad[];

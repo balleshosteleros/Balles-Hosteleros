@@ -60,6 +60,7 @@ import { guardarFichaCliente } from "@/features/sala/actions/cliente-ficha-actio
 import { ActividadCliente } from "@/features/sala/components/clientes/ActividadCliente";
 import { ComunicacionesCliente } from "@/features/sala/components/clientes/ComunicacionesCliente";
 import { HistorialVisitasCliente } from "@/features/sala/components/clientes/HistorialVisitasCliente";
+import { PipelinesCliente } from "@/features/producto/pipeline/components/PipelinesCliente";
 import {
   listClientesEnriquecidos,
   type ClienteEnriquecido,
@@ -1608,6 +1609,15 @@ export function ClientesView() {
                     se refresca al cerrar la ficha.
                   */}
                   <EtiquetasPanel scope="cliente" entityId={borrador.id} />
+                </div>
+
+                {/* En qué pipelines está. La ficha es UNA y las tarjetas son
+                    muchas, igual que las reservas: quien contrata Ágora y
+                    Sesame es la misma persona con dos tarjetas, no dos fichas.
+                    En los restaurantes no hay tablero comercial, así que ahí
+                    esto no pinta nada. */}
+                <div className="pt-2 border-t empty:hidden">
+                  <PipelinesCliente clienteId={borrador.id} />
                 </div>
 
                 {/* Actividad DEL CLIENTE: los cambios de sus datos de contacto,

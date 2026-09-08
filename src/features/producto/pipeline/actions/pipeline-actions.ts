@@ -446,3 +446,76 @@ export async function borrarFase(id: string): Promise<ActionResult> {
     return { ok: false, error: friendlyError(err, "borrarFase") };
   }
 }
+
+// ─────────────────── Los pipelines de una persona ───────────────────
+
+/**
+ * Dónde está una persona dentro del comercial: en qué tablero, en qué columna
+ * y cómo acabó. Una sola ficha de cliente puede estar en varios tableros a la
+ * vez —quien contrata Ágora suele contratar también Sesame—, igual que puede
+ * tener varias reservas: la ficha es UNA y las tarjetas son muchas.
+ */
+export interface OportunidadDeCliente {
+  id: string;
+  pipelineId: string;
+  pipelineNombre: string;
+  faseNombre: string;
+  faseIcono: string | null;
+  estado: OportunidadEstado;
+  valor: number;
+  faseAt: string;
+}
+
+export async function listOportunidadesDeCliente(
+  clienteId: string,
+): Promise<ActionResult<OportunidadDeCliente[]>> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "Sin empresa." };
+
+    const { data, error } = await supabase
+      .from("pipeline_oportunidades")
+      .select(
+        "id, estado, valor, fase_at, pipeline:pipelines(id, nombre, orden), fase:pipeline_fases(nombre, icono)",
+      )
+      .eq("empresa_id", empresaId)
+      .eq("cliente_id", clienteId);
+
+    if (error) {
+      console.error("[pipeline][listOportunidadesDeCliente]", error.message);
+      return { ok: false, error: "No se pudieron cargar sus pipelines." };
+    }
+
+    type Fila = {
+      id: string;
+      estado: OportunidadEstado;
+      valor: number | string | null;
+      fase_at: string;
+      pipeline: { id: string; nombre: string; orden: number } | null;
+      fase: { nombre: string; icono: string | null } | null;
+    };
+
+    const filas = (data ?? []) as unknown as Fila[];
+    return {
+      ok: true,
+      data: filas
+        .filter((f) => f.pipeline && f.fase)
+        // En el mismo orden en que están en el selector del tablero, para que
+        // la ficha y el tablero se lean igual.
+        .sort((a, b) => (a.pipeline!.orden - b.pipeline!.orden) || a.pipeline!.nombre.localeCompare(b.pipeline!.nombre))
+        .map((f) => ({
+          id: f.id,
+          pipelineId: f.pipeline!.id,
+          pipelineNombre: f.pipeline!.nombre,
+          faseNombre: f.fase!.nombre,
+          faseIcono: f.fase!.icono,
+          estado: f.estado,
+          valor: Number(f.valor ?? 0),
+          faseAt: f.fase_at,
+        })),
+    };
+  } catch (err) {
+    console.error("[pipeline][listOportunidadesDeCliente] fatal:", err);
+    return { ok: false, error: friendlyError(err, "listOportunidadesDeCliente") };
+  }
+}

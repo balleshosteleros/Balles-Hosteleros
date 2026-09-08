@@ -22,15 +22,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { formatEur } from "@/shared/lib/numero";
 import { telefonoHref, whatsappHref } from "@/shared/lib/telefono";
-import type { Oportunidad, OportunidadEstado, PipelineFase } from "../types";
-import { OPORTUNIDAD_ESTADO_LABEL } from "../types";
+import type { Oportunidad, PipelineFase } from "../types";
+import { OPORTUNIDAD_ESTADO_CLASE as ESTADO_CLASE, OPORTUNIDAD_ESTADO_LABEL } from "../types";
 
 /** Colores del estado. Abierta no pinta nada: es lo normal, no una etiqueta. */
-const ESTADO_CLASE: Record<Exclude<OportunidadEstado, "ABIERTA">, string> = {
-  GANADA: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
-  PERDIDA: "bg-red-500/10 text-red-700 border-red-500/30",
-  ABANDONADA: "bg-muted text-muted-foreground border-border",
-};
 
 /** Días que lleva la tarjeta parada en su columna. */
 function diasEnFase(desde: string): number | null {
