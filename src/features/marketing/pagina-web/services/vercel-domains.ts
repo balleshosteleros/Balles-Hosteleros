@@ -10,14 +10,20 @@
 
 const API_BASE = "https://api.vercel.com";
 
+/** Marca de que la conexión con Vercel no está montada, para poder distinguirla. */
+export const SIN_CREDENCIALES = "SIN_CREDENCIALES_VERCEL";
+
+/** ¿Está montada la conexión con Vercel? Sin ella no se pueden dar de alta direcciones. */
+export function hayCredencialesVercel(): boolean {
+  return Boolean(process.env.VERCEL_TOKEN && process.env.VERCEL_PROJECT_ID);
+}
+
 function env() {
   const token = process.env.VERCEL_TOKEN;
   const projectId = process.env.VERCEL_PROJECT_ID;
   const teamId = process.env.VERCEL_TEAM_ID;
   if (!token || !projectId) {
-    throw new Error(
-      "Faltan env vars: VERCEL_TOKEN y VERCEL_PROJECT_ID son obligatorias.",
-    );
+    throw new Error(SIN_CREDENCIALES);
   }
   return { token, projectId, teamId };
 }

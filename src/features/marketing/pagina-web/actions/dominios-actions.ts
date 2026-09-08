@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
 import {
   addDomainToProject,
+  hayCredencialesVercel,
   getDomainConfig,
   registrosDelDominio,
   removeDomainFromProject,
@@ -83,6 +84,16 @@ export async function anadirDominio(input: {
     const hostname = normalizarHost(input.hostname);
     if (!hostname || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(hostname)) {
       return { ok: false, error: "Hostname inválido. Ej: turestaurante.com" };
+    }
+
+    // Sin la conexión montada no se puede dar de alta nada. El error de dentro
+    // habla de variables de entorno: eso no le dice nada a quien está delante.
+    if (!hayCredencialesVercel()) {
+      return {
+        ok: false,
+        error:
+          "Todavía no está activada la conexión para dar de alta direcciones web. Avísanos y lo dejamos listo.",
+      };
     }
 
     // Call Vercel API
