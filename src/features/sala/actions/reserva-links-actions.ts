@@ -10,6 +10,7 @@ import {
   type ReservaLink,
 } from "@/features/sala/data/reserva-links";
 import { dominioPublicoDeEmpresa } from "@/features/marketing/pagina-web/services/dominio-empresa";
+import { ensureCanalesReservaLinks } from "@/features/sala/lib/canales-reserva-links";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -60,6 +61,8 @@ export async function listReservaLinks() {
   try {
     const { supabase, empresaId, empresaSlug, dominioPropio } = await getCtx();
     if (!empresaId) return { ok: false, data: [] as ReservaLink[], error: "Sin empresa" };
+    // Un local recien abierto no deberia nacer sin sus canales.
+    await ensureCanalesReservaLinks(supabase, empresaId, empresaSlug, dominioPropio);
     const { data, error } = await supabase
       .from("reserva_links")
       .select("*")

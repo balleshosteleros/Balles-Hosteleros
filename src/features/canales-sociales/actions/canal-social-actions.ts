@@ -6,6 +6,7 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildReservaUrl, buildEmbedUrl } from "@/features/sala/data/reserva-links";
 import { dominioPublicoDeEmpresa } from "@/features/marketing/pagina-web/services/dominio-empresa";
+import { ensureCanalesReservaLinks } from "@/features/sala/lib/canales-reserva-links";
 import {
   CANALES_SOCIALES,
   esCanalSocial,
@@ -77,6 +78,7 @@ export async function getEstadoCanalSocial(
   if (!empresaId) return null;
 
   const canal = CANALES_SOCIALES[canalId];
+  await ensureCanalesReservaLinks(supabase, empresaId, empresaSlug, dominioPropio);
   const { data } = await supabase
     .from("reserva_links")
     .select("activo, created_at")
