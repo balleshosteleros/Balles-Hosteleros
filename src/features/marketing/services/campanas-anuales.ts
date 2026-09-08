@@ -101,16 +101,30 @@ export async function fotoDeLaCarta(
 }
 
 /**
- * Enlace de reserva propio de cada mes. Uno por campaña —EMAIL_ENERO,
- * EMAIL_FEBRERO…— para poder mirar en enero cuántas mesas trajo el correo de
- * enero. Sin un enlace por mes, todas las reservas caerían en el mismo saco y el
- * calendario no se podría evaluar.
+ * Palabra clave única del canal correo. Coincide con `EMAIL` de
+ * `features/sala/data/origenes.ts`, donde ya tiene etiqueta y color: si aquí se
+ * escribiera otra cosa, la analítica de canales abriría una columna aparte.
+ */
+export const PALABRA_CLAVE_EMAIL = "EMAIL";
+
+/**
+ * UN SOLO enlace de reserva para el correo: la palabra clave es `EMAIL` y punto.
+ *
+ * Antes había uno por mes (EMAIL_ENERO, EMAIL_FEBRERO…) y la pantalla de
+ * enlaces de reservas amanecía con doce filas por local. La palabra clave se
+ * graba en `reservas.origen`, así que eso partía el canal del correo en doce
+ * columnas de analítica en Sala, que es el sitio donde solo interesa saber
+ * cuántas mesas llegaron POR CORREO.
+ *
+ * Qué campaña concreta trajo cada mesa se mide en Marketing, que es su sitio:
+ * ahí cada campaña tiene sus envíos y sus clics.
  */
 export async function enlaceReservaConPalabra(
   admin: Admin,
   empresa: EmpresaMarca,
   palabraClave: string,
   dominio: string | null,
+  nombre: string,
 ): Promise<{ id: string; url: string }> {
   const { data: existente } = await admin
     .from("reserva_links")
@@ -131,7 +145,7 @@ export async function enlaceReservaConPalabra(
       palabra_clave: palabraClave,
       url_generada: url,
       activo: true,
-      nombre: `Campaña de email · ${palabraClave.replace("EMAIL_", "").toLowerCase()}`,
+      nombre,
     })
     .select("id, url_generada")
     .single();
@@ -169,7 +183,13 @@ export async function construirCorreoDelMes(
 ): Promise<{ html: string; ctaUrl: string; reservaLinkId: string; fotoUrl: string | null }> {
   const foto = await fotoDeLaCarta(admin, empresa.id, seed.fotoPistas, fotosUsadas);
   if (foto) fotosUsadas.add(foto.url);
-  const enlace = await enlaceReservaConPalabra(admin, empresa, seed.palabraClave, dominio);
+  const enlace = await enlaceReservaConPalabra(
+    admin,
+    empresa,
+    PALABRA_CLAVE_EMAIL,
+    dominio,
+    "Email",
+  );
 
   const html = renderCampanaEmail({
     empresa,

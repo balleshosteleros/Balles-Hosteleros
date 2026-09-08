@@ -51,8 +51,6 @@ export interface CampanaAnualSeed {
   ctaTexto: string;
   /** Palabras con las que se busca la foto en la carta de cada empresa. */
   fotoPistas: string[];
-  /** Palabra clave del enlace de reserva, para saber qué correo trajo la mesa. */
-  palabraClave: string;
 }
 
 export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
@@ -73,7 +71,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Reservar mesa",
     fotoPistas: ["croqueta", "guiso", "risotto", "costilla", "curry"],
-    palabraClave: "EMAIL_ENERO",
   },
   {
     clave: "FEBRERO_SAN_VALENTIN",
@@ -92,7 +89,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Coger mesa para el 14",
     fotoPistas: ["coulant", "chocolate", "postre", "tarta", "cóctel"],
-    palabraClave: "EMAIL_FEBRERO",
   },
   {
     clave: "MARZO_DIA_DEL_PADRE",
@@ -111,7 +107,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Reservar para el 19",
     fotoPistas: ["entrecot", "entraña", "tomahawk", "arroz", "jamón"],
-    palabraClave: "EMAIL_MARZO",
   },
   {
     clave: "ABRIL_SEMANA_SANTA",
@@ -130,7 +125,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Reservar en la terraza",
     fotoPistas: ["torrija", "ensaladilla", "alcachofa", "burrata", "tortilla"],
-    palabraClave: "EMAIL_ABRIL",
   },
   {
     clave: "MAYO_MADRE_Y_SAN_ISIDRO",
@@ -149,7 +143,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Reservar mesa grande",
     fotoPistas: ["arroz", "paella", "cachopo", "vieira", "tarta"],
-    palabraClave: "EMAIL_MAYO",
   },
   {
     clave: "JUNIO_SAN_JUAN_FIN_DE_CURSO",
@@ -168,7 +161,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Reservar cena de grupo",
     fotoPistas: ["mojito", "cóctel", "daiquiri", "ceviche", "torrezno"],
-    palabraClave: "EMAIL_JUNIO",
   },
   {
     clave: "JULIO_VERANO",
@@ -187,7 +179,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Reservar para cenar",
     fotoPistas: ["ceviche", "tartar", "cóctel", "mojito", "ensalada"],
-    palabraClave: "EMAIL_JULIO",
   },
   {
     clave: "AGOSTO_MADRID_VACIO",
@@ -206,7 +197,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Ver disponibilidad",
     fotoPistas: ["torrezno", "alita", "gyoza", "bao", "batido"],
-    palabraClave: "EMAIL_AGOSTO",
   },
   {
     clave: "SEPTIEMBRE_VUELTA",
@@ -225,7 +215,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Ver la carta nueva",
     fotoPistas: ["setas", "risotto", "guiso", "brioche", "arroz"],
-    palabraClave: "EMAIL_SEPTIEMBRE",
   },
   {
     clave: "OCTUBRE_HALLOWEEN",
@@ -244,7 +233,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Reservar para el 31",
     fotoPistas: ["cóctel", "lado oscuro", "danza", "hamburguesa", "costilla"],
-    palabraClave: "EMAIL_OCTUBRE",
   },
   {
     clave: "NOVIEMBRE_CENAS_EMPRESA",
@@ -263,7 +251,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Pedir fecha para el grupo",
     fotoPistas: ["jamón", "arroz", "entraña", "tomahawk", "croqueta"],
-    palabraClave: "EMAIL_NOVIEMBRE",
   },
   {
     clave: "DICIEMBRE_NAVIDAD",
@@ -282,7 +269,6 @@ export const CAMPANAS_ANUALES_SEED: CampanaAnualSeed[] = [
     ],
     ctaTexto: "Reservar en diciembre",
     fotoPistas: ["vieira", "jamón", "tomahawk", "tarta", "cóctel"],
-    palabraClave: "EMAIL_DICIEMBRE",
   },
 ];
 

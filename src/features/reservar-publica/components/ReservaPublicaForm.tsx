@@ -551,9 +551,10 @@ export function ReservaPublicaForm({
         className={
           embedded
             ? "mx-auto w-full max-w-3xl"
-            : // En móvil manda el ancho de siempre; a partir de tablet la
-              // tarjeta se ensancha para las dos columnas.
-              "max-w-md min-[700px]:max-w-3xl mx-auto pb-[max(env(safe-area-inset-bottom),1.5rem)]"
+            : // Columna de móvil en TODAS las pantallas. El portal se abre casi
+              // siempre desde el teléfono, y ensancharlo en el ordenador daba
+              // dos formularios distintos que mantener y comprobar.
+              "max-w-md mx-auto pb-[max(env(safe-area-inset-bottom),1.5rem)]"
         }
       >
         {/* Vuelta a la web del restaurante: el portal es una página entera, no
@@ -644,12 +645,10 @@ export function ReservaPublicaForm({
             />
           ) : null}
 
-          {/* DOS COLUMNAS en tablet y ordenador: la reserva a la izquierda y
-              quién la hace a la derecha, para que todo entre en una pantalla
-              sin bajar. En móvil no hay ancho: una sola columna, en el mismo
-              orden de siempre. */}
-          <div className="grid gap-4 min-[700px]:grid-cols-2 min-[700px]:gap-5 min-[700px]:items-start">
-            {/* COLUMNA 1 — qué reservas: comensales → fecha → hora → zona.
+          {/* UNA SOLA COLUMNA, siempre: primero qué reservas y después quién la
+              hace. El mismo orden en el móvil y en el ordenador. */}
+          <div className="grid gap-4">
+            {/* BLOQUE 1 — qué reservas: comensales → fecha → hora → zona.
                 Las personas van primero porque la disponibilidad depende de
                 cuánta gente viene. */}
             <div className="space-y-4">
@@ -771,7 +770,7 @@ export function ReservaPublicaForm({
 
             </div>
 
-            {/* COLUMNA 2 — quién reserva: nombre, teléfono, correo y el cupón. */}
+            {/* BLOQUE 2 — quién reserva: nombre, teléfono, correo y el cupón. */}
             <div className="space-y-4">
           {/* Datos de contacto */}
           <div className="grid grid-cols-2 gap-3">
@@ -842,9 +841,9 @@ export function ReservaPublicaForm({
             </div>
           </div>
 
-          {/* Nacimiento y email comparten fila: por separado estiraban el
-              formulario media pantalla más para dos campos cortos. */}
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* Nacimiento y correo, uno debajo del otro: en la columna estrecha
+              compartir fila los dejaba en dos cajas de 200 px. */}
+          <div className="grid gap-3">
             <div>
               <Label htmlFor="nacimiento" className="text-xs font-medium text-zinc-600 flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5" />

@@ -68,7 +68,16 @@ export async function construirCorreoCumpleanos(
   dominio: string | null,
 ): Promise<{ html: string; ctaUrl: string; reservaLinkId: string; fotoUrl: string | null }> {
   const foto = await fotoDeLaCarta(admin, empresa.id, seed.email.fotoPistas, new Set());
-  const enlace = await enlaceReservaConPalabra(admin, empresa, seed.palabraClave, dominio);
+  // Cumpleaños SÍ tiene enlace propio: no es una campaña del calendario, es un
+  // correo que sale uno a uno el día de cada cliente, y saber cuántas mesas
+  // trae es justo lo que dice si el cupón merece la pena.
+  const enlace = await enlaceReservaConPalabra(
+    admin,
+    empresa,
+    seed.palabraClave,
+    dominio,
+    "Cumpleaños",
+  );
 
   const html = renderCampanaEmail({
     empresa,
