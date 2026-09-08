@@ -86,6 +86,24 @@ rendimiento vacío, así que el sistema entiende que **la receta es para UNA uni
 1 litro). Si en realidad están escritas **por tanda** *("con esto salen 5 litros")*, hay que
 declarar ese 5 — o **descontará 5 veces de menos**.
 
+### 📉 Cómo han quedado los costes (ya aplicado en producción)
+
+| Plato | Antes | Ahora | PVP |
+|---|---|---|---|
+| Costillas a baja temperatura | miles de € | **3,95 €** | 19,50 € |
+| Entrecot Lomo bajo frisona | miles de € | **10,12 €** | 26,00 € |
+| Torreznos con guacamole | miles de € | **1,88 €** | 14,90 € |
+
+Quedan **dos platos descuadrados**, y cada uno por un motivo distinto que os toca a vosotros:
+
+- **Cachopo — 218,52 €** (PVP 27,20). Es el ejemplo perfecto de la decisión 2: el *jamón de
+  cebo ibérico loncheado* pone **30** queriendo decir 30 gramos, pero está dado de alta **por
+  unidades** a 6,88 € cada una → 206 € de jamón en un cachopo.
+- **Arroz de Secreto — 36,05 €** (PVP 29). Aquí no es la unidad, es **el precio**: la *base de
+  arroz de carne* tiene 7,92 €/kg en su ficha pero **87,00 €/kg** en el proveedor preferido, y
+  manda el del proveedor. ¿87 € es el precio de una caja entera? La *base de arroz de pescado*,
+  que es lo mismo, está a 7,92 €.
+
 ### ⚠️ Un aviso práctico para vuestro equipo
 
 Las recetas que habéis cargado **directamente por migración**, sin pasar por la ficha de
