@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { iconsDeUrl } from "@/shared/lib/favicon-empresa";
 import type { Metadata } from "next";
 import { resolverHostname } from "@/features/marketing/pagina-web/services/hostname-resolver";
+import { schemaNegocioDeEmpresa } from "@/features/marketing/pagina-web/services/schema-negocio";
 import { PaginaPublicaShell } from "@/features/marketing/pagina-web/components/public/PaginaPublicaShell";
 import { registrarVisita, esRobot } from "@/features/marketing/pagina-web/services/visitas";
 import { clasificarOrigen, registrarOrigen } from "@/features/marketing/pagina-web/services/analitica";
@@ -88,6 +89,8 @@ export default async function PublicCatchAllPage({ params, searchParams }: PageP
   // La visita se apunta aquí y no en `generateMetadata`, que Next ejecuta
   // aparte en la misma petición: contar en los dos sitios duplicaría cada
   // visita. Sin `await`: la web no espera a la estadística.
+  // La ficha del negocio solo se declara en la portada.
+  const esPortada = !slugDeParams(slug);
   const cabeceras = await headers();
   const userAgent = cabeceras.get("user-agent");
   void registrarVisita(match.pagina_id, userAgent);
@@ -108,7 +111,29 @@ export default async function PublicCatchAllPage({ params, searchParams }: PageP
     );
   }
 
+  // Datos estructurados del local (schema.org). Van en el cuerpo a propósito:
+  // Next no deja meter JSON-LD por `generateMetadata`, y Google lo lee igual.
+  // Solo en la portada: repetir la ficha del negocio en cada página no aporta y
+  // duplica la misma entidad.
+  const schema = esPortada
+    ? await schemaNegocioDeEmpresa(
+        match.empresa_id,
+        `https://${match.hostname.replace(/^www\./, "")}`,
+        match.isotipo_url,
+        match.seo?.description ?? null,
+      )
+    : null;
+
   return (
+    <>
+      {schema && (
+        <script
+          type="application/ld+json"
+          // El contenido es un objeto que construimos nosotros desde la ficha de
+          // la empresa, no entrada de usuario libre.
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+        />
+      )}
     <PaginaPublicaShell
       bloques={match.bloques}
       branding={match.branding}
@@ -123,5 +148,6 @@ export default async function PublicCatchAllPage({ params, searchParams }: PageP
       }}
       hrefPoliticaCookies="/politica-de-cookies"
     />
+    </>
   );
 }

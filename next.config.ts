@@ -254,6 +254,47 @@ async function replicasComoRutas() {
  * por empresa, el subdominio de la segunda web saltaba al dominio propio de la
  * primera y esa web no se podía ver nunca.
  */
+/**
+ * Palabras clave de los enlaces de canal (`reserva_links`), en minúsculas.
+ *
+ * POR QUÉ: bajo el dominio del restaurante, `/reservar/google` lleva la palabra
+ * clave del canal, NO el nombre del local. La redirección que quita el slug se
+ * la comía —los redirects corren ANTES que los rewrites—, así que la reserva
+ * entraba sin canal, que es justo lo único que estos enlaces miden. Es el mismo
+ * fallo que ya se comió los ids de vacante en `/empleo/<id>` (05-sep).
+ *
+ * Se leen de la BD porque el catálogo es abierto: el restaurante crea las
+ * campañas que quiera desde Sala → Reservas → Enlaces, sin tocar código.
+ */
+async function keywordsDeCanalReserva(): Promise<string[]> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return []
+  try {
+    const { createClient } = await import('@supabase/supabase-js')
+    const db = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data } = await db.from('reserva_links').select('palabra_clave')
+    // Los tres canales fijos van SIEMPRE, existan ya o no en la BD: un local
+    // recién abierto tiene que funcionar sin esperar a un despliegue nuevo.
+    // Ojo: una campaña nueva creada a mano (`BLACK_FRIDAY`) sí necesita el
+    // siguiente despliegue para que su enlace corto atribuya bajo el dominio
+    // propio. Mientras tanto atribuye igual por el dominio del sistema.
+    const vistos = new Set<string>(['google', 'instagram', 'facebook'])
+    for (const r of data ?? []) {
+      const k = String(r.palabra_clave ?? '').trim().toLowerCase()
+      // Solo lo que es seguro meter en una regex; una palabra clave rara no
+      // puede romper el enrutado entero.
+      if (k && /^[a-z0-9_]+$/.test(k)) vistos.add(k)
+    }
+    return [...vistos]
+  } catch (err) {
+    console.error('[next.config] keywordsDeCanalReserva:', err)
+    return []
+  }
+}
+
 async function subdominiosSoftwareARedirigir() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -290,9 +331,35 @@ async function subdominiosSoftwareARedirigir() {
     }> = []
 
     for (const { software, propios } of porPagina.values()) {
-      if (!software.length || !propios.length) continue
+      // Sin dominio propio no hay a dónde redirigir. Antes se exigía además
+      // tener subdominio del software, pero eso dejaba fuera las reglas de
+      // `www` de un local que ya nace con su dominio y sin subdominio de
+      // pruebas.
+      if (!propios.length) continue
       const destinoHost = propios.find((h) => !h.startsWith('www.')) ?? propios[0]
       for (const host of software) {
+        reglas.push({
+          source: '/:ruta*',
+          has: [{ type: 'host', value: host }],
+          destination: `https://${destinoHost}/:ruta*`,
+          permanent: true,
+        })
+      }
+
+      // `www.loquesea.com` → `loquesea.com`.
+      //
+      // El dominio responde por las dos vías, y para Google eso son dos webs
+      // distintas con el mismo contenido: reparte la fuerza entre ambas. El
+      // canónico ya señalaba la buena, pero lo correcto es no servir siquiera
+      // la duplicada (auditoría SEO, 08-09-2026).
+      //
+      // Se generan desde la BD, una por dominio, en vez de con una regla
+      // genérica con comodín en el host: esa forma (`www\.(?<d>.*)` con el
+      // grupo en el destino) tumba el servidor con un 500 — probado. Al salir
+      // de aquí, un local nuevo la hereda sola en cuanto verifica su dominio.
+      for (const host of propios) {
+        if (!host.startsWith('www.')) continue
+        if (host === destinoHost) continue
         reglas.push({
           source: '/:ruta*',
           has: [{ type: 'host', value: host }],
@@ -442,6 +509,8 @@ const nextConfig: NextConfig = {
     }
   },
   async redirects() {
+    const keywords = await keywordsDeCanalReserva()
+    const exclusionKeywords = keywords.length > 0 ? `|${keywords.join('$|')}$` : ''
     return [
       // Subdominios del SOFTWARE que servían la web de un cliente
       // (`bacanal.balleshosteleros.com`). Se cierran: mezclan la marca de la
@@ -474,9 +543,13 @@ const nextConfig: NextConfig = {
         // esta exclusión la redirección se comía el id —se ejecuta antes que
         // los rewrites— y el candidato que tocaba una vacante volvía siempre a
         // la lista, sin poder apuntarse (05-sep).
+        //
+        // Y las palabras clave de canal quedan fuera por lo mismo: en
+        // `/reservar/google` ese segmento es el canal, no el local. Ver
+        // `keywordsDeCanalReserva()`.
         {
           source:
-            '/:ruta(carta|reservar|empleo|ticket)/:slug((?!embed$|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$)[^/]+)',
+            `/:ruta(carta|reservar|empleo|ticket)/:slug((?!embed$|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$${exclusionKeywords})[^/]+)`,
           has: [{ type: 'host' as const, value: host }],
           destination: '/:ruta',
           permanent: false,
