@@ -20,7 +20,7 @@ import type {
   SolicitudSubtipoAusencia,
   SolicitudSubtipoTrabajo,
 } from "@/features/mi-panel/types";
-import { HORAS_EXTRAS_MOTIVO_MIN, SUBTIPO_LABEL } from "@/features/mi-panel/types";
+import { HORAS_EXTRAS_MOTIVO_MIN, MOTIVO_MIN_CARACTERES, SUBTIPO_LABEL } from "@/features/mi-panel/types";
 import { validarTramo } from "@/features/mi-panel/lib/solicitud-horas";
 import {
   VACACIONES_REGLAS_DEFAULT,
@@ -37,7 +37,7 @@ import {
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 import { getZonaHorariaEmpresa, ZONA_HORARIA_DEFAULT } from "@/features/empresa/lib/empresa-server";
 import { getDiasVacacionesAnio } from "@/features/rrhh/actions/calendario-config-actions";
-import { minutosDiaEnZona, ahoraEnZona, hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { minutosDiaEnZona, ahoraEnZona, hoyEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
@@ -61,8 +61,10 @@ import {
   getMisLocales,
   getMisFilasEmpleado,
   planificarReparto,
+  calcularSalidaPrevista,
   type TramoEmpresaMin,
 } from "@/features/mi-panel/utils/fichaje-multiempresa";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 function extractErrorMessage(err: unknown): string {
   if (!err) return "Error desconocido";
@@ -1070,7 +1072,181 @@ function redondearHoras(ms: number): number {
   return Math.round((ms / 3600000) * 10000) / 10000;
 }
 
-export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
+/**
+ * "Me he equivocado al entrar": anula un fichaje recién abierto.
+ *
+ * La otra mitad del mínimo para cerrar. Sin esto, quien ficha por error se
+ * queda atrapado media hora con la jornada corriendo. Solo vale para un fichaje
+ * SUYO, aún abierto y dentro de esa ventana: pasado ese rato ya no se anula, se
+ * cierra como una salida anticipada, con su motivo y su solicitud.
+ *
+ * Se borra la fila entera a propósito: una entrada que nunca debió existir no
+ * es registro de jornada, es un toque sin querer. No hay horas que conservar.
+ */
+export async function anularEntradaRecienFichada(fichajeId: string) {
+  try {
+    const { supabase, user } = await getContext();
+    if (!user) return { ok: false, error: "No autenticado" };
+
+    const { data: fichaje, error } = await supabase
+      .from("fichajes")
+      .select("id, empleado_id, empresa_id, hora_entrada, hora_salida, estado")
+      .eq("id", fichajeId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!fichaje) return { ok: false, error: "Ese fichaje ya no existe." };
+    if (fichaje.empleado_id !== user.id) {
+      return { ok: false, error: "Ese fichaje no es tuyo." };
+    }
+    if (fichaje.hora_salida) {
+      return { ok: false, error: "Ese fichaje ya está cerrado: no se puede anular." };
+    }
+
+    const { data: cfg } = await supabase
+      .from("empresa_fichajes_config")
+      .select("min_minutos_para_cerrar")
+      .eq("empresa_id", (fichaje.empresa_id as string | null) ?? "")
+      .maybeSingle();
+    const minimo = Math.max(30, (cfg?.min_minutos_para_cerrar as number | null) ?? 30);
+    const dentroMin = fichaje.hora_entrada
+      ? Math.floor((Date.now() - new Date(fichaje.hora_entrada as string).getTime()) / 60000)
+      : 0;
+    if (dentroMin >= minimo) {
+      return {
+        ok: false,
+        error: `Ya llevas ${dentroMin} min dentro: esto no se anula. Ficha la salida y explica por qué te vas antes.`,
+      };
+    }
+
+    const { error: delErr } = await supabase.from("fichajes").delete().eq("id", fichajeId);
+    if (delErr) throw delErr;
+
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    console.error("[mi-panel] anularEntradaRecienFichada:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Salir antes de la hora del turno: qué hay que hacer antes de cerrar.
+ *
+ * Dos puertas, por este orden:
+ *
+ *  1. RECIÉN ENTRADO (menos de `min_minutos_para_cerrar`, 30 por defecto). No
+ *     se cierra: casi siempre es un toque sin querer, y cerrar deja la jornada
+ *     a 0 h y el botón apagado el resto de la noche. La UI ofrece anular la
+ *     entrada, que le devuelve el botón.
+ *  2. ANTES DE SU HORA. Se cierra, pero explicándose: el motivo es obligatorio
+ *     y genera una solicitud que su responsable aprueba o rechaza.
+ *
+ * Fuera de esas dos, la salida es normal y no pregunta nada.
+ */
+async function evaluarSalidaAnticipada(
+  supabase: SupabaseClient,
+  userId: string,
+  fichaje: { hora_entrada: string | null; empresa_id: string | null; fecha: string },
+  ahora: Date,
+): Promise<
+  | { clase: "normal" }
+  | { clase: "demasiado-pronto"; minutosMinimos: number; minutosDentro: number }
+  | { clase: "anticipada"; salidaPrevista: Date }
+> {
+  if (!fichaje.hora_entrada) return { clase: "normal" };
+  const entradaMs = new Date(fichaje.hora_entrada).getTime();
+  const dentroMin = Math.floor((ahora.getTime() - entradaMs) / 60000);
+
+  const { data: cfg } = await supabase
+    .from("empresa_fichajes_config")
+    .select("min_minutos_para_cerrar")
+    .eq("empresa_id", fichaje.empresa_id ?? "")
+    .maybeSingle();
+  const minimo = Math.max(30, (cfg?.min_minutos_para_cerrar as number | null) ?? 30);
+  if (dentroMin < minimo) {
+    return { clase: "demasiado-pronto", minutosMinimos: minimo, minutosDentro: Math.max(0, dentroMin) };
+  }
+
+  // `calcularSalidaPrevista` devuelve null cuando no hay forma de saberlo (sin
+  // horario, o flexible semanal). Sin hora prevista no se puede decir que salga
+  // antes, así que la salida es normal: nunca se inventa una anticipada.
+  const prevista = await calcularSalidaPrevista(
+    supabase,
+    userId,
+    fichaje.fecha,
+    fichaje.hora_entrada,
+  );
+  if (prevista && ahora.getTime() < prevista.getTime()) {
+    return { clase: "anticipada", salidaPrevista: prevista };
+  }
+  return { clase: "normal" };
+}
+
+/**
+ * Deja la salida anticipada en manos de alguien: crea la solicitud y la ata al
+ * fichaje por los dos lados. Aprobarla dejará las horas como están; rechazarla
+ * pondrá ese día a 0 h.
+ *
+ * Si algo falla aquí NO se tira el cierre: el empleado ya se ha ido y su
+ * fichaje tiene que quedar cerrado igual. Se marca para revisión, que es lo que
+ * hace que RRHH lo vea de todos modos.
+ */
+async function crearSolicitudSalidaAnticipada(
+  supabase: SupabaseClient,
+  datos: {
+    fichajeId: string;
+    empresaId: string | null;
+    userId: string;
+    nombre: string;
+    fecha: string;
+    motivo: string;
+    salidaPrevista: Date;
+    salidaReal: Date;
+  },
+): Promise<void> {
+  try {
+    if (!datos.empresaId) return;
+    const tz = await getZonaHorariaEmpresa(supabase, datos.empresaId);
+    const { data, error } = await supabase
+      .from("solicitudes_personal")
+      .insert({
+        empresa_id: datos.empresaId,
+        user_id: datos.userId,
+        empleado_nombre: datos.nombre || "Sin nombre",
+        tipo: "salida_anticipada",
+        subtipo: "salida_anticipada",
+        fecha_inicio: datos.fecha,
+        fecha_fin: datos.fecha,
+        hora_inicio: formatHoraEnZona(datos.salidaReal.toISOString(), tz),
+        hora_fin: formatHoraEnZona(datos.salidaPrevista.toISOString(), tz),
+        motivo: datos.motivo,
+        estado: "pendiente",
+        fichaje_id: datos.fichajeId,
+        salida_prevista: datos.salidaPrevista.toISOString(),
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+
+    // El fichaje apunta a su solicitud, para que la lista de RRHH pueda
+    // enseñar el estado sin recalcular nada.
+    await supabase
+      .from("fichajes")
+      .update({ solicitud_id: data.id as string })
+      .eq("id", datos.fichajeId);
+  } catch (err) {
+    console.error(
+      "[mi-panel] crearSolicitudSalidaAnticipada:",
+      extractErrorMessage(err),
+    );
+  }
+}
+
+export async function ficharSalidaPersonal(
+  fichajeId: string,
+  geo?: GeoInput,
+  motivoSalidaAnticipada?: string,
+) {
   try {
     const { supabase, user, nombre } = await getContext();
     if (!user) return { ok: false, error: "No autenticado" };
@@ -1112,6 +1288,41 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
     // turno por la cortesía: si no, salen horas negativas.
     const ahora = salidaNoAnterior(fichaje.hora_entrada as string | null, ahoraAlMinuto());
     const instanteReal = new Date();
+
+    // ¿Sale antes de tiempo? Se resuelve ANTES de tocar nada: si hay que
+    // preguntarle algo, el fichaje se queda como está y decide él.
+    const veredicto = await evaluarSalidaAnticipada(
+      supabase,
+      user.id,
+      {
+        hora_entrada: (fichaje.hora_entrada as string | null) ?? null,
+        empresa_id: (fichaje.empresa_id as string | null) ?? null,
+        fecha: fichaje.fecha as string,
+      },
+      ahora,
+    );
+
+    if (veredicto.clase === "demasiado-pronto") {
+      return {
+        ok: false,
+        demasiadoPronto: true,
+        minutosMinimos: veredicto.minutosMinimos,
+        minutosDentro: veredicto.minutosDentro,
+        error: `Acabas de fichar la entrada hace ${veredicto.minutosDentro} min. Si te has equivocado, anula la entrada; si no, podrás fichar la salida a partir de los ${veredicto.minutosMinimos} min.`,
+      };
+    }
+
+    const motivoAnticipada = (motivoSalidaAnticipada ?? "").trim();
+    if (veredicto.clase === "anticipada" && motivoAnticipada.length < MOTIVO_MIN_CARACTERES) {
+      const tz = await getZonaHorariaEmpresa(supabase, (fichaje.empresa_id as string | null) ?? null);
+      return {
+        ok: false,
+        requiereMotivo: true,
+        salidaPrevistaISO: veredicto.salidaPrevista.toISOString(),
+        salidaPrevistaHora: formatHoraEnZona(veredicto.salidaPrevista.toISOString(), tz),
+        error: "Vas a salir antes de tu horario: explica por qué.",
+      };
+    }
     if (!fichaje.hora_entrada) {
       // Sin hora de entrada no hay nada que repartir ni cronometrar.
       const { error } = await supabase
@@ -1167,6 +1378,8 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
     }
     const reparto = planificarReparto(entradaMin, salidaMin, tramos);
 
+    const esAnticipada = veredicto.clase === "anticipada";
+
     // Sin reparto (una sola empresa) → cierre normal del fichaje.
     if (reparto.length <= 1) {
       const { error } = await supabase
@@ -1179,10 +1392,31 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
           lat_salida: geo?.lat ?? null,
           lng_salida: geo?.lng ?? null,
           precision_salida_metros: geo?.precision ?? null,
+          ...(esAnticipada
+            ? {
+                cierre_anticipado: true,
+                cierre_anticipado_motivo: motivoAnticipada,
+                requiere_revision: true,
+                revision_motivo: "Salida anticipada pendiente de aprobar",
+              }
+            : {}),
         })
         .eq("id", fichajeId);
       if (error) throw error;
-      return { ok: true, data: { horas_totales: horasTotales } };
+
+      if (esAnticipada && veredicto.clase === "anticipada") {
+        await crearSolicitudSalidaAnticipada(supabase, {
+          fichajeId,
+          empresaId: (fichaje.empresa_id as string | null) ?? null,
+          userId: user.id,
+          nombre: nombre ?? "",
+          fecha: fichaje.fecha as string,
+          motivo: motivoAnticipada,
+          salidaPrevista: veredicto.salidaPrevista,
+          salidaReal: ahora,
+        });
+      }
+      return { ok: true, data: { horas_totales: horasTotales, salidaAnticipada: esAnticipada } };
     }
 
     // Reparto real: 1 fila por empresa, atadas por `sesion_id`.
@@ -3537,7 +3771,7 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
     if (!user) return { ok: false, error: "No autenticado" };
     const { data: solicitud } = await supabase
       .from("solicitudes_personal")
-      .select("id, empresa_id, user_id, tipo, subtipo")
+      .select("id, empresa_id, user_id, tipo, subtipo, fichaje_id")
       .eq("id", id)
       .maybeSingle();
     if (!solicitud) return { ok: false, error: "Solicitud no encontrada" };
@@ -3551,16 +3785,46 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
       return { ok: false, error: "Solo el validador asignado de este empleado puede denegar esta solicitud." };
     }
 
+    // Rechazar una salida anticipada obliga a explicarse: ese texto es el que le
+    // llega al trabajador y donde se le dice qué hacer para arreglarlo.
+    const esSalidaAnticipada = solicitud.tipo === "salida_anticipada";
+    const notas = (notasRevision ?? "").trim();
+    if (esSalidaAnticipada && notas.length < MOTIVO_MIN_CARACTERES) {
+      return {
+        ok: false,
+        error: `Explica por qué la rechazas (mínimo ${MOTIVO_MIN_CARACTERES} caracteres). El trabajador lo recibirá tal cual.`,
+      };
+    }
+
     const { error } = await supabase
       .from("solicitudes_personal")
       .update({
         estado: "rechazada",
         revisado_por: user.id,
         revisado_at: new Date().toISOString(),
-        notas_revision: notasRevision ?? null,
+        notas_revision: notas || null,
       })
       .eq("id", id);
     if (error) throw error;
+
+    // Rechazada = ese día no cuenta. Si la aprobase, las horas se quedarían
+    // como están; rechazándola el fichaje baja a 0 h y sale de la nómina. La
+    // FILA no se borra: es el registro de jornada y hay que conservarlo cuatro
+    // años, así que queda con su hora real de entrada y salida y a 0 horas.
+    if (esSalidaAnticipada && solicitud.fichaje_id) {
+      const { error: errF } = await supabase
+        .from("fichajes")
+        .update({
+          horas_totales: 0,
+          requiere_revision: false,
+          incidencia: `Salida anticipada rechazada: ${notas}`,
+        })
+        .eq("id", solicitud.fichaje_id as string);
+      if (errF) {
+        console.error("[mi-panel] rechazarSolicitud → fichaje a 0:", errF.message);
+        return { ok: false, error: "Se rechazó la solicitud pero no se pudieron poner las horas a cero. Avisa a soporte." };
+      }
+    }
 
     // Resuelta: apaga el aviso de la campana del validador.
     await cerrarAvisoSolicitud(id);
@@ -3575,8 +3839,10 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
           empresaId: solicitud.empresa_id as string,
           eventType: "solicitud_resuelta",
           payload: {
-            title: "Solicitud rechazada",
-            body: `Tu solicitud (${solicitud.subtipo ?? "petición"}) no ha sido aprobada.`,
+            title: esSalidaAnticipada ? "Tu salida anticipada ha sido rechazada" : "Solicitud rechazada",
+            body: esSalidaAnticipada
+              ? `Ese día se queda en 0 h. ${notas}`
+              : `Tu solicitud (${solicitud.subtipo ?? "petición"}) no ha sido aprobada.`,
             url: "/m/solicitudes",
             tag: `solicitud-${solicitud.id}`,
             data: { url: "/m/solicitudes" },

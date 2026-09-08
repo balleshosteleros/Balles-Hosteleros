@@ -24,6 +24,13 @@ export type SolicitudEstado = "pendiente" | "aprobada" | "rechazada" | "anulada"
  */
 export const HORAS_EXTRAS_MOTIVO_MIN = 15;
 
+/**
+ * Mínimo de caracteres del motivo en una salida anticipada — el del trabajador
+ * al cerrar antes de hora, y el de quien la rechaza. Ese segundo texto es el
+ * que le llega y donde se le dice qué hacer, así que no vale un "no".
+ */
+export const MOTIVO_MIN_CARACTERES = 15;
+
 export interface SolicitudPersonal {
   id: string;
   empresaId: string;
