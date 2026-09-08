@@ -338,6 +338,15 @@ const nextConfig: NextConfig = {
   // producción—. Declararlo externo hace que se cargue desde node_modules tal
   // cual, con su binario de Linux.
   serverExternalPackages: ['ssh2', 'ssh2-sftp-client', 'sharp'],
+  // ...y ademas hay que COPIARLO a mano al paquete de la funcion. `sharp` carga
+  // su motor (`libvips`) en tiempo de ejecucion, no con un `import`, asi que el
+  // rastreador de Next no lo ve y lo deja fuera: en el servidor el modulo falla
+  // con `libvips-cpp.so: cannot open shared object file` y el favicon sale sin
+  // recortar. Declarar `sharp` como externo no basta — hay que arrastrar
+  // tambien los binarios de `@img`.
+  outputFileTracingIncludes: {
+    '/api/favicon': ['./node_modules/@img/**/*'],
+  },
   // Activa el MCP server en /_next/mcp (Next.js 16+)
   experimental: {
     mcpServer: true,
