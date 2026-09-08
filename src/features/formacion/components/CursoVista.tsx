@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/features/auth/contexts/auth-context";
+import { analizarVideo } from "@/features/escuela/lib/video";
 import { toast } from "sonner";
 import {
   useFormacionStore,
@@ -133,6 +134,7 @@ export function CursoVista({ cursoId, admin = false, ambito = "plantilla" }: Pro
   }
 
   const activa = ordenadas.find((l) => l.id === activaId) ?? ordenadas[0];
+  const incrustado = analizarVideo(activa?.url);
   const idxActual = activa
     ? ordenadas.findIndex((l) => l.id === activa.id)
     : -1;
@@ -197,14 +199,29 @@ export function CursoVista({ cursoId, admin = false, ambito = "plantilla" }: Pro
             {(!activa || activa.url) && (
               <div className="relative aspect-video w-full bg-black">
                 {activa ? (
-                  <video
-                    key={activa.id}
-                    src={activa.url}
-                    controls
-                    autoPlay
-                    className="h-full w-full"
-                    onEnded={() => marcarCompletada(userKey, activa.id)}
-                  />
+                  // Un vídeo de YouTube o Vimeo se INCRUSTA (se ve desde su
+                  // plataforma, sin gastar almacenamiento nuestro); uno subido a
+                  // R2 se reproduce aquí. Antes solo cabía lo segundo y una
+                  // dirección de YouTube salía en negro.
+                  incrustado.tipo === "youtube" || incrustado.tipo === "vimeo" ? (
+                    <iframe
+                      key={activa.id}
+                      src={incrustado.src}
+                      title={activa.titulo}
+                      className="h-full w-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <video
+                      key={activa.id}
+                      src={activa.url}
+                      controls
+                      autoPlay
+                      className="h-full w-full"
+                      onEnded={() => marcarCompletada(userKey, activa.id)}
+                    />
+                  )
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-white/70">
                     Este curso aún no tiene lecciones.

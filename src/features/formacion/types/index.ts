@@ -14,7 +14,12 @@ export interface PuestoRef {
   departamento?: string;
 }
 
-export type Ambito = "general" | "puesto";
+/**
+ * "escuela" = curso del portal de alumnos (empresa matriz). Vive en estas mismas
+ * tablas, pero nunca se mezcla con la formación de la plantilla: las lecturas de
+ * RRHH y Mi panel lo excluyen.
+ */
+export type Ambito = "general" | "puesto" | "escuela";
 
 export type CategoriaCurso =
   | "bienvenida"

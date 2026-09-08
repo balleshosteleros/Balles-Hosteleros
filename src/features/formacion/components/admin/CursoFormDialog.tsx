@@ -106,8 +106,10 @@ export function CursoFormDialog({ empresaId, curso, onClose, onSaved }: Props) {
   const [categoria, setCategoria] = useState<CategoriaCurso>(
     curso?.categoria ?? "operativa",
   );
+  // En la formación de plantilla solo hay dos ámbitos; el de la escuela se
+  // monta desde PRODUCTO → ESCUELA y no pasa por este diálogo.
   const [ambito, setAmbito] = useState<"general" | "puesto">(
-    curso?.ambito ?? "general",
+    curso?.ambito === "puesto" ? "puesto" : "general",
   );
   const [puestoId, setPuestoId] = useState<string>(curso?.puestoId ?? "");
   const [autor, setAutor] = useState(curso?.autor ?? "RRHH");

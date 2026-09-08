@@ -1,35 +1,97 @@
 "use client";
 
-import { Card } from "@/components/ui/card";
-import { GraduationCap } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, ExternalLink, GraduationCap, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { createClient } from "@/lib/supabase/client";
+import { useFormacionStore } from "@/features/formacion/store/use-formacion-store";
+import { CursosTab } from "@/features/escuela/components/admin/CursosTab";
+import { ClasesTab } from "@/features/escuela/components/admin/ClasesTab";
+import { AlumnosTab } from "@/features/escuela/components/admin/AlumnosTab";
 
 /**
  * ESCUELA — submódulo de PRODUCTO (empresa matriz).
  *
- * De momento solo existe el hueco: el submódulo ya vive en el menú y tiene su
- * sitio, pero su contenido está por definir. Se deja explícito en pantalla en
- * lugar de inventar una funcionalidad que nadie ha pedido.
+ * Es el otro lado del portal del alumno: aquí se monta TODO lo que allí se ve
+ * —cursos, clases y quién entra— y allí no se puede tocar nada. El botón de
+ * arriba abre el portal tal y como lo ve un alumno, sin volver a identificarse.
  */
 export function EscuelaView() {
-  return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Escuela</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Formación de los clientes que contratan el software.
-        </p>
-      </div>
+  const { cursos, hydrate } = useFormacionStore();
+  const ambitoCargado = useFormacionStore((s) => s.ambito);
+  const [empresas, setEmpresas] = useState<{ id: string; nombre: string }[]>([]);
 
-      <Card className="p-8 text-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="rounded-xl bg-muted/60 p-3 text-muted-foreground">
-            <GraduationCap className="h-6 w-6" />
-          </div>
-          <p className="text-sm text-muted-foreground max-w-md">
-            Este submódulo todavía no tiene contenido.
+  useEffect(() => {
+    if (ambitoCargado !== "escuela") void hydrate("", { ambito: "escuela" });
+  }, [ambitoCargado, hydrate]);
+
+  // Las empresas cliente sirven para saber de qué restaurante es cada alumno.
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const supabase = createClient();
+      const { data } = await supabase.from("empresas").select("id, nombre").order("nombre");
+      if (vivo) setEmpresas((data ?? []) as { id: string; nombre: string }[]);
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  const cursosEscuela = useMemo(
+    () =>
+      cursos
+        .filter((c) => c.ambito === "escuela")
+        .map((c) => ({ id: c.id, titulo: c.titulo })),
+    [cursos],
+  );
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6 p-4 pb-28 md:p-6">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Escuela</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Las clases, los cursos y los alumnos del portal de formación.
           </p>
         </div>
-      </Card>
+        {/* Se abre en una pestaña nueva: el portal es otro sitio, no una
+            pantalla más del software. */}
+        <a href="/api/escuela/entrar" target="_blank" rel="noopener noreferrer">
+          <Button variant="outline">
+            <ExternalLink className="mr-2 h-4 w-4" />
+            Abrir el portal
+          </Button>
+        </a>
+      </div>
+
+      <Tabs defaultValue="clases">
+        <TabsList>
+          <TabsTrigger value="clases">
+            <CalendarDays className="mr-2 h-4 w-4" />
+            Clases
+          </TabsTrigger>
+          <TabsTrigger value="cursos">
+            <GraduationCap className="mr-2 h-4 w-4" />
+            Cursos
+          </TabsTrigger>
+          <TabsTrigger value="alumnos">
+            <Users className="mr-2 h-4 w-4" />
+            Alumnos
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="clases" className="mt-4">
+          <ClasesTab cursos={cursosEscuela} />
+        </TabsContent>
+        <TabsContent value="cursos" className="mt-4">
+          <CursosTab />
+        </TabsContent>
+        <TabsContent value="alumnos" className="mt-4">
+          <AlumnosTab cursos={cursosEscuela} empresas={empresas} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

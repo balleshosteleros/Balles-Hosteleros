@@ -78,7 +78,13 @@ const PUBLIC_PREFIXES = ['/carta', '/sitio-publico', '/api/google/connect', '/ap
   // pidieran login, el enlace del correo llevaría a la pantalla de acceso de un
   // software de gestión que esa persona no conoce.
   '/concurso',
-  '/baja']
+  '/baja',
+  // Portal de alumnos de la ESCUELA. El alumno no es un usuario del software:
+  // entra con su correo y un código, así que estas rutas no pueden exigir
+  // sesión de Supabase. `/api/escuela/entrar` es la excepción por dentro: ahí
+  // SÍ se lee la sesión del software, pero si no la hay simplemente devuelve al
+  // portal en vez de rebotar al login.
+  '/escuela', '/api/escuela']
 
 /**
  * Rutas que en el dominio de un cliente se sirven TAL CUAL, sin mandarlas al

@@ -1,7 +1,7 @@
 # PRP-090: Escuela — cursos en PRODUCTO y portal de alumnos
 
-> **Estado**: PENDIENTE
-> **Fecha**: 2026-09-07
+> **Estado**: EN MARCHA — fases 1, 2, 5, 6, 7 y las CLASES hechas (08-09-2026). Pendiente: volcar el contenido real de GoHighLevel y repuntar el dominio.
+> **Fecha**: 2026-09-07 (revisado el 08-09-2026)
 > **Proyecto**: Balles-Hosteleros
 
 ---
@@ -191,6 +191,31 @@ ALTER TABLE public.escuela_accesos    ENABLE ROW LEVEL SECURITY;
 ---
 
 **TODAS LAS DECISIONES ESTÁN CERRADAS.** El PRP queda listo para ejecutar (`/bucle-agentico`) en cuanto Iván lo apruebe.
+
+---
+
+## Cambios acordados el 08-09-2026 (Iván) — mandan sobre lo escrito arriba
+
+1. **Los vídeos se quedan en YouTube y se INCRUSTAN.** No se descargan ni se suben a R2 «de momento, para no gastar memoria nuestra». Cae por completo el trabajo de `ffmpeg`/HLS de las fases 3 y 4: del portal viejo se copian los TEXTOS y la dirección del vídeo, nada más. `analizarVideo()` (`features/escuela/lib/video.ts`) traduce cualquiera de las cinco formas de YouTube —y Vimeo— a la de incrustar; un vídeo ya subido a R2 sigue reproduciéndose como antes.
+2. **CLASES: apartado propio con calendario.** Es el «Eventos» de GoHighLevel, pero enseñando **una miniatura por clase** dentro del día, y al lado **las próximas en orden**. La miniatura se pinta con la IMAGEN DE MARCA (colores de Ajustes + isotipo) cuando la clase no trae una propia: ni se generan ficheros ni quedan huecos grises. Tabla nueva `escuela_clases` (fecha y hora de la EMPRESA, nunca UTC).
+3. **Portal del alumno de SOLO LECTURA.** Clases, cursos y su ficha: mira, entra a la clase, ve el vídeo y marca la lección. Nada editable. Todo se monta desde PRODUCTO → ESCUELA.
+4. **Ficha del alumno** con sus datos básicos, también sin poder editarlos.
+5. **Entrada sin claves desde dentro del software** (`/api/escuela/entrar`): quien ya ha entrado en el software no vuelve a identificarse; se le reconoce por el correo de su usuario y, si aún no era alumno, se da de alta en ese momento.
+
+### Lo que quedó hecho el 08-09-2026
+
+- Migración `20260908120000_escuela_portal_alumnos.sql`: `escuela_clases`, `escuela_alumnos`, `escuela_matriculas`, `escuela_progreso`, `escuela_accesos` (esta última sin políticas: solo servidor).
+- `features/escuela/` completo: tipos, `video.ts`, `sesion-alumno.ts` (cookie HttpOnly firmada, 30 días), `calendario.ts`, acciones de clases y alumnos, servicios del portal y del acceso por código.
+- Portal en `/escuela` (clases, cursos, curso, perfil) + `/api/escuela/entrar`; `/escuela` y `/api/escuela` dados de alta en `PUBLIC_PREFIXES`.
+- Back-office: `EscuelaView` con Clases | Cursos | Alumnos y `/producto/escuela/curso/[cursoId]` (mismo editor que la formación de plantilla).
+- `CursoVista` aprende a incrustar YouTube/Vimeo: antes una dirección de YouTube salía en negro.
+- Sembrado con lo visible en las capturas: las 11 clases de ago-sep 2026 y el curso «Máster en dirección y gestión hostelera» con el módulo «Bienvenida» y sus 3 lecciones (el texto de la primera, entero).
+
+### Lo que falta
+
+- **El contenido real de GoHighLevel**: la dirección de YouTube de cada lección y los textos del resto de módulos. Está detrás del login de la escuela vieja; hace falta acceso o un volcado.
+- **El dominio** `laescuela.balleshosteleros.com`: es lo ÚLTIMO, cuando el contenido esté verificado (ver decisión 5).
+- Fase 8 (test y certificado), que sigue sin empezar.
 
 ---
 
