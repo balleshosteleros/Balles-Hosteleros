@@ -13,6 +13,11 @@ export interface StockMovimiento {
   cantidad: number;
   signo: 1 | -1;
   saldo_resultante: number;
+  /**
+   * Si no es null, este movimiento FIJA el saldo en ese valor en vez de sumarlo o
+   * restarlo: es lo que son un inventario ("había 12") y un ajuste ("déjalo en 12").
+   */
+  saldo_fijado?: number | null;
   /** Coste por unidad de stock, congelado al registrar. null = no se pudo saber. */
   coste_unitario: number | null;
   /** cantidad x coste_unitario, congelado al registrar. */

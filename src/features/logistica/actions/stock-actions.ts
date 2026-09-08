@@ -110,11 +110,15 @@ export async function crearAjusteStock(input: {
       return { ok: true, saldoAnterior, saldoResultante: saldoAnterior };
     }
 
+    // "Corregir existencias" dice **déjalo en N**, no "suma N": va como ancla
+    // (PRP-080 F2). Si más tarde aparece un albarán con fecha anterior, la
+    // corrección sigue mandando en vez de descuadrarse.
     const resultado = await registrarMovimiento({
       empresaId,
       productoId: input.productoId,
       tipo: diferencia > 0 ? "entrada" : "salida",
       cantidad: Math.abs(diferencia),
+      saldoFijado: cantidadNueva,
       referencia: "Ajuste",
       documentoTipo: "ajuste",
       motivo,
@@ -126,6 +130,10 @@ export async function crearAjusteStock(input: {
         ok: false,
         error: `"${producto.nombre}" tiene el control de stock desactivado, así que no lleva existencias que ajustar.`,
       };
+    }
+
+    if (resultado.rechazadoPorCierre) {
+      return { ok: false, error: resultado.mensaje };
     }
 
     revalidatePath("/logistica/stock");
