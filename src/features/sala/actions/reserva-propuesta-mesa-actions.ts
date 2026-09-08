@@ -5,6 +5,7 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
 import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
+import { getZonasReservables } from "@/features/sala/planos/lib/zonas-reservables";
 import {
   ESTADOS_NO_OCUPANTES,
   horaAMinutosJornada,
@@ -65,12 +66,31 @@ interface MesaCatalogo {
   capacidadMax: number;
   zonaId: string;
   zonaNombre: string;
+  /** Posición de la zona en el local: manda el orden de llenado. */
+  zonaOrden: number;
   salaNombre: string;
 }
 
 function parteNumericaCodigo(codigo: string): number {
   const match = codigo.match(/\d+/);
   return match ? parseInt(match[0], 10) : 9999;
+}
+
+/** Letras iniciales del código ("TE12" → "TE"): la serie a la que pertenece. */
+function serieCodigo(codigo: string): string {
+  const match = codigo.match(/^[^\d]+/);
+  return (match ? match[0] : codigo).trim().toUpperCase();
+}
+
+/** Orden de mesa: serie primero (A, B, CR…) y dentro de ella el número. */
+function comparaCodigoMesa(a: string, b: string): number {
+  const sa = serieCodigo(a);
+  const sb = serieCodigo(b);
+  if (sa !== sb) return sa.localeCompare(sb);
+  const na = parteNumericaCodigo(a);
+  const nb = parteNumericaCodigo(b);
+  if (na !== nb) return na - nb;
+  return a.localeCompare(b);
 }
 
 /**
@@ -127,7 +147,7 @@ export async function proponerMesaAutomatica(input: {
     const { data: mesasRows, error: errMesas } = await supabase
       .from("mesas")
       .select(
-        "id, codigo, capacidad_min, capacidad_max, zona_id, zonas!inner(id, nombre, salas!inner(nombre))",
+        "id, codigo, capacidad_min, capacidad_max, zona_id, zonas!inner(id, nombre, orden, salas!inner(nombre))",
       )
       .eq("local_id", input.localId)
       .eq("activa", true);
@@ -136,8 +156,8 @@ export async function proponerMesaAutomatica(input: {
     const catalogo: MesaCatalogo[] = (mesasRows ?? [])
       .map((m) => {
         const z = m.zonas as unknown as
-          | { id?: string; nombre?: string; salas?: { nombre?: string } | { nombre?: string }[] }
-          | { id?: string; nombre?: string; salas?: { nombre?: string } | { nombre?: string }[] }[]
+          | { id?: string; nombre?: string; orden?: number; salas?: { nombre?: string } | { nombre?: string }[] }
+          | { id?: string; nombre?: string; orden?: number; salas?: { nombre?: string } | { nombre?: string }[] }[]
           | null;
         const zona = Array.isArray(z) ? z[0] : z;
         const s = zona?.salas;
@@ -149,13 +169,24 @@ export async function proponerMesaAutomatica(input: {
           capacidadMax: Number(m.capacidad_max) || 1,
           zonaId: (zona?.id as string) ?? (m.zona_id as string) ?? "",
           zonaNombre: zona?.nombre ?? "",
+          zonaOrden: Number(zona?.orden ?? 9999),
           salaNombre,
         };
       })
       .filter((m) => m.codigo)
       .filter((m) => !zonaFiltro || m.zonaNombre.toUpperCase() === zonaFiltro);
 
-    if (catalogo.length === 0) {
+    // Sin zona pedida, la propuesta se limita a las zonas PUBLICADAS (las que
+    // el cliente puede reservar en algún grupo). Nunca se propone sentar a
+    // nadie en una zona que no se ofrece — la barra, por ejemplo.
+    const zonasReservables = zonaFiltro
+      ? null
+      : await getZonasReservables(supabase as unknown as SupabaseClient, input.localId);
+    const catalogoPublicado = zonasReservables
+      ? catalogo.filter((m) => zonasReservables.has(m.zonaId))
+      : catalogo;
+
+    if (catalogoPublicado.length === 0) {
       return {
         ok: true,
         data: { encontrada: false, motivo: "SIN_MESAS", libresNoAptas: [], zonaBuscada: input.zona ?? null },
@@ -169,7 +200,7 @@ export async function proponerMesaAutomatica(input: {
       fechaISO: input.fecha,
       turno: input.turno,
     });
-    const disponiblesCatalogo = catalogo.filter((m) => !bloqueadas.has(m.id));
+    const disponiblesCatalogo = catalogoPublicado.filter((m) => !bloqueadas.has(m.id));
 
     // 3. Ocupación real en la franja [hora, hora + duración).
     //    Cada reserva se mide con SU duración: una de 4h bloquea 4h.
@@ -228,10 +259,8 @@ export async function proponerMesaAutomatica(input: {
       if (aptasLibres.length > 0) {
         const ordenadas = [...aptasLibres].sort((a, b) => {
           if (a.capacidadMax !== b.capacidadMax) return a.capacidadMax - b.capacidadMax;
-          const na = parteNumericaCodigo(a.codigo);
-          const nb = parteNumericaCodigo(b.codigo);
-          if (na !== nb) return na - nb;
-          return a.codigo.localeCompare(b.codigo);
+          if (a.zonaOrden !== b.zonaOrden) return a.zonaOrden - b.zonaOrden;
+          return comparaCodigoMesa(a.codigo, b.codigo);
         });
         const elegida = ordenadas[0];
         return {

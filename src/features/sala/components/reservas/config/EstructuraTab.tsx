@@ -6,7 +6,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Trash2, Edit3 } from "lucide-react";
+import { Plus, Pencil, Trash2, Edit3, GripVertical, Info } from "lucide-react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 import {
   TIPO_MESA_LABELS,
@@ -25,6 +42,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { updateCombinacion } from "@/features/sala/planos/actions/combinaciones-actions";
+import { reordenarZonas } from "@/features/sala/planos/actions/zonas-actions";
 import { ZonaConfigModal } from "./ZonaConfigModal";
 import { MesaConfigModal } from "./MesaConfigModal";
 import { CombinacionConfigModal } from "./CombinacionConfigModal";
@@ -159,6 +177,56 @@ export function EstructuraTab() {
     return mesasPorZona.get(zonaId) ?? SIN_MESAS;
   }
 
+  // Arrastre de zonas: decide el ORDEN DE LLENADO (ver más abajo).
+  const sensoresZonas = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  /**
+   * Reordena las zonas de una sala y persiste el orden GLOBAL del local: las
+   * salas en el orden en que se muestran y, dentro de cada una, sus zonas.
+   * Ese número es el que usa la asignación automática para decidir qué zona
+   * se llena antes cuando la reserva no pide zona.
+   */
+  const handleReordenarZonas = useCallback(
+    async (salaId: string, e: DragEndEvent) => {
+      const { active, over } = e;
+      if (!over || active.id === over.id) return;
+      const zs = zonasPorSala.get(salaId) ?? [];
+      const desde = zs.findIndex((z) => z.id === active.id);
+      const hasta = zs.findIndex((z) => z.id === over.id);
+      if (desde < 0 || hasta < 0) return;
+
+      const deLaSala = arrayMove(zs, desde, hasta);
+      const globales: Zona[] = [];
+      const vistas = new Set<string>();
+      for (const sala of salas) {
+        const lista = sala.id === salaId ? deLaSala : (zonasPorSala.get(sala.id) ?? []);
+        for (const z of lista) {
+          globales.push(z);
+          vistas.add(z.id);
+        }
+      }
+      // Una zona cuya sala ya no se lista no puede perderse del estado.
+      for (const z of zonas) if (!vistas.has(z.id)) globales.push(z);
+
+      const conOrden = globales.map((z, i) => ({ ...z, orden: i + 1 }));
+      setZonas(conOrden);
+      const res = await reordenarZonas(
+        localId,
+        conOrden.map((z) => z.id),
+      );
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo guardar el orden de las zonas");
+        await cargarTodo(localId);
+        return;
+      }
+      toast.success("Orden de llenado guardado");
+    },
+    [zonasPorSala, zonas, salas, localId, cargarTodo],
+  );
+
   if (salaEnEdicionPlano) {
     return (
       <SalaPlanoEditor
@@ -281,7 +349,14 @@ export function EstructuraTab() {
           {/* ZONAS */}
           <section className="space-y-3">
             <header className="flex items-baseline justify-between">
-              <h3 className="text-sm font-semibold">Zonas</h3>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold">Zonas</h3>
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Info className="h-3.5 w-3.5 shrink-0" />
+                  Arrastra para decidir qué zona se llena antes. A igual capacidad,
+                  la reserva entra en la mesa de la zona que esté más arriba.
+                </p>
+              </div>
               <Button
                 size="sm"
                 variant="outline"
@@ -322,33 +397,30 @@ export function EstructuraTab() {
                           Aún no hay zonas en esta sala.
                         </p>
                       ) : (
-                      <ul className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                        {zs.map((z) => (
-                          <li
-                            key={z.id}
-                            className="flex items-center justify-between border rounded-md px-3 py-2 text-sm"
-                          >
-                            <span className="flex items-center gap-2">
-                              <span
-                                className="inline-block h-4 w-4 rounded border"
-                                style={{ backgroundColor: z.colorPastel }}
+                      <DndContext
+                        sensors={sensoresZonas}
+                        collisionDetection={closestCenter}
+                        onDragEnd={(e) => handleReordenarZonas(sala.id, e)}
+                      >
+                        <SortableContext
+                          items={zs.map((z) => z.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <ul className="space-y-1.5">
+                            {zs.map((z, i) => (
+                              <ZonaOrdenable
+                                key={z.id}
+                                zona={z}
+                                posicion={i + 1}
+                                onEditar={() => {
+                                  setZonaEdit(z);
+                                  setZonaModalOpen(true);
+                                }}
                               />
-                              <span className="font-medium">{z.nombre}</span>
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-muted-foreground"
-                              onClick={() => {
-                                setZonaEdit(z);
-                                setZonaModalOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                          </li>
-                        ))}
-                      </ul>
+                            ))}
+                          </ul>
+                        </SortableContext>
+                      </DndContext>
                       )}
                     </div>
                   );
@@ -679,6 +751,66 @@ function AforoRapido({
         +
       </button>
     </span>
+  );
+}
+
+/**
+ * Zona arrastrable dentro de su sala.
+ *
+ * El número que se ve a la izquierda es su posición en el orden de llenado:
+ * a igual capacidad, la asignación automática entra antes en la zona 1 que en
+ * la 2. Se arrastra por el asa para no pelearse con el botón de editar.
+ */
+function ZonaOrdenable({
+  zona,
+  posicion,
+  onEditar,
+}: {
+  zona: Zona;
+  posicion: number;
+  onEditar: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: zona.id });
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : 1,
+      }}
+      className="flex items-center justify-between border rounded-md px-3 py-2 text-sm bg-background"
+    >
+      <span className="flex items-center gap-2 min-w-0">
+        <button
+          type="button"
+          className="text-muted-foreground cursor-grab active:cursor-grabbing touch-none"
+          aria-label={`Mover ${zona.nombre}`}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <span className="text-xs text-muted-foreground tabular-nums w-4 text-right">
+          {posicion}
+        </span>
+        <span
+          className="inline-block h-4 w-4 rounded border shrink-0"
+          style={{ backgroundColor: zona.colorPastel }}
+        />
+        <span className="font-medium truncate">{zona.nombre}</span>
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-muted-foreground"
+        onClick={onEditar}
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </Button>
+    </li>
   );
 }
 

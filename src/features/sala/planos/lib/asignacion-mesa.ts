@@ -7,6 +7,7 @@ import {
 } from "@/features/sala/lib/reserva-conflicto";
 import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
+import { getZonasReservables } from "@/features/sala/planos/lib/zonas-reservables";
 
 export type AsignacionInput = {
   localId: string;
@@ -33,6 +34,27 @@ export type AsignacionResultado =
 function parteNumericaCodigo(codigo: string): number {
   const match = codigo.match(/\d+/);
   return match ? parseInt(match[0], 10) : 9999;
+}
+
+/** Letras iniciales del código ("TE12" → "TE"): la serie a la que pertenece. */
+function serieCodigo(codigo: string): string {
+  const match = codigo.match(/^[^\d]+/);
+  return (match ? match[0] : codigo).trim().toUpperCase();
+}
+
+/**
+ * Orden de mesa: primero la serie (A, B, CR, TE…) y dentro de ella el número
+ * de menor a mayor, para sentar por orden de mesa — A1, A2, A3… — y no
+ * saltando de zona en zona (A1, TE1, A2, TE2…).
+ */
+function comparaCodigoMesa(a: string, b: string): number {
+  const sa = serieCodigo(a);
+  const sb = serieCodigo(b);
+  if (sa !== sb) return sa.localeCompare(sb);
+  const na = parteNumericaCodigo(a);
+  const nb = parteNumericaCodigo(b);
+  if (na !== nb) return na - nb;
+  return a.localeCompare(b);
 }
 
 /**
@@ -89,7 +111,12 @@ async function codigosOcupadosEnFranja(
 async function listarUnionesLibres(
   supabase: SupabaseClient,
   input: AsignacionInput,
-  ctx: { codigosOcupados: Set<string>; bloqueadas: Set<string> },
+  ctx: {
+    codigosOcupados: Set<string>;
+    bloqueadas: Set<string>;
+    /** Zonas publicadas al cliente. `null` = el local no las tiene definidas. */
+    zonasReservables: Set<string> | null;
+  },
 ): Promise<Array<{ id: string; codigo: string; zonaNombre: string }>> {
   let query = supabase
     .from("mesa_combinaciones")
@@ -102,6 +129,11 @@ async function listarUnionesLibres(
   if (input.zonaId) query = query.eq("zona_id", input.zonaId);
   if (input.zonaIds && input.zonaIds.length > 0) {
     query = query.in("zona_id", input.zonaIds);
+  }
+  // Sin zona pedida, solo las publicadas: una unión de una zona que el cliente
+  // no puede reservar no existe para la asignación.
+  if (!input.zonaId && !(input.zonaIds && input.zonaIds.length > 0) && ctx.zonasReservables) {
+    query = query.in("zona_id", Array.from(ctx.zonasReservables));
   }
   if (input.tipo) query = query.eq("tipo", input.tipo);
 
@@ -249,10 +281,13 @@ export async function asignarMesaAutomatica(
       return { ok: true, mesa: null, razon: "SIN_CANDIDATAS" };
     }
 
-    // 3. Mesas candidatas (capacidad + filtros).
+    // 3. Mesas candidatas (capacidad + filtros). Antes, qué zonas admiten
+    // cliente: las que están en algún grupo publicado del local.
+    const zonasReservables = await getZonasReservables(supabase, input.localId);
+
     let mesasQuery = supabase
       .from("mesas")
-      .select("id, codigo, capacidad_min, capacidad_max, tipo, zona_id, zonas!inner(id, nombre, sala_id)")
+      .select("id, codigo, capacidad_min, capacidad_max, tipo, zona_id, zonas!inner(id, nombre, sala_id, orden)")
       .eq("local_id", input.localId)
       .eq("activa", true)
       .in("zonas.sala_id", salaIdsFiltradas)
@@ -261,6 +296,12 @@ export async function asignarMesaAutomatica(
     if (input.zonaId) mesasQuery = mesasQuery.eq("zona_id", input.zonaId);
     if (input.zonaIds && input.zonaIds.length > 0) {
       mesasQuery = mesasQuery.in("zona_id", input.zonaIds);
+    }
+    // Sin zona ni grupo pedidos, la asignación se limita a las zonas que el
+    // local tiene PUBLICADAS en algún grupo: nunca se sienta a nadie donde el
+    // cliente no puede reservar (p. ej. la barra).
+    if (!input.zonaId && !(input.zonaIds && input.zonaIds.length > 0) && zonasReservables) {
+      mesasQuery = mesasQuery.in("zona_id", Array.from(zonasReservables));
     }
     if (input.tipo) mesasQuery = mesasQuery.eq("tipo", input.tipo);
 
@@ -285,6 +326,7 @@ export async function asignarMesaAutomatica(
       const uniones = await listarUnionesLibres(supabase, input, {
         codigosOcupados: ocupadosSinCandidatas,
         bloqueadas,
+        zonasReservables,
       });
       if (uniones.length > 0) {
         // Con solo uniones disponibles, el orden manual sigue mandando.
@@ -333,17 +375,24 @@ export async function asignarMesaAutomatica(
       id: string;
       codigo: string;
       zonaNombre: string;
+      capacidadMax: number;
+      zonaOrden: number;
     };
     const libres: MesaCandidata[] = mesas
       .filter((m) => !codigosOcupados.has(m.codigo as string))
       .filter((m) => !bloqueadas.has(m.id as string))
       .map((m) => {
-        const z = m.zonas as unknown as { nombre?: string } | { nombre?: string }[] | null;
-        const zonaNombre = Array.isArray(z) ? (z[0]?.nombre ?? "") : (z?.nombre ?? "");
+        const z = m.zonas as unknown as
+          | { nombre?: string; orden?: number }
+          | { nombre?: string; orden?: number }[]
+          | null;
+        const zona = Array.isArray(z) ? z[0] : z;
         return {
           id: m.id as string,
           codigo: m.codigo as string,
-          zonaNombre,
+          zonaNombre: zona?.nombre ?? "",
+          capacidadMax: Number(m.capacidad_max) || 1,
+          zonaOrden: Number(zona?.orden ?? 9999),
         };
       });
 
@@ -353,6 +402,7 @@ export async function asignarMesaAutomatica(
     const uniones = await listarUnionesLibres(supabase, input, {
       codigosOcupados,
       bloqueadas,
+      zonasReservables,
     });
 
     const preferida = await primeraPreferida(supabase, planoId, input.personas, {
@@ -362,14 +412,19 @@ export async function asignarMesaAutomatica(
     if (preferida) return { ok: true, mesa: { ...preferida, planoId } };
 
     // 6. Sin preferencia configurada (o toda ocupada): criterio por defecto.
-    // Mesa suelta antes que unión, para no partir mesas sin necesidad, y
-    // dentro de las sueltas por parte numérica del código.
+    //   a) Mesa suelta antes que unión, para no partir mesas sin necesidad.
+    //   b) La MÁS AJUSTADA al grupo: un grupo de 3 no puede llevarse la mesa
+    //      de 4 solo por llamarse A1, porque después la de 4 ya no está para
+    //      un grupo de 4.
+    //   c) A igual capacidad, el ORDEN DE LA ZONA del local (Configuración →
+    //      Estructura): se llena primero la zona que el responsable puso
+    //      primera, no la que alfabéticamente empieza antes.
+    //   d) Y dentro de la zona, por serie y número de mesa.
     if (libres.length > 0) {
       libres.sort((a, b) => {
-        const na = parteNumericaCodigo(a.codigo);
-        const nb = parteNumericaCodigo(b.codigo);
-        if (na !== nb) return na - nb;
-        return a.codigo.localeCompare(b.codigo);
+        if (a.capacidadMax !== b.capacidadMax) return a.capacidadMax - b.capacidadMax;
+        if (a.zonaOrden !== b.zonaOrden) return a.zonaOrden - b.zonaOrden;
+        return comparaCodigoMesa(a.codigo, b.codigo);
       });
       return { ok: true, mesa: { ...libres[0], planoId } };
     }

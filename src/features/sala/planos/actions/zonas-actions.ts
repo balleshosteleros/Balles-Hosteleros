@@ -104,6 +104,37 @@ export async function updateZona(
   }
 }
 
+/**
+ * Guarda el ORDEN DE LLENADO de las zonas del local.
+ *
+ * Es el orden que decide qué zona se ocupa primero cuando la reserva no pide
+ * una concreta: a igualdad de capacidad, la mesa de la zona que va antes en
+ * esta lista. `ordenIds` llega ya en el orden final que ve el responsable.
+ */
+export async function reordenarZonas(localId: string, ordenIds: string[]) {
+  try {
+    if (!localId) return { ok: false, error: "Local obligatorio" };
+    if (ordenIds.length === 0) return { ok: true };
+    const supabase = await createClient();
+    // Una escritura por zona: son pocas (decenas como mucho) y así el fallo de
+    // una no deja el resto a medias sin que nos enteremos.
+    for (let i = 0; i < ordenIds.length; i++) {
+      const { error } = await supabase
+        .from("zonas")
+        .update({ orden: i + 1 })
+        .eq("id", ordenIds[i])
+        .eq("local_id", localId);
+      if (error) throw error;
+    }
+    revalidatePath("/sala/reservas");
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[zonas] reordenar:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export async function deleteZona(id: string) {
   try {
     const supabase = await createClient();
