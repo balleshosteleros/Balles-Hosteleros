@@ -22,6 +22,20 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://sistema.balleshosteleros.com"),
   title: esProduccion ? "Balles Hosteleros" : "Balles Hosteleros - PRUEBAS",
   description: "Sistema de gestión integral para hostelería",
+  // `?v=` al final del icono: al cambiar el dibujo hay que SUBIR ESE NÚMERO.
+  // Next sirve `icon.png` siempre en la misma dirección aunque el archivo
+  // cambie, y el navegador guarda los favicons en su propio archivo y no
+  // vuelve a pedirlos: el icono redondo estaba servido y seguía viéndose el
+  // cuadrado de antes. Cambiar la dirección es lo único que le hace bajarlo de
+  // nuevo (mismo truco que en el manifest de la PWA).
+  //
+  // v2 = 08-09-2026, el paso de icono cuadrado a redondo.
+  icons: {
+    icon: "/icon.png?v=2",
+    shortcut: "/icon.png?v=2",
+    // iOS sigue con el cuadrado: la pantalla de inicio lo recorta ella.
+    apple: "/apple-icon.png?v=2",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -43,6 +43,12 @@ function serviceClient() {
 export function faviconRedondo(url: string, color?: string | null): string {
   const q = new URLSearchParams({ u: url });
   if (color) q.set("c", color);
+  // `v=` no lo usa la ruta: está para que al cambiar el aspecto del icono
+  // cambie la dirección. El navegador guarda los favicons en su propio archivo
+  // y no vuelve a pedirlos; sin esto, quien ya hubiera entrado en la web seguía
+  // viendo el icono viejo aunque el nuevo estuviera servido. SUBIR EL NÚMERO al
+  // cambiar el dibujo. v2 = 08-09-2026, disco negro con el color de la empresa.
+  q.set("v", "2");
   return `/api/favicon?${q.toString()}`;
 }
 
