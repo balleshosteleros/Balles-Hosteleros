@@ -194,6 +194,36 @@ Candidatos ya detectados que rompen en silencio:
 
 ---
 
+## QR nuevos bajo el dominio del propio restaurante
+
+Hoy el QR lleva grabado `qr.balleshosteleros.com/<codigo>`. Es a propósito: el
+destino vive en la base de datos y se cambia desde el panel, así que **el papel
+impreso no se reimprime nunca**. Los QR que se hicieron en GoHighLevel apuntando
+directos a WhatsApp quedaron atados de por vida y reimprimir cartas cuesta
+dinero.
+
+El precio de eso: al escanear, el comensal ve un instante la marca de la
+gestora, no la del restaurante. Iván lo señaló el 08-09-2026 — *«es algo que
+abre un cliente y le posiciona su web»*, así que debería ir en el dominio del
+cliente.
+
+**Se puede tener lo mejor de los dos:** que los QR NUEVOS se graben como
+`sudominio.com/q/<codigo>` y que la redirección la siga resolviendo nuestro
+sistema. El comensal ve la marca del restaurante y el destino sigue siendo
+cambiable sin reimprimir.
+
+**Por qué se aplaza:** los QR ya impresos no se tocan (por eso mismo existe el
+redirector), así que esto solo aporta de aquí en adelante y no corría prisa. Al
+hacerlo, tener en cuenta que el código es único GLOBALMENTE entre empresas
+porque hoy el subdominio es común — al repartirlos por dominios habría que
+decidir si se mantiene esa unicidad global (recomendable: no reutilizar nunca un
+código, aunque cambie de dominio). Y que un local sin dominio propio conectado
+tiene que seguir cayendo en `qr.balleshosteleros.com`.
+
+Ver `.claude/memory/` → `project_qr_redireccion_dominio_propio`.
+
+---
+
 ## Cómo usar este documento
 
 Cuando aparezca una mejora que se decide aplazar, **añadirla aquí con el
