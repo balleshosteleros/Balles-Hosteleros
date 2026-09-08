@@ -32,6 +32,7 @@ import {
 import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { WizardDominioDialog } from "./WizardDominioDialog";
 import { EstadoDominio } from "./EstadoDominio";
+import { registrosDns } from "../../../types";
 import type { PaginaWebDominio } from "../../../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
@@ -186,15 +187,15 @@ export function DominiosPanel({ paginaId, nombrePagina }: Props) {
                     )}
                   </TableCell>
                   <TableCell className="font-mono text-xs">
-                    {d.dns_hint ? (
-                      <>
-                        <span className="font-semibold">{d.dns_hint.tipo}</span>{" "}
-                        <span className="text-muted-foreground">{d.dns_hint.name}</span>{" "}
-                        → <span>{d.dns_hint.value}</span>
-                      </>
-                    ) : (
-                      "—"
-                    )}
+                    {registrosDns(d.dns_hint).length > 0
+                      ? registrosDns(d.dns_hint).map((r, i) => (
+                          <div key={`${r.tipo}-${r.name}-${i}`}>
+                            <span className="font-semibold">{r.tipo}</span>{" "}
+                            <span className="text-muted-foreground">{r.name}</span>{" "}
+                            → <span>{r.value}</span>
+                          </div>
+                        ))
+                      : "—"}
                   </TableCell>
                   <TableCell>
                     <EstadoDominio estado={d.estado} ssl={d.ssl_activo} />

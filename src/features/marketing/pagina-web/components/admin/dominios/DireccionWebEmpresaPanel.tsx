@@ -37,6 +37,7 @@ import {
 import { listarPaginas } from "../../../actions/paginas-actions";
 import { WizardDominioDialog } from "./WizardDominioDialog";
 import { EstadoDominio } from "./EstadoDominio";
+import { registrosDns } from "../../../types";
 import type { PaginaWeb, PaginaWebDominio } from "../../../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
@@ -177,11 +178,15 @@ export function DireccionWebEmpresaPanel() {
                   Abre: {nombrePagina(d.pagina_id)}
                   {d.es_principal && " · principal"}
                 </p>
-                {d.dns_hint && d.estado !== "VERIFICADO" && (
-                  <p className="text-xs font-mono text-muted-foreground mt-1">
-                    {d.dns_hint.tipo} {d.dns_hint.name} → {d.dns_hint.value}
-                  </p>
-                )}
+                {d.estado !== "VERIFICADO" &&
+                  registrosDns(d.dns_hint).map((r, i) => (
+                    <p
+                      key={`${r.tipo}-${r.name}-${i}`}
+                      className="text-xs font-mono text-muted-foreground mt-1"
+                    >
+                      {r.tipo} {r.name} → {r.value}
+                    </p>
+                  ))}
               </div>
               <div className="flex items-center gap-2">
                 <EstadoDominio estado={d.estado} ssl={d.ssl_activo} />

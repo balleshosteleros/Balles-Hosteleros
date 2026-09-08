@@ -37,6 +37,31 @@ export interface VercelDomainConfig {
   configuredBy: string | null;
   acceptedChallenges: string[] | null;
   misconfigured: boolean;
+  /** Nameservers reales del dominio. Sirven para saber dónde vive su DNS. */
+  nameservers?: string[] | null;
+  /** Direcciones que Vercel recomienda HOY para un dominio raíz, por preferencia. */
+  recommendedIPv4?: Array<{ rank: number; value: string[] }> | null;
+  /** Destino que Vercel recomienda HOY para un subdominio, por preferencia. */
+  recommendedCNAME?: Array<{ rank: number; value: string }> | null;
+}
+
+/** Un registro que el dueño del dominio tiene que crear, tal y como se le enseña. */
+export interface RegistroDns {
+  tipo: "A" | "CNAME" | "TXT";
+  name: string;
+  value: string;
+  /** Por qué hace falta. Se enseña al usuario, sin jerga. */
+  motivo: "APUNTAR" | "PROPIEDAD";
+}
+
+/** Dónde vive el DNS del dominio: cambia las instrucciones que se enseñan. */
+export type ProveedorDns = "VERCEL" | "SITEGROUND" | "OTRO";
+
+export function proveedorDeNameservers(nameservers?: string[] | null): ProveedorDns {
+  const ns = (nameservers ?? []).join(" ").toLowerCase();
+  if (ns.includes("vercel-dns")) return "VERCEL";
+  if (ns.includes("siteground")) return "SITEGROUND";
+  return "OTRO";
 }
 
 export async function addDomainToProject(
@@ -131,18 +156,100 @@ export async function removeDomainFromProject(
 }
 
 /**
+ * Los registros que hay que crear para este dominio, preguntándoselos a Vercel.
+ *
+ * Antes se adivinaban con una heurística y salían los valores ANTIGUOS
+ * (`76.76.21.21`, `cname.vercel-dns.com`). Siguen funcionando, pero no son los
+ * que Vercel enseña hoy en su panel, y un cliente que compare las dos pantallas
+ * cree que le estamos dando datos malos. Ahora se piden y se usa el que Vercel
+ * pone primero; la heurística solo entra si la API no contesta.
+ *
+ * `verificacion` es lo que devuelve `addDomainToProject` cuando el dominio ya
+ * está en OTRA cuenta de Vercel: un registro TXT que demuestra que es suyo. No
+ * mueve el dominio a nuestra cuenta, solo nos deja usarlo en el proyecto.
+ */
+export async function registrosDelDominio(
+  hostname: string,
+  verificacion?: VercelDomainAddResult["verification"],
+): Promise<{ registros: RegistroDns[]; proveedor: ProveedorDns }> {
+  const registros: RegistroDns[] = [];
+
+  // La propiedad va SIEMPRE primero: sin ella, apuntar el dominio no sirve.
+  for (const v of verificacion ?? []) {
+    if (v.type?.toUpperCase() !== "TXT") continue;
+    registros.push({
+      tipo: "TXT",
+      name: nombreRelativo(v.domain, hostname),
+      value: v.value,
+      motivo: "PROPIEDAD",
+    });
+  }
+
+  const cfg = await getDomainConfig(hostname);
+  const partes = hostname.split(".");
+  const esApex = partes.length === 2 || esApexConTldCompuesto(hostname);
+
+  if (cfg.ok) {
+    const mejor = <T,>(lista?: Array<{ rank: number; value: T }> | null): T | null => {
+      if (!lista?.length) return null;
+      return [...lista].sort((a, b) => a.rank - b.rank)[0].value;
+    };
+    if (esApex) {
+      const ips = mejor(cfg.data.recommendedIPv4);
+      for (const ip of ips ?? []) {
+        registros.push({ tipo: "A", name: "@", value: ip, motivo: "APUNTAR" });
+      }
+    } else {
+      const destino = mejor(cfg.data.recommendedCNAME);
+      if (destino) {
+        registros.push({
+          tipo: "CNAME",
+          name: partes[0],
+          // Vercel lo devuelve con el punto final de la raíz DNS; casi ningún
+          // panel lo acepta escrito así.
+          value: destino.replace(/\.$/, ""),
+          motivo: "APUNTAR",
+        });
+      }
+    }
+  }
+
+  // La API no contestó (o no recomendó nada): se cae a los valores de siempre.
+  if (!registros.some((r) => r.motivo === "APUNTAR")) {
+    const hint = generarDnsHint(hostname);
+    registros.push({ ...hint, motivo: "APUNTAR" });
+  }
+
+  return {
+    registros,
+    proveedor: proveedorDeNameservers(cfg.ok ? cfg.data.nameservers : null),
+  };
+}
+
+/** `_vercel.midominio.com` sobre `midominio.com` se escribe solo como `_vercel`. */
+function nombreRelativo(completo: string, hostname: string): string {
+  if (completo === hostname) return "@";
+  return completo.endsWith("." + hostname)
+    ? completo.slice(0, -(hostname.length + 1))
+    : completo;
+}
+
+function esApexConTldCompuesto(hostname: string): boolean {
+  const partes = hostname.split(".");
+  return (
+    partes.length === 3 &&
+    ["co.uk", "com.es", "com.mx", "com.ar", "com.br"].some((s) => hostname.endsWith(s))
+  );
+}
+
+/**
  * Heurística simple para generar el DNS hint que se muestra al admin.
  * Para apex: A record 76.76.21.21 (Vercel anycast).
  * Para subdominios: CNAME cname.vercel-dns.com.
  */
 export function generarDnsHint(hostname: string): { tipo: "A" | "CNAME"; name: string; value: string } {
   const parts = hostname.split(".");
-  // Consideramos apex si sólo hay 2 segmentos (ej. bacanalmadrid.com)
-  // o 3 segmentos con TLDs compuestos comunes (ej. example.co.uk)
-  const esApex =
-    parts.length === 2 ||
-    (parts.length === 3 &&
-      ["co.uk", "com.es", "com.mx", "com.ar", "com.br"].some((s) => hostname.endsWith(s)));
+  const esApex = parts.length === 2 || esApexConTldCompuesto(hostname);
   if (esApex) {
     return { tipo: "A", name: "@", value: "76.76.21.21" };
   }

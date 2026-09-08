@@ -360,7 +360,12 @@ export interface PaginaWebDominio {
   es_principal: boolean;
   estado: DominioEstado;
   vercel_domain_id: string | null;
-  dns_hint: DnsHint | null;
+  /**
+   * Los registros que hay que crear. Los dominios dados de alta antes de
+   * septiembre de 2026 guardan UNO SOLO, sin lista: hay que aceptar las dos
+   * formas al leerlos.
+   */
+  dns_hint: DnsHint | DnsHint[] | null;
   ssl_activo: boolean;
   verificado_at: string | null;
   created_at: string;
@@ -371,6 +376,17 @@ export interface DnsHint {
   tipo: "A" | "CNAME" | "TXT";
   name: string;
   value: string;
+  /** Para qué sirve: apuntar el dominio, o demostrar que es suyo. */
+  motivo?: "APUNTAR" | "PROPIEDAD";
+}
+
+/**
+ * Los registros de un dominio, venga como lista o como registro suelto: los
+ * dominios dados de alta antes de septiembre de 2026 guardan uno solo.
+ */
+export function registrosDns(hint: DnsHint | DnsHint[] | null): DnsHint[] {
+  if (!hint) return [];
+  return Array.isArray(hint) ? hint : [hint];
 }
 
 export interface PaginaWebVersion {

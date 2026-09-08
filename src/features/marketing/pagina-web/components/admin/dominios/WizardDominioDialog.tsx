@@ -36,7 +36,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { anadirDominio, verificarDominio } from "../../../actions/dominios-actions";
-import type { DnsHint } from "../../../types";
+import type { ProveedorDns, RegistroDns } from "../../../services/vercel-domains";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type Paso = "DIRECCION" | "DNS" | "VERIFICAR" | "LISTO";
@@ -51,7 +51,8 @@ interface Props {
 interface DominioState {
   id: string;
   hostname: string;
-  dns: DnsHint;
+  registros: RegistroDns[];
+  proveedor: ProveedorDns;
 }
 
 export function WizardDominioDialog({ open, onOpenChange, paginaId, onCompletado }: Props) {
@@ -121,7 +122,12 @@ export function WizardDominioDialog({ open, onOpenChange, paginaId, onCompletado
       setError(res.error);
       return;
     }
-    setDominio({ id: res.data.id, hostname: limpio, dns: res.data.dns as DnsHint });
+    setDominio({
+      id: res.data.id,
+      hostname: limpio,
+      registros: res.data.registros,
+      proveedor: res.data.proveedor,
+    });
     setPaso("DNS");
     onCompletado();
   };
@@ -186,7 +192,8 @@ export function WizardDominioDialog({ open, onOpenChange, paginaId, onCompletado
           {paso === "DNS" && dominio && (
             <PasoDns
               hostname={dominio.hostname}
-              dns={dominio.dns}
+              registros={dominio.registros}
+              proveedor={dominio.proveedor}
               onCopiar={copiar}
               onSiguiente={() => setPaso("VERIFICAR")}
               onAtras={() => setPaso("DIRECCION")}
@@ -332,85 +339,67 @@ function PasoDireccion({
 
 function PasoDns({
   hostname,
-  dns,
+  registros,
+  proveedor,
   onCopiar,
   onSiguiente,
   onAtras,
 }: {
   hostname: string;
-  dns: DnsHint;
+  registros: RegistroDns[];
+  proveedor: ProveedorDns;
   onCopiar: (v: string, etiqueta: string) => void;
   onSiguiente: () => void;
   onAtras: () => void;
 }) {
-  const esCName = dns.tipo === "CNAME";
+  const propiedad = registros.filter((r) => r.motivo === "PROPIEDAD");
+  const apuntar = registros.filter((r) => r.motivo !== "PROPIEDAD");
+  const total = registros.length;
+  const donde =
+    proveedor === "VERCEL"
+      ? "en Vercel"
+      : proveedor === "SITEGROUND"
+        ? "en SiteGround"
+        : "donde tienes contratado el dominio";
 
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <h3 className="text-lg font-semibold">Copia estos dos datos en SiteGround</h3>
+        <h3 className="text-lg font-semibold">
+          {total === 1 ? "Copia este dato" : `Copia estos ${total} datos`} {donde}
+        </h3>
         <p className="text-sm text-muted-foreground">
-          Para que <strong>{hostname}</strong> apunte a tu nueva web, hay que pegar
-          dos valores donde tienes contratado el dominio.
+          Para que <strong>{hostname}</strong> muestre tu web, hay que crear{" "}
+          {total === 1 ? "este registro" : "estos registros"} en el sitio donde se
+          gestiona el dominio.
         </p>
       </div>
 
-      <div className="rounded-lg border bg-muted/30 divide-y">
-        <CampoCopiable
-          etiqueta={esCName ? "Apunta este subdominio…" : "Apunta el dominio raíz (@)…"}
-          valor={dns.name}
-          onCopiar={(v) => onCopiar(v, "Nombre")}
+      {propiedad.length > 0 && (
+        <BloqueRegistros
+          titulo="1 · Demuestra que el dominio es tuyo"
+          explicacion="Tu dominio está en otra cuenta de Vercel. Este dato le dice a Vercel que nos autorizas a usarlo. El dominio sigue siendo tuyo: no se mueve de tu cuenta."
+          registros={propiedad}
+          onCopiar={onCopiar}
         />
-        <CampoCopiable
-          etiqueta="…a este destino"
-          valor={dns.value}
-          onCopiar={(v) => onCopiar(v, "Destino")}
-        />
-        <div className="px-4 py-2 text-[11px] text-muted-foreground">
-          Tipo de registro: <strong>{dns.tipo}</strong>{" "}
-          {esCName ? "(subdominio)" : "(dominio raíz)"}
-        </div>
-      </div>
+      )}
+
+      <BloqueRegistros
+        titulo={propiedad.length > 0 ? "2 · Apunta el dominio a tu web" : undefined}
+        explicacion={
+          propiedad.length > 0
+            ? "Este segundo dato es el que hace que la dirección abra tu web."
+            : undefined
+        }
+        registros={apuntar}
+        onCopiar={onCopiar}
+      />
 
       <details className="rounded-lg border bg-muted/10 px-4 py-3 text-sm">
         <summary className="cursor-pointer font-medium">
-          ¿Dónde pego esto en SiteGround? (paso a paso)
+          ¿Dónde pego esto? (paso a paso)
         </summary>
-        <ol className="list-decimal pl-5 mt-3 space-y-1.5 text-muted-foreground">
-          <li>
-            Entra en tu cuenta de SiteGround y abre <strong>Site Tools</strong> del
-            dominio.
-          </li>
-          <li>
-            Ve a <strong>Domain → DNS Zone Editor</strong>.
-          </li>
-          <li>
-            {esCName ? (
-              <>
-                Pulsa <strong>“Add Record”</strong> y elige tipo{" "}
-                <strong>CNAME</strong>.
-              </>
-            ) : (
-              <>
-                Busca si ya existe un registro <strong>A</strong> para{" "}
-                <strong>@</strong>. Si existe, edítalo. Si no, pulsa{" "}
-                <strong>“Add Record”</strong> y elige tipo <strong>A</strong>.
-              </>
-            )}
-          </li>
-          <li>
-            En <strong>Nombre / Host</strong> pega:{" "}
-            <code className="px-1.5 py-0.5 rounded bg-muted">{dns.name}</code>
-          </li>
-          <li>
-            En <strong>{esCName ? "Destino / Points to" : "IP / Apunta a"}</strong>{" "}
-            pega: <code className="px-1.5 py-0.5 rounded bg-muted">{dns.value}</code>
-          </li>
-          <li>
-            <strong>Guarda</strong>. SiteGround tarda entre 5 minutos y media hora en
-            propagar el cambio.
-          </li>
-        </ol>
+        <InstruccionesProveedor proveedor={proveedor} registros={registros} />
       </details>
 
       <div className="flex justify-between gap-2 pt-2">
@@ -422,6 +411,124 @@ function PasoDns({
         </Button>
       </div>
     </div>
+  );
+}
+
+function BloqueRegistros({
+  titulo,
+  explicacion,
+  registros,
+  onCopiar,
+}: {
+  titulo?: string;
+  explicacion?: string;
+  registros: RegistroDns[];
+  onCopiar: (v: string, etiqueta: string) => void;
+}) {
+  if (registros.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      {titulo && <h4 className="text-sm font-semibold">{titulo}</h4>}
+      {explicacion && <p className="text-xs text-muted-foreground">{explicacion}</p>}
+      {registros.map((r, i) => (
+        <div key={`${r.tipo}-${r.name}-${i}`} className="rounded-lg border bg-muted/30 divide-y">
+          <CampoCopiable
+            etiqueta={r.name === "@" ? "Nombre (el dominio raíz)" : "Nombre"}
+            valor={r.name}
+            onCopiar={(v) => onCopiar(v, "Nombre")}
+          />
+          <CampoCopiable
+            etiqueta={r.tipo === "TXT" ? "Contenido" : "Destino"}
+            valor={r.value}
+            onCopiar={(v) => onCopiar(v, r.tipo === "TXT" ? "Contenido" : "Destino")}
+          />
+          <div className="px-4 py-2 text-[11px] text-muted-foreground">
+            Tipo de registro: <strong>{r.tipo}</strong>
+          </div>
+        </div>
+      ))}
+      {registros.filter((r) => r.tipo === "A").length > 1 && (
+        <p className="text-xs text-muted-foreground">
+          Son dos direcciones para el mismo nombre: hay que crear las dos, una en
+          cada línea.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function InstruccionesProveedor({
+  proveedor,
+  registros,
+}: {
+  proveedor: ProveedorDns;
+  registros: RegistroDns[];
+}) {
+  const tipos = [...new Set(registros.map((r) => r.tipo))].join(" y ");
+  const clase = "list-decimal pl-5 mt-3 space-y-1.5 text-muted-foreground";
+
+  if (proveedor === "VERCEL") {
+    return (
+      <ol className={clase}>
+        <li>
+          Entra en <strong>vercel.com</strong> y abre la pestaña{" "}
+          <strong>Domains</strong>.
+        </li>
+        <li>Pincha en tu dominio y abre su apartado de DNS.</li>
+        <li>
+          Pulsa <strong>“Add Record”</strong> y crea {registros.length === 1 ? "el registro" : "los registros"}{" "}
+          de tipo <strong>{tipos}</strong> con el nombre y el valor de arriba.
+        </li>
+        <li>
+          <strong>Guarda</strong>. Al estar el DNS en Vercel el cambio suele
+          notarse en un par de minutos.
+        </li>
+      </ol>
+    );
+  }
+
+  if (proveedor === "SITEGROUND") {
+    return (
+      <ol className={clase}>
+        <li>
+          Entra en SiteGround y abre <strong>Site Tools</strong> del dominio.
+        </li>
+        <li>
+          Ve a <strong>Domain → DNS Zone Editor</strong>.
+        </li>
+        <li>
+          Pulsa <strong>“Add Record”</strong> y crea{" "}
+          {registros.length === 1 ? "el registro" : "los registros"} de tipo{" "}
+          <strong>{tipos}</strong>. Si ya existe uno igual, edítalo en vez de
+          crear otro.
+        </li>
+        <li>
+          <strong>Guarda</strong>. SiteGround tarda entre 5 minutos y media hora
+          en propagar el cambio.
+        </li>
+      </ol>
+    );
+  }
+
+  return (
+    <ol className={clase}>
+      <li>
+        Entra donde compraste el dominio y busca su apartado de <strong>DNS</strong>{" "}
+        (suele llamarse “Zona DNS”, “DNS Records” o “Editor de zona”).
+      </li>
+      <li>
+        Crea {registros.length === 1 ? "un registro" : "un registro por cada línea de arriba"}{" "}
+        de tipo <strong>{tipos}</strong>, copiando el nombre y el valor tal cual.
+      </li>
+      <li>
+        Si ya existe un registro con ese mismo nombre y tipo, <strong>edítalo</strong>{" "}
+        en vez de crear otro: dos registros iguales se pisan.
+      </li>
+      <li>
+        <strong>Guarda</strong>. El cambio puede tardar desde unos minutos hasta
+        un par de horas en notarse.
+      </li>
+    </ol>
   );
 }
 

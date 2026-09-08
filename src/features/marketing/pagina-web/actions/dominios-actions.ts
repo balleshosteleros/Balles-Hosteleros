@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
 import {
   addDomainToProject,
-  generarDnsHint,
   getDomainConfig,
+  registrosDelDominio,
   removeDomainFromProject,
   verifyDomain,
 } from "../services/vercel-domains";
+import type { ProveedorDns, RegistroDns } from "../services/vercel-domains";
 import { normalizarHost } from "../services/hostname-resolver";
 import type { DominioEstado, PaginaWebDominio } from "../types";
 import { friendlyError } from "@/shared/lib/friendly-errors";
@@ -72,7 +73,9 @@ export async function anadirDominio(input: {
   paginaId: string;
   hostname: string;
   esPrincipal?: boolean;
-}): Promise<ActionResult<{ id: string; dns: { tipo: string; name: string; value: string } }>> {
+}): Promise<
+  ActionResult<{ id: string; registros: RegistroDns[]; proveedor: ProveedorDns }>
+> {
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "Sin empresa." };
@@ -81,8 +84,6 @@ export async function anadirDominio(input: {
     if (!hostname || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(hostname)) {
       return { ok: false, error: "Hostname inválido. Ej: turestaurante.com" };
     }
-
-    const dns = generarDnsHint(hostname);
 
     // Call Vercel API
     const vercelRes = await addDomainToProject(hostname);
@@ -95,6 +96,14 @@ export async function anadirDominio(input: {
     }
     const vercelId = vercelRes.ok ? vercelRes.data.id : null;
 
+    // Los registros se le piden a Vercel: incluyen el TXT de propiedad cuando
+    // el dominio ya está en otra cuenta suya (el caso del cliente que lo compra
+    // él mismo). Adivinarlos daba los valores antiguos y dejaba fuera el TXT.
+    const { registros, proveedor } = await registrosDelDominio(
+      hostname,
+      vercelRes.ok ? vercelRes.data.verification : undefined,
+    );
+
     const { data, error } = await supabase
       .from("paginas_web_dominios")
       .insert({
@@ -104,7 +113,7 @@ export async function anadirDominio(input: {
         es_principal: input.esPrincipal ?? false,
         estado: "PENDIENTE_DNS" as DominioEstado,
         vercel_domain_id: vercelId,
-        dns_hint: dns,
+        dns_hint: registros,
       })
       .select("id")
       .single();
@@ -115,7 +124,10 @@ export async function anadirDominio(input: {
     }
 
     revalidar(input.paginaId);
-    return { ok: true, data: { id: (data as { id: string }).id, dns } };
+    return {
+      ok: true,
+      data: { id: (data as { id: string }).id, registros, proveedor },
+    };
   } catch (err) {
     console.error("[dominios][anadir] fatal:", err);
     return { ok: false, error: friendlyError(err, "anadirDominio") };
