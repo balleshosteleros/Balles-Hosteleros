@@ -72,29 +72,21 @@ https://software.balleshosteleros.com
 
 **11. Links to 5 Google Business Profiles**
 
-Google pide 5 porque el formulario está pensado para plataformas con muchos
-clientes. Nosotros tenemos 2 y **se ponen los 2 con una nota explicándolo**:
+⚠️ Es un campo de **una sola línea** y Google pide los enlaces **separados por
+comas**. No caben notas ni explicaciones: solo las URLs.
+
+Pega esto tal cual:
 
 ```
-1. Restaurante Bacanal Fuenlabrada
-   C/ de Leganés, 51, 28945 Fuenlabrada, Madrid, Spain
-   https://www.google.com/maps/place/?q=place_id:ChIJp2-2bhKLQQ0RHVqLaz1SX9M
-
-2. Cocteleria Habana Fuenlabrada
-   C/ de Leganés, 51, 28945 Fuenlabrada, Madrid, Spain
-   https://www.google.com/maps/place/?q=place_id:ChIJ-UhdsJqLQQ0RSZdft4X5V9Q
-
-Note: we currently operate 2 restaurants. We are the merchant itself, not an
-aggregator, so all locations in our feed are our own — the direct contractual
-relationship requirement is met by ownership. Our booking software is built to
-serve additional restaurants, and these two are the first.
+https://www.google.com/maps/place/?q=place_id:ChIJp2-2bhKLQQ0RHVqLaz1SX9M, https://www.google.com/maps/place/?q=place_id:ChIJ-UhdsJqLQQ0RSZdft4X5V9Q
 ```
 
-*(En español, por si te lo preguntan: operamos 2 restaurantes; somos el propio
-comercio, no un agregador, así que todos los locales del feed son nuestros —
-el requisito de relación contractual directa se cumple por propiedad. El
-software está hecho para dar servicio a más restaurantes y estos dos son los
-primeros.)*
+Son BACANAL y HABANA. Van 2 en vez de 5 porque son los locales que hay, y el
+campo anterior ya dice 2: es coherente y no hay nada que justificar. Google pide
+5 porque el formulario está pensado para plataformas con muchos clientes.
+
+Ambas fichas verificadas contra Google: *Restaurante Bacanal Fuenlabrada* y
+*Cocteleria Habana Fuenlabrada*, C/ de Leganés 51, las dos `OPERATIONAL`.
 
 ---
 
