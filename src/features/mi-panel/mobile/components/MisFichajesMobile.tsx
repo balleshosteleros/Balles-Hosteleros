@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Inbox, AlertTriangle, LogIn, LogOut, CheckCircle2, ClockAlert } from "lucide-react";
+import { Loader2, Inbox, AlertTriangle, LogIn, LogOut, CheckCircle2, ClockAlert, Clock, XCircle } from "lucide-react";
 import { listarMisFichajes } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
@@ -27,6 +27,33 @@ const ESTADO_COLOR: Record<string, string> = {
 };
 
 const ESTADOS_ALERTA = new Set(["sin cerrar", "incidencia"]);
+
+/**
+ * Cómo se ve un día en el que salió antes de su hora. Una sola familia de
+ * palabras —pendiente, aprobada, rechazada— para que no compitan con el
+ * "Correcto" de un día normal, que significa otra cosa: que no hubo nada que
+ * aprobar.
+ */
+const SALIDA_ANTICIPADA = {
+  pendiente: {
+    texto: "Salida anticipada · pendiente",
+    color: "text-amber-600",
+    tarjeta: "border-amber-200 bg-amber-50/40 dark:bg-amber-950/20",
+    Icono: Clock,
+  },
+  aprobada: {
+    texto: "Salida anticipada · aprobada",
+    color: "text-emerald-600",
+    tarjeta: "border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20",
+    Icono: CheckCircle2,
+  },
+  rechazada: {
+    texto: "Salida anticipada · rechazada",
+    color: "text-rose-600",
+    tarjeta: "border-rose-200 bg-rose-50/40 dark:bg-rose-950/20",
+    Icono: XCircle,
+  },
+} as const;
 
 function todayISO(): string {
   return new Date().toISOString().split("T")[0];
@@ -154,12 +181,21 @@ export function MisFichajesMobile() {
                   ESTADOS_ALERTA.has(deriveEstadoMostrado(t, hoy)),
                 );
                 const tramoRef = dia.tramos[0];
+                // Un día solo puede tener una salida anticipada: la del tramo
+                // que cerró antes de hora.
+                const anticipada = dia.tramos.find((t) => t.salidaAnticipadaEstado)?.salidaAnticipadaEstado ?? null;
+                const estiloAnticipada = anticipada ? SALIDA_ANTICIPADA[anticipada] : null;
+                const respuestaRechazo = dia.tramos.find((t) => t.salidaAnticipadaRespuesta)?.salidaAnticipadaRespuesta ?? null;
                 return (
                   <li
                     key={dia.fecha}
                     className={cn(
                       "rounded-2xl border bg-card p-3.5",
-                      hayAlerta ? "border-rose-200 bg-rose-50/40 dark:bg-rose-950/20" : "border-border/60",
+                      estiloAnticipada
+                        ? estiloAnticipada.tarjeta
+                        : hayAlerta
+                          ? "border-rose-200 bg-rose-50/40 dark:bg-rose-950/20"
+                          : "border-border/60",
                     )}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -178,7 +214,12 @@ export function MisFichajesMobile() {
                           {tramoRef.modoTeletrabajo ? "Teletrabajo" : (tramoRef.local || "Local")}
                         </span>
                       </div>
-                      <p className="text-base font-semibold tabular-nums">
+                      <p
+                        className={cn(
+                          "text-base font-semibold tabular-nums",
+                          anticipada === "rechazada" && "text-rose-600",
+                        )}
+                      >
                         {formatHorasDecimal(totalDia)}
                       </p>
                     </div>
@@ -255,6 +296,29 @@ export function MisFichajesMobile() {
                                 </span>
                               )}
                             </div>
+                            {/* Salida anticipada: en qué ha quedado. Sustituye
+                                al "Correcto" del día, que aquí significaría
+                                otra cosa. */}
+                            {t.salidaAnticipadaEstado && (
+                              <div className="mt-2 flex items-center gap-1.5">
+                                {(() => {
+                                  const e = SALIDA_ANTICIPADA[t.salidaAnticipadaEstado];
+                                  return (
+                                    <>
+                                      <e.Icono className={cn("h-3.5 w-3.5", e.color)} />
+                                      <span
+                                        className={cn(
+                                          "text-[10px] font-semibold uppercase tracking-wider",
+                                          e.color,
+                                        )}
+                                      >
+                                        {e.texto}
+                                      </span>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            )}
                             {t.incidencia && (
                               <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-rose-100/60 p-2 text-xs text-rose-900 dark:bg-rose-950/40 dark:text-rose-100">
                                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -265,6 +329,19 @@ export function MisFichajesMobile() {
                         );
                       })}
                     </div>
+
+                    {/* Lo que escribió quien la rechazó: es lo que tiene que
+                        hacer para arreglarlo. */}
+                    {anticipada === "rechazada" && respuestaRechazo && (
+                      <div className="mt-2 rounded-xl bg-rose-100/60 p-2.5 dark:bg-rose-950/40">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-300">
+                          Motivo del rechazo
+                        </p>
+                        <p className="mt-0.5 text-xs leading-snug text-rose-900 dark:text-rose-100">
+                          {respuestaRechazo}
+                        </p>
+                      </div>
+                    )}
                   </li>
                 );
               })}

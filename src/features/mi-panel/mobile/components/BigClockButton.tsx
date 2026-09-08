@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Fingerprint, Loader2, Coffee, Play, CheckCircle2, WifiOff, MapPin, House } from "lucide-react";
+import { Fingerprint, Loader2, Coffee, Play, CheckCircle2, WifiOff, MapPin, House, TriangleAlert, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
 import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
@@ -14,11 +14,13 @@ import {
   getMiConfigFichaje,
   getMiVentanaFichajeHoy,
   getTiposFichajeDisponibles,
+  anularEntradaRecienFichada,
   type ModoFichaje,
   type TipoFichajeDisponible,
   type VentanaFichajeHoy,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
+import { MOTIVO_MIN_CARACTERES } from "@/features/mi-panel/types";
 import { fichajeColorDot } from "@/features/rrhh/data/fichajes";
 import { enqueue } from "../lib/offline-fichaje-db";
 import { useOfflineFichajes } from "../hooks/use-offline-fichajes";
@@ -254,6 +256,20 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
     }
   };
 
+  /** Ya ha confirmado que empieza: a partir de aquí, el flujo de siempre. */
+  const empezarATrabajar = async () => {
+    setConfirmandoEntrada(false);
+    if (!online) {
+      await ficharEntrada("presencial");
+      return;
+    }
+    if (tiposDisponibles.length > 1) {
+      setEligiendoTipo(true);
+      return;
+    }
+    iniciarFichajeEntrada(tiposDisponibles[0]?.codigo);
+  };
+
   // Tras elegir tipo (o si solo hay uno), preguntamos el modo si procede.
   const iniciarFichajeEntrada = (tipoCodigo?: string) => {
     setTipoElegido(tipoCodigo);
@@ -264,34 +280,99 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
     void ficharEntrada("presencial", tipoCodigo);
   };
 
+  // Reconfirmar la ENTRADA: un toque sin querer en el botón grande abría la
+  // jornada sin más. Una pregunta corta y ya.
+  const [confirmandoEntrada, setConfirmandoEntrada] = useState(false);
+  // Sale antes de su hora: hay que explicarse. La hoja guarda la hora a la que
+  // debía terminar, que la calcula el servidor.
+  const [pidiendoMotivo, setPidiendoMotivo] = useState(false);
+  const [motivoSalida, setMotivoSalida] = useState("");
+  const [horaPrevista, setHoraPrevista] = useState<string | null>(null);
+  // Recién entrado: no se cierra, se ofrece deshacer la entrada.
+  const [avisoPronto, setAvisoPronto] = useState<{ minutos: number; minimo: number } | null>(null);
+
+  /** Cierra la jornada. Con motivo si el servidor lo pidió por salir antes. */
+  const ficharSalida = async (motivo?: string) => {
+    if (!fichajeId) return;
+    setBusy(true);
+    try {
+      const geo = await tryGetGeo();
+      if (!online) {
+        await enqueueOffline("salida", geo);
+        return;
+      }
+      const res = await ficharSalidaPersonal(fichajeId, geo, motivo);
+      if (res.ok) {
+        setPidiendoMotivo(false);
+        setMotivoSalida("");
+        toast.success(
+          (res as { data?: { salidaAnticipada?: boolean } }).data?.salidaAnticipada
+            ? "Salida registrada. Tu responsable tiene que aprobarla."
+            : "Salida registrada",
+        );
+        return;
+      }
+      const r = res as {
+        error?: string;
+        demasiadoPronto?: boolean;
+        minutosDentro?: number;
+        minutosMinimos?: number;
+        requiereMotivo?: boolean;
+        salidaPrevistaHora?: string;
+      };
+      if (r.demasiadoPronto) {
+        setAvisoPronto({ minutos: r.minutosDentro ?? 0, minimo: r.minutosMinimos ?? 30 });
+        return;
+      }
+      if (r.requiereMotivo) {
+        setHoraPrevista(r.salidaPrevistaHora ?? null);
+        setPidiendoMotivo(true);
+        return;
+      }
+      toast.error(r.error || "No se pudo fichar la salida");
+    } finally {
+      setBusy(false);
+      onAction?.();
+      startTransition(() => router.refresh());
+    }
+  };
+
+  /** "Me he equivocado al entrar": borra la entrada y devuelve el botón. */
+  const anularEntrada = async () => {
+    if (!fichajeId) return;
+    setBusy(true);
+    try {
+      const res = await anularEntradaRecienFichada(fichajeId);
+      if (res.ok) {
+        setAvisoPronto(null);
+        toast.success("Entrada anulada. Puedes volver a fichar.");
+      } else {
+        toast.error(res.error || "No se pudo anular la entrada");
+      }
+    } finally {
+      setBusy(false);
+      onAction?.();
+      startTransition(() => router.refresh());
+    }
+  };
+
   const action = async () => {
     if (disabled) return;
     // Entrada: sin conexión va directa (presencial, sin tipo). Con conexión,
     // primero el tipo (si hay más de uno) y luego el modo (si teletrabaja).
     if (estado === "sin-fichar") {
-      if (!online) {
-        await ficharEntrada("presencial");
-        return;
-      }
-      if (tiposDisponibles.length > 1) {
-        setEligiendoTipo(true);
-        return;
-      }
-      iniciarFichajeEntrada(tiposDisponibles[0]?.codigo);
+      // Reconfirmación: el botón es grande y está en la portada. Un roce no
+      // puede abrir la jornada.
+      setConfirmandoEntrada(true);
+      return;
+    }
+    if (estado === "trabajando" && fichajeId) {
+      await ficharSalida();
       return;
     }
     setBusy(true);
     try {
-      if (estado === "trabajando" && fichajeId) {
-        const geo = await tryGetGeo();
-        if (!online) {
-          await enqueueOffline("salida", geo);
-        } else {
-          const res = await ficharSalidaPersonal(fichajeId, geo);
-          if (!res.ok) toast.error(res.error || "No se pudo fichar la salida");
-          else toast.success("Salida registrada");
-        }
-      } else if (estado === "pausa" && fichajeId) {
+      if (estado === "pausa" && fichajeId) {
         if (!online) {
           await enqueueOffline("pausa_fin", null);
         } else {
@@ -369,6 +450,20 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
         )}
       </button>
 
+      {/* Cerrar la jornada NO puede dejarte fuera el resto del día. En
+          escritorio esto existía ("Fichar nueva entrada") y en el móvil no: el
+          botón se quedaba gris y no había forma de volver a fichar. */}
+      {estado === "completado" && (
+        <button
+          type="button"
+          onClick={() => setConfirmandoEntrada(true)}
+          disabled={busy || pending}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-background py-3 text-sm font-medium active:bg-muted disabled:opacity-60"
+        >
+          <Fingerprint className="h-4 w-4" /> Fichar nueva entrada
+        </button>
+      )}
+
       {estado === "trabajando" && fichajeId && (
         <button
           type="button"
@@ -378,6 +473,146 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
         >
           <Coffee className="h-4 w-4" /> Iniciar pausa
         </button>
+      )}
+
+      {/* Reconfirmar la entrada. Corta a propósito: si cada día hay que leerse
+          un párrafo, se pulsa en automático y deja de servir de nada. */}
+      {confirmandoEntrada && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
+          onClick={() => setConfirmandoEntrada(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-background p-5 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
+            <h2 className="text-center text-lg font-semibold">¿Empiezas tu turno?</h2>
+            <div className="mt-5 grid gap-2">
+              <button
+                type="button"
+                onClick={empezarATrabajar}
+                disabled={busy}
+                className="h-14 rounded-2xl bg-emerald-500 text-base font-semibold text-white active:bg-emerald-600 disabled:opacity-60"
+              >
+                Empezar a trabajar
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmandoEntrada(false)}
+                className="h-12 rounded-2xl text-sm font-medium text-muted-foreground active:bg-muted"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Recién entrado: cerrar aquí casi siempre es un error, y antes costaba
+          el turno entero (jornada a 0 h y botón apagado el resto del día). */}
+      {avisoPronto && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
+          onClick={() => setAvisoPronto(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-background p-5 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
+            <div className="flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-900 dark:bg-amber-950">
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                  Acabas de fichar la entrada
+                </p>
+                <p className="mt-0.5 text-xs leading-snug text-amber-800 dark:text-amber-200">
+                  Llevas {avisoPronto.minutos} min dentro. ¿Te has equivocado al fichar, o de verdad
+                  has terminado?
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2">
+              <button
+                type="button"
+                onClick={anularEntrada}
+                disabled={busy}
+                className="flex h-14 items-center justify-center gap-2 rounded-2xl border-2 border-border bg-background text-base font-semibold active:bg-muted disabled:opacity-60"
+              >
+                <Undo2 className="h-5 w-5" /> Me he equivocado al entrar
+              </button>
+              <button
+                type="button"
+                onClick={() => setAvisoPronto(null)}
+                className="h-12 rounded-2xl text-sm font-medium text-muted-foreground active:bg-muted"
+              >
+                Seguir trabajando
+              </button>
+            </div>
+            <p className="mt-3 text-center text-[11px] text-muted-foreground">
+              Podrás fichar la salida a partir de los {avisoPronto.minimo} min.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Sale antes de su hora: se cierra igual, pero explicándose. */}
+      {pidiendoMotivo && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
+          onClick={() => setPidiendoMotivo(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-background p-5 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-900 dark:bg-amber-950">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                Vas a salir antes de tu horario
+              </p>
+              {horaPrevista && (
+                <p className="mt-0.5 text-xs leading-snug text-amber-800 dark:text-amber-200 tabular-nums">
+                  Tu turno termina a las {horaPrevista}.
+                </p>
+              )}
+            </div>
+
+            <p className="mt-4 text-sm font-medium">Explica por qué te vas antes</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Tu responsable tendrá que aprobarlo o rechazarlo.
+            </p>
+            <textarea
+              value={motivoSalida}
+              onChange={(e) => setMotivoSalida(e.target.value)}
+              autoFocus
+              rows={3}
+              className="mt-2 w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Obligatorio. Mínimo {MOTIVO_MIN_CARACTERES} caracteres.
+            </p>
+
+            <div className="mt-4 grid gap-2">
+              <button
+                type="button"
+                onClick={() => ficharSalida(motivoSalida)}
+                disabled={busy || motivoSalida.trim().length < MOTIVO_MIN_CARACTERES}
+                className="h-14 rounded-2xl bg-rose-500 text-base font-semibold text-white active:bg-rose-600 disabled:opacity-60"
+              >
+                {busy ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : "Fichar salida y enviar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPidiendoMotivo(false)}
+                className="h-12 rounded-2xl text-sm font-medium text-muted-foreground active:bg-muted"
+              >
+                Seguir trabajando
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Hoja de elección de tipo (solo si hay más de un tipo disponible hoy). */}

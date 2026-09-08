@@ -423,6 +423,10 @@ export async function getMiFichajeHoy(): Promise<{
         modoTeletrabajo: Boolean(registro.modo_teletrabajo),
         porSolicitud: Boolean(registro.solicitud_id),
         cierreAnticipado: Boolean(registro.cierre_anticipado),
+        // El fichaje de HOY todavía se está haciendo: si hay salida anticipada,
+        // su estado se ve en el historial, no aquí.
+        salidaAnticipadaEstado: null,
+        salidaAnticipadaRespuesta: null,
         local: (registro.centro as string | null) ?? null,
         flexible,
         flexModo,
@@ -1661,6 +1665,27 @@ export async function listarMisFichajes(limite = 60): Promise<{
       .order("created_at", { ascending: false })
       .limit(limite);
     if (error) throw error;
+
+    // Estado de las salidas anticipadas de esos días. Va en una consulta aparte
+    // y no en un embed porque `fichajes.solicitud_id` lo usan también las
+    // solicitudes de trabajo, y aquí solo interesan las salidas anticipadas.
+    const solicitudIds = (data ?? [])
+      .map((f: Record<string, unknown>) => f.solicitud_id as string | null)
+      .filter((id): id is string => !!id);
+    const estadoPorSolicitud = new Map<string, { estado: string; respuesta: string | null }>();
+    if (solicitudIds.length > 0) {
+      const { data: sols } = await supabase
+        .from("solicitudes_personal")
+        .select("id, estado, notas_revision, tipo")
+        .in("id", solicitudIds)
+        .eq("tipo", "salida_anticipada");
+      for (const s of sols ?? []) {
+        estadoPorSolicitud.set(s.id as string, {
+          estado: s.estado as string,
+          respuesta: (s.notas_revision as string | null) ?? null,
+        });
+      }
+    }
     // Historial multi-empresa: cada fichaje se muestra en la zona horaria de SU
     // empresa (PRP-069). Resolvemos la zona por empresa una sola vez (caché).
     const tzPorEmpresa = new Map<string, string>();
@@ -1686,6 +1711,14 @@ export async function listarMisFichajes(limite = 60): Promise<{
         modoTeletrabajo: Boolean(f.modo_teletrabajo),
         porSolicitud: Boolean(f.solicitud_id),
         cierreAnticipado: Boolean(f.cierre_anticipado),
+        salidaAnticipadaEstado:
+          (estadoPorSolicitud.get((f.solicitud_id as string | null) ?? "")?.estado as
+            | "pendiente"
+            | "aprobada"
+            | "rechazada"
+            | undefined) ?? null,
+        salidaAnticipadaRespuesta:
+          estadoPorSolicitud.get((f.solicitud_id as string | null) ?? "")?.respuesta ?? null,
         local: (f.centro as string | null) ?? null,
         flexible: false,
         flexModo: null,

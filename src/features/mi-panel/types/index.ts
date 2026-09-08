@@ -31,6 +31,12 @@ export const HORAS_EXTRAS_MOTIVO_MIN = 15;
  */
 export const MOTIVO_MIN_CARACTERES = 15;
 
+/**
+ * Estado de la salida anticipada de un fichaje, tal como lo ve el trabajador.
+ * `null` = ese día no salió antes de hora, no hay nada que aprobar.
+ */
+export type SalidaAnticipadaEstado = "pendiente" | "aprobada" | "rechazada" | null;
+
 export interface SolicitudPersonal {
   id: string;
   empresaId: string;
@@ -127,6 +133,14 @@ export interface MiFichajeHoy {
    * realmente fichadas, no las del turno previsto.
    */
   cierreAnticipado: boolean;
+  /**
+   * Si ese día salió antes de su hora: en qué ha quedado. Pendiente mientras
+   * nadie lo gestiona, aprobada si le cuentan las horas, rechazada si ese día
+   * se queda a 0 h. `null` cuando no hubo salida anticipada.
+   */
+  salidaAnticipadaEstado: SalidaAnticipadaEstado;
+  /** Lo que escribió quien la rechazó. Es lo que tiene que hacer para arreglarlo. */
+  salidaAnticipadaRespuesta: string | null;
 }
 
 export interface DiaCalendario {
