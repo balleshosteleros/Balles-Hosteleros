@@ -17,6 +17,9 @@ const MINUTOS_OPCIONES = [5, 10, 15, 20, 25, 30];
 // llegar a 30 las dos ventanas se pisarían. Los demás márgenes de esta pantalla
 // (aviso del móvil, auto-salida) no redondean nada y conservan su lista.
 const CORTESIA_OPCIONES = [5, 10, 15];
+// Mínimo para poder cerrar la jornada. Nunca menos de 30: un toque sin querer
+// nada más entrar no puede costar el turno entero.
+const MIN_CIERRE_OPCIONES = [30, 45, 60, 90, 120];
 const REAVISO_OPCIONES = [1, 2, 3, 5, 10, 15];
 
 /**
@@ -178,6 +181,32 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                 </p>
               </>
             )}
+          </div>
+
+          {/* Mínimo antes de poder cerrar */}
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">Mínimo antes de poder cerrar el fichaje</Label>
+              <p className="text-xs text-muted-foreground">
+                Tiempo que el empleado tiene que llevar dentro para poder fichar la salida. Dentro de
+                esa ventana el botón no cierra la jornada: le ofrece anular la entrada, por si se ha
+                equivocado al fichar.
+              </p>
+            </div>
+            <div className="flex items-center justify-between pl-1">
+              <Label className="text-sm">Minutos desde la entrada</Label>
+              <select
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                value={policy.minMinutosParaCerrar}
+                onChange={(e) =>
+                  setPolicy((p) => ({ ...p, minMinutosParaCerrar: Number(e.target.value) }))
+                }
+              >
+                {MIN_CIERRE_OPCIONES.map((m) => (
+                  <option key={m} value={m}>{m} min</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Aviso (pop-up) de fichar en la app móvil */}

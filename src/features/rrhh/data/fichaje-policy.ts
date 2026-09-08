@@ -25,6 +25,11 @@ export interface FichajePolicy {
   // margen, sin depender de que el empleado fiche salida.
   autoSalidaActiva: boolean;
   autoSalidaMargenMin: number;
+  // Minutos que hay que llevar dentro antes de poder cerrar la jornada. Un
+  // toque sin querer nada más entrar no puede costar el turno entero: dentro de
+  // esa ventana el botón no cierra, ofrece anular la entrada. Nunca baja de 30,
+  // y por eso la cortesía está topada en 15: así no se pisan.
+  minMinutosParaCerrar: number;
   // Multi-empresa: avisar al empleado de que su jornada CONTINÚA en otra empresa
   // al cruzar el límite entre turnos de empresas distintas (en vez del reaviso de
   // "ficha entrada"). Aplica a todos los empleados de la empresa.
@@ -50,5 +55,6 @@ export const FICHAJE_POLICY_DEFAULT: FichajePolicy = {
   avisoVibracion: false,
   autoSalidaActiva: false,
   autoSalidaMargenMin: 15,
+  minMinutosParaCerrar: 30,
   avisoCambioEmpresa: false,
 };

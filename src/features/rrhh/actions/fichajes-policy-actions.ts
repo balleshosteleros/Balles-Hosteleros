@@ -23,6 +23,15 @@ function clampCortesia(n: number): number {
   return Math.min(15, Math.max(0, Math.round(n)));
 }
 
+/**
+ * Mínimo para poder cerrar un fichaje: nunca menos de 30 minutos. Es el pacto,
+ * y lo que hace que jamás se pise con la cortesía (topada en 15).
+ */
+function clampMinCierre(n: number): number {
+  if (!Number.isFinite(n)) return 30;
+  return Math.min(240, Math.max(30, Math.round(n)));
+}
+
 function clampIntervalo(n: number): number {
   if (!Number.isFinite(n)) return 5;
   return Math.min(60, Math.max(1, Math.round(n)));
@@ -63,6 +72,7 @@ export async function getFichajePolicy(): Promise<{
         avisoVibracion: !!data.aviso_vibracion,
         autoSalidaActiva: !!data.auto_salida_activa,
         autoSalidaMargenMin: (data.auto_salida_margen_min as number) ?? 15,
+        minMinutosParaCerrar: clampMinCierre((data.min_minutos_para_cerrar as number) ?? 30),
         avisoCambioEmpresa: !!data.aviso_cambio_empresa,
       },
     };
@@ -96,6 +106,7 @@ export async function saveFichajePolicy(input: FichajePolicy) {
         aviso_vibracion: input.avisoVibracion,
         auto_salida_activa: input.autoSalidaActiva,
         auto_salida_margen_min: clampMargen(input.autoSalidaMargenMin),
+        min_minutos_para_cerrar: clampMinCierre(input.minMinutosParaCerrar),
         aviso_cambio_empresa: input.avisoCambioEmpresa,
         updated_at: new Date().toISOString(),
       },
