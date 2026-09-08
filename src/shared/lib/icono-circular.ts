@@ -116,19 +116,34 @@ export async function iconoCircular(
       .raw()
       .toBuffer({ resolveWithObject: true });
 
-    // El color de la empresa; blanco si todavía no tiene ninguno guardado
-    // (negro sobre negro no se vería).
-    const tinta = hexARgb(colorMarca) ?? [255, 255, 255];
-
-    // Se conserva la SILUETA (el canal alfa) y se tira el color de origen: el
-    // dibujo sale entero del color de la marca, venga como venga el archivo.
+    // ¿Se ve el dibujo tal cual sobre el negro? Se mira lo claro que es de
+    // media. El isotipo de BACANAL en negro no se vería y hay que repintarlo;
+    // el mismo dibujo en su dorado oficial se ve perfecto y se deja INTACTO,
+    // con su degradado, que un dorado plano lo empobrece.
     const pixeles = Buffer.from(silueta.data);
     const canales = silueta.info.channels;
+    let claridad = 0;
+    let pintados = 0;
     for (let i = 0; i < pixeles.length; i += canales) {
-      pixeles[i] = tinta[0];
-      pixeles[i + 1] = tinta[1];
-      pixeles[i + 2] = tinta[2];
+      if (pixeles[i + 3] > 180) {
+        claridad += (pixeles[i] + pixeles[i + 1] + pixeles[i + 2]) / 3;
+        pintados++;
+      }
     }
+    const seVeSobreNegro = pintados > 0 && claridad / pintados > 90;
+
+    if (!seVeSobreNegro) {
+      // Se conserva la SILUETA (el canal alfa) y se tira el color de origen: el
+      // dibujo sale entero del color de la marca. Blanco si la empresa todavía
+      // no tiene color guardado, que negro sobre negro no se vería.
+      const tinta = hexARgb(colorMarca) ?? [255, 255, 255];
+      for (let i = 0; i < pixeles.length; i += canales) {
+        pixeles[i] = tinta[0];
+        pixeles[i + 1] = tinta[1];
+        pixeles[i + 2] = tinta[2];
+      }
+    }
+
     const dibujo = await sharp(pixeles, {
       raw: { width: silueta.info.width, height: silueta.info.height, channels: 4 },
     })

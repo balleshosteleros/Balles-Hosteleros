@@ -47,8 +47,8 @@ export function faviconRedondo(url: string, color?: string | null): string {
   // cambie la dirección. El navegador guarda los favicons en su propio archivo
   // y no vuelve a pedirlos; sin esto, quien ya hubiera entrado en la web seguía
   // viendo el icono viejo aunque el nuevo estuviera servido. SUBIR EL NÚMERO al
-  // cambiar el dibujo. v2 = 08-09-2026, disco negro con el color de la empresa.
-  q.set("v", "2");
+  // cambiar el dibujo. v3 = 08-09-2026, disco negro; se respeta el color del archivo si ya contrasta.
+  q.set("v", "3");
   return `/api/favicon?${q.toString()}`;
 }
 

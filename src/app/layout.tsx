@@ -29,12 +29,12 @@ export const metadata: Metadata = {
   // cuadrado de antes. Cambiar la dirección es lo único que le hace bajarlo de
   // nuevo (mismo truco que en el manifest de la PWA).
   //
-  // v2 = 08-09-2026, el paso de icono cuadrado a redondo.
+  // v3 = 08-09-2026, redondo y aligerado de 536 KB a 36 KB.
   icons: {
-    icon: "/icon.png?v=2",
-    shortcut: "/icon.png?v=2",
+    icon: "/icon.png?v=3",
+    shortcut: "/icon.png?v=3",
     // iOS sigue con el cuadrado: la pantalla de inicio lo recorta ella.
-    apple: "/apple-icon.png?v=2",
+    apple: "/apple-icon.png?v=3",
   },
 };
 
