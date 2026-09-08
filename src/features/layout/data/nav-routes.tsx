@@ -12,7 +12,7 @@ import {
   Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard, FileQuestion,
   LayoutGrid, CalendarClock, AlertTriangle, HelpCircle, MessageSquareWarning,
   Video, Mail, MessageSquare, Banknote, Building2, Smartphone, Trash2,
-  Bell, ArrowLeftRight, PackageCheck, Handshake, Boxes,
+  Bell, ArrowLeftRight, PackageCheck, Handshake, Boxes, KanbanSquare,
 } from "lucide-react";
 
 // ─── Icons custom ──────────────────────────────────────────────────────────
@@ -207,6 +207,7 @@ export const juridicoSubs: SubItem[] = [
 // software). No existe en ninguna empresa cliente: ver MODULOS_SOLO_MATRIZ en
 // features/auth/lib/permisos.ts.
 export const productoSubs: SubItem[] = [
+  { title: "PIPELINE", url: "/producto/pipeline", icon: KanbanSquare },
   { title: "CLIENTES", url: "/producto/clientes", icon: Contact },
   { title: "CITAS", url: "/producto/citas", icon: CalendarClock },
   { title: "ESCUELA", url: "/producto/escuela", icon: GraduationCap },
