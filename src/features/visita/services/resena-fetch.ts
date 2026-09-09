@@ -4,6 +4,7 @@
  */
 
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { urlEscribirResenaDesdePlaceId } from "@/features/visita/lib/url-resena-google";
 
 function service() {
   return createServiceClient(
@@ -90,7 +91,7 @@ export async function fetchResenaPagina(
 
     const { data: empresa } = await supabase
       .from("empresas")
-      .select("id, nombre, logo_url, color")
+      .select("id, nombre, logo_url, color, google_place_id")
       .eq("id", lead.empresa_id)
       .maybeSingle();
     if (!empresa) return null;
@@ -125,8 +126,13 @@ export async function fetchResenaPagina(
         nombre: (empresa.nombre as string) ?? "",
         logoUrl: (empresa.logo_url as string | null) ?? null,
         colorPrimario: (empresa.color as string | null) ?? null,
-        redirigir5EstrellasGoogle: Boolean(cfg?.redirigir_5estrellas_google),
-        googleReviewUrl: (cfg?.google_review_url as string | null) ?? null,
+        // Sin fila de config se asume activado (es el defecto del producto), y
+        // la URL se deriva de la ficha de Google si nadie puso una: exigirla a
+        // mano dejaba la función muerta, que es lo que pasaba hasta hoy.
+        redirigir5EstrellasGoogle: cfg?.redirigir_5estrellas_google ?? true,
+        googleReviewUrl:
+          (cfg?.google_review_url as string | null)?.trim() ||
+          urlEscribirResenaDesdePlaceId(empresa.google_place_id as string | null),
       },
       lead: {
         id: lead.id,

@@ -13,6 +13,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { sendEmail } from "@/lib/email/send";
+import { urlResenaGoogleDeEmpresa } from "@/features/visita/lib/url-resena-google";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -193,8 +194,17 @@ export async function POST(req: Request) {
       .select("redirigir_5estrellas_google, google_review_url")
       .eq("empresa_id", lead.empresa_id)
       .maybeSingle();
-    if (cfg?.redirigir_5estrellas_google && cfg.google_review_url) {
-      redirect = cfg.google_review_url as string;
+    // Sin fila de config se asume activado: es el valor por defecto del
+    // producto (`visita-actions.ts`), y exigir configuración previa dejaba a
+    // BACANAL fuera por no tener fila.
+    const activado = cfg?.redirigir_5estrellas_google ?? true;
+    if (activado) {
+      redirect =
+        (await urlResenaGoogleDeEmpresa(
+          supabase,
+          lead.empresa_id as string,
+          cfg?.google_review_url as string | null,
+        )) ?? undefined;
     }
   }
 
