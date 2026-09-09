@@ -217,28 +217,41 @@ export async function updateSession(
 
   const { data: { user }, error: userError } = await supabase.auth.getUser()
 
-  // ── Sesión HUÉRFANA: cookies de un usuario que ya no existe ─────────
-  // Si la cuenta se borró (o su token se revocó) mientras el móvil/PWA tenía
-  // sesión guardada, GoTrue responde 403 "User from sub claim in JWT does not
-  // exist" en CADA petición. Las cookies sb-* siguen en el dispositivo, así que
-  // la app queda atascada: no entra y tampoco muestra el login, y el usuario
-  // tiene que cerrar y reabrir la app a mano para desbloquearse.
+  // ── Sesión HUÉRFANA: cookies que ya no valen para nada ──────────────
+  // Si la cuenta se borró, si su sesión se revocó (un "cerrar sesión" en otro
+  // sitio) o si el refresh token ya se gastó, GoTrue rechaza CADA petición. Las
+  // cookies sb-* siguen en el dispositivo, así que la app queda atascada: no
+  // entra y tampoco muestra el login, y el usuario tiene que cerrar y reabrir
+  // la app a mano para desbloquearse.
   // Limpiamos aquí las cookies muertas para que se recupere sola.
   if (!user && userError) {
     const codigo = (userError as { code?: string }).code ?? ''
     const esSesionMuerta =
       userError.status === 403 ||
+      // El refresh token gastado o desaparecido llega como 400, no como 403, y
+      // se quedaba fuera de esta limpieza. Ese era el limbo que dejaba a la
+      // pantalla funcionando mientras el servidor contestaba "no autenticado"
+      // a todo: el aviso "No se pudo cambiar de empresa" salía por aquí.
       codigo === 'user_not_found' ||
-      /user.*not.*exist|user_not_found|session.*not.*found/i.test(
+      codigo === 'session_not_found' ||
+      codigo === 'refresh_token_not_found' ||
+      codigo === 'refresh_token_already_used' ||
+      /user.*not.*exist|user_not_found|session.*not.*found|invalid refresh token/i.test(
         userError.message ?? '',
       )
     if (esSesionMuerta) {
       const limpio = NextResponse.redirect(new URL('/?auth=1', request.url))
+      // Se vacían con `set(..., maxAge: 0)` y `path: '/'`, no con `delete()`:
+      // `delete()` no lleva path, y una cookie sembrada en "/" sobrevivía a la
+      // limpieza cuando se borraba desde una ruta más profunda. Es el mismo
+      // remate que ya usa la salida por "/?logout=1", ahí abajo.
       for (const c of request.cookies.getAll()) {
-        if (c.name.startsWith('sb-')) limpio.cookies.delete(c.name)
+        if (c.name.startsWith('sb-')) {
+          limpio.cookies.set(c.name, '', { path: '/', maxAge: 0 })
+        }
       }
-      limpio.cookies.delete(SESION_INICIO_COOKIE)
-      limpio.cookies.delete(SESION_INICIO_DUENO_COOKIE)
+      limpio.cookies.set(SESION_INICIO_COOKIE, '', { path: '/', maxAge: 0 })
+      limpio.cookies.set(SESION_INICIO_DUENO_COOKIE, '', { path: '/', maxAge: 0 })
       return { response: limpio, user: null }
     }
   }
@@ -265,7 +278,12 @@ export async function updateSession(
       const inicioCookie = request.cookies.get(SESION_INICIO_COOKIE)?.value
       const ahora = Date.now()
       if (sesionCaducada(inicioCookie, ahora)) {
-        await supabase.auth.signOut()
+        // `scope: 'local'` — cierra la sesión de ESTE navegador, no las del
+        // usuario en todas partes. Sin el scope, GoTrue revoca TODAS: el corte
+        // de 8h del ordenador tumbaba también el móvil, que está exento por
+        // definición, y dejaba a las demás pestañas en un limbo donde la
+        // pantalla se ve pero el servidor responde "no autenticado" a todo.
+        await supabase.auth.signOut({ scope: 'local' })
         const url = new URL('/', request.url)
         // El aviso "tu sesión ha caducado" SOLO se muestra si el reloj de 8h
         // pertenece de verdad a ESTA sesión (mismo usuario que lo sembró).
@@ -363,7 +381,8 @@ export async function updateSession(
       // cerramos sesión y dejamos que vea el login.
       const guard = await checkProfileGuard(supabase, user.id)
       if (!guard.ok) {
-        await supabase.auth.signOut()
+        // Solo este navegador (ver el corte de 8h, más arriba).
+        await supabase.auth.signOut({ scope: 'local' })
         const url = new URL('/', request.url)
         url.searchParams.set('error', guard.code)
         return { response: NextResponse.redirect(url), user: null }
@@ -396,7 +415,8 @@ export async function updateSession(
   // que no estén bajo los 12 prefijos de módulo del proxy raíz.
   const guard = await checkProfileGuard(supabase, user.id)
   if (!guard.ok) {
-    await supabase.auth.signOut()
+    // Solo este navegador (ver el corte de 8h, más arriba).
+    await supabase.auth.signOut({ scope: 'local' })
     const url = new URL('/', request.url)
     url.searchParams.set('error', guard.code)
     return { response: NextResponse.redirect(url), user: null }

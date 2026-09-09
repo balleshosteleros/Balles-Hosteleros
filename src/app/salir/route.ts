@@ -157,8 +157,13 @@ export async function GET() {
         },
       },
     );
+    // `scope: 'local'`: cerrar sesión cierra ESTE dispositivo. Sin el scope,
+    // GoTrue revoca todas las sesiones del usuario, así que salir en el
+    // ordenador tiraba también la app del móvil — y dejaba a cualquier otra
+    // pestaña abierta en un limbo: se ve la pantalla, pero el servidor
+    // responde "no autenticado" a todo lo que se pulse.
     await Promise.race([
-      supabase.auth.signOut().catch(() => null),
+      supabase.auth.signOut({ scope: "local" }).catch(() => null),
       new Promise((r) => setTimeout(r, 2000)),
     ]);
   } catch {

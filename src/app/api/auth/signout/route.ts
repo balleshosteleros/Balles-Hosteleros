@@ -35,8 +35,10 @@ export async function POST() {
   // No se espera indefinidamente a Supabase: si tarda, se sigue igual y las
   // cookies se borran a mano abajo. Lo que NO puede pasar es que el usuario se
   // quede con la sesión viva porque una llamada externa fue lenta.
+  // `scope: 'local'`: se cierra ESTE dispositivo, no todas las sesiones del
+  // usuario. Ver la nota completa en `src/app/salir/route.ts`.
   await Promise.race([
-    supabase.auth.signOut().catch(() => null),
+    supabase.auth.signOut({ scope: "local" }).catch(() => null),
     new Promise((r) => setTimeout(r, 2500)),
   ]);
 

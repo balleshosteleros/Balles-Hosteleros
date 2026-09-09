@@ -61,7 +61,8 @@ export async function login(formData: FormData) {
     exigirPassword: true,
   })
   if (!guard.ok) {
-    await supabase.auth.signOut()
+    // Solo este navegador: se descarta el login que se acaba de hacer aquí.
+    await supabase.auth.signOut({ scope: 'local' })
     return { error: PROFILE_GUARD_MESSAGES[guard.code] }
   }
 
@@ -117,10 +118,12 @@ export async function loginAsDemo(_formData: FormData) {
 export async function signout() {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const isDemo = !!(user?.email && process.env.DEMO_EMAIL && user.email === process.env.DEMO_EMAIL)
-
-  await supabase.auth.signOut(isDemo ? { scope: 'local' } : undefined)
+  // `scope: 'local'` SIEMPRE: cerrar sesión cierra ESTE dispositivo. Antes solo
+  // el demo lo hacía así y el resto revocaba todas las sesiones del usuario, de
+  // modo que salir en el ordenador tumbaba también la app del móvil y dejaba a
+  // las demás pestañas en un limbo: la pantalla se ve, pero el servidor
+  // contesta "no autenticado" a todo lo que se pulse.
+  await supabase.auth.signOut({ scope: 'local' })
 
   // Reloj de caducidad de 8h: se borra para que el próximo login arranque limpio.
   const cookieStore = await cookies()
@@ -243,6 +246,10 @@ export async function updatePassword(formData: FormData) {
     // Cierra la sesión de recovery del correo de bienvenida para que ese
     // enlace no pueda reutilizarse: a partir de aquí entra como un usuario
     // normal (Google o correo+contraseña). La contraseña queda asignada.
+    //
+    // Este es el ÚNICO signOut que se deja GLOBAL a propósito: el enlace del
+    // correo pudo abrirse en varios sitios, y revocarlo a medias dejaría vivas
+    // sesiones nacidas de un enlace que ya se ha gastado.
     await supabase.auth.signOut()
     revalidatePath('/', 'layout')
     redirect('/?password_creada=1')
@@ -252,7 +259,8 @@ export async function updatePassword(formData: FormData) {
   // alta; lo dejamos pasar directo a su panel.
   const guard = await checkProfileGuard(supabase, user.id)
   if (!guard.ok) {
-    await supabase.auth.signOut()
+    // Solo este navegador: se descarta la sesión de recuperación abierta aquí.
+    await supabase.auth.signOut({ scope: 'local' })
     return { error: PROFILE_GUARD_MESSAGES[guard.code] }
   }
 

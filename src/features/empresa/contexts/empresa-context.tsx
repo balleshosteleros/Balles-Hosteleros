@@ -9,6 +9,7 @@ import { getLogoUrls, getIsotipoUrls } from "@/features/empresa/actions/logo-act
 import { listEmpresasCompletas } from "@/features/empresa/actions/empresas-actions";
 import { listEmpresasDeUsuario } from "@/features/empresa/actions/user-empresas-actions";
 import { setEmpresaActiva, getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
+import type { ErrorEmpresaActiva } from "@/features/empresa/types/empresa-activa";
 import { setEmpresaActivaCliente } from "@/lib/supabase/empresa-activa-cliente";
 import { useGlobalLoading } from "@/shared/stores/use-global-loading";
 
@@ -508,7 +509,12 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     // aunque `bh_empresa_activa` no se hubiera actualizado, y los módulos que
     // dependen solo de la cookie (p. ej. listado de Firmas) seguían leyendo
     // la empresa anterior sin ningún aviso.
-    const revertir = () => {
+    //
+    // `motivo` distingue la sesión caducada del resto de fallos: con las
+    // cookies muertas no hay nada que reintentar, y decir "inténtalo de nuevo"
+    // solo invita a repetir algo que no puede funcionar. En ese caso el aviso
+    // se queda en pantalla con la salida real: volver a entrar.
+    const revertir = (motivo?: ErrorEmpresaActiva) => {
       setEmpresaId(idAnterior);
       if (typeof window !== "undefined") {
         try {
@@ -519,6 +525,25 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
       }
       const empresaPrevia = empresasList.find((e) => e.id === idAnterior);
       if (empresaPrevia?.dbId) setEmpresaActivaCliente(empresaPrevia.dbId);
+
+      if (motivo === "sesion_caducada") {
+        toast.error("Tu sesión ha caducado. Vuelve a entrar para continuar.", {
+          duration: Infinity,
+          action: {
+            label: "Volver a entrar",
+            // `/salir` borra las cookies de sesión (son del servidor, el
+            // navegador no puede tocarlas) y deja el login limpio.
+            onClick: () => {
+              window.location.href = "/salir";
+            },
+          },
+        });
+        return;
+      }
+      if (motivo === "sin_acceso") {
+        toast.error("No tienes acceso a esa empresa.");
+        return;
+      }
       toast.error("No se pudo cambiar de empresa. Inténtalo de nuevo.");
     };
 
@@ -546,7 +571,7 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
       .then((res) => {
         if (!res.ok) {
           hideLoading();
-          revertir();
+          revertir(res.motivo);
           return;
         }
         startTransition(() => {

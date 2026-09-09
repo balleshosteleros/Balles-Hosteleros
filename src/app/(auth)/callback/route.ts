@@ -105,7 +105,10 @@ export async function GET(request: Request) {
     // dejarle pasar. Si no, cerramos sesión y mandamos al login con flag.
     const guard = await checkProfileGuard(supabase, data.session.user.id)
     if (!guard.ok) {
-      await supabase.auth.signOut()
+      // Solo este navegador: se descarta la sesión que acaba de crear Google.
+      // Con el scope global, un intento rechazado aquí echaba al usuario de
+      // todos sus dispositivos, incluida la app del móvil.
+      await supabase.auth.signOut({ scope: 'local' })
       // Sin perfil / sin empresa tras entrar por Google = cuenta no invitada.
       const code =
         guard.code === 'sin_perfil' || guard.code === 'sin_empresa'

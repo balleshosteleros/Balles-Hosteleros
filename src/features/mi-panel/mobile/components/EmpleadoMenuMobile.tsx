@@ -127,7 +127,8 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl, size = "md" }: Props) {
 
     // Revocación en Supabase, en segundo plano y sin esperarla.
     try {
-      void createBrowserClient().auth.signOut().catch(() => null);
+      // `scope: 'local'`: este dispositivo, no todos (ver `/salir`).
+      void createBrowserClient().auth.signOut({ scope: "local" }).catch(() => null);
     } catch {
       // Ídem.
     }

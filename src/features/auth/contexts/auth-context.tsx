@@ -655,7 +655,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // 2. GoTrue en segundo plano: cortesía para revocar el refresh token.
     try {
-      if (supabase) void supabase.auth.signOut().catch(() => null);
+      // `scope: 'local'`: este dispositivo, no todos (ver `/salir`).
+      if (supabase) void supabase.auth.signOut({ scope: "local" }).catch(() => null);
     } catch {
       // Ídem.
     }

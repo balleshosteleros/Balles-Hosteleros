@@ -188,7 +188,9 @@ async function proxyInterno(request: NextRequest) {
     // pasar a CUALQUIERA a CUALQUIER módulo con solo escribir la URL. Si no se
     // puede comprobar, no se pasa.
     console.error('[proxy] SUPABASE_SERVICE_ROLE_KEY no configurada — se deniega el acceso')
-    await supabase.auth.signOut()
+    // Solo este navegador: un fallo de configuración del servidor no puede
+    // echar al usuario de su móvil y de todas sus demás sesiones.
+    await supabase.auth.signOut({ scope: 'local' })
     return NextResponse.redirect(new URL('/', request.url))
   }
   const admin = createSupabaseClient(adminUrl, serviceKey, {
@@ -234,7 +236,10 @@ async function proxyInterno(request: NextRequest) {
         : null
 
   if (motivoBloqueo) {
-    await supabase.auth.signOut()
+    // Solo este navegador. La puerta se comprueba en CADA petición de cada
+    // dispositivo, así que una cuenta bloqueada se queda fuera igualmente sin
+    // necesidad de revocar de golpe todas sus sesiones.
+    await supabase.auth.signOut({ scope: 'local' })
     const url = new URL('/', request.url)
     url.searchParams.set('error', motivoBloqueo === 'cuenta_inactiva' ? 'cuenta_inactiva' : 'sin_acceso')
     const redir = NextResponse.redirect(url)

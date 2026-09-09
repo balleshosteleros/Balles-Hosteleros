@@ -97,7 +97,9 @@ export async function POST(request: Request) {
   const guard = await checkProfileGuard(supabase, data.session.user.id)
   if (!guard.ok) {
     const userId = data.session.user.id
-    await supabase.auth.signOut()
+    // Solo este navegador: se descarta la sesión recién creada por Google, sin
+    // tumbar las que el usuario tenga abiertas en otros dispositivos.
+    await supabase.auth.signOut({ scope: 'local' })
     // Cuenta de Google no invitada → borrar el login auto-creado (sin dejar fantasmas).
     if (guard.code === 'sin_perfil' || guard.code === 'sin_empresa') {
       await purgeOrphanUser(userId)

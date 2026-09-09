@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import type { ErrorEmpresaActiva } from "@/features/empresa/types/empresa-activa";
 
 const COOKIE_NAME = "bh_empresa_activa";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
@@ -9,16 +10,18 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export async function setEmpresaActiva(
   empresaId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; motivo?: ErrorEmpresaActiva }> {
   if (!UUID_RE.test(empresaId)) {
-    return { ok: false, error: "empresaId inválido" };
+    return { ok: false, error: "empresaId inválido", motivo: "id_invalido" };
   }
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "No autenticado" };
+  if (!user) {
+    return { ok: false, error: "No autenticado", motivo: "sesion_caducada" };
+  }
 
   const { data: linked } = await supabase
     .from("usuario_empresas")
@@ -36,7 +39,9 @@ export async function setEmpresaActiva(
       .single();
     allowed = prof?.empresa_id === empresaId;
   }
-  if (!allowed) return { ok: false, error: "Sin acceso a esa empresa" };
+  if (!allowed) {
+    return { ok: false, error: "Sin acceso a esa empresa", motivo: "sin_acceso" };
+  }
 
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, empresaId, {
