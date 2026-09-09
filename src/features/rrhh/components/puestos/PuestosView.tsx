@@ -612,17 +612,6 @@ function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () =>
         ))}
       </div>
 
-      {puesto.descripcion && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Descripción</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground whitespace-pre-line">{puesto.descripcion}</p>
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Condiciones del puesto</CardTitle>
