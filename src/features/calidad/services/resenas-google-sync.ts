@@ -60,6 +60,16 @@ export async function syncResenasGoogleForEmpresa(
     };
   }
 
+  // Foto del día ANTES de mirar las reseñas: el contador total y la nota son
+  // el único dato exacto que da Google (las reseñas vienen de 5 en 5, así que
+  // contar filas de `resenas` no dice cuántas tiene el local). Guardarlo a
+  // diario construye la línea base sin la que no se puede afirmar que una
+  // campaña traiga reseñas: ver `resenas_metricas_diarias`.
+  //
+  // Va antes del corte por `reviews.length === 0` a propósito: un día sin
+  // reseñas nuevas también es un dato de la serie, y perderlo dejaría huecos.
+  await guardarMetricaDiaria(supabase, empresaId, details);
+
   if (details.reviews.length === 0) {
     return { ok: true, insertadas: 0, actualizadas: 0, total: 0 };
   }
@@ -120,4 +130,42 @@ export async function syncResenasGoogleForEmpresa(
     actualizadas,
     total: details.reviews.length,
   };
+}
+
+/**
+ * Guarda (o refresca) la foto de hoy: total de reseñas y nota media de la ficha.
+ *
+ * Silencioso a propósito: es una métrica, no puede tumbar la sincronización de
+ * reseñas si falla. La fecha es la del local, no la del servidor, porque el
+ * cron corre de madrugada en UTC y si no la serie se desplazaría un día.
+ */
+async function guardarMetricaDiaria(
+  supabase: SupabaseClient,
+  empresaId: string,
+  details: { rating: number | null; totalRatings: number | null },
+): Promise<void> {
+  try {
+    const { data: emp } = await supabase
+      .from("empresas")
+      .select("config_operativa")
+      .eq("id", empresaId)
+      .maybeSingle();
+    const cfg = (emp?.config_operativa as { zonaHoraria?: string } | null) ?? null;
+    const tz = cfg?.zonaHoraria || "Europe/Madrid";
+    const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+
+    await supabase.from("resenas_metricas_diarias").upsert(
+      {
+        empresa_id: empresaId,
+        fecha: hoy,
+        plataforma: "google",
+        total_resenas: details.totalRatings,
+        nota_media: details.rating,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "empresa_id,fecha,plataforma" },
+    );
+  } catch (err) {
+    console.error("[resenas-google-sync] guardarMetricaDiaria:", err);
+  }
 }
