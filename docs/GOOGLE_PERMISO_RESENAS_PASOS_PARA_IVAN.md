@@ -2,24 +2,41 @@
 
 ---
 
-## ✅ SOLICITUD ENVIADA — 17 de agosto de 2026
+## ✅ SOLICITUD ENVIADA — 9 de septiembre de 2026 (LA BUENA)
 
 | | |
 |---|---|
-| **ID de asistencia de Google** | `8-0006000041312` |
-| **Enviada el** | 17-ago-2026 |
-| **Plazo que da Google** | 7–10 días hábiles |
-| **Respuesta esperada** | ~28-ago-2026 / 1-sep-2026 |
-| **Estado** | ⏳ Esperando respuesta de Google |
+| **ID de asistencia** | `6-7179000041984` |
+| **Enviada el** | 9-sep-2026 |
+| **Desde** | `balleshosteleros@gmail.com` |
+| **Ficha usada** | Balles Hosteleros (Empresa de servicios locales, **Verificada**) |
+| **Proyecto** | `131650182388` (My First Project) |
+| **Plazo que da Google** | 7-10 días hábiles |
+| **Respuesta esperada** | ~18-23 sep 2026 |
+| **Estado** | ⏳ esperando |
 
-**Google contesta por correo, a la cuenta desde la que se envió (la que
-administra la ficha de BACANAL).** Puede pedir información adicional: si ese
-correo se queda sin contestar, la solicitud se queda parada. Conviene
-vigilarlo.
+**⚠️ Por qué esta vez sí y las dos anteriores no.** Al abrir el formulario,
+Google mostró *"No se han encontrado casos anteriores que coincidan"*: las
+solicitudes de agosto (`8-0006000041312` y `9-5913000041388`) **nunca llegaron a
+generar un ticket**. No las rechazaron — no entraron. Se enviaron por un canal
+que no abre caso.
+
+**El canal bueno es este, y es un asistente por pasos, no un formulario suelto:**
+https://support.google.com/business/contact/api_default → *"Solicitud de acceso
+básico a las APIs"*. Empieza haciéndote elegir tu ficha verificada de una lista,
+así que Google ya sabe quién eres desde el primer paso.
+
+**Dos cosas que hay que hacer bien o la solicitud muere sin avisar:**
+- El campo "Número del proyecto" quiere **solo dígitos** (`131650182388`), NO el
+  ID con letras (`project-ed11b68e-3b8a-4daf-816`). Es el error natural.
+- Enviar desde una cuenta que administre una ficha **verificada con 60+ días**.
+
+**Cómo saber si está aprobada SIN esperar correo:** Cloud Console → APIs y
+servicios → *My Business Account Management API* → **Cuotas**. `0 QPM` = no
+aprobada; `300 QPM` = aprobada. A 9-sep no aparece ninguna API "business" entre
+las habilitadas.
 
 Cuando llegue la aprobación → seguir por el **Paso 2** de este documento.
-
-El Paso 1 de abajo queda como registro de lo que se envió.
 
 ---
 
