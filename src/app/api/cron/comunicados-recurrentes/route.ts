@@ -6,7 +6,7 @@
  * sola vez y deben salir SOLOS en su fecha, todos los años, sin que nadie se
  * acuerde de publicarlos.
  *
- * Cada día este cron busca los comunicados con `recurrencia` distinta de
+ * Cada HORA este cron busca los comunicados con `recurrencia` distinta de
  * `sin_repeticion` cuya fecha de `envio` ya ha llegado y:
  *   1. los marca como `publicado`,
  *   2. dispara push al móvil + notificación in-app (igual que al publicarlos a
@@ -15,6 +15,10 @@
  *      comunicado (isotipo sobre disco y degradado con el color de la empresa),
  *   4. y adelanta `envio` a la siguiente fecha (un año o un mes después), de
  *      modo que el año que viene vuelve a saltar sin tocar nada.
+ *
+ * Corre cada hora a propósito: la hora de salida la decide el campo `envio` de
+ * cada comunicado (se edita en su ficha), no el `schedule`. Con un cron diario,
+ * uno programado a las 10:00 no salía hasta el día siguiente.
  *
  * Idempotente: al reprogramar `envio` a la siguiente ocurrencia, un segundo
  * pase el mismo día ya no lo encuentra. Si el cron no corre un día (caída), al

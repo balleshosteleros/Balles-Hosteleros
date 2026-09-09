@@ -51,6 +51,7 @@ import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodul
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
 import { SancionDisciplinariaView } from "@/features/gerencia/components/SancionDisciplinariaView";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { getOpcionesSegmento } from "@/features/notificaciones/actions/aviso-manual-actions";
 
 function EstadoBadge({ estado }: { estado: EstadoComunicado }) {
   const colors: Record<EstadoComunicado, string> = {
@@ -77,12 +78,6 @@ function AlcanceCircle({ pct }: { pct: number }) {
   );
 }
 
-const ROLES_DISPONIBLES = [
-  "Director", "Gerencia", "Contabilidad", "Gestoría", "Jurídico",
-  "Recursos Humanos", "Logística", "Marketing", "Solo lectura",
-  "Cocina", "Jefe de Sala", "Camareros", "Mantenimiento", "RRPP",
-];
-
 interface EditorForm {
   titulo: string;
   asunto: string;
@@ -93,6 +88,7 @@ interface EditorForm {
   prioridad: string;
   todaEmpresa: boolean;
   rolesDestinatarios: string[];
+  departamentosDestinatarios: string[];
   empleadosDestinatarios: string[];
   programado: boolean;
   envioFecha: string;
@@ -107,7 +103,7 @@ interface EditorForm {
 const emptyForm: EditorForm = {
   titulo: "", asunto: "", cuerpo: "", creadorId: "", estado: "borrador",
   recurrencia: "sin_repeticion", prioridad: "normal", todaEmpresa: true,
-  rolesDestinatarios: [], empleadosDestinatarios: [], programado: false,
+  rolesDestinatarios: [], departamentosDestinatarios: [], empleadosDestinatarios: [], programado: false,
   envioFecha: "", envioHora: "", textoNotificacion: "", adjuntos: [],
   portadaColor: "hsl(var(--primary))", portadaTitulo: "", observaciones: "",
 };
@@ -118,6 +114,7 @@ function formFromComunicado(c: Comunicado): EditorForm {
     titulo: c.titulo, asunto: c.asunto, cuerpo: c.cuerpo, creadorId: c.creadorId,
     estado: c.estado, recurrencia: c.recurrencia, prioridad: c.prioridad,
     todaEmpresa: c.todaEmpresa, rolesDestinatarios: [...c.rolesDestinatarios],
+    departamentosDestinatarios: [],
     empleadosDestinatarios: [],
     programado: !!c.envio, envioFecha: fecha || "", envioHora: hora || "",
     textoNotificacion: `Nuevo comunicado: ${c.titulo}`, adjuntos: [],
@@ -125,11 +122,17 @@ function formFromComunicado(c: Comunicado): EditorForm {
   };
 }
 
-function ComunicadoEditor({ comunicado, onBack, onSave, empleadosReales, empresaNombre }: {
+function ComunicadoEditor({
+  comunicado, onBack, onSave, empleadosReales, rolesReales, departamentosReales, empresaNombre,
+}: {
   comunicado: Comunicado | null;
   onBack: () => void;
   onSave: (form: EditorForm) => void | Promise<void>;
   empleadosReales: EmpleadoSelector[];
+  /** Roles REALES de la empresa. Nada de listas escritas a mano: un rol que no
+   *  existe deja el comunicado sin llegarle a nadie, y sin avisar. */
+  rolesReales: string[];
+  departamentosReales: { id: string; nombre: string }[];
   empresaNombre: string;
 }) {
   const isEdit = !!comunicado;
@@ -151,6 +154,14 @@ function ComunicadoEditor({ comunicado, onBack, onSave, empleadosReales, empresa
 
   const toggleRole = (role: string) => {
     u({ rolesDestinatarios: form.rolesDestinatarios.includes(role) ? form.rolesDestinatarios.filter(r => r !== role) : [...form.rolesDestinatarios, role] });
+  };
+
+  const toggleDepartamento = (nombre: string) => {
+    u({
+      departamentosDestinatarios: form.departamentosDestinatarios.includes(nombre)
+        ? form.departamentosDestinatarios.filter(x => x !== nombre)
+        : [...form.departamentosDestinatarios, nombre],
+    });
   };
 
   const toggleEmpleado = (userId: string) => {
@@ -303,15 +314,42 @@ function ComunicadoEditor({ comunicado, onBack, onSave, empleadosReales, empresa
                 {!form.todaEmpresa && (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Por rol:</p>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {ROLES_DISPONIBLES.map(role => (
-                          <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                            <Checkbox checked={form.rolesDestinatarios.includes(role)} onCheckedChange={() => toggleRole(role)} />
-                            {role}
-                          </label>
-                        ))}
-                      </div>
+                      <p className="text-xs text-muted-foreground">Por área o rol:</p>
+                      {rolesReales.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Esta empresa no tiene roles configurados todavía.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {rolesReales.map(role => (
+                            <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                              <Checkbox checked={form.rolesDestinatarios.includes(role)} onCheckedChange={() => toggleRole(role)} />
+                              {role}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">Por departamento:</p>
+                      {departamentosReales.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Esta empresa no tiene departamentos activos.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {departamentosReales.map(d => (
+                            <label key={d.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                              <Checkbox
+                                checked={form.departamentosDestinatarios.includes(d.nombre)}
+                                onCheckedChange={() => toggleDepartamento(d.nombre)}
+                              />
+                              {d.nombre}
+                            </label>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -657,6 +695,11 @@ export function ComunicadosView() {
   const tz = empresaActual?.zonaHoraria ?? ZONA_HORARIA_FALLBACK;
   const [comunicados, setComunicados] = useState<Comunicado[]>([]);
   const [empleadosReales, setEmpleadosReales] = useState<EmpleadoSelector[]>([]);
+  // Roles y departamentos REALES de la empresa: los mismos que usa el resto del
+  // software para segmentar avisos. Una lista escrita a mano se desincroniza y
+  // deja comunicados sin destinatario.
+  const [rolesReales, setRolesReales] = useState<string[]>([]);
+  const [departamentosReales, setDepartamentosReales] = useState<{ id: string; nombre: string }[]>([]);
   const [cargando, setCargando] = useState(true);
 
   const loadComunicados = useCallback(async () => {
@@ -677,6 +720,9 @@ export function ComunicadosView() {
   const loadEmpleadosReales = useCallback(async () => {
     const res = await listEmpleadosParaComunicado();
     if (res.ok) setEmpleadosReales(res.data);
+    const opciones = await getOpcionesSegmento();
+    setRolesReales(opciones.roles);
+    setDepartamentosReales(opciones.departamentos);
   }, []);
 
   useEffect(() => {
@@ -813,7 +859,7 @@ export function ComunicadosView() {
       todaEmpresa: form.todaEmpresa,
       rolesDestinatarios: form.todaEmpresa ? [] : form.rolesDestinatarios,
       empleadosDestinatarios: form.todaEmpresa ? [] : form.empleadosDestinatarios,
-      departamentosDestinatarios: [] as string[],
+      departamentosDestinatarios: form.todaEmpresa ? [] : form.departamentosDestinatarios,
       envio,
       observaciones: form.observaciones,
     };
@@ -836,6 +882,8 @@ export function ComunicadosView() {
           onBack={closeEditor}
           onSave={saveEditor}
           empleadosReales={empleadosReales}
+          rolesReales={rolesReales}
+          departamentosReales={departamentosReales}
           empresaNombre={empresaResuelta ? empresaActual?.nombre ?? "" : ""}
         />
         <ValidacionFaltantesDialog

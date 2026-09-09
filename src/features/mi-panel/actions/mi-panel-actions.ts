@@ -740,6 +740,24 @@ async function evaluarEntradaFichaje(
   },
 ): Promise<EvalEntradaResultado> {
   const { empresaId, empleadoId, userId, tipoCodigo } = args;
+
+  // Anulación del preaviso sin firmar: no ficha. Volvió al equipo tras pedir la
+  // baja, pero mientras no firme que esa baja queda sin efecto no puede empezar
+  // la jornada — es el único momento en que se le puede parar de verdad.
+  {
+    const { tieneAnulacionPreavisoPendiente, MENSAJE_ANULACION_PENDIENTE } = await import(
+      "@/features/rrhh/services/firmas/anulacion-preaviso-pendiente"
+    );
+    if (
+      await tieneAnulacionPreavisoPendiente(
+        supabase as unknown as import("@supabase/supabase-js").SupabaseClient,
+        { empresaId, empleadoId },
+      )
+    ) {
+      return { ok: false, error: MENSAJE_ANULACION_PENDIENTE };
+    }
+  }
+
   // "Hoy" y "ahora" en la zona horaria de ESTA empresa candidata (PRP-069): la
   // ventana de fichaje se valida contra el horario local de la empresa.
   const tz = await getZonaHorariaEmpresa(supabase, empresaId);
@@ -1785,7 +1803,10 @@ export async function listarComunicadosVisibles(): Promise<{
 
     const visibles = (data ?? []).filter((c: Record<string, unknown>) => {
       const estado = (c.estado as string | undefined) ?? "publicado";
-      if (estado === "borrador" || estado === "archivado") return false;
+      // Solo se ve lo PUBLICADO. Un comunicado programado existe y tiene fecha,
+      // pero hasta que el cron lo publica no debe verlo nadie: si no, el de
+      // Navidad aparecería en septiembre.
+      if (estado !== "publicado") return false;
 
       // Difusión a toda la empresa: visible para todos.
       if ((c.toda_empresa as boolean | undefined) === true) return true;
@@ -2605,6 +2626,74 @@ async function cerrarAvisoSolicitud(solicitudId: string): Promise<void> {
   }
 }
 
+/**
+ * Avisa AL TRABAJADOR, en su campana, de que su solicitud ya está resuelta.
+ *
+ * Vale para CUALQUIER solicitud (vacaciones, permiso, baja médica, horas extras,
+ * material, baja de contrato…) y para los dos desenlaces: aprobada o denegada.
+ * Antes esto solo salía por push, que exige tener la app instalada y el permiso
+ * dado: quien entra por el navegador no se enteraba de nada y tenía que ir a
+ * mirar la lista de solicitudes a ver si le habían contestado.
+ *
+ * Cuando se deniega, el MOTIVO viaja en el propio aviso: es la explicación que
+ * el validador está obligado a escribir, y el trabajador debe poder leerla sin
+ * abrir nada más.
+ *
+ * Side-effect NO bloqueante: si falla, la solicitud queda resuelta igual.
+ */
+async function notificarSolicitanteResuelta(args: {
+  empresaId: string;
+  userId: string;
+  solicitudId: string;
+  tipo: SolicitudTipo;
+  subtipo: SolicitudSubtipo | null;
+  fechaInicio: string | null;
+  fechaFin: string | null;
+  resultado: "aprobada" | "rechazada";
+  notas: string | null;
+}): Promise<void> {
+  try {
+    const aprobada = args.resultado === "aprobada";
+    const que = args.subtipo ? SUBTIPO_LABEL[args.subtipo] : "Solicitud";
+    const periodo =
+      args.fechaInicio && args.fechaFin && args.fechaFin !== args.fechaInicio
+        ? ` (del ${formatFechaEs(args.fechaInicio)} al ${formatFechaEs(args.fechaFin)})`
+        : args.fechaInicio
+          ? ` (${formatFechaEs(args.fechaInicio)})`
+          : "";
+    const notas = (args.notas ?? "").trim();
+
+    const { emitirNotificacion } = await import(
+      "@/features/notificaciones/actions/notificaciones-actions"
+    );
+    await emitirNotificacion({
+      system: true,
+      empresaId: args.empresaId,
+      tipo: "solicitud_resuelta",
+      titulo: `${que}: ${aprobada ? "aprobada" : "denegada"}`,
+      mensaje: aprobada
+        ? `Tu solicitud${periodo} ha sido aprobada.${notas ? ` ${notas}` : ""}`
+        : `Tu solicitud${periodo} no ha sido aprobada.${notas ? ` Motivo: ${notas}` : ""}`,
+      // El destinatario es el propio solicitante, resuelto por su login.
+      segmento: { tipo: "usuarios", usuarioIds: [args.userId] },
+      accionUrl: "/mi-panel/solicitudes",
+      accionLabel: "Ver",
+      requiereAccion: false,
+      refTabla: "solicitudes_personal",
+      refId: args.solicitudId,
+      // Una sola vez por solicitud y desenlace, aunque se reintente.
+      dedupeKey: `solicitud_resuelta:${args.solicitudId}:${args.resultado}`,
+      // El push ya lo dispara cada action por su cuenta, con su propio texto.
+      push: false,
+    });
+  } catch (err) {
+    console.error(
+      "[mi-panel] notificarSolicitanteResuelta:",
+      extractErrorMessage(err),
+    );
+  }
+}
+
 export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
   try {
     const { supabase, user, empresaId, nombre } = await getContext();
@@ -3220,119 +3309,56 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
     await cerrarAvisoSolicitud(id);
 
     if (solicitud.subtipo === "baja_contrato") {
-      // Recorte del horario futuro: desde el último día (fecha_fin) que indicó el
-      // empleado, no debe conservar turnos ni patrones. Los ilimitados o que
-      // terminarían después se recortan a esa fecha; los sueltos posteriores se
-      // borran. No bloqueamos la aprobación si el recorte falla.
-      const ultimoDia = (solicitud.fecha_fin as string | null) ?? null;
-      if (ultimoDia) {
-        let empleadoBajaId: string | null = null;
-        try {
-          const { data: empBaja } = await supabase
-            .from("empleados")
-            .select("id")
-            .eq("user_id", solicitud.user_id as string)
-            .eq("empresa_id", solicitud.empresa_id as string)
-            .maybeSingle();
-          empleadoBajaId = (empBaja?.id as string | null) ?? null;
-          if (empleadoBajaId) {
-            const { recortarHorarioFuturoPorBaja } = await import(
-              "@/features/rrhh/services/baja-horario"
-            );
-            await recortarHorarioFuturoPorBaja(supabase, {
-              empleadoId: empleadoBajaId,
-              empresaId: solicitud.empresa_id as string,
-              fechaBaja: ultimoDia,
-            });
-          }
-        } catch (e) {
-          console.error(
-            "[mi-panel] aprobarSolicitud → recorte horario baja_contrato:",
-            extractErrorMessage(e),
-          );
-        }
-
-        // Aviso a la GESTORÍA con los datos del trabajador y su ÚLTIMO DÍA (la
-        // fecha efectiva de la baja que indicó el empleado en la solicitud). Mismo
-        // formato de ficha que el alta, plantilla editable `gestoria_baja`. No
-        // bloquea la aprobación si el envío falla.
+      // APROBAR UNA BAJA NO LA TRAMITA. Solo la acepta y abre el PREAVISO.
+      //
+      // Durante el preaviso todavía cabe negociar la continuidad del trabajador,
+      // así que aquí NO se toca NADA suyo: ni se recortan sus turnos, ni se avisa
+      // a la gestoría, ni cambia su estado. Sigue siendo un empleado normal.
+      // Todo eso ocurre después, cuando RRHH mueve su tarjeta a «Baja contrato»
+      // en el Kanban (`tramitarBajaDesdePreaviso`): ahí la baja se vuelve firme,
+      // se comunica a la gestoría y se le recorta el horario a partir de su
+      // último día.
+      //
+      // Lo único que pasa al aprobar: su ficha entra en la columna «Preaviso» del
+      // offboarding y él recibe el correo con las fechas.
+      try {
+        const { data: empBaja } = await supabase
+          .from("empleados")
+          .select("id")
+          .eq("user_id", solicitud.user_id as string)
+          .eq("empresa_id", solicitud.empresa_id as string)
+          .maybeSingle();
+        const empleadoBajaId = (empBaja?.id as string | null) ?? null;
         if (empleadoBajaId) {
-          try {
-            const { enviarBajaGestoria } = await import(
-              "@/features/rrhh/actions/gestoria-actions"
+          const { data: cand } = await supabase
+            .from("candidatos")
+            .select("id, fase, estado")
+            .eq("empresa_id", solicitud.empresa_id as string)
+            .eq("empleado_id", empleadoBajaId)
+            .maybeSingle();
+          if (cand?.id && cand.estado !== "ex_empleado") {
+            const { moverCandidatoFase } = await import(
+              "@/features/rrhh/actions/candidatos-actions"
             );
-            const motivoBaja =
-              typeof solicitud.motivo === "string" && solicitud.motivo.trim()
-                ? solicitud.motivo.trim()
-                : null;
-            // Baja solicitada por el propio empleado desde Mi Panel = VOLUNTARIA.
-            // `ultimoDia` es el ISO (fecha_fin); la action calcula el día oficial (+1).
-            const avisoBaja = await enviarBajaGestoria(empleadoBajaId, {
-              ultimoDiaIso: ultimoDia,
-              tipoBaja: "voluntaria",
-              motivo: motivoBaja,
-              origen: "mi_panel",
-            });
-
-            // Si el aviso NO sale, la baja queda aprobada pero la gestoría puede
-            // no haberse enterado (el trabajador seguiría de alta en la Seguridad
-            // Social). Antes esto solo se veía en el log del servidor: nadie se
-            // enteraba. Ahora se avisa a RRHH para que lo reenvíe a mano.
-            if (!avisoBaja.ok) {
-              const { notificarRrhhGestoria } = await import(
-                "@/features/rrhh/services/gestoria/gestoria-contrato"
-              );
-              await notificarRrhhGestoria({
-                empresaId: solicitud.empresa_id as string,
-                tipo: "gestoria_alta_enviada",
-                titulo: "No se pudo avisar a la gestoría de una baja",
-                mensaje:
-                  `La baja aprobada desde Mi Panel (último día ${ultimoDia}) NO se pudo comunicar ` +
-                  `a la gestoría: ${avisoBaja.error ?? "error desconocido"}. Revísalo y reenvíalo a mano.`,
-                empleadoId: empleadoBajaId,
-                dedupeKey: `gestoria_baja_fallida:${empleadoBajaId}:${ultimoDia}`,
-              });
-            }
-          } catch (e) {
-            console.error(
-              "[mi-panel] aprobarSolicitud → aviso gestoría baja_contrato:",
-              extractErrorMessage(e),
-            );
-          }
-
-          // TODA baja se coordina desde RECLUTAMIENTO: la tarjeta del trabajador
-          // pasa a la fase de offboarding «Baja contrato», igual que cuando la
-          // causa la empresa. Sin esto la baja voluntaria quedaba fuera del
-          // Kanban y nadie la cerraba: el empleado seguía Activo indefinidamente.
-          // No bloquea la aprobación si falla (se avisa en el log).
-          try {
-            const { data: cand } = await supabase
-              .from("candidatos")
-              .select("id, fase, estado")
-              .eq("empresa_id", solicitud.empresa_id as string)
-              .eq("empleado_id", empleadoBajaId)
-              .maybeSingle();
-            if (cand?.id && cand.estado !== "ex_empleado") {
-              const { moverCandidatoFase } = await import(
-                "@/features/rrhh/actions/candidatos-actions"
-              );
-              await moverCandidatoFase(cand.id as string, "offboarding", "baja_contrato");
-            } else if (!cand?.id) {
-              console.warn(
-                "[mi-panel] aprobarSolicitud → baja sin tarjeta en Reclutamiento:",
-                empleadoBajaId,
-              );
-            }
-          } catch (e) {
-            console.error(
-              "[mi-panel] aprobarSolicitud → mover a offboarding:",
-              extractErrorMessage(e),
+            await moverCandidatoFase(cand.id as string, "offboarding", "preaviso");
+          } else if (!cand?.id) {
+            // Sin tarjeta en Reclutamiento la baja se queda fuera del Kanban y
+            // nadie la cierra. Se avisa a RRHH para que la cree y no se pierda.
+            console.warn(
+              "[mi-panel] aprobarSolicitud → baja sin tarjeta en Reclutamiento:",
+              empleadoBajaId,
             );
           }
         }
+      } catch (e) {
+        console.error(
+          "[mi-panel] aprobarSolicitud → mover a preaviso:",
+          extractErrorMessage(e),
+        );
       }
 
-      // Notificación al empleado. No bloqueamos la aprobación si el envío falla.
+      // Correo al trabajador: baja aceptada, último día, fecha efectiva (el día
+      // siguiente) y aviso de que RRHH podría contactarle durante el preaviso.
       try {
         await notificarBajaContratoRecibida({
           empresaId: solicitud.empresa_id as string,
@@ -3349,6 +3375,20 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
         );
       }
     }
+
+    // Campana: el trabajador debe enterarse SIEMPRE de que su solicitud —la que
+    // sea— ya está resuelta, no solo por push (que exige app instalada y permiso).
+    await notificarSolicitanteResuelta({
+      empresaId: solicitud.empresa_id as string,
+      userId: solicitud.user_id as string,
+      solicitudId: solicitud.id as string,
+      tipo: solicitud.tipo as SolicitudTipo,
+      subtipo: solicitud.subtipo as SolicitudSubtipo,
+      fechaInicio: solicitud.fecha_inicio as string,
+      fechaFin: (solicitud.fecha_fin as string | null) ?? null,
+      resultado: "aprobada",
+      notas: notasRevision ?? null,
+    });
 
     // Push PWA al solicitante. No bloqueamos si el envío falla.
     try {
@@ -3419,14 +3459,21 @@ async function notificarBajaContratoRecibida(args: {
     "compañero/a";
   const empresaNombre =
     (empresaRes.data?.nombre as string | undefined) ?? "tu empresa";
-  const diasPreaviso = diasNaturales(args.fechaInicio, args.fechaFin);
+
+  // La baja surte efecto el día SIGUIENTE al último trabajado. Se calcula en UTC
+  // puro (fecha de calendario, sin hora) para que el +1 no baile con la zona.
+  const diaSiguienteIso = (iso: string): string => {
+    const t = new Date(`${iso}T00:00:00Z`);
+    if (Number.isNaN(t.getTime())) return iso;
+    t.setUTCDate(t.getUTCDate() + 1);
+    return t.toISOString().slice(0, 10);
+  };
 
   const { subject, html, text } = bajaContratoRecibidaEmail({
     recipientName: nombre,
     empresaNombre,
-    fechaSolicitud: formatFechaEs(args.fechaInicio),
     fechaBaja: formatFechaEs(args.fechaFin),
-    diasPreaviso,
+    fechaEfectiva: formatFechaEs(diaSiguienteIso(args.fechaFin)),
     notasRevision: args.notasRevision,
   });
 
@@ -3804,7 +3851,7 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
     if (!user) return { ok: false, error: "No autenticado" };
     const { data: solicitud } = await supabase
       .from("solicitudes_personal")
-      .select("id, empresa_id, user_id, tipo, subtipo, fichaje_id")
+      .select("id, empresa_id, user_id, tipo, subtipo, fichaje_id, fecha_inicio, fecha_fin")
       .eq("id", id)
       .maybeSingle();
     if (!solicitud) return { ok: false, error: "Solicitud no encontrada" };
@@ -3818,14 +3865,16 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
       return { ok: false, error: "Solo el validador asignado de este empleado puede denegar esta solicitud." };
     }
 
-    // Rechazar una salida anticipada obliga a explicarse: ese texto es el que le
-    // llega al trabajador y donde se le dice qué hacer para arreglarlo.
+    // Denegar OBLIGA a explicarse, sea la solicitud que sea: ese texto es lo
+    // único que el trabajador recibe como respuesta, y sin él un "no" seco deja
+    // a la gente preguntando por los pasillos. Le llega tal cual en la campana,
+    // en el push y en su lista de solicitudes.
     const esSalidaAnticipada = solicitud.tipo === "salida_anticipada";
     const notas = (notasRevision ?? "").trim();
-    if (esSalidaAnticipada && notas.length < MOTIVO_MIN_CARACTERES) {
+    if (notas.length < MOTIVO_MIN_CARACTERES) {
       return {
         ok: false,
-        error: `Explica por qué la rechazas (mínimo ${MOTIVO_MIN_CARACTERES} caracteres). El trabajador lo recibirá tal cual.`,
+        error: `Explica por qué la deniegas (mínimo ${MOTIVO_MIN_CARACTERES} caracteres). El trabajador lo recibirá tal cual.`,
       };
     }
 
@@ -3862,6 +3911,19 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
     // Resuelta: apaga el aviso de la campana del validador.
     await cerrarAvisoSolicitud(id);
 
+    // Campana del trabajador: se entera de la negativa Y del motivo.
+    await notificarSolicitanteResuelta({
+      empresaId: solicitud.empresa_id as string,
+      userId: solicitud.user_id as string,
+      solicitudId: solicitud.id as string,
+      tipo: solicitud.tipo as SolicitudTipo,
+      subtipo: (solicitud.subtipo as SolicitudSubtipo | null) ?? null,
+      fechaInicio: (solicitud.fecha_inicio as string | null) ?? null,
+      fechaFin: (solicitud.fecha_fin as string | null) ?? null,
+      resultado: "rechazada",
+      notas,
+    });
+
     if (solicitud) {
       try {
         const { sendPushToUser } = await import(
@@ -3872,10 +3934,10 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
           empresaId: solicitud.empresa_id as string,
           eventType: "solicitud_resuelta",
           payload: {
-            title: esSalidaAnticipada ? "Tu salida anticipada ha sido rechazada" : "Solicitud rechazada",
+            title: esSalidaAnticipada ? "Tu salida anticipada ha sido rechazada" : "Solicitud denegada",
             body: esSalidaAnticipada
               ? `Ese día se queda en 0 h. ${notas}`
-              : `Tu solicitud (${solicitud.subtipo ?? "petición"}) no ha sido aprobada.`,
+              : `${solicitud.subtipo ? SUBTIPO_LABEL[solicitud.subtipo as SolicitudSubtipo] : "Tu solicitud"}: no aprobada. ${notas}`,
             url: "/m/solicitudes",
             tag: `solicitud-${solicitud.id}`,
             data: { url: "/m/solicitudes" },

@@ -125,11 +125,23 @@
     },
     {
       "path": "/api/cron/comunicados-recurrentes",
-      "schedule": "0 6 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/marketing-automatizaciones",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/meta-ads-sync",
+      "schedule": "30 * * * *"
+    },
+    {
+      "path": "/api/cron/meta-ads-programadas",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/documentacion-informe",
+      "schedule": "0 7 * * *"
     }
   ]
 }
