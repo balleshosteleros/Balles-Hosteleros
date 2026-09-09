@@ -338,6 +338,38 @@ export async function guardarPipeline(input: PipelineInput): Promise<ActionResul
   }
 }
 
+/**
+ * Guardar un pipeline viejo sin borrarlo. Deja de salir en el selector, pero
+ * sus tarjetas siguen ahí: es memoria, no papelera. Se recupera desde el mismo
+ * desplegable, en "Ver los archivados".
+ *
+ * Es `pipelines.activo`, el mismo interruptor de Activo/Inactivo que el resto
+ * del software; aquí se llama archivar porque es lo que se hace con un embudo
+ * que ya no se trabaja.
+ */
+export async function archivarPipeline(id: string, archivar: boolean): Promise<ActionResult> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "Sin empresa." };
+
+    const { error } = await supabase
+      .from("pipelines")
+      .update({ activo: !archivar, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+
+    if (error) {
+      console.error("[pipeline][archivarPipeline]", error.message);
+      return { ok: false, error: archivar ? "No se pudo archivar." : "No se pudo desarchivar." };
+    }
+    revalidar();
+    return { ok: true };
+  } catch (err) {
+    console.error("[pipeline][archivarPipeline] fatal:", err);
+    return { ok: false, error: friendlyError(err, "archivarPipeline") };
+  }
+}
+
 const faseSchema = z.object({
   id: z.string().guid().optional(),
   pipeline_id: z.string().guid(),

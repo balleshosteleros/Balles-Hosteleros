@@ -15,6 +15,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -29,7 +30,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { formatEur, formatNumero } from "@/shared/lib/numero";
-import { cargarTablero, moverOportunidad } from "../actions/pipeline-actions";
+import { archivarPipeline, cargarTablero, moverOportunidad } from "../actions/pipeline-actions";
 import type { Oportunidad, PipelineFase, TableroPipeline } from "../types";
 import { OPORTUNIDAD_ESTADOS, OPORTUNIDAD_ESTADO_LABEL } from "../types";
 import { PipelineBoard } from "./PipelineBoard";
@@ -38,6 +39,13 @@ import { OportunidadDialog } from "./OportunidadDialog";
 import { PipelineConfigDialog } from "./PipelineConfigDialog";
 
 type Vista = "tablero" | "lista";
+
+/**
+ * Filas del desplegable que no son un pipeline sino una acción. Van con doble
+ * guion bajo para que no puedan chocar nunca con un id.
+ */
+const ARCHIVAR = "__archivar__";
+const VER_ARCHIVADOS = "__ver-archivados__";
 
 const VACIO: TableroPipeline = { pipelines: [], pipeline: null, fases: [], oportunidades: [] };
 
@@ -78,6 +86,7 @@ export function PipelineView() {
   const [pipelineId, setPipelineId] = useState<string | undefined>();
   const [cargando, setCargando] = useState(true);
   const [vista, setVista] = useState<Vista>("tablero");
+  const [verArchivados, setVerArchivados] = useState(false);
 
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
@@ -220,6 +229,53 @@ export function PipelineView() {
     }
   };
 
+  const activos = useMemo(() => tablero.pipelines.filter((p) => p.activo), [tablero.pipelines]);
+  const archivados = useMemo(() => tablero.pipelines.filter((p) => !p.activo), [tablero.pipelines]);
+
+  /**
+   * Lo que se ofrece en el desplegable: solo los activos, salvo que se pidan
+   * los archivados o no quede ninguno activo. El que se está mirando va
+   * siempre, aunque esté archivado, para que el selector no salga en blanco.
+   */
+  const enElDesplegable = useMemo(() => {
+    const base = verArchivados || activos.length === 0 ? tablero.pipelines : activos;
+    const actual = tablero.pipeline;
+    return actual && !base.some((p) => p.id === actual.id) ? [actual, ...base] : base;
+  }, [verArchivados, activos, tablero.pipelines, tablero.pipeline]);
+
+  /**
+   * Archivar el pipeline que se está mirando, o sacarlo del archivo. Al
+   * archivarlo salta al siguiente activo: si se quedara delante, seguiría
+   * viéndose justo lo que se acaba de esconder.
+   */
+  const alternarArchivo = async () => {
+    const p = tablero.pipeline;
+    if (!p) return;
+    const res = await archivarPipeline(p.id, p.activo);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success(p.activo ? `"${p.nombre}" archivado` : `"${p.nombre}" desarchivado`);
+    const siguiente = p.activo
+      ? tablero.pipelines.find((x) => x.activo && x.id !== p.id)?.id
+      : pipelineId;
+    if (siguiente === pipelineId) void cargar();
+    else setPipelineId(siguiente);
+  };
+
+  const elegirEnDesplegable = (valor: string) => {
+    if (valor === VER_ARCHIVADOS) {
+      setVerArchivados((v) => !v);
+      return;
+    }
+    if (valor === ARCHIVAR) {
+      void alternarArchivo();
+      return;
+    }
+    setPipelineId(valor);
+  };
+
   const abrirFicha = (o: Oportunidad | null) => {
     setEnFicha(o);
     setFichaAbierta(true);
@@ -232,18 +288,38 @@ export function PipelineView() {
       <div className="flex flex-wrap items-center gap-3">
         <Select
           value={tablero.pipeline?.id ?? ""}
-          onValueChange={setPipelineId}
+          onValueChange={elegirEnDesplegable}
           disabled={tablero.pipelines.length === 0}
         >
           <SelectTrigger className="h-9 w-64">
             <SelectValue placeholder="Sin pipelines" />
           </SelectTrigger>
           <SelectContent>
-            {tablero.pipelines.map((p) => (
+            {enElDesplegable.map((p) => (
               <SelectItem key={p.id} value={p.id}>
-                {p.nombre}
+                {p.activo ? p.nombre : `${p.nombre} · archivado`}
               </SelectItem>
             ))}
+
+            {/* Archivar y recuperar, en el mismo sitio donde se elige el
+                embudo: es donde se mira cuando sobra uno. */}
+            {tablero.pipeline && (
+              <>
+                <SelectSeparator />
+                <SelectItem value={ARCHIVAR}>
+                  {tablero.pipeline.activo
+                    ? "Archivar este pipeline"
+                    : "Desarchivar este pipeline"}
+                </SelectItem>
+              </>
+            )}
+            {archivados.length > 0 && (
+              <SelectItem value={VER_ARCHIVADOS}>
+                {verArchivados
+                  ? "Ocultar los archivados"
+                  : `Ver los archivados (${archivados.length})`}
+              </SelectItem>
+            )}
           </SelectContent>
         </Select>
 
