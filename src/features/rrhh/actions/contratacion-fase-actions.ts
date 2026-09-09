@@ -12,7 +12,7 @@
  *      módulo de Firmas (Email 3).
  *   3. Notifica a RRHH (contratación iniciada / contrato interno enviado).
  *
- * El candidato queda en `{ fase: "contratacion", estado: "contratacion" }`.
+ * El candidato queda en `{ fase: "onboarding", estado: "contratacion" }`.
  *
  * El contrato OFICIAL ya está cubierto por el flujo de gestoría existente
  * (`procesarSubidaContrato`): cuando la gestoría sube el PDF, se manda a firmar
@@ -182,7 +182,7 @@ export async function iniciarContratacion(
       // Entrar en Contratación ES el acto de contratar: el candidato aún está en su
       // fase anterior (Selección, etc.), así que se permite desde cualquier fase.
       permitirDesdeCualquierFase: true,
-      destino: { fase: "contratacion", estado: "contratacion" },
+      destino: { fase: "onboarding", estado: "contratacion" },
     });
   } catch (e) {
     return { ok: false, error: friendlyError(e, "iniciarContratacion:contratar") };

@@ -122,7 +122,7 @@ export interface ContratarInput {
   /**
    * Fase/estado en que queda el candidato tras crear el empleado. Por defecto
    * (compat) pasa a `seleccionado`/`empleado`. Al entrar en Contratación se pasa
-   * `{ fase: "contratacion", estado: "contratacion" }`.
+   * `{ fase: "onboarding", estado: "contratacion" }`.
    */
   destino?: { fase: string; estado: string };
 }
@@ -472,7 +472,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   }
 
   // Fase/estado destino del candidato (compat = seleccionado/empleado).
-  const destinoFase = input.destino?.fase ?? "seleccionado";
+  const destinoFase = input.destino?.fase ?? "onboarding";
   const destinoEstado = input.destino?.estado ?? "empleado";
   const enviarAcceso = input.enviarAcceso !== false;
   const enviarGestoria = input.enviarGestoria !== false;

@@ -401,7 +401,7 @@ export async function POST(req: Request) {
         canal_link_id: canalLinkId,
         canal_nombre: canalNombre,
         como_nos_conocio: comoNosConocio,
-        fase: "nuevo",
+        fase: "seleccion",
         estado: "nuevo",
       })
       .select("id")
