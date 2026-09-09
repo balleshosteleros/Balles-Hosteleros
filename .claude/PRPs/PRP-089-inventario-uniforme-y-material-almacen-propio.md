@@ -1,6 +1,6 @@
 # PRP-089: Inventario de uniforme y material (almacén propio de RRHH)
 
-> **Estado**: PENDIENTE
+> **Estado**: IMPLEMENTADO salvo la Fase 8 (carga de las 28 piezas), bloqueada a la espera de decidir firma y fecha
 > **Fecha**: 2026-09-07
 > **Proyecto**: Balles-Hosteleros
 > **Módulo**: RRHH → Entregas
@@ -239,39 +239,39 @@ alter table public.entregas_material
 
 ## Blueprint (Assembly Line)
 
-### Fase 1: El libro y los tres saldos
+### Fase 1: El libro y los tres saldos ✅
 **Objetivo**: migración idempotente con `material_movimientos`, la vista `material_saldos`, las dos tablas de recuento, el estado `no_devuelta` y las RLS (lectura por `empresas_del_usuario()`, escritura solo server). Seed del catálogo de tipos completado también en la empresa que hoy no lo tiene.
 **Validación**: `material_saldos` devuelve 0 filas sin romper; insertar a mano una compra y una entrega deja el total de la empresa igual; una fila con los dos deltas a 0 la rechaza el CHECK.
 
-### Fase 2: Puerta única de escritura del libro
+### Fase 2: Puerta única de escritura del libro ✅
 **Objetivo**: `services/material/movimientos.ts` como **único** punto que escribe movimientos, con la tabla de deltas por tipo de movimiento, congelado de nombre/talla, idempotencia y reversión.
 **Validación**: llamar dos veces al mismo movimiento de entrega no duplica; revertir deja el saldo como estaba.
 
-### Fase 3: Enganchar las entregas que ya existen
-**Objetivo**: firmar entrega → `−1/+1`; firmar devolución → `+1/−1`; firmar merma → `−1 manos`; borrar entrega firmada → reversión. Sin cambiar el flujo de actas ni la UI de Entregas.
+### Fase 3: Enganchar las entregas que ya existen ✅
+**Objetivo**: firmar entrega → `−1/+1`; firmar devolución → `+1/−1`; firmar merma → `−1 manos`. Sin cambiar el flujo de actas ni la UI de Entregas. (La reversión al borrar se descartó: ver Aprendizajes.)
 **Validación**: ciclo completo entrega → firma → devolución → firma sobre una unidad; el total de la empresa no varía en ningún paso y el libro tiene 2 filas.
 
-### Fase 4: No devuelta (la pérdida)
+### Fase 4: No devuelta (la pérdida) ✅
 **Objetivo**: acción y diálogo con motivo obligatorio para marcar una entrega como no devuelta; `−1 manos`; sale de `resumirMaterial()` y de `pendientesDeDevolucion()`; aparece en el histórico de la ficha del empleado y en el offboarding.
 **Validación**: marcada la pieza, desaparece de "lo que tiene" el empleado y el total de la empresa baja 1; la fila sigue en su histórico con motivo y fecha.
 
-### Fase 5: Entradas y bajas de almacén
+### Fase 5: Entradas y bajas de almacén ✅
 **Objetivo**: diálogo de entrada (tipo, talla, unidades, fecha, proveedor, documento, coste unitario opcional) y de baja por deterioro en almacén con motivo obligatorio. Validación Zod en ambos.
 **Validación**: 10 camisetas M entran y suben `en_almacen` y `total_empresa`; 2 rotas los bajan; el libro lo explica.
 
-### Fase 6: Pantalla de Almacén
+### Fase 6: Pantalla de Almacén ✅
 **Objetivo**: pestaña con tres tarjetas (en almacén / en manos / total empresa), tabla por tipo·talla con esas tres columnas más último recuento y descuadre, filtro por columna, y libro de movimientos con su signo. Fechas en la zona de la empresa, formato día-mes-año.
 **Validación**: los tres totales de las tarjetas cuadran con la suma de la tabla; screenshot Playwright.
 
-### Fase 7: Recuento y descuadre
+### Fase 7: Recuento y descuadre ✅
 **Objetivo**: abrir recuento (congela el teórico), contar, ver diferencia por línea, confirmar → un `ajuste_recuento` por cada diferencia ≠ 0 con la referencia del recuento. Confirmación no destructiva con botón Aceptar, sin `confirm()` nativo.
 **Validación**: teórico 10, contado 8 → tras confirmar el saldo es 8 y hay un ajuste de −2 en el libro con su motivo.
 
-### Fase 8: Carga de las 28 piezas reales
+### Fase 8: Carga de las 28 piezas reales ⏳ BLOQUEADA: falta decidir firma y fecha
 **Objetivo**: movimientos `inicial` para HABANA y BACANAL, cada pieza en su empresa, con tipo y talla reales, distinguiendo lo que está en el almacén de lo que ya está en manos de alguien. Migración versionada e idempotente.
 **Validación**: `material_saldos` cuadra pieza a pieza con el listado real; ejecutar la migración dos veces no duplica nada.
 
-### Fase 9: Validación Final
+### Fase 9: Validación Final ✅ typecheck 0 errores, build en verde, kardex de cocina intacto
 **Objetivo**: sistema funcionando end-to-end.
 **Validación**:
 - [ ] `npm run typecheck` pasa
@@ -284,7 +284,23 @@ alter table public.entregas_material
 
 ## 🧠 Aprendizajes (Self-Annealing)
 
-_(vacío — se rellena durante la implementación)_
+**La reversión no hacía falta y se quitó.** El plan preveía revertir el
+movimiento al borrar una entrega firmada. Al implementarlo se vio que el módulo
+lo impide en tres sitios: `borrarEntrega` rechaza las firmadas, y
+`cancelarDevolucion` rechaza tanto `devuelta` como `merma`. Y lo no firmado
+todavía no ha movido nada, porque el movimiento se graba al firmar. No había
+ningún camino que llegara a esa función, así que se eliminó en vez de dejar
+código muerto. La columna `revierte_a` se queda en la tabla: si algún día se
+permite deshacer algo firmado, la corrección se escribe como línea contraria.
+
+**El catálogo estaba peor de lo que decía el PRP.** No era solo que una empresa
+no tuviera tipos: además "Camisa" no distinguía manga, y faltaban Americana y
+Ordenador para poder cargar las piezas reales. Se resolvió en la misma
+migración; la "Camisa" antigua se desactiva en vez de borrarse.
+
+**`talla` NULL en la vista.** `group by ... talla` no agrupa los NULL entre sí de
+forma utilizable desde el cliente, así que la vista expone `talla_clave`
+(`coalesce(talla,'')`) para filtrar y `talla` real para mostrar.
 
 ---
 
@@ -317,4 +333,4 @@ _(vacío — se rellena durante la implementación)_
 
 ---
 
-*PRP pendiente de aprobación. No se ha modificado código.*
+*Implementado el 10-09-2026 salvo la Fase 8.*
