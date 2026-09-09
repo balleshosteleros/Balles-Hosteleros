@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Loader2, Check, ChevronRight, ChevronLeft, User, Home,
-  Heart, Shirt, Sparkles, ShieldCheck, FileText, Upload, Wand2,
+  Heart, Shirt, Sparkles, ShieldCheck, FileText, Upload, Wand2, Camera,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,8 +141,9 @@ export function WizardPrimerAcceso({
   const [analizando, setAnalizando] = useState<TipoDocPropio | null>(null);
   const [avisoIA, setAvisoIA] = useState<string | null>(null);
   const inputsDoc = useRef<Partial<Record<TipoDocPropio, HTMLInputElement | null>>>({});
+  const inputsCam = useRef<Partial<Record<TipoDocPropio, HTMLInputElement | null>>>({});
 
-  // Lo leído por la IA: se muestra en campos EDITABLES para que la persona lo
+  // Lo leído por la IA: se muestra en campos editables para que la persona lo
   // revise. Nada de esto se guarda en su ficha hasta que pulsa el botón final.
   const [leidos, setLeidos] = useState<DatosLeidos>({
     dni_nie: prefilled.dni_nie ?? "",
@@ -150,6 +151,19 @@ export function WizardPrimerAcceso({
     direccion: prefilled.direccion ?? "",
     iban: prefilled.iban ?? "",
   });
+
+  // Lo que YA constaba en su ficha al abrir se enseña BLOQUEADO. El servidor no
+  // lo sobrescribe pase lo que pase, así que dejarlo editable solo serviría para
+  // que alguien creyera haber corregido su IBAN y se fuera tan tranquilo sin que
+  // hubiera cambiado nada. Corregir un dato grabado es cosa de RRHH, que puede
+  // contrastarlo con el documento.
+  const [bloqueado] = useState<Record<keyof DatosLeidos, boolean>>(() => ({
+    dni_nie: Boolean(prefilled.dni_nie),
+    fecha_nacimiento: Boolean(prefilled.fecha_nacimiento),
+    direccion: Boolean(prefilled.direccion),
+    iban: Boolean(prefilled.iban),
+  }));
+  const hayBloqueado = Object.values(bloqueado).some(Boolean);
 
   const [form, setForm] = useState<FormState>({
     dni_nie: prefilled.dni_nie ?? "",
@@ -571,8 +585,9 @@ export function WizardPrimerAcceso({
           {pasoId === "documentos" && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Haz una foto de cada documento. Los leemos automáticamente y después
-                compruebas tú que los datos son correctos.
+                Haz una foto de cada documento o sube el archivo. Los leemos automáticamente y
+                después compruebas tú que los datos son correctos. Si una foto sale mal, puedes
+                repetirla antes de terminar.
               </p>
 
               {documentosEntregados.length > 0 && (
@@ -604,6 +619,20 @@ export function WizardPrimerAcceso({
                           </p>
                           <p className="text-[11px] text-muted-foreground mt-0.5">{d.ayuda}</p>
                         </div>
+                        {/* `capture` abre la cámara; sin él, la galería o los
+                            archivos del teléfono. Se ofrecen las dos, que no
+                            todo el mundo lleva el documento encima ni todo el
+                            mundo tiene el PDF del banco descargado. */}
+                        <input
+                          ref={(el) => {
+                            inputsCam.current[d.tipo] = el;
+                          }}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          onChange={(e) => elegirDoc(d.tipo, e.target.files?.[0])}
+                        />
                         <input
                           ref={(el) => {
                             inputsDoc.current[d.tipo] = el;
@@ -613,21 +642,32 @@ export function WizardPrimerAcceso({
                           className="hidden"
                           onChange={(e) => elegirDoc(d.tipo, e.target.files?.[0])}
                         />
-                        <Button
-                          type="button"
-                          variant={hecho ? "outline" : "default"}
-                          size="sm"
-                          disabled={pending}
-                          onClick={() => inputsDoc.current[d.tipo]?.click()}
-                          className="shrink-0"
-                        >
-                          {cargando ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
+                        <div className="flex shrink-0 flex-col gap-1.5">
+                          <Button
+                            type="button"
+                            variant={hecho ? "outline" : "default"}
+                            size="sm"
+                            disabled={pending}
+                            onClick={() => inputsCam.current[d.tipo]?.click()}
+                          >
+                            {cargando ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Camera className="h-3.5 w-3.5" />
+                            )}
+                            <span className="ml-1.5">{hecho ? "Repetir foto" : "Hacer foto"}</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={pending}
+                            onClick={() => inputsDoc.current[d.tipo]?.click()}
+                          >
                             <Upload className="h-3.5 w-3.5" />
-                          )}
-                          <span className="ml-1.5">{hecho ? "Cambiar" : "Subir"}</span>
-                        </Button>
+                            <span className="ml-1.5">Elegir archivo</span>
+                          </Button>
+                        </div>
                       </div>
                     </li>
                   );
@@ -656,7 +696,11 @@ export function WizardPrimerAcceso({
                     <Label>Número de DNI o NIE *</Label>
                     <Input
                       value={leidos.dni_nie}
+                      readOnly={bloqueado.dni_nie}
+                      disabled={bloqueado.dni_nie}
+                      className={bloqueado.dni_nie ? "bg-muted text-muted-foreground" : undefined}
                       onChange={(e) => {
+                        if (bloqueado.dni_nie) return;
                         setLeidos((p) => ({ ...p, dni_nie: e.target.value }));
                         setError(null);
                       }}
@@ -667,7 +711,11 @@ export function WizardPrimerAcceso({
                     <Input
                       type="date"
                       value={leidos.fecha_nacimiento}
+                      readOnly={bloqueado.fecha_nacimiento}
+                      disabled={bloqueado.fecha_nacimiento}
+                      className={bloqueado.fecha_nacimiento ? "bg-muted text-muted-foreground" : undefined}
                       onChange={(e) => {
+                        if (bloqueado.fecha_nacimiento) return;
                         setLeidos((p) => ({ ...p, fecha_nacimiento: e.target.value }));
                         setError(null);
                       }}
@@ -679,7 +727,11 @@ export function WizardPrimerAcceso({
                   <Label>Número de cuenta (IBAN) *</Label>
                   <Input
                     value={leidos.iban}
+                    readOnly={bloqueado.iban}
+                    disabled={bloqueado.iban}
+                    className={bloqueado.iban ? "bg-muted text-muted-foreground" : undefined}
                     onChange={(e) => {
+                      if (bloqueado.iban) return;
                       setLeidos((p) => ({ ...p, iban: e.target.value }));
                       setError(null);
                     }}
@@ -691,7 +743,11 @@ export function WizardPrimerAcceso({
                   <Label>Domicilio</Label>
                   <Input
                     value={leidos.direccion}
+                    readOnly={bloqueado.direccion}
+                    disabled={bloqueado.direccion}
+                    className={bloqueado.direccion ? "bg-muted text-muted-foreground" : undefined}
                     onChange={(e) => {
+                      if (bloqueado.direccion) return;
                       setLeidos((p) => ({ ...p, direccion: e.target.value }));
                       setError(null);
                     }}
@@ -702,6 +758,12 @@ export function WizardPrimerAcceso({
                   Los rellenamos leyendo tus documentos. Si algo no cuadra, corrígelo aquí antes
                   de continuar.
                 </p>
+                {hayBloqueado && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Los datos en gris ya constan en tu ficha y no se pueden cambiar desde aquí. Si
+                    alguno está mal, díselo a RRHH.
+                  </p>
+                )}
               </div>
             </div>
           )}

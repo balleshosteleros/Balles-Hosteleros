@@ -189,7 +189,7 @@ export async function subirYLeerDocumentoPropio(input: {
   // así nadie puede escribir en la carpeta de otro.
   const { data: fichas } = await supabase
     .from("empleados")
-    .select("id, empresa_id")
+    .select("id, empresa_id, doc_dni_anverso_path, doc_dni_reverso_path, doc_iban_path")
     .eq("user_id", user.id);
   if (!fichas || fichas.length === 0) {
     return { ok: false as const, error: "No se encontró tu ficha de empleado" };
@@ -197,6 +197,41 @@ export async function subirYLeerDocumentoPropio(input: {
 
   const buffer = Buffer.from(await input.file.arrayBuffer());
   const admin = createAdminClient();
+
+  // ⛔ MISMA NORMA QUE CON LOS DATOS: lo entregado no se reemplaza desde aquí…
+  //
+  // La subida hace `upsert`, así que sin esta guarda un segundo envío machacaría
+  // el documento bueno — y con él la prueba de lo que RRHH comprobó en su día
+  // (que el titular del certificado bancario es esa persona, por ejemplo).
+  //
+  // …CON UNA VENTANA DE CORRECCIÓN. La foto se guarda nada más elegirla, antes
+  // de leerla, así que la borrosa, la torcida o la cara equivocada quedan dentro.
+  // Con dieciocho personas fotografiando su DNI con el móvil eso pasa seguro, y
+  // sin margen para repetir cada una de esas veces acaba en una llamada a RRHH.
+  // Se permite rehacerlo durante la hora siguiente a haberlo subido; pasada esa
+  // hora el documento se considera entregado y solo lo cambia RRHH.
+  //
+  // La ventana se mide con la fecha del ARCHIVO en el almacén, no con nada que
+  // mande el navegador: el cliente no puede alargarse el plazo.
+  const yaEntregado = fichas.some((f) => !!(f as Record<string, unknown>)[doc.columna]);
+  if (yaEntregado) {
+    const ficha = fichas[0];
+    const { data: objetos } = await admin.storage
+      .from("empleados-docs")
+      .list(`${ficha.empresa_id}/${ficha.id}`, { search: input.tipo });
+
+    const previo = (objetos ?? []).find((o) => o.name.startsWith(`${input.tipo}.`));
+    const subidoEn = previo?.updated_at ?? previo?.created_at ?? null;
+    const dentroDeVentana =
+      subidoEn !== null && Date.now() - new Date(subidoEn).getTime() < 60 * 60 * 1000;
+
+    if (!dentroDeVentana) {
+      return {
+        ok: false as const,
+        error: "Ese documento ya lo tenemos. Si necesitas cambiarlo, avisa a RRHH.",
+      };
+    }
+  }
 
   // Una copia en cada empresa donde trabaja, en la MISMA ruta que usa la subida
   // manual de RRHH: `{empresa_id}/{empleado_id}/{tipo}.{ext}`.
@@ -223,9 +258,21 @@ export async function subirYLeerDocumentoPropio(input: {
 /**
  * Guarda los datos que la persona ha REVISADO Y APROBADO tras leerlos la IA.
  *
- * Solo escribe lo que llega con valor: un campo vacío se deja como estaba en
- * lugar de borrar lo que ya hubiera en la ficha. Va a TODAS sus fichas porque
- * son datos de la persona, no de su relación con una empresa.
+ * ⛔ SOLO RELLENA HUECOS. Nunca pisa un dato que ya esté en la ficha.
+ *
+ * Este formulario lo abre el propio trabajador sin que nadie lo supervise. Si
+ * pudiera reescribir lo que ya hay, bastaría un error de tecleo —o mala fe— para
+ * cambiar el IBAN por el que se le paga la nómina, machacando un certificado
+ * bancario que RRHH ya había comprobado a mano contra el titular del documento.
+ * Lo mismo con el DNI, que es lo que la gestoría usa para el contrato.
+ *
+ * Así que la regla es: campo vacío → se rellena; campo con algo → se ignora en
+ * silencio, aunque venga distinto. La comprobación va AQUÍ y no solo en la
+ * pantalla: esto es una server action alcanzable desde el navegador, y lo que
+ * bloquee un input deshabilitado no cuenta.
+ *
+ * Para corregir un dato ya grabado está RRHH, que es quien puede contrastarlo
+ * con el documento antes de tocarlo.
  */
 export async function confirmarDatosDocumentacion(input: {
   dni_nie?: string | null;
@@ -236,22 +283,51 @@ export async function confirmarDatosDocumentacion(input: {
   const { supabase, user } = await getCtx();
   if (!user) return { ok: false, error: "No autenticado" };
 
-  const patch: Record<string, unknown> = {};
-  if (input.dni_nie?.trim()) patch.dni_nie = input.dni_nie.trim().toUpperCase();
-  if (input.iban?.trim()) patch.iban = input.iban.replace(/\s/g, "").toUpperCase();
-  if (input.direccion?.trim()) patch.direccion = input.direccion.trim();
-  if (input.fecha_nacimiento && /^\d{4}-\d{2}-\d{2}$/.test(input.fecha_nacimiento)) {
-    patch.fecha_nacimiento = input.fecha_nacimiento;
-  }
-  if (Object.keys(patch).length === 0) return { ok: true };
-
   const { data: fichas } = await supabase
     .from("empleados")
-    .select("id")
+    .select("id, dni_nie, fecha_nacimiento, direccion, iban, iban_verificado")
     .eq("user_id", user.id);
   if (!fichas || fichas.length === 0) {
     return { ok: false, error: "No se encontró tu ficha de empleado" };
   }
+
+  const vacio = (v: unknown) => v === null || v === undefined || String(v).trim() === "";
+  // Basta que UNA ficha ya tenga el dato para no tocarlo en ninguna: sus fichas
+  // son la misma persona y deben acabar iguales.
+  const yaTiene = (campo: "dni_nie" | "fecha_nacimiento" | "direccion" | "iban") =>
+    fichas.some((f) => !vacio((f as Record<string, unknown>)[campo]));
+  const ibanBlindado = fichas.some((f) => Boolean(f.iban_verificado)) || yaTiene("iban");
+
+  const patch: Record<string, unknown> = {};
+  const ignorados: string[] = [];
+
+  if (input.dni_nie?.trim()) {
+    if (yaTiene("dni_nie")) ignorados.push("dni_nie");
+    else patch.dni_nie = input.dni_nie.trim().toUpperCase();
+  }
+  if (input.iban?.trim()) {
+    // El IBAN lleva candado extra: si está verificado no se toca ni estando vacío
+    // en alguna de sus fichas — ese dato salió de un certificado comprobado.
+    if (ibanBlindado) ignorados.push("iban");
+    else patch.iban = input.iban.replace(/\s/g, "").toUpperCase();
+  }
+  if (input.direccion?.trim()) {
+    if (yaTiene("direccion")) ignorados.push("direccion");
+    else patch.direccion = input.direccion.trim();
+  }
+  if (input.fecha_nacimiento && /^\d{4}-\d{2}-\d{2}$/.test(input.fecha_nacimiento)) {
+    if (yaTiene("fecha_nacimiento")) ignorados.push("fecha_nacimiento");
+    else patch.fecha_nacimiento = input.fecha_nacimiento;
+  }
+
+  if (ignorados.length > 0) {
+    // Queda en el log: si alguien intenta cambiar su IBAN por aquí, se ve.
+    console.warn(
+      `[primer-acceso] datos ya grabados, no se sobrescriben (user ${user.id}): ${ignorados.join(", ")}`,
+    );
+  }
+
+  if (Object.keys(patch).length === 0) return { ok: true, ignorados };
 
   const { error } = await createAdminClient()
     .from("empleados")
@@ -261,7 +337,7 @@ export async function confirmarDatosDocumentacion(input: {
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/", "layout");
-  return { ok: true };
+  return { ok: true, ignorados };
 }
 
 /** Tipos admitidos al subir la foto o el DNI. Se comprueba en SERVIDOR: el
