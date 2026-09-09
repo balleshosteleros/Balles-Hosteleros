@@ -83,6 +83,8 @@ export function ResenaForm({
   // había forma de distinguir lo que él había valorado de lo que le habíamos
   // rellenado nosotros. Enviaba tres notas creyendo haber dado una.
   const [comida, setComida] = useState<number>(ratingInicial ?? 0);
+  /** Enlace a Google. Solo se rellena cuando la nota es de 5 estrellas. */
+  const [urlResena, setUrlResena] = useState<string | null>(null);
   const [servicio, setServicio] = useState<number>(0);
   const [ambiente, setAmbiente] = useState<number>(0);
   const [comentario, setComentario] = useState("");
@@ -145,13 +147,19 @@ export function ResenaForm({
       if (!r.ok || !body.ok) {
         throw new Error(body.error || `Error ${r.status}`);
       }
+      // Con 5 estrellas NO se salta a Google de golpe: se guarda el enlace y la
+      // pantalla de gracias ofrece el botón.
+      //
+      // Antes se redirigía sin avisar, y eso tenía dos problemas: el cliente
+      // aterrizaba en Google sin entender por qué, y ni siquiera llegaba a ver
+      // que su valoración se había guardado. Quien llega a Google convencido
+      // escribe; quien llega de rebote, cierra.
       if (
         media === 5 &&
         redirigir5EstrellasGoogle &&
         (body.redirect || googleReviewUrl)
       ) {
-        window.location.href = body.redirect || googleReviewUrl!;
-        return;
+        setUrlResena(body.redirect || googleReviewUrl!);
       }
       setExito(true);
     } catch (err) {
@@ -187,13 +195,49 @@ export function ResenaForm({
             <Check className="h-7 w-7" />
           </div>
           <h2 className="text-xl font-semibold">
-            ¡Gracias{nombreLead ? `, ${nombreLead}` : ""}!
+            {urlResena ? "¡Cinco estrellas!" : `¡Gracias${nombreLead ? `, ${nombreLead}` : ""}!`}
           </h2>
           <p className="mt-2 text-sm text-gray-600">
-            {yaRespondio
-              ? "Ya habías valorado esta visita, así que tu opinión está registrada. Esperamos verte pronto."
-              : "Tu opinión es muy importante para nosotros. Esperamos verte pronto."}
+            {urlResena
+              ? `${nombreLead ? `${nombreLead}, n` : "N"}os has alegrado el día. Gracias de verdad.`
+              : yaRespondio
+                ? "Ya habías valorado esta visita, así que tu opinión está registrada. Esperamos verte pronto."
+                : "Tu opinión es muy importante para nosotros. Esperamos verte pronto."}
           </p>
+
+          {/* Invitación a reseñar en Google, solo tras 5 estrellas.
+              El texto apela a algo cierto —un negocio de barrio compite contra
+              cadenas con presupuesto— y agradece por adelantado. Nada de
+              culpar a quien no lo haga: la culpa genera rechazo y, en alguien
+              que ya tiene el formulario de Google delante, se puede volver en
+              contra dentro de la propia reseña. */}
+          {urlResena && (
+            <div className="mt-7 space-y-4 border-t border-gray-100 pt-6">
+              <div className="text-3xl leading-none" aria-hidden>
+                🙏
+              </div>
+              <p className="text-base font-semibold text-gray-900">
+                ¿Nos regalas 30 segundos más?
+              </p>
+              <p className="text-sm leading-relaxed text-gray-600">
+                Somos un negocio de barrio, sin presupuesto de publicidad. Lo que
+                escribas en Google es, literalmente, lo que hace que otra gente
+                nos encuentre y se anime a venir.
+              </p>
+              <a
+                href={urlResena}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full rounded-xl px-4 py-4 text-center text-base font-bold text-white shadow-lg transition-transform hover:scale-[1.02]"
+                style={{ background: color }}
+              >
+                Escribir mi reseña en Google
+              </a>
+              <p className="text-xs text-gray-400">
+                Se abre en otra ventana · Nos harías un favor enorme
+              </p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="w-full rounded-2xl bg-white p-6 shadow-lg">

@@ -74,6 +74,13 @@ export function PushEscritorioAviso() {
     void (async () => {
       if (!isPushSupported()) return;
 
+      // En local nunca. `localStorage` es por dominio, así que el "ya dije que
+      // sí" de producción no cuenta en `localhost` y el aviso reaparecía en
+      // cada arranque mientras se trabaja. Además los avisos de escritorio no
+      // se prueban desde aquí: se prueban en el dominio real.
+      const host = window.location.hostname;
+      if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".local")) return;
+
       // Denegado: el navegador ya no deja volver a preguntar desde la app.
       const permission = getPushPermission();
       if (permission === "denied") return;
@@ -185,14 +192,14 @@ export function PushEscritorioAviso() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[22rem] max-w-[calc(100vw-2rem)] rounded-2xl border bg-card p-4 shadow-lg">
+    <div className="fixed bottom-5 right-5 z-50 w-[26rem] max-w-[calc(100vw-2rem)] rounded-2xl border bg-card p-5 shadow-2xl">
       <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <Bell className="h-4 w-4" />
+        <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Bell className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">Activa los avisos en este ordenador</p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-base font-semibold">Activa los avisos en este ordenador</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
             Recibe los comunicados, mensajes y llamadas aunque tengas Balles en
             segundo plano o minimizado.
           </p>
