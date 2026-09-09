@@ -202,12 +202,21 @@ async function replicasComoRutas() {
       auth: { persistSession: false, autoRefreshToken: false },
     })
 
-    const { data: replicas } = await db
+    const { data: filas } = await db
       .from('paginas_web')
-      .select('id, empresa_id, slug_interno')
+      .select('id, empresa_id, slug_interno, bloques')
       .eq('estado', 'PUBLICADA')
       .not('html_replica', 'is', null)
-    if (!replicas?.length) return []
+
+    // Una página con BLOQUES ya está rehecha en el editor: manda el editor, no
+    // la copia. Así una web clonada se puede ir pasando a bloques página a
+    // página, y el HTML original se queda guardado por si hay que volver atrás
+    // —basta con vaciarle los bloques—. Sin esto habría que borrar
+    // `html_replica`, que es tirar el trabajo del clonado.
+    const replicas = (filas ?? []).filter(
+      (p) => !Array.isArray(p.bloques) || p.bloques.length === 0
+    )
+    if (!replicas.length) return []
 
     const { data: doms } = await db
       .from('paginas_web_dominios')
