@@ -237,3 +237,31 @@ origen, y el hueco de las 10:00 desaparecido de la lista. Datos de prueba borrad
 **Falta**: elegir desde el software qué cuenta de Google recibe cada calendario
 (hoy hay que ponerla a mano en `citas_calendarios`), y avisar por correo a quien
 reserva desde nuestro sistema (ahora el aviso lo manda Google al invitar).
+
+
+---
+
+## Cómo se ve el embudo (09-09-2026)
+
+**En la lista** (Marketing → Página web) los pasos ya NO salen sueltos: hay una
+**tarjeta por embudo**, con su nombre, cuánta gente entra, cuánta llega al final,
+el porcentaje que convierte y el recorrido dibujado en pequeño. Los pasos sueltos
+en una tabla ordenada por fecha era justo como un embudo no se entiende.
+
+**Al entrar**, los pasos van **en columna, de arriba abajo** (`/marketing/pagina-web/embudo/[id]`).
+Cada paso lleva su número, su nombre, su dirección, las **visitas totales**, las de
+los **últimos 30 días**, su estado y una **barra centrada** cuyo ancho es su gente:
+al bajar se estrecha, y ese estrechamiento es lo que se pierde. Entre paso y paso
+se dice **cuántos siguen y cuántos se caen**.
+
+Iván lo pidió primero horizontal y lo corrigió a vertical: un embudo se lee de
+arriba abajo.
+
+**De dónde salen los números**: `paginas_web_visitas`, que ya existía y guarda una
+fila por página, día y tipo de aparato — sumadas por paso. **Son visitas, no
+personas únicas**: el módulo no guarda identificador de quien visita, por decisión
+de privacidad ya tomada. Distinguir visitantes únicos exigiría tocar datos
+personales y es una decisión aparte.
+
+⚠️ Mientras el embudo se sirva desde GoHighLevel, todos los números salen a
+**cero**, y la pantalla lo dice en vez de fingir datos.
