@@ -135,6 +135,19 @@ function rellenar(
     .split("{{URL}}").join(datos.url);
 }
 
+/**
+ * Quita tildes y eñes. Solo para el SMS.
+ *
+ * El texto de la campaña se escribe ya sin ellas, pero el NOMBRE lo pone el
+ * cliente y "Lucía" no se puede evitar. Una sola vocal acentuada obliga a
+ * codificar el mensaje entero en UCS-2, que baja el tope de 160 caracteres a 70
+ * y parte el aviso en dos SMS cobrados aparte. En el correo y en WhatsApp el
+ * nombre va tal cual: ahí no cuesta nada.
+ */
+function sinTildes(texto: string): string {
+  return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ñ/g, "n").replace(/Ñ/g, "N");
+}
+
 /** El nombre de pila, que es como se felicita. "MARÍA JOSÉ PÉREZ" → "María José". */
 function nombreDePila(nombre: string): string {
   const limpio = (nombre ?? "").trim().split(/\s+/).slice(0, 2).join(" ");
@@ -442,7 +455,9 @@ async function procesarMomento(
               datos.url,
             ]
           : undefined,
-        textoSms: puedeSms ? rellenar((sms?.payload.cuerpo as string) ?? "", datos) : undefined,
+        textoSms: puedeSms
+          ? sinTildes(rellenar((sms?.payload.cuerpo as string) ?? "", datos))
+          : undefined,
         actor: { origen: "AUTOMATICO" },
       });
       if (r.ok) {
