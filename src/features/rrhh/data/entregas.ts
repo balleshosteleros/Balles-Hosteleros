@@ -33,7 +33,10 @@ export type EstadoDevolucion =
   | "devuelta"
   | "rechazada"
   | "merma_pendiente_firma"
-  | "merma";
+  | "merma"
+  // Se marcho y nunca la trajo. Es el unico desenlace SIN firma: ya no hay a
+  // quien pedirle que firme. Por eso exige motivo escrito.
+  | "no_devuelta";
 
 export const CATEGORIA_LABEL: Record<CategoriaMaterial, string> = {
   uniforme: "Uniforme",
@@ -61,6 +64,7 @@ export const DEVOLUCION_LABEL: Record<EstadoDevolucion, string> = {
   rechazada: "Devolución rechazada",
   merma_pendiente_firma: "Merma pendiente de firma",
   merma: "Merma",
+  no_devuelta: "No devuelta",
 };
 
 export const DEVOLUCION_COLOR: Record<EstadoDevolucion, string> = {
@@ -71,6 +75,8 @@ export const DEVOLUCION_COLOR: Record<EstadoDevolucion, string> = {
   merma_pendiente_firma: "bg-amber-50 text-amber-700 border-amber-200",
   // La merma no es un fallo ni un logro: es material dado de baja.
   merma: "bg-slate-100 text-slate-700 border-slate-300",
+  // Esta si es una perdida para la empresa: se marca en rojo.
+  no_devuelta: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
 /** Tallas de ropa. Las de calzado se escriben a mano (numero). */
@@ -123,6 +129,10 @@ export interface Entrega {
   mermaMotivo: string | null;
   /** Cuando firmo el trabajador la baja por deterioro. */
   mermaEn: string | null;
+  /** Por que no volvio la pieza. Solo cuando se marca como no devuelta. */
+  noDevueltaMotivo: string | null;
+  /** Cuando RRHH dio la pieza por perdida. */
+  noDevueltaEn: string | null;
 }
 
 /**
@@ -152,6 +162,9 @@ export function resumirMaterial(entregas: Entrega[]): ResumenMaterial[] {
     // Y lo que sigue teniendo: devuelto o dado de baja por deterioro, deja de serlo.
     if (entrega.devolucionEstado === "devuelta") continue;
     if (entrega.devolucionEstado === "merma") continue;
+    // La que no devolvio dejo de ser suya el dia que se marcho: no cuenta como
+    // material que tiene, cuenta como perdida de la empresa.
+    if (entrega.devolucionEstado === "no_devuelta") continue;
 
     const item = entrega.item;
     if (!item) continue;
@@ -208,7 +221,9 @@ export function sePuedeDarDeBajaPorMerma(entrega: Entrega): boolean {
     entrega.estado === "firmada" &&
     entrega.devolucionEstado !== "devuelta" &&
     entrega.devolucionEstado !== "merma" &&
-    entrega.devolucionEstado !== "merma_pendiente_firma"
+    entrega.devolucionEstado !== "merma_pendiente_firma" &&
+    // Lo que no volvio ya esta dado de baja: no se puede dar de baja dos veces.
+    entrega.devolucionEstado !== "no_devuelta"
   );
 }
 
@@ -224,7 +239,23 @@ export function pendientesDeDevolucion(entregas: Entrega[]): Entrega[] {
       Boolean(e.item?.requiereDevolucion) &&
       e.devolucionEstado !== "devuelta" &&
       // Lo dado de baja por deterioro ya no se le puede reclamar.
-      e.devolucionEstado !== "merma",
+      e.devolucionEstado !== "merma" &&
+      // Ni lo que ya se dio por perdido.
+      e.devolucionEstado !== "no_devuelta",
+  );
+}
+
+/**
+ * Se puede dar por perdida la pieza que el trabajador reconocio tener y no ha
+ * devuelto. Es la salida para cuando alguien se marcha con el uniforme puesto:
+ * la pieza deja de ser suya y la empresa se la apunta como perdida.
+ */
+export function sePuedeMarcarNoDevuelta(entrega: Entrega): boolean {
+  return (
+    entrega.estado === "firmada" &&
+    entrega.devolucionEstado !== "devuelta" &&
+    entrega.devolucionEstado !== "merma" &&
+    entrega.devolucionEstado !== "no_devuelta"
   );
 }
 

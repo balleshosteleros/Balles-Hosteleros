@@ -82,6 +82,8 @@ type FilaEntrega = {
   devuelta_en: string | null;
   merma_motivo: string | null;
   merma_en: string | null;
+  no_devuelta_motivo: string | null;
+  no_devuelta_en: string | null;
 };
 
 function mapItem(r: FilaItem): EntregaItem {
@@ -109,7 +111,7 @@ async function cargarEntregas(filtro: { empleadoId?: string } = {}): Promise<Ent
   let query = db
     .from("entregas_material")
     .select(
-      "id, empleado_id, fecha, nota, estado, firma_id, firmada_en, entregado_por_nombre, devolucion_estado, devolucion_firma_id, devuelta_en, merma_motivo, merma_en",
+      "id, empleado_id, fecha, nota, estado, firma_id, firmada_en, entregado_por_nombre, devolucion_estado, devolucion_firma_id, devuelta_en, merma_motivo, merma_en, no_devuelta_motivo, no_devuelta_en",
     )
     .eq("empresa_id", empresaId);
   if (filtro.empleadoId) query = query.eq("empleado_id", filtro.empleadoId);
@@ -166,6 +168,8 @@ async function cargarEntregas(filtro: { empleadoId?: string } = {}): Promise<Ent
     mermaEn: f.merma_en,
     devolucionFirmaId: f.devolucion_firma_id,
     devueltaEn: f.devuelta_en,
+    noDevueltaMotivo: f.no_devuelta_motivo,
+    noDevueltaEn: f.no_devuelta_en,
   }));
 }
 
