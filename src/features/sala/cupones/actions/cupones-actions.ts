@@ -105,21 +105,89 @@ function inputToRow(input: Partial<CuponInput>): Record<string, unknown> {
   return row;
 }
 
-export async function listCuponesAction(): Promise<{ ok: boolean; data: Cupon[]; error?: string }> {
+/**
+ * Los cupones de la pantalla de Sala.
+ *
+ * Por defecto SOLO los escritos a mano. Los que emite el software —uno por
+ * cumpleaños, miles al año— no se listan: enterrarían los de siempre y, como
+ * PostgREST corta en mil filas, a partir del cupón mil los de la casa
+ * desaparecerían de la pantalla sin que nadie entendiera por qué.
+ *
+ * De los automáticos hay dos formas de saber: el resumen (cuántos salieron y
+ * cuántos se usaron) y la búsqueda por código, que sí los encuentra —es lo que
+ * hace falta cuando un cliente llama diciendo que tiene un código y no sabe qué
+ * es—.
+ */
+export async function listCuponesAction(opts?: {
+  /** Texto de búsqueda. Con él se buscan TAMBIÉN los automáticos. */
+  buscar?: string;
+  /** true = listar los automáticos (los últimos), sin buscar nada. */
+  incluirAutomaticos?: boolean;
+}): Promise<{ ok: boolean; data: Cupon[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getCtx();
     if (!empresaId) return { ok: false, data: [], error: "No autenticado" };
-    const { data, error } = await supabase
+
+    const busqueda = (opts?.buscar ?? "").trim();
+    let q = supabase
       .from("reserva_codigos")
       .select("*")
       .eq("empresa_id", empresaId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (busqueda) {
+      // Buscando se mira TODO, automáticos incluidos: quien teclea un código lo
+      // que quiere es encontrarlo, venga de donde venga.
+      const escapado = busqueda.replace(/[%,()]/g, " ");
+      q = q.or(
+        `codigo.ilike.%${escapado}%,titulo_interno.ilike.%${escapado}%,titulo_cliente.ilike.%${escapado}%`,
+      );
+    } else if (!opts?.incluirAutomaticos) {
+      q = q.is("origen", null);
+    }
+
+    const { data, error } = await q;
     if (error) throw error;
     return { ok: true, data: (data ?? []).map(rowToCupon) };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[cupones] list:", msg);
     return { ok: false, data: [], error: msg };
+  }
+}
+
+/** Una línea del resumen de cupones automáticos. */
+export interface ResumenCuponesAutomaticos {
+  origen: string;
+  emitidos: number;
+  usados: number;
+  caducados: number;
+  vivos: number;
+}
+
+/**
+ * Cuántos cupones ha emitido el software solo y qué ha sido de ellos.
+ *
+ * Es la respuesta a "¿y quién lleva el control de todos esos cupones?": nadie
+ * los apunta porque nadie los escribe. Los crea el envío, se consumen al
+ * reservar, y aquí se ve el balance.
+ */
+export async function resumenCuponesAutomaticosAction(): Promise<{
+  ok: boolean;
+  data: ResumenCuponesAutomaticos[];
+}> {
+  try {
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, data: [] };
+    const { data, error } = await supabase.rpc("resumen_cupones_automaticos", {
+      p_empresa_id: empresaId,
+    });
+    if (error) throw error;
+    return { ok: true, data: (data ?? []) as ResumenCuponesAutomaticos[] };
+  } catch (err) {
+    console.error("[cupones] resumen:", err);
+    return { ok: false, data: [] };
   }
 }
 

@@ -29,6 +29,7 @@ import {
   cargarEmpresaMarca,
   dominioPropioDeEmpresa,
   enlaceReservaConPalabra,
+  urlConCampana,
   fotoDeLaCarta,
   urlBajaDeEmpresa,
   type Admin,
@@ -73,6 +74,14 @@ function urlWeb(dominio: string | null, slug: string): string {
 }
 
 /**
+ * Palabra de la campaña de cumpleaños: `…/reservar/email?c=cumpleanos`.
+ *
+ * El canal es EMAIL como el resto de correos; esto solo dice que la mesa la
+ * trajo el cumpleaños y no el correo del mes.
+ */
+export const PALABRA_CUMPLEANOS = "cumpleanos";
+
+/**
  * El correo del AVISO, con la marca de la empresa y los marcadores dentro.
  *
  * El código del cupón NO se resuelve aquí: se guarda como `{{CODIGO}}` y lo
@@ -98,11 +107,11 @@ export async function construirCorreoAviso(
     fotoUrl: foto?.url ?? null,
     fotoAlt: foto?.alt,
     ctaTexto: seed.aviso.ctaTexto,
-    ctaUrl: enlace.url,
+    ctaUrl: urlConCampana(enlace.url, PALABRA_CUMPLEANOS),
     cupon: {
       codigo: M.codigo,
       concepto: `${M.descuento}% de descuento en tu mesa`,
-      condiciones: `Un solo uso · y gratis para ti si sois ${M.mesa}`,
+      condiciones: `Un solo uso · ven con ${M.amigos} amigos y te invitamos`,
       caducidad: `Válido hasta el ${M.caducidad}`,
     },
     // El cumpleaños no lleva concurso: ya trae su propio regalo, y dos ganchos
@@ -244,6 +253,7 @@ export async function sembrarCampanaCumpleanosAEmpresa(
       canal: "email",
       nombre: seed.aviso.nombre,
       reserva_link_id: aviso.reservaLinkId,
+      palabra: PALABRA_CUMPLEANOS,
       segmento_json: segmentoDe(reglas.diasAntes),
       media_urls: aviso.fotoUrl ? [aviso.fotoUrl] : [],
       payload: p.email,

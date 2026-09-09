@@ -57,13 +57,25 @@ export interface CampanaCumpleanosSeed {
   claveFelicitacion: "CUMPLEANOS_FELICITACION";
   /** Días de antelación del aviso. */
   diasAntes: number;
-  /** Días que el cupón sigue valiendo DESPUÉS del cumpleaños. */
+  /**
+   * Días que el cupón sigue valiendo DESPUÉS del cumpleaños.
+   *
+   * Diez, y el correo enseña la fecha límite pero NO dice de dónde sale: el
+   * aviso nunca nombra el cumpleaños, así que tampoco puede decir "tu cumple más
+   * diez". Se ve una fecha y punto.
+   */
   diasValidezDespues: number;
   /** Descuento que lleva el cupón, en porcentaje. */
   descuentoPorcentaje: number;
   /**
    * Amigos que hay que traer para que la casa invite al cumpleañero. La mesa
    * son estos MÁS la persona que cumple.
+   *
+   * Diez amigos, mesa de once, y ahí está toda la gracia de la mecánica: una
+   * parte de once es el 9% de la cuenta, así que el 10% que lleva el cupón
+   * cubre justo lo suyo —y sobra un poco—. No son dos ofertas, es una contada
+   * de dos maneras: el porcentaje para quien viene en pareja, y "tú no pagas"
+   * para quien llena la mesa, que es la que se entiende sin pensar.
    */
   amigosParaGratis: number;
   /**
@@ -113,8 +125,9 @@ export const CAMPANA_CUMPLEANOS_SEED: CampanaCumpleanosSeed = {
   clave: "CUMPLEANOS",
   claveFelicitacion: "CUMPLEANOS_FELICITACION",
   diasAntes: 10,
-  diasValidezDespues: 7,
+  diasValidezDespues: 10,
   descuentoPorcentaje: 10,
+  // Diez amigos + quien cumple = once a la mesa, y ella no paga.
   amigosParaGratis: 10,
   palabraClave: "EMAIL",
 
@@ -124,7 +137,7 @@ export const CAMPANA_CUMPLEANOS_SEED: CampanaCumpleanosSeed = {
     // El asunto no dice "cumpleaños": si lo dijera, se lee entero en la bandeja
     // y ya no hay nada que abrir.
     asunto: "Nos hemos acordado de una fecha",
-    preheader: "Tienes un 10% esperándote. Y algo más si vienes bien acompañado.",
+    preheader: "Un 10% para tu mesa. Y si venís once, ese 10% eres tú.",
     badge: "Falta poco",
     titular: "Hay una fecha tuya marcada en nuestro calendario",
     subtitulo: "Y no pensamos dejarla pasar",
@@ -132,7 +145,7 @@ export const CAMPANA_CUMPLEANOS_SEED: CampanaCumpleanosSeed = {
       "No hace falta que nos digas cuál es, {{NOMBRE}}: ya la tenemos apuntada. Queda poco, y cuando llegue nos gustaría que la celebrases aquí.",
     cuerpo: [
       "Hasta entonces te guardamos un {{DESCUENTO}}% en tu mesa. Es tuyo, lleva tu nombre y solo se puede usar una vez.",
-      "(Y si apareces con {{AMIGOS}} amigos, lo tuyo no lo pagas: a partir de {{MESA}} en la mesa, invita la casa.)",
+      "(Y ahí está la gracia: ven con {{AMIGOS}} amigos y sois {{MESA}} a la mesa, así que ese {{DESCUENTO}}% es justo lo que cuesta tu parte. O sea que tú no pagas: te invitamos.)",
     ],
     ctaTexto: "Reservar mi mesa",
     fotoPistas: ["tarta", "postre", "chuletón", "chuleton", "solomillo", "arroz"],
@@ -163,7 +176,7 @@ export const CAMPANA_CUMPLEANOS_SEED: CampanaCumpleanosSeed = {
     // acentuada obliga a codificar el mensaje entero en UCS-2, que baja el tope
     // de 160 a 70 caracteres y parte el aviso en dos SMS cobrados aparte.
     cuerpo:
-      "{{NOMBRE}}, tenemos una fecha tuya apuntada. Un {{DESCUENTO}}% para tu mesa en {{EMPRESA}}: codigo {{CODIGO}}, hasta el {{CADUCIDAD}}. Si sois {{MESA}}, lo tuyo gratis. {{URL}}",
+      "{{NOMBRE}}, tenemos una fecha tuya apuntada. Un {{DESCUENTO}}% para tu mesa en {{EMPRESA}}: codigo {{CODIGO}}, hasta el {{CADUCIDAD}}. Ven con {{AMIGOS}} amigos y ese {{DESCUENTO}}% es tu parte: te invitamos. {{URL}}",
   },
 
   whatsapp: {
@@ -171,6 +184,6 @@ export const CAMPANA_CUMPLEANOS_SEED: CampanaCumpleanosSeed = {
     plantilla: "cumpleanos_invitacion",
     idioma: "es",
     cuerpo:
-      "{{NOMBRE}}, tenemos una fecha tuya apuntada y queda poco. En {{EMPRESA}} te guardamos un {{DESCUENTO}}% para tu mesa: tu código es {{CODIGO}} y vale hasta el {{CADUCIDAD}}. (Y si venís {{MESA}}, lo tuyo lo invita la casa.) Reserva aquí: {{URL}}",
+      "{{NOMBRE}}, tenemos una fecha tuya apuntada y queda poco. En {{EMPRESA}} te guardamos un {{DESCUENTO}}% para tu mesa: tu código es {{CODIGO}} y vale hasta el {{CADUCIDAD}}. Y si vienes con {{AMIGOS}} amigos, sois {{MESA}} y ese {{DESCUENTO}}% es justo tu parte: te invitamos. Reserva aquí: {{URL}}",
   },
 };

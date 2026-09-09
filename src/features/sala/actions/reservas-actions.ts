@@ -591,6 +591,12 @@ export async function createReserva(input: {
       } | undefined;
       if (!vRow?.ok) {
         const motivo = vRow?.motivo ?? "NO_EXISTE";
+        if (motivo === "YA_USADO") {
+          return { ok: false, error: "Este código ya se ha usado." };
+        }
+        if (motivo === "CADUCADO") {
+          return { ok: false, error: "Este código ha caducado." };
+        }
         if (motivo === "MINIMO_PERSONAS") {
           return {
             ok: false,
@@ -605,8 +611,8 @@ export async function createReserva(input: {
       });
       if (cErr) {
         const msg = cErr.message ?? "";
-        if (msg.includes("AGOTADO")) return { ok: false, error: "Cupón agotado." };
-        if (msg.includes("INACTIVO")) return { ok: false, error: "Cupón inactivo." };
+        if (msg.includes("AGOTADO")) return { ok: false, error: "Este código ya se ha usado." };
+        if (msg.includes("INACTIVO")) return { ok: false, error: "Este código ya no está activo." };
         console.error("[reservas] consumir_stock_cupon:", cErr);
         return { ok: false, error: "No se pudo aplicar el cupón." };
       }

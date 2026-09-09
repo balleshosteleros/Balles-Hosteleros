@@ -185,3 +185,54 @@ $fn$;
 
 revoke execute on function public.clientes_sala_cumpleanos(uuid, date) from public, anon, authenticated;
 grant  execute on function public.clientes_sala_cumpleanos(uuid, date) to service_role;
+
+------------------------------------------------------------------
+-- (09-09-2026) "Agotado" no es lo que le pasa a un cupón personal.
+------------------------------------------------------------------
+--
+-- Un cupón de cumpleaños se emite con un solo uso y va a nombre de una persona.
+-- Cuando esa persona lo gasta y vuelve a intentarlo, el sistema le decía
+-- "AGOTADO", que es la palabra de un cupón promocional sin existencias: se
+-- entiende "llegué tarde, se acabaron" cuando lo que pasa es "ya lo usaste tú".
+-- Se distinguen por el stock con el que nació: uno solo es personal.
+--
+-- El uso se comprueba ANTES que el día, el turno y el mínimo: a quien ya gastó
+-- su cupón hay que decírselo, no mandarle a probar otro día con un código que
+-- no va a funcionar nunca más.
+--
+-- La versión vigente de `validar_cupon` está aplicada con esos dos cambios; se
+-- deja anotado aquí porque la función se define más arriba en este mismo
+-- archivo y reescribirla dos veces confundiría más que aclarar.
+
+------------------------------------------------------------------
+-- Resumen de los cupones que emite el software solo.
+------------------------------------------------------------------
+--
+-- La pantalla de cupones no puede listarlos —serán miles al año, y PostgREST
+-- corta en mil filas: los cupones escritos a mano quedarían enterrados— pero sí
+-- tiene que poder decir cuántos salieron y cuántos se usaron.
+create or replace function public.resumen_cupones_automaticos(p_empresa_id uuid)
+returns table (origen text, emitidos int, usados int, caducados int, vivos int)
+language sql stable set search_path = public, pg_temp
+as $fn$
+  select c.origen,
+         count(*)::int as emitidos,
+         count(*) filter (where c.stock_consumido >= c.stock_total)::int as usados,
+         count(*) filter (
+           where c.stock_consumido < c.stock_total
+             and c.fecha_caducidad is not null
+             and c.fecha_caducidad < current_date
+         )::int as caducados,
+         count(*) filter (
+           where c.stock_consumido < c.stock_total
+             and (c.fecha_caducidad is null or c.fecha_caducidad >= current_date)
+             and c.activo
+         )::int as vivos
+    from public.reserva_codigos c
+   where c.empresa_id = p_empresa_id
+     and c.origen is not null
+   group by c.origen
+   order by c.origen;
+$fn$;
+
+grant execute on function public.resumen_cupones_automaticos(uuid) to authenticated, service_role;

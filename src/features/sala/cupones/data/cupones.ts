@@ -66,15 +66,18 @@ export type CuponMotivoInvalidez =
   | "AGOTADO"
   | "DIA_NO_PERMITIDO"
   | "TURNO_NO_PERMITIDO"
-  | "MINIMO_PERSONAS";
+  | "MINIMO_PERSONAS"
+  /** Personal y de un solo uso: ya lo gastó quien lo tenía. */
+  | "YA_USADO";
 
 export const CUPON_MOTIVO_LABELS: Record<CuponMotivoInvalidez, string> = {
-  NO_EXISTE: "No existe ningún cupón con ese código",
-  INACTIVO: "Cupón inactivo",
-  CADUCADO: "Cupón caducado",
-  AGOTADO: "Cupón agotado",
-  DIA_NO_PERMITIDO: "Cupón no válido este día de la semana",
-  TURNO_NO_PERMITIDO: "Cupón no válido para este turno",
+  NO_EXISTE: "No existe ningún código así",
+  INACTIVO: "Este código ya no está activo",
+  CADUCADO: "Este código ha caducado",
+  YA_USADO: "Este código ya se ha usado",
+  AGOTADO: "Este código ya no tiene usos disponibles",
+  DIA_NO_PERMITIDO: "Este código no vale para ese día de la semana",
+  TURNO_NO_PERMITIDO: "Este código no vale para ese turno",
   MINIMO_PERSONAS: "Sois menos de los que pide el cupón",
 };
 

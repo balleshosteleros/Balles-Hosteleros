@@ -52,6 +52,11 @@ const MINUTOS_PARA_PAGAR = 15;
 const inputSchema = z.object({
   empresaSlug: z.string().min(1).max(120),
   origen: z.string().regex(/^[A-Z0-9_]+$/).max(32).nullable().optional(),
+  // Campaña que trajo al cliente (`?c=enero`). El canal lo dice `origen`
+  // (EMAIL); esto distingue qué correo de los quince trajo la mesa. Si llega
+  // algo raro o de otra empresa, la reserva entra sin campaña y ya está: es un
+  // dato de analítica, nunca un motivo para no dejar reservar.
+  campana: z.string().regex(/^[a-z0-9]{1,24}$/).nullable().optional(),
   // Nombre y apellidos son siempre obligatorios. El teléfono y el email se
   // exigen o no según la configuración de cada empresa, así que aquí solo se
   // valida el formato; la obligatoriedad se comprueba abajo, con la config.
@@ -256,12 +261,13 @@ export async function crearReservaPublicaAction(
     if (!row?.ok) {
       const motivo = row?.motivo ?? "NO_EXISTE";
       const labelMap: Record<string, string> = {
-        NO_EXISTE: "Cupón no válido.",
-        INACTIVO: "Cupón inactivo.",
-        CADUCADO: "Cupón caducado.",
-        AGOTADO: "Cupón agotado.",
-        DIA_NO_PERMITIDO: "El cupón no es válido este día.",
-        TURNO_NO_PERMITIDO: "El cupón no es válido para este turno.",
+        NO_EXISTE: "No existe ningún código así.",
+        INACTIVO: "Este código ya no está activo.",
+        CADUCADO: "Este código ha caducado.",
+        YA_USADO: "Este código ya se ha usado.",
+        AGOTADO: "Este código ya no tiene usos disponibles.",
+        DIA_NO_PERMITIDO: "Este código no vale para ese día.",
+        TURNO_NO_PERMITIDO: "Este código no vale para ese turno.",
         MINIMO_PERSONAS: row?.minimo_personas
           ? `Este cupón necesita mesa de ${row.minimo_personas} personas o más.`
           : "Sois menos de los que pide el cupón.",
@@ -333,6 +339,21 @@ export async function crearReservaPublicaAction(
     linkRequiereTicket = Boolean(linkRow?.vende_tickets);
   }
   const ticketObligatorio = data.ticketOnly || linkRequiereTicket;
+
+  // ── De qué campaña viene la mesa ────────────────────────────────────────
+  //
+  // La palabra se resuelve SIEMPRE contra las campañas de esta empresa: la URL
+  // es pública y la palabra de otro local no puede sumarle mesas al nuestro.
+  let campanaId: string | null = null;
+  if (data.campana) {
+    const { data: campanaRow } = await admin
+      .from("campanas_marketing")
+      .select("id")
+      .eq("empresa_id", empresa.id)
+      .eq("palabra", data.campana)
+      .maybeSingle();
+    campanaId = (campanaRow?.id as string | undefined) ?? null;
+  }
 
   // ── Canje de un código comprado antes ──────────────────────────
   //
@@ -718,6 +739,7 @@ export async function crearReservaPublicaAction(
     // Con `null` el listado la daba por "Manual", que es justo lo contrario:
     // parecía que la había metido alguien del restaurante a mano.
     origen: data.origen ?? "RESERVA_WEB",
+    campana_id: campanaId,
     estado: "CONFIRMADA",
     turno,
     codigo_id: codigoId,

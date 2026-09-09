@@ -188,7 +188,7 @@ async function crearCuponCumpleanos(
       // El título es lo que ve el camarero: tiene que decir de quién es y qué
       // hay que aplicar sin abrir nada ni preguntar a nadie.
       titulo_interno:
-        `Cumpleaños · ${nombre} · ${args.reglas.descuentoPorcentaje}% (gratis si son ${args.reglas.mesaParaGratis}) · ${anio}`.slice(0, 120),
+        `Cumpleaños · ${nombre} · ${args.reglas.descuentoPorcentaje}% (si son ${args.reglas.mesaParaGratis}, invita la casa) · ${anio}`.slice(0, 120),
       titulo_cliente: `${args.reglas.descuentoPorcentaje}% por tu cumpleaños`,
       beneficio_tipo: "porcentaje",
       beneficio_valor: args.reglas.descuentoPorcentaje,
