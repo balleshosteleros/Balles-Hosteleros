@@ -47,6 +47,8 @@ export interface PrevisionElaboracion {
   /** cantidadProducida / rinde: cuántas veces se hace la receta. */
   factor: number;
   consumo: LineaConsumo[];
+  /** Ingredientes de la receta con la cantidad sin rellenar: se enseñan, no se consumen. */
+  sinCantidad: string[];
 }
 
 /** Lee la elaboración, su receta y calcula qué se consumiría. No escribe nada. */
@@ -55,6 +57,7 @@ async function calcular(admin: AdminClient, elabId: string): Promise<
 > {
   const vacio = (error: string): PrevisionElaboracion => ({
     ok: false, error, producto: null, cantidadProducida: 0, rinde: 1, factor: 0, consumo: [],
+    sinCantidad: [],
   });
 
   const { data: elab } = await admin
@@ -120,18 +123,32 @@ async function calcular(admin: AdminClient, elabId: string): Promise<
   }
 
   const consumo: LineaConsumo[] = [];
+  const sinCantidad: string[] = [];
   for (const c of comp) {
     const info = infoById.get(c.ingrediente_id as string);
     const merma = Number(c.merma_pct ?? 0);
     // Misma fórmula que el descuento por ventas: receta × (1+merma) ÷ factor_conversion.
     const cantidad = (factor * Number(c.cantidad ?? 0) * (1 + merma / 100)) / (info?.factorConv ?? 1);
-    if (!(cantidad > 0)) continue;
+    if (!(cantidad > 0)) {
+      sinCantidad.push(info?.nombre ?? "—");
+      continue;
+    }
     consumo.push({
       productoId: c.ingrediente_id as string,
       nombre: info?.nombre ?? "—",
       cantidad,
       medida: info?.medida ?? null,
     });
+  }
+
+  // Una receta con TODAS las cantidades en blanco es, a efectos de almacén, lo mismo que
+  // no tener receta: no se descontaría nada y el elaborado entraría de la nada con coste
+  // cero. Es exactamente el fallo que arrastraba el módulo viejo, así que se bloquea igual.
+  // (En Bacanal, 8 de las 12 elaboraciones cargadas están así: ingredientes sí, cantidades no.)
+  if (consumo.length === 0) {
+    return vacio(
+      `La receta de "${prod.nombre}" tiene los ingredientes puestos pero ninguna cantidad: ${sinCantidad.join(", ")}. Hasta que alguien diga cuánto lleva de cada uno no se puede confirmar, porque no se descontaría nada del almacén.`,
+    );
   }
 
   return {
@@ -141,6 +158,7 @@ async function calcular(admin: AdminClient, elabId: string): Promise<
     rinde,
     factor,
     consumo,
+    sinCantidad,
     elab: elab as Record<string, unknown>,
   };
 }

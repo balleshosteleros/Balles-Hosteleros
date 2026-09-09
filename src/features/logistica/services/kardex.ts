@@ -3,13 +3,31 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signoDeTipo, type DocumentoTipo, type TipoMovimiento } from "@/features/logistica/data/kardex";
 import { getCosteEnFecha } from "@/features/logistica/services/coste-producto";
+import {
+  AlmacenCerradoError,
+  assertAlmacenAbierto,
+  esErrorAlmacenCerrado,
+  getCierreVigente,
+} from "@/features/logistica/services/cierre-almacen";
 
 /**
- * Servicio del kardex de stock (PRP-057).
+ * Servicio del kardex de stock (PRP-057, revisado en PRP-080 Fase 2).
  *
  * Fuente de verdad del histórico = tabla `stock_movimientos`. `stock.cantidad_actual`
- * se mantiene como saldo materializado (rápido para listados) y se actualiza en cada
- * movimiento. `saldo_resultante` se guarda como foto del saldo tras aplicar el movimiento.
+ * es el saldo materializado (rápido para listados).
+ *
+ * QUIÉN CALCULA EL SALDO: **la base de datos**, no este archivo. Al insertar, borrar o
+ * cambiar un movimiento, un trigger reencadena todos los saldos de ese producto en
+ * orden real y deja `stock.cantidad_actual` cuadrado. Antes se hacía aquí, sumando al
+ * saldo vivo, y por eso un movimiento con fecha atrasada (un albarán de la semana
+ * pasada, las ventas de Ágora que llegan al día siguiente) quedaba con el saldo de HOY
+ * metido en medio del histórico de entonces.
+ *
+ * ANCLAS: un inventario o un ajuste no suman ni restan, **dicen cuánto hay**. Se pasan
+ * con `saldoFijado` y el recálculo deduce solo la cantidad y el signo.
+ *
+ * CIERRE DE ALMACÉN: un trigger rechaza cualquier escritura anterior al corte vigente.
+ * Aquí se comprueba antes para poder avisar en condiciones (ver `cierre-almacen.ts`).
  *
  * Pensado para llamarse desde acciones server / crons con el cliente service role
  * (la escritura de stock_movimientos no tiene policy para usuarios).
@@ -50,6 +68,14 @@ export interface RegistrarMovimientoInput {
    * línea viene en cajas de 12, el coste unitario es el de LA UNIDAD, no el de la caja.
    */
   costeUnitario?: number | null;
+  /**
+   * ANCLA: este movimiento no suma ni resta, **fija** el saldo del producto a este
+   * valor. Es lo que son de verdad un inventario ("el día X había 12") y un ajuste
+   * ("déjalo en 12"). El recálculo deduce solo la cantidad y el signo de la resta con
+   * el saldo anterior, así que si luego aparece un albarán con fecha anterior, el
+   * recuento sigue mandando en vez de descuadrarse.
+   */
+  saldoFijado?: number | null;
 }
 
 export interface MovimientoResultado {
@@ -59,6 +85,10 @@ export interface MovimientoResultado {
   omitido?: boolean; // true si el producto no controla stock (no se registró nada)
   /** true si `impedirNegativo` frenó el movimiento: no se registró nada. */
   rechazado?: boolean;
+  /** true si el almacén está cerrado a esa fecha: no se registró nada. */
+  rechazadoPorCierre?: boolean;
+  /** Motivo del rechazo, listo para enseñar. */
+  mensaje?: string;
 }
 
 /** Lee el saldo actual del producto (0 si no tiene fila de stock todavía). */
@@ -66,48 +96,14 @@ async function leerSaldo(
   admin: AdminClient,
   empresaId: string,
   productoId: string,
-): Promise<{ saldo: number; existeFila: boolean }> {
+): Promise<{ saldo: number }> {
   const { data } = await admin
     .from("stock")
     .select("cantidad_actual")
     .eq("empresa_id", empresaId)
     .eq("producto_id", productoId)
     .maybeSingle();
-  if (!data) return { saldo: 0, existeFila: false };
-  return { saldo: Number(data.cantidad_actual ?? 0), existeFila: true };
-}
-
-/** Crea o actualiza la fila de stock con el nuevo saldo. */
-async function aplicarSaldo(
-  admin: AdminClient,
-  empresaId: string,
-  productoId: string,
-  nuevoSaldo: number,
-  existeFila: boolean,
-  fechaISO: string,
-): Promise<void> {
-  if (existeFila) {
-    await admin
-      .from("stock")
-      .update({ cantidad_actual: nuevoSaldo, ultimo_movimiento: fechaISO })
-      .eq("empresa_id", empresaId)
-      .eq("producto_id", productoId);
-    return;
-  }
-  // No había fila de stock: la creamos copiando nombre/unidad del producto.
-  const { data: prod } = await admin
-    .from("productos")
-    .select("nombre, unidad:medida")
-    .eq("id", productoId)
-    .maybeSingle();
-  await admin.from("stock").insert({
-    empresa_id: empresaId,
-    producto_id: productoId,
-    producto_nombre: prod?.nombre ?? null,
-    cantidad_actual: nuevoSaldo,
-    unidad: prod?.unidad ?? null,
-    ultimo_movimiento: fechaISO,
-  });
+  return { saldo: data ? Number(data.cantidad_actual ?? 0) : 0 };
 }
 
 /**
@@ -154,8 +150,33 @@ export async function registrarMovimiento(
     }
   }
 
-  const { saldo: saldoAnterior, existeFila } = await leerSaldo(admin, input.empresaId, input.productoId);
-  const saldoResultante = saldoAnterior + signo * cantidad;
+  // Almacén cerrado: se comprueba ANTES de escribir nada. El trigger lo impediría
+  // igualmente, pero así el aviso llega con un mensaje decente y los procesos de
+  // varias filas (un inventario, una elaboración) no se quedan a medias.
+  const corte = await getCierreVigente(admin, input.empresaId);
+  if (corte && new Date(fechaISO).getTime() < new Date(corte).getTime()) {
+    const { saldo } = await leerSaldo(admin, input.empresaId, input.productoId);
+    let mensaje = "El almacén está cerrado a esa fecha.";
+    try {
+      await assertAlmacenAbierto(admin, input.empresaId, fechaISO);
+    } catch (err) {
+      if (err instanceof AlmacenCerradoError) mensaje = err.message;
+    }
+    return {
+      saldoAnterior: saldo,
+      saldoResultante: saldo,
+      duplicado: false,
+      rechazadoPorCierre: true,
+      mensaje,
+    };
+  }
+
+  const { saldo: saldoAnterior } = await leerSaldo(admin, input.empresaId, input.productoId);
+  // Un ancla DICE el saldo; un movimiento normal lo mueve. (Ojo: el saldo definitivo
+  // lo pone el recálculo al encadenar el histórico; esto es solo lo que se ve desde
+  // aquí, que coincide salvo que el movimiento venga con fecha atrasada.)
+  const esAncla = input.saldoFijado != null;
+  const saldoResultante = esAncla ? Number(input.saldoFijado) : saldoAnterior + signo * cantidad;
 
   // Freno para las salidas apuntadas a mano: no se puede sacar del almacén más
   // de lo que hay. Sin esto, mermar 5 de algo que tiene 2,4 dejaba el saldo en
@@ -174,7 +195,7 @@ export async function registrarMovimiento(
   }
   const valorTotal = costeUnitario == null ? null : costeUnitario * cantidad;
 
-  await admin.from("stock_movimientos").insert({
+  const { error: errIns } = await admin.from("stock_movimientos").insert({
     empresa_id: input.empresaId,
     producto_id: input.productoId,
     fecha: fechaISO,
@@ -182,6 +203,7 @@ export async function registrarMovimiento(
     cantidad,
     signo,
     saldo_resultante: saldoResultante,
+    saldo_fijado: input.saldoFijado ?? null,
     coste_unitario: costeUnitario,
     valor_total: valorTotal,
     referencia: input.referencia ?? null,
@@ -191,16 +213,38 @@ export async function registrarMovimiento(
     motivo: input.motivo ?? null,
     created_by: input.createdBy ?? null,
   });
+  if (errIns) {
+    if (esErrorAlmacenCerrado(errIns)) {
+      return {
+        saldoAnterior,
+        saldoResultante: saldoAnterior,
+        duplicado: false,
+        rechazadoPorCierre: true,
+        mensaje: (errIns as { message?: string }).message ?? "El almacén está cerrado a esa fecha.",
+      };
+    }
+    throw errIns;
+  }
 
-  await aplicarSaldo(admin, input.empresaId, input.productoId, saldoResultante, existeFila, fechaISO);
+  // El saldo definitivo lo ha dejado el recálculo (trigger). Se relee en vez de
+  // devolver el que calculamos aquí: si el movimiento venía con fecha atrasada, o si
+  // había un ancla por medio, el bueno es el de la base de datos.
+  const { saldo: saldoFinal } = await leerSaldo(admin, input.empresaId, input.productoId);
 
-  return { saldoAnterior, saldoResultante, duplicado: false };
+  return { saldoAnterior, saldoResultante: saldoFinal, duplicado: false };
 }
 
 /**
- * Revierte TODOS los movimientos de un documento (p. ej. al reprocesar un día de
- * ventas o anular una recepción): devuelve el efecto al stock y borra los movimientos.
- * Tras esto se puede volver a registrar sin duplicar.
+ * Borra TODOS los movimientos de un documento (p. ej. al reprocesar un día de ventas
+ * o anular una recepción). Tras esto se puede volver a registrar sin duplicar.
+ *
+ * Ya no toca `stock` a mano: el recálculo repara los saldos al borrar. Antes actualizaba
+ * el stock fila a fila y borraba después, así que si el borrado fallaba a mitad —lo que
+ * ahora pasa cuando el período está cerrado— dejaba las existencias movidas sin haber
+ * borrado nada.
+ *
+ * Si alguno de los movimientos cae en período cerrado, **no borra ninguno** y lanza
+ * `AlmacenCerradoError`: deshacer medio documento sería peor que no deshacerlo.
  */
 export async function revertirMovimientosPorDocumento(
   args: { empresaId: string; documentoTipo: DocumentoTipo; documentoId: string },
@@ -209,27 +253,33 @@ export async function revertirMovimientosPorDocumento(
   const admin = client ?? createAdminClient();
   const { data: movs } = await admin
     .from("stock_movimientos")
-    .select("id, producto_id, cantidad, signo")
+    .select("id, fecha")
     .eq("empresa_id", args.empresaId)
     .eq("documento_tipo", args.documentoTipo)
     .eq("documento_id", args.documentoId);
 
   if (!movs || movs.length === 0) return { revertidos: 0 };
 
-  const fechaISO = new Date().toISOString();
-  for (const m of movs as { id: string; producto_id: string; cantidad: number; signo: number }[]) {
-    const { saldo, existeFila } = await leerSaldo(admin, args.empresaId, m.producto_id);
-    // Deshacer el efecto: restar lo que en su día se aplicó (signo * cantidad).
-    const nuevoSaldo = saldo - m.signo * Number(m.cantidad);
-    await aplicarSaldo(admin, args.empresaId, m.producto_id, nuevoSaldo, existeFila, fechaISO);
-  }
+  // El más antiguo manda: si ese está cerrado, el documento entero es intocable.
+  const masAntigua = (movs as { fecha: string }[])
+    .map((m) => m.fecha)
+    .sort()[0];
+  await assertAlmacenAbierto(admin, args.empresaId, masAntigua);
 
-  await admin
+  const { error } = await admin
     .from("stock_movimientos")
     .delete()
     .eq("empresa_id", args.empresaId)
     .eq("documento_tipo", args.documentoTipo)
     .eq("documento_id", args.documentoId);
+  if (error) {
+    if (esErrorAlmacenCerrado(error)) {
+      throw new AlmacenCerradoError(
+        (error as { message?: string }).message ?? "El almacén está cerrado a esa fecha.",
+      );
+    }
+    throw error;
+  }
 
   return { revertidos: movs.length };
 }

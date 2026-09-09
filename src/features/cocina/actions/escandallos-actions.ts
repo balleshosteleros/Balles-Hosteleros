@@ -1,7 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
-import { unidadAlGuardar } from "@/features/cocina/lib/normalizar-unidad";
+import { unidadAlGuardar, factorAMedida } from "@/features/cocina/lib/normalizar-unidad";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
 // ─── Tipos compartidos con la UI ───────────────────────────────────
@@ -162,6 +162,15 @@ async function replaceIngredientes(
 // Solo se incluyen ingredientes vinculados a un producto (ing.productoId).
 // Los duplicados por ingrediente se agregan (suma de cantidad) para respetar el
 // unique (producto_venta_id, ingrediente_id).
+//
+// LA CANTIDAD SE CONVIERTE A LA MEDIDA DEL PRODUCTO. `producto_composicion` no tiene
+// columna de unidad: su `cantidad` se lee siempre en la `medida` del ingrediente
+// (`coste_escandallo()` la multiplica por el precio por kilo y la divide por
+// `factor_conversion`, que hoy vale 1 en los 1.150 productos). Copiarla en crudo desde
+// una línea escrita en gramos metía el valor mil veces mayor — así se descuadró la
+// tabla en agosto y así costaba "500 kg de costilla" un plato. Si la unidad de la línea
+// no es convertible a la del producto (gramos contra unidades), la línea NO se escribe:
+// más vale que falte a que descuente un disparate. Queda marcada en el escandallo.
 async function syncProductoComposicion(
   supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
   productoId: string,
@@ -173,17 +182,29 @@ async function syncProductoComposicion(
     .eq("producto_venta_id", productoId);
   if (delErr) throw delErr;
 
+  const idsIng = [...new Set(ingredientes.map((i) => i.productoId).filter(Boolean) as string[])];
+  const medidaIng = new Map<string, string | null>();
+  if (idsIng.length > 0) {
+    const { data: prods } = await supabase.from("productos").select("id, medida").in("id", idsIng);
+    for (const p of prods ?? []) medidaIng.set(p.id as string, (p.medida as string) ?? null);
+  }
+
   const byIng = new Map<string, { producto_venta_id: string; ingrediente_id: string; cantidad: number; merma_pct: number }>();
   for (const ing of ingredientes) {
     if (!ing.productoId) continue;
+    const medida = medidaIng.get(ing.productoId) ?? null;
+    // Sin medida conocida se asume que ya viene en la del producto (nada que convertir).
+    const factor = medida ? factorAMedida(ing.unidad, medida) : 1;
+    if (factor == null) continue; // incompatible: la resuelve una persona, no un factor
+    const cantidad = ing.cantidad * factor;
     const prev = byIng.get(ing.productoId);
     if (prev) {
-      prev.cantidad += ing.cantidad;
+      prev.cantidad += cantidad;
     } else {
       byIng.set(ing.productoId, {
         producto_venta_id: productoId,
         ingrediente_id: ing.productoId,
-        cantidad: ing.cantidad,
+        cantidad,
         merma_pct: ing.mermaPct ?? 0,
       });
     }

@@ -4,7 +4,8 @@ import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { registrarMovimiento, revertirMovimientosPorDocumento } from "@/features/logistica/services/kardex";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
-import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { hoyEnZona, zonaLocalAUtcISO, ZONA_HORARIA_FALLBACK } from "@/features/empresa/lib/zona-horaria";
+import { comprobarAlmacenAbierto } from "@/features/logistica/services/cierre-almacen";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
 async function getContext() {
@@ -120,11 +121,18 @@ export async function updateInventarioEstado(id: string, estado: string, usuario
 }
 
 /**
- * Al CONFIRMAR un inventario (PRP-058): por cada línea con producto_id, ajusta el
- * stock a la cantidad contada (cantidad_real) y registra un movimiento 'inventario'
- * en el kardex. Si la diferencia es 0, registra igualmente un movimiento con cantidad 0
- * ("el inventario no movió nada"). Idempotente: revierte los movimientos previos de
- * este inventario antes de rehacer. Las líneas sin producto_id se omiten.
+ * Al CONFIRMAR un inventario (PRP-058, revisado en PRP-080 F2): por cada línea con
+ * producto_id, apunta en el kardex **un ancla**: "en este producto había N".
+ *
+ * Antes se guardaba la diferencia contra el saldo del momento, y eso se rompía en
+ * cuanto aparecía un movimiento con fecha anterior (un albarán que llega tarde, las
+ * ventas de Ágora del día siguiente): la diferencia dejaba de valer y todo lo posterior
+ * al recuento se descuadraba. Ahora la fila DICE el saldo y el recálculo deduce solo
+ * la corrección que hizo falta.
+ *
+ * Si la diferencia es 0 se apunta igualmente ("el inventario no movió nada").
+ * Idempotente: revierte los movimientos previos de este inventario antes de rehacer.
+ * Las líneas sin producto_id se omiten.
  */
 export async function confirmarInventarioKardex(
   inventarioId: string,
@@ -135,17 +143,24 @@ export async function confirmarInventarioKardex(
 
     const { data: inv } = await admin
       .from("inventarios")
-      .select("empresa_id, nombre, fecha")
+      .select("empresa_id, nombre, fecha, contado_at")
       .eq("id", inventarioId)
       .maybeSingle();
     if (!inv) return { ok: false, error: "Inventario no encontrado" };
     const empresaId = String(inv.empresa_id); // inventarios.empresa_id es TEXT; stock_movimientos espera UUID
     const referencia = (inv.nombre as string) ?? "Inventario";
-    // PRP-069: el movimiento se fecha en el DÍA del documento (mediodía UTC para
-    // evitar saltos de día), no en el instante UTC de confirmación. Así un
-    // inventario de ayer no se mueve con timestamp de hoy.
-    const fechaDoc = (inv.fecha as string | null) ?? null;
-    const fechaMovimiento = fechaDoc ? `${fechaDoc}T12:00:00Z` : undefined;
+
+    // Hora del recuento. PRP-069 fechaba los movimientos al mediodía UTC del día del
+    // documento, pero las ventas de Ágora llegan estampadas a esa MISMA hora: el ancla
+    // y las ventas del día empataban y el orden lo decidía el azar. Un recuento va
+    // después de lo que se vendió ese día (estaba contado en la estantería), así que se
+    // guarda cuándo se contó de verdad: ahora si es de hoy, fin del día si es pasado.
+    const fechaMovimiento = await fechaDelRecuento(admin, inventarioId, inv);
+
+    // El período tiene que estar abierto ANTES de tocar la primera línea: si el trigger
+    // parase a mitad, dejaría medio inventario apuntado.
+    const abierto = await comprobarAlmacenAbierto(admin, empresaId, fechaMovimiento);
+    if (!abierto.abierto) return { ok: false, error: abierto.error };
 
     // Anti-doble: deshacer movimientos previos de este inventario antes de rehacer.
     await revertirMovimientosPorDocumento(
@@ -167,7 +182,7 @@ export async function confirmarInventarioKardex(
         omitidas++;
         continue;
       }
-      // Saldo actual del producto.
+      // Saldo actual, solo para saber si el recuento cambia algo o no.
       const { data: st } = await admin
         .from("stock")
         .select("cantidad_actual")
@@ -183,7 +198,8 @@ export async function confirmarInventarioKardex(
           empresaId,
           productoId: l.producto_id,
           tipo: diff >= 0 ? "entrada" : "salida",
-          cantidad: Math.abs(diff), // 0 si no hubo cambio → deja constancia igualmente
+          cantidad: Math.abs(diff), // el recálculo la rededuce si hace falta
+          saldoFijado: contado, // el ancla: "había esto"
           referencia,
           documentoTipo: "inventario",
           documentoId: inventarioId,
@@ -204,6 +220,29 @@ export async function confirmarInventarioKardex(
     console.error("[inventarios] confirmarInventarioKardex:", msg);
     return { ok: false, error: msg };
   }
+}
+
+/**
+ * Instante que se le pone al recuento. Se guarda en `inventarios.contado_at` la primera
+ * vez para que reconfirmar no lo mueva: un inventario se contó cuando se contó.
+ */
+async function fechaDelRecuento(
+  admin: ReturnType<typeof createAdminClient>,
+  inventarioId: string,
+  inv: { fecha?: string | null; contado_at?: string | null; empresa_id?: unknown },
+): Promise<string> {
+  if (inv.contado_at) return String(inv.contado_at);
+
+  const empresaId = String(inv.empresa_id ?? "");
+  const tz = empresaId ? await getZonaHorariaEmpresa(admin, empresaId) : ZONA_HORARIA_FALLBACK;
+  const dia = (inv.fecha as string | null) ?? hoyEnZona(tz);
+  const contadoAt =
+    dia === hoyEnZona(tz)
+      ? new Date().toISOString()
+      : zonaLocalAUtcISO(dia, "23:59", tz);
+
+  await admin.from("inventarios").update({ contado_at: contadoAt }).eq("id", inventarioId);
+  return contadoAt;
 }
 
 // ─── Conteos (persistencia de líneas) ─────────────────────────────────────

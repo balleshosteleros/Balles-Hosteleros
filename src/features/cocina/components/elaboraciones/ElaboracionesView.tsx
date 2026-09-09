@@ -474,6 +474,12 @@ export function ElaboracionesView() {
                   </li>
                 ))}
               </ul>
+              {prevision.datos.sinCantidad.length > 0 && (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <strong>Ojo:</strong> estos ingredientes están en la receta pero sin cantidad, así
+                  que <strong>no se descuentan</strong>: {prevision.datos.sinCantidad.join(", ")}.
+                </p>
+              )}
               {prevision.datos.rinde !== 1 && (
                 <p className="text-xs text-muted-foreground">
                   La receta está escrita para {prevision.datos.rinde} · se aplica ×
@@ -502,4 +508,5 @@ type PrevisionUI = {
   rinde: number;
   factor: number;
   consumo: { productoId: string; nombre: string; cantidad: number; medida: string | null }[];
+  sinCantidad: string[];
 };

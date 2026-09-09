@@ -5,6 +5,114 @@
 
 ---
 
+## ⚖️ 09-SEP — LAS RECETAS COSTABAN MIL VECES DE MÁS · corregido lo evidente, 3 decisiones para vosotros
+
+> **Gracias por la carga de escandallos y por cerrar la ronda con Borja.** Al revisarla
+> encontramos un problema de fondo que veníamos arrastrando **los dos equipos**, y del que
+> **una buena parte es culpa nuestra**. Ya está corregido lo que se podía corregir solo.
+
+### Qué pasaba
+
+La misma receta vive en **dos sitios**: la ficha de cocina (lo que veis y editáis) y una
+tabla interna que es la que de verdad **calcula el coste y descontará el almacén**. No hay
+un único responsable de escribir en las dos, y este verano **cada equipo arregló una**:
+
+- **Nosotros**, el 29-ago, pasamos 26 líneas de gramos a kilos **solo en la ficha**. La
+  tabla interna se quedó con el número en gramos. Como ahí la cantidad se lee en la unidad
+  del producto, *"0,5 kg de costilla"* quedó guardado como **500 kg por ración**.
+- **Vosotros**, el 08-sep con Borja, corregisteis cantidades **solo en la tabla interna**
+  (sepia 120 g, cola de rape 120 g, gamba 80 g, curry rojo 200 g), en gramos, y la ficha se
+  quedó a cero.
+
+Resultado: **43 líneas costaban mil veces de más**. Costillas a 500 kg, arroz a 400 kg,
+cachopo a 350 kg. Los escandallos de esos platos daban miles de euros.
+
+**No ha habido ningún daño en el almacén**: el descuento automático sigue apagado y no hay
+ninguna elaboración confirmada. El daño era el coste que se veía en pantalla.
+
+### Qué hemos hecho
+
+1. **Corregidas las 43 líneas.** Donde la ficha tenía el número bueno, la tabla interna
+   copia de la ficha; donde no había ficha, hemos dividido entre mil los valores que eran
+   gramos sin ninguna duda (350 en *"Lomo bajo frisona (350 gr)"*, 150 de patata en las
+   patatas fritas…). Cada línea va comentada con su antes y su después.
+2. **Tapado el agujero para que no vuelva a pasar.** Al guardar una ficha, la cantidad
+   ahora se **convierte** a la unidad del producto en vez de copiarse en crudo. Y si la
+   unidad no es convertible, la línea **no se escribe**: mejor que falte a que descuente un
+   disparate.
+3. **Elaboraciones: no se pueden confirmar con la receta en blanco.** Bloqueábamos las que
+   no tienen receta, pero una receta *con los ingredientes puestos y las cantidades vacías*
+   se colaba — y habría dado de alta el producto sin descontar nada, que es justo el fallo
+   que fuimos a arreglar. Ahora se bloquea y se dice qué ingredientes están sin cantidad.
+
+### 🙋 1) PARA BORJA: 49 cantidades en blanco
+
+Hay recetas con los ingredientes puestos pero **sin decir cuánto lleva de cada uno**. Cuestan
+0 € y no descontarían nada. **Solo él las sabe.**
+
+**Platos enteros a cero:** Burger Bacanal 2.0 · Burger Balles Hosteleros · Tartar de Salmón ·
+Entraña con chimichurri · Vieiras con salsa kimchi · Croquetas Jamón Ibérico · Jamón Ibérico
+con Pan Cristal · Arroz negro (sepia) · Ceviche Thai (aliño asiático).
+
+**Elaboraciones enteras a cero (8 de las 12 que cargasteis):** Ensaladilla · Guacamole ·
+Pico de gallo · Ragout de setas · Barbacoa asiática · Espuma de tiramisú · Salsa de curry
+mango · Emulsión de ají amarillo.
+
+Estas 8 son las que **bloquean el módulo de Elaboraciones**: hasta que tengan cantidades no
+se pueden confirmar.
+
+### ❓ 2) DECISIÓN: 27 productos están declarados "por unidades" y sus recetas van en gramos
+
+*Rúcula, canónigos, lechuga romana, zanahoria, nata, helado de vainilla, pan brioche,
+puntalette, paleta ibérica loncheada, patatas fritas, pimientos fritos, corvina frita,
+salsa brava, mayonesa de trufa…* — 38 líneas en total.
+
+La receta dice **60 de rúcula** queriendo decir 60 gramos, pero el producto está dado de
+alta **por unidades**, así que el sistema entiende **60 rúculas**. Y no lo podemos arreglar
+solos: pasar de gramos a unidades exige saber **cuánto pesa una**, y eso no se inventa.
+
+> **Nuestra recomendación:** casi todos son cosas que se compran **al peso**. Cambiar su
+> unidad a **Kilogramos** (o Litros para la nata) y las recetas cuadran solas. Pero eso toca
+> stock, albaranes y precios, así que **lo decidís vosotros**. Decidnos "adelante" y lo
+> hacemos producto por producto.
+
+Aparte, tres números redondos que nos huelen a error pero no es evidente: **Martini Rojo** y
+**Martini Blanco** ponen *1 litro por copa*, y el **Coulant** *1 kg por ración*. ¿Es "1 unidad"?
+
+### ❓ 3) SIGUE PENDIENTE: cuánto rinde cada receta de elaboración
+
+Lo preguntamos el 04-sep y sigue sin respuesta. Las 12 elaboraciones cargadas tienen el
+rendimiento vacío, así que el sistema entiende que **la receta es para UNA unidad** (1 kg,
+1 litro). Si en realidad están escritas **por tanda** *("con esto salen 5 litros")*, hay que
+declarar ese 5 — o **descontará 5 veces de menos**.
+
+### 📉 Cómo han quedado los costes (ya aplicado en producción)
+
+| Plato | Antes | Ahora | PVP |
+|---|---|---|---|
+| Costillas a baja temperatura | miles de € | **3,95 €** | 19,50 € |
+| Entrecot Lomo bajo frisona | miles de € | **10,12 €** | 26,00 € |
+| Torreznos con guacamole | miles de € | **1,88 €** | 14,90 € |
+
+Quedan **dos platos descuadrados**, y cada uno por un motivo distinto que os toca a vosotros:
+
+- **Cachopo — 218,52 €** (PVP 27,20). Es el ejemplo perfecto de la decisión 2: el *jamón de
+  cebo ibérico loncheado* pone **30** queriendo decir 30 gramos, pero está dado de alta **por
+  unidades** a 6,88 € cada una → 206 € de jamón en un cachopo.
+- **Arroz de Secreto — 36,05 €** (PVP 29). Aquí no es la unidad, es **el precio**: la *base de
+  arroz de carne* tiene 7,92 €/kg en su ficha pero **87,00 €/kg** en el proveedor preferido, y
+  manda el del proveedor. ¿87 € es el precio de una caja entera? La *base de arroz de pescado*,
+  que es lo mismo, está a 7,92 €.
+
+### ⚠️ Un aviso práctico para vuestro equipo
+
+Las recetas que habéis cargado **directamente por migración**, sin pasar por la ficha de
+cocina, no existen en la ficha. Si alguien abre esa ficha en pantalla y le da a guardar,
+**la receta se pierde** (la ficha manda y está vacía). Pasa con Torreznos, Tiramisú, Falso
+risotto, Alitas, Gyozas y las elaboraciones nuevas. Merece la pena volcarlas a la ficha.
+
+---
+
 ## 🍳 04-SEP — ELABORACIONES ARREGLADAS · faltan tus recetas y una regla que decidir
 
 > **1 tarea + 1 decisión para Iván.** El módulo ya funciona como pediste, pero **está
