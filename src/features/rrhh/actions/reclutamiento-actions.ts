@@ -475,7 +475,12 @@ export async function asegurarVacantesPorPuesto(empresaSlug?: string | null) {
     }>;
     if (puestos.length === 0) return { ok: true, created: 0 };
 
-    const norm = (s: string) => s.trim().toLowerCase();
+    // Los puestos numerados (JEFE DE SALA 1 · 2 · 3) son PLAZAS del mismo puesto,
+    // no puestos distintos: comparten una sola oferta, la del nombre sin número.
+    // Un candidato no puede elegir entre «CAMAREROS 1» y «CAMAREROS 2»: ve
+    // «CAMAREROS» y, al contratarlo, RRHH decide en qué plaza entra.
+    const nombreBase = (s: string) => s.replace(/\s+\d+\s*$/, "").trim();
+    const norm = (s: string) => nombreBase(s).toLowerCase();
     const puestoIdConVacante = new Set(
       vacantes.map((v) => v.puesto_id).filter(Boolean) as string[],
     );
@@ -487,7 +492,8 @@ export async function asegurarVacantesPorPuesto(empresaSlug?: string | null) {
       if (puestoIdConVacante.has(p.id)) continue; // ya tiene su vacante
       const homonima = vacantePorNombre.get(norm(p.nombre));
       if (homonima) {
-        // Existe una vacante con el mismo nombre pero sin enlazar → enlazar.
+        // Ya hay oferta para esa familia de puestos (con o sin número) → enlazar
+        // si estaba suelta, y nunca crear una segunda.
         if (!homonima.puesto_id) {
           await supabase
             .from("vacantes")
@@ -496,9 +502,12 @@ export async function asegurarVacantesPorPuesto(empresaSlug?: string | null) {
         }
         continue;
       }
+      // Se apunta en el mapa para que las demás plazas del mismo puesto
+      // («… 2», «… 3») no creen cada una su propia oferta en esta misma pasada.
+      vacantePorNombre.set(norm(p.nombre), { id: "", puesto_id: p.id });
       aCrear.push({
         empresa_id: empresaId,
-        titulo: p.nombre,
+        titulo: nombreBase(p.nombre),
         puesto_id: p.id,
         departamento_id: p.departamento_id,
         tipo_jornada: "Jornada completa",

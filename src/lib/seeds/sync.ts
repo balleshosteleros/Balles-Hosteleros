@@ -297,7 +297,10 @@ export async function syncVacantesAEmpresa(
   }>;
   if (puestos.length === 0) return { creadas: 0 };
 
-  const norm = (s: string) => s.trim().toLowerCase();
+  // Los puestos numerados (JEFE DE SALA 1 · 2 · 3) son PLAZAS del mismo puesto:
+  // una sola oferta para toda la familia, con el nombre sin número.
+  const nombreBase = (s: string) => s.replace(/\s+\d+\s*$/, "").trim();
+  const norm = (s: string) => nombreBase(s).toLowerCase();
   const puestoIdConVacante = new Set(
     vacantes.map((v) => v.puesto_id).filter(Boolean) as string[],
   );
@@ -318,9 +321,11 @@ export async function syncVacantesAEmpresa(
       }
       continue;
     }
+    // Reservada para el resto de plazas del mismo puesto en esta misma pasada.
+    vacantePorNombre.set(norm(p.nombre), { id: "", puesto_id: p.id });
     aCrear.push({
       empresa_id: empresaId,
-      titulo: p.nombre,
+      titulo: nombreBase(p.nombre),
       puesto_id: p.id,
       departamento_id: p.departamento_id,
       tipo_jornada: "Jornada completa",
