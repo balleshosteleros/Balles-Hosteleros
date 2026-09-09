@@ -15,8 +15,14 @@
  *   el cliente admin, y por eso cada funcion comprueba ella misma la empresa.
  *
  * NADA SE EDITA NI SE BORRA
- *   Corregir es anadir la linea contraria (`revertirMovimientos`). Un libro que
- *   se puede reescribir no sirve como explicacion de por que faltan tres camisas.
+ *   Corregir es anadir la linea contraria. Un libro que se puede reescribir no
+ *   sirve como explicacion de por que faltan tres camisas.
+ *
+ *   No hay funcion de reversion: en este modulo NADA firmado se puede deshacer
+ *   (ni borrar una entrega firmada, ni cancelar una devolucion o una merma ya
+ *   firmadas), y lo no firmado todavia no ha movido nada, porque el movimiento
+ *   se graba al firmar. Si algun dia se permite deshacer algo firmado, la
+ *   correccion se escribe aqui como linea contraria con `revierte_a`.
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -174,73 +180,6 @@ export async function registrarMovimiento(
   }
 
   return { ok: true, ids: [data.id] };
-}
-
-/**
- * Deshace los movimientos de una entrega anadiendo la linea contraria de cada
- * uno. Se usa al borrar una entrega ya firmada: la pieza vuelve a donde estaba.
- *
- * No borra nada. Borrar la linea original dejaria el libro sin explicar por que
- * el saldo cambio, que es justo para lo que existe el libro.
- */
-export async function revertirMovimientosDeEntrega(
-  entregaId: string,
-  opciones?: { usuarioId?: string | null; usuarioNombre?: string | null },
-): Promise<ResultadoMovimiento> {
-  if (!entregaId) return { ok: false, ids: [], error: "Falta la entrega" };
-
-  const supabase = createAdminClient();
-
-  const { data: originales, error } = await supabase
-    .from("material_movimientos")
-    .select(
-      "id, empresa_id, tipo_id, tipo_nombre, categoria, talla, tipo_movimiento, delta_almacen, delta_manos, empleado_id",
-    )
-    .eq("entrega_id", entregaId)
-    .is("revierte_a", null);
-
-  if (error) return { ok: false, ids: [], error: error.message };
-  if (!originales?.length) return { ok: true, ids: [] };
-
-  // Las que ya tienen su reversion no se revierten otra vez.
-  const { data: yaRevertidos } = await supabase
-    .from("material_movimientos")
-    .select("revierte_a")
-    .eq("entrega_id", entregaId)
-    .not("revierte_a", "is", null);
-
-  const revertidos = new Set((yaRevertidos ?? []).map((r) => r.revierte_a as string));
-  const pendientes = originales.filter((m) => !revertidos.has(m.id));
-  if (!pendientes.length) return { ok: true, ids: [] };
-
-  const hoy = new Date().toISOString().slice(0, 10);
-  const filas = pendientes.map((m) => ({
-    empresa_id: m.empresa_id,
-    tipo_id: m.tipo_id,
-    tipo_nombre: m.tipo_nombre,
-    categoria: m.categoria,
-    talla: m.talla,
-    fecha: hoy,
-    tipo_movimiento: m.tipo_movimiento,
-    // La linea contraria: mismos numeros con el signo cambiado.
-    delta_almacen: -m.delta_almacen,
-    delta_manos: -m.delta_manos,
-    entrega_id: entregaId,
-    empleado_id: m.empleado_id,
-    revierte_a: m.id,
-    motivo: "Se anuló la entrega",
-    created_by: opciones?.usuarioId ?? null,
-    created_por_nombre: opciones?.usuarioNombre ?? null,
-  }));
-
-  const { data: insertadas, error: errorInsert } = await supabase
-    .from("material_movimientos")
-    .insert(filas)
-    .select("id");
-
-  if (errorInsert) return { ok: false, ids: [], error: errorInsert.message };
-
-  return { ok: true, ids: (insertadas ?? []).map((f) => f.id) };
 }
 
 /**

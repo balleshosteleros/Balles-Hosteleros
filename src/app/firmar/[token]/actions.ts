@@ -14,6 +14,8 @@ import { registrarEvento, listarEventos } from "@/features/rrhh/services/firmas/
 import { enviarCodigoOTP, enviarCopiaFirmada } from "@/features/rrhh/services/firmas/email";
 import { generarActa, aplicarFirmaYConcatenar, type DatosActa } from "@/features/rrhh/services/firmas/pdf";
 import { marcarNotificacionesVistasPorRef } from "@/features/notificaciones/actions/notificaciones-actions";
+import { registrarMovimiento } from "@/features/rrhh/services/material/movimientos";
+import type { CategoriaMaterial } from "@/features/rrhh/data/entregas";
 
 const BUCKET = "firmas";
 const OTP_TTL_MIN = 10;
@@ -905,11 +907,14 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
 
         const { data: entrega } = await admin
           .from("entregas_material")
-          .select("id")
+          .select("id, empresa_id, empleado_id")
           .eq(columnaFirma, documentoId)
           .maybeSingle();
 
-        const entregaId = (entrega as { id: string } | null)?.id;
+        const cabecera = entrega as
+          | { id: string; empresa_id: string; empleado_id: string }
+          | null;
+        const entregaId = cabecera?.id;
         if (entregaId) {
           const patch = esEntrega
             ? { estado: "firmada", firmada_en: ahora, updated_at: ahora }
@@ -926,6 +931,46 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
               .from("entregas_material_items")
               .update({ devuelto_en: ahora })
               .eq("entrega_id", entregaId);
+          }
+
+          // Y el almacen se entera: la firma es lo que mueve la pieza de sitio.
+          // Hasta aqui contaba en la estanteria; al firmar pasa a sus manos, o
+          // vuelve, o desaparece si se le rompio. Se hace al FIRMAR y no al
+          // crear la entrega para que el libro diga lo mismo que la ficha.
+          const { data: pieza } = await admin
+            .from("entregas_material_items")
+            .select("tipo_id, tipo_nombre, categoria, talla")
+            .eq("entrega_id", entregaId)
+            .maybeSingle();
+
+          const linea = pieza as {
+            tipo_id: string | null;
+            tipo_nombre: string;
+            categoria: CategoriaMaterial;
+            talla: string | null;
+          } | null;
+
+          if (linea && cabecera) {
+            const movimiento = await registrarMovimiento({
+              empresaId: cabecera.empresa_id,
+              empleadoId: cabecera.empleado_id,
+              entregaId,
+              pieza: {
+                tipoId: linea.tipo_id,
+                tipoNombre: linea.tipo_nombre,
+                categoria: linea.categoria,
+                talla: linea.talla,
+              },
+              tipoMovimiento: esEntrega
+                ? "entrega"
+                : esMerma
+                  ? "deterioro_trabajador"
+                  : "devolucion",
+              motivo: esMerma ? "Baja por deterioro firmada" : null,
+            });
+            if (!movimiento.ok) {
+              console.error("[firmar/firmar] almacén:", movimiento.error);
+            }
           }
         }
       } catch (e) {

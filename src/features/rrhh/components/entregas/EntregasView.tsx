@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import {
   ArrowLeft, Settings, PackageCheck, Shirt, Package, Trash2, Loader2,
-  AlertTriangle, CheckCircle2, RotateCcw, Mail, Undo2, PackageX, History,
+  AlertTriangle, CheckCircle2, RotateCcw, Mail, Undo2, PackageX, History, UserMinus,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -37,10 +37,12 @@ import {
   DEVOLUCION_COLOR,
   sePuedePedirDevolucion,
   sePuedeDarDeBajaPorMerma,
+  sePuedeMarcarNoDevuelta,
   type Entrega,
 } from "@/features/rrhh/data/entregas";
 import { HistorialEntregaDialog } from "@/features/rrhh/components/entregas/HistorialEntregaDialog";
 import { MermaDialog } from "./MermaDialog";
+import { NoDevueltaDialog } from "./NoDevueltaDialog";
 import { TiposMaterialConfig } from "./TiposMaterialConfig";
 import { NuevaEntregaDialog } from "./NuevaEntregaDialog";
 
@@ -85,6 +87,7 @@ export function EntregasView() {
   const [accionando, setAccionando] = useState<string | null>(null);
   /** Entrega que se está dando de baja por deterioro. Null = diálogo cerrado. */
   const [mermaDe, setMermaDe] = useState<Entrega | null>(null);
+  const [noDevueltaDe, setNoDevueltaDe] = useState<Entrega | null>(null);
   /** Entrega cuyo historial se está mirando. Null = diálogo cerrado. */
   const [historialDe, setHistorialDe] = useState<Entrega | null>(null);
   const { confirm, dialog } = useConfirmDelete();
@@ -403,6 +406,21 @@ export function EntregasView() {
                         </Button>
                       )}
 
+                      {/* Se marchó y nunca la trajo: la empresa tiene una menos. */}
+                      {sePuedeMarcarNoDevuelta(e) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-xs text-muted-foreground"
+                          disabled={accionando === e.id}
+                          onClick={() => setNoDevueltaDe(e)}
+                          title="Se marchó y no devolvió la pieza"
+                        >
+                          <UserMinus className="h-3.5 w-3.5 mr-1" />
+                          No devuelta
+                        </Button>
+                      )}
+
                       {/* Deshacer una devolución o merma pedida por error. */}
                       {(e.devolucionEstado === "pendiente_firma" ||
                         e.devolucionEstado === "merma_pendiente_firma") && (
@@ -452,6 +470,12 @@ export function EntregasView() {
         entrega={mermaDe}
         onOpenChange={(abierto) => { if (!abierto) setMermaDe(null); }}
         onHecho={() => { setMermaDe(null); void cargar(); }}
+      />
+
+      <NoDevueltaDialog
+        entrega={noDevueltaDe}
+        onOpenChange={(abierto) => { if (!abierto) setNoDevueltaDe(null); }}
+        onHecho={() => { setNoDevueltaDe(null); void cargar(); }}
       />
     </div>
   );

@@ -1,5 +1,5 @@
-import { EntregasView } from "@/features/rrhh/components/entregas/EntregasView";
+import { EntregasModulo } from "@/features/rrhh/components/entregas/EntregasModulo";
 
 export default function EntregasPage() {
-  return <EntregasView />;
+  return <EntregasModulo />;
 }

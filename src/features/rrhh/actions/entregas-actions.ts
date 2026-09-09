@@ -15,6 +15,7 @@ import type {
 } from "@/features/rrhh/data/entregas";
 import { enviarActaEntregaAFirma } from "@/features/rrhh/services/entregas/enviar-a-firma";
 import { reenviarFirma, cancelarFirmaInterno } from "@/features/rrhh/actions/firmas-actions";
+import { registrarMovimiento } from "@/features/rrhh/services/material/movimientos";
 
 /**
  * Entregas de material y uniforme.
@@ -600,6 +601,122 @@ export async function darDeBajaPorMerma(entregaId: string, motivo: string) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", entregaId);
+
+    revalidatePath("/rrhh/entregas");
+    return { ok: true as const };
+  } catch (err) {
+    return { ok: false as const, error: mensajeError(err) };
+  }
+}
+
+/**
+ * Da una pieza por perdida: el trabajador se marchó y nunca la devolvió.
+ *
+ * Es la ÚNICA baja de todo el módulo que nadie firma, y no puede ser de otra
+ * manera: el trabajador ya no está, no hay a quién pedirle una firma. Por eso
+ * exige motivo escrito — es lo único que quedará explicando dónde fue a parar.
+ *
+ * No es una devolución: la pieza NO vuelve al almacén. Sale de sus manos y el
+ * total de la empresa baja, porque la empresa tiene una menos de verdad.
+ */
+export async function marcarNoDevuelta(entregaId: string, motivo: string) {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
+    const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
+
+    const motivoLimpio = motivo?.trim() ?? "";
+    if (!motivoLimpio) {
+      return { ok: false as const, error: "Explica por qué no ha vuelto la pieza" };
+    }
+
+    const { data: actual } = await db
+      .from("entregas_material")
+      .select("estado, devolucion_estado, empleado_id, devolucion_firma_id")
+      .eq("id", entregaId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!actual) return { ok: false as const, error: "La entrega ya no existe" };
+
+    const row = actual as {
+      estado: string;
+      devolucion_estado: string | null;
+      empleado_id: string;
+      devolucion_firma_id: string | null;
+    };
+
+    // Sin acta de entrega firmada no se le puede reclamar nada: nunca reconoció
+    // haberla recibido.
+    if (row.estado !== "firmada") {
+      return {
+        ok: false as const,
+        error: "El trabajador nunca firmó que recibió esta pieza",
+      };
+    }
+    if (row.devolucion_estado === "devuelta") {
+      return { ok: false as const, error: "Esta pieza ya está devuelta" };
+    }
+    if (row.devolucion_estado === "merma") {
+      return { ok: false as const, error: "Esta pieza ya está dada de baja por deterioro" };
+    }
+    if (row.devolucion_estado === "no_devuelta") {
+      return { ok: false as const, error: "Esta pieza ya está dada por perdida" };
+    }
+
+    // Si había un acta de devolución esperando su firma, se cierra: el enlace
+    // del correo seguiría vivo y podría firmar la devolución de algo que la
+    // empresa ya ha dado por perdido.
+    if (row.devolucion_firma_id) {
+      await cancelarFirmaInterno(row.devolucion_firma_id, empresaId, userId);
+    }
+
+    // La pieza que se lleva puesta: hace falta para restarla del almacén.
+    const { data: pieza } = await db
+      .from("entregas_material_items")
+      .select("tipo_id, tipo_nombre, categoria, talla")
+      .eq("entrega_id", entregaId)
+      .maybeSingle();
+
+    const ahora = new Date().toISOString();
+    const { error } = await db
+      .from("entregas_material")
+      .update({
+        devolucion_estado: "no_devuelta",
+        devolucion_firma_id: null,
+        no_devuelta_motivo: motivoLimpio,
+        no_devuelta_en: ahora,
+        updated_at: ahora,
+      })
+      .eq("id", entregaId)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+
+    if (pieza) {
+      const linea = pieza as {
+        tipo_id: string | null;
+        tipo_nombre: string;
+        categoria: CategoriaMaterial;
+        talla: string | null;
+      };
+      const movimiento = await registrarMovimiento({
+        empresaId,
+        empleadoId: row.empleado_id,
+        entregaId,
+        pieza: {
+          tipoId: linea.tipo_id,
+          tipoNombre: linea.tipo_nombre,
+          categoria: linea.categoria,
+          talla: linea.talla,
+        },
+        tipoMovimiento: "no_devuelta",
+        motivo: motivoLimpio,
+        usuarioId: userId,
+        usuarioNombre: await nombreUsuarioActual(db, userId),
+      });
+      if (!movimiento.ok) {
+        console.error("[rrhh] marcarNoDevuelta almacén:", movimiento.error);
+      }
+    }
 
     revalidatePath("/rrhh/entregas");
     return { ok: true as const };
