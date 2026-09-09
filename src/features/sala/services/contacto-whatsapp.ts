@@ -13,7 +13,10 @@
  *   3. Si el nombre hubo que deducirlo, queda anotado en la actividad del
  *      cliente con origen `PERFIL_WHATSAPP`: nadie lo ha confirmado, y quien
  *      abra la ficha tiene que poder saberlo.
- *   4. El origen del cliente se marca como WHATSAPP.
+ *   4. El origen del cliente se marca como WHATSAPP, salvo que quien llama
+ *      diga otro (`origen`): una exportación de un CRM trae gente que llegó
+ *      por Instagram o por una campaña, y ese dato no se puede perder solo
+ *      porque la conversación acabara en WhatsApp.
  *
  * No duplica: si ese teléfono o ese correo ya tienen ficha en la empresa, se
  * respeta la que hay. Un cliente que ya estaba no se sobrescribe con lo que
@@ -60,6 +63,14 @@ export async function altaContactoWhatsapp(
     /** Quién lo importó, para la actividad. En un alta automática, null. */
     usuarioId?: string | null;
     usuarioNombre?: string | null;
+    /**
+     * Canal por el que la persona dejó sus datos la primera vez
+     * (`clientes_sala.origen`). Sin pasarlo vale WHATSAPP, que es de donde
+     * entra la inmensa mayoría; un importador que sepa el canal real lo pasa
+     * aquí. `null` explícito = NO SE SABE, que es un valor legítimo y distinto
+     * de inventarle un canal: ver la norma de `clientes_sala.origen`.
+     */
+    origen?: string | null;
   },
 ): Promise<ResultadoAltaWhatsapp> {
   const { empresaId, contacto } = params;
@@ -69,14 +80,25 @@ export async function altaContactoWhatsapp(
   if (!telefono && !email) {
     return { estado: "descartado", motivo: "Sin teléfono ni correo." };
   }
+
   // Mismo criterio que el resto de puertas de alta: un teléfono sin prefijo o
   // inventado no entra. Es lo que evitó repetir el agujero de CoverManager.
-  if (telefono) {
-    const v = validarTelefono(telefono, false);
-    if (!v.ok) return { estado: "descartado", motivo: v.error };
+  //
+  // Pero un teléfono malo NO tira a la persona si dejó un correo válido: se
+  // tira el teléfono y se queda ella. Al importar la base de Balles, un
+  // interesado real se perdía entero por tener el móvil escrito con dígitos de
+  // menos, teniendo su correo bien puesto al lado. Lo que hay que evitar es
+  // GUARDAR un teléfono inventado, no perder a quien sí se puede contactar.
+  let telefonoValido = telefono;
+  if (telefonoValido) {
+    const v = validarTelefono(telefonoValido, false);
+    if (!v.ok) {
+      if (!email) return { estado: "descartado", motivo: v.error };
+      telefonoValido = null;
+    }
   }
 
-  const telN = telefono ? normalizarTelefono(telefono) : null;
+  const telN = telefonoValido ? normalizarTelefono(telefonoValido) : null;
 
   // ¿Ya está? Se busca por los dos contactos, que son los que tienen índice
   // único por empresa.
@@ -102,9 +124,9 @@ export async function altaContactoWhatsapp(
       empresa_id: empresaId,
       // Puede ser null: hay perfiles de los que no sale ningún nombre.
       nombre: perfil.nombre,
-      telefono,
+      telefono: telefonoValido,
       email,
-      origen: "WHATSAPP",
+      origen: params.origen === undefined ? "WHATSAPP" : params.origen,
       nombre_whatsapp: perfil.original || null,
       ...(contacto.creadoAt ? { created_at: contacto.creadoAt } : {}),
     })

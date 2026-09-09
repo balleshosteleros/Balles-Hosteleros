@@ -17,6 +17,12 @@
  * constancia de lo deducido) vive en `features/sala/services/contacto-whatsapp`,
  * que es lo que usará también la sesión de WhatsApp conectada. Aquí solo se lee
  * el CSV y se llama a esa puerta contacto por contacto.
+ *
+ * El CANAL sale de las etiquetas de GHL, no se da por supuesto: en la base de
+ * Balles hay gente que llegó por Instagram y gente que llegó por una campaña, y
+ * marcarlos a todos como WhatsApp por costumbre sería inventarse el dato. Quien
+ * no trae ninguna etiqueta de canal y tampoco teléfono se queda SIN origen, que
+ * es lo que de verdad se sabe de esa persona: nada.
  */
 
 import { readFileSync } from "node:fs";
@@ -82,6 +88,21 @@ async function conReintento<T>(fn: () => Promise<T>, intentos = 4): Promise<T> {
   throw ultimo;
 }
 
+/**
+ * Canal por el que llegó la persona, deducido de las etiquetas de GHL.
+ *
+ * `null` = no se sabe, y se guarda así: `clientes_sala.origen` admite NULL a
+ * propósito y no tiene cajón "Otros". Un contacto con teléfono que no dice de
+ * dónde vino sí se marca como WHATSAPP, que es por donde GHL hablaba con él.
+ */
+function origenDeEtiquetas(etiquetas: string, tieneTelefono: boolean): string | null {
+  const t = etiquetas.toLowerCase();
+  if (t.includes("instagram")) return "INSTAGRAM";
+  if (t.includes("facebook")) return "FACEBOOK";
+  if (/evergreen|retargeting|setter|sorteo|campa/.test(t)) return "MARKETING";
+  return tieneTelefono ? "WHATSAPP" : null;
+}
+
 function leerEnv(): Record<string, string> {
   const txt = readFileSync(".env.local", "utf8");
   const out: Record<string, string> = {};
@@ -131,25 +152,35 @@ async function main() {
   const iTel = col("Phone");
   const iEmail = col("Email");
   const iCreado = col("Created");
+  const iEtiquetas = col("Tags");
   if (iTel < 0 || iNombre < 0) {
     console.error("El CSV no tiene las columnas de GHL (First Name, Phone…).");
     process.exit(1);
   }
 
-  const contactos: ContactoWhatsapp[] = filas
+  const contactos: { contacto: ContactoWhatsapp; origen: string | null }[] = filas
     .slice(1)
     .filter((f) => f.length > 3)
-    .map((f) => ({
-      // Nombre y apellidos van juntos: los adornos aparecen en los dos y el
-      // apellido del perfil no es un apellido, es parte de como se llama ahi.
-      nombrePerfil: [f[iNombre] ?? "", f[iApellidos] ?? ""]
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .join(" "),
-      telefono: (f[iTel] ?? "").trim() || null,
-      email: (f[iEmail] ?? "").trim() || null,
-      creadoAt: (f[iCreado] ?? "").trim() || null,
-    }));
+    .map((f) => {
+      const telefono = (f[iTel] ?? "").trim() || null;
+      return {
+        contacto: {
+          // Nombre y apellidos van juntos: los adornos aparecen en los dos y el
+          // apellido del perfil no es un apellido, es parte de como se llama ahi.
+          nombrePerfil: [f[iNombre] ?? "", f[iApellidos] ?? ""]
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .join(" "),
+          telefono,
+          email: (f[iEmail] ?? "").trim() || null,
+          creadoAt: (f[iCreado] ?? "").trim() || null,
+        },
+        origen: origenDeEtiquetas(
+          iEtiquetas >= 0 ? (f[iEtiquetas] ?? "") : "",
+          !!telefono,
+        ),
+      };
+    });
 
   console.log(`${empresa.nombre} · ${contactos.length} contactos en el CSV`);
   if (!aplicar) console.log("SIMULACIÓN (sin --aplicar no se escribe nada)\n");
@@ -167,7 +198,7 @@ async function main() {
   if (!aplicar) {
     // En simulación no se toca la base: solo se cuenta lo que se descartaría
     // por no tener contacto utilizable, que es el único filtro local.
-    for (const contacto of contactos) {
+    for (const { contacto } of contactos) {
       if (!contacto.telefono && !contacto.email) {
         cuenta.descartados++;
         anotar("Sin teléfono ni correo.");
@@ -185,11 +216,12 @@ async function main() {
     for (let i = 0; i < contactos.length; i += TANDA) {
       const tanda = contactos.slice(i, i + TANDA);
       const resultados = await Promise.all(
-        tanda.map((contacto) =>
+        tanda.map(({ contacto, origen }) =>
           conReintento(() =>
             altaContactoWhatsapp(supabase, {
               empresaId: empresa.id as string,
               contacto,
+              origen,
             }),
           ),
         ),

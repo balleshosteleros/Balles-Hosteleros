@@ -46,6 +46,8 @@ import { altaContactoWhatsapp } from "@/features/sala/services/contacto-whatsapp
 const ORTOGRAFIA: Record<string, string> = {
   "pendiente decision": "Pendiente decisión",
   "reunion": "Reunión",
+  // VIP es sigla: se queda en mayúsculas aunque el resto vaya en frase normal.
+  "master vip": "Master VIP",
 };
 
 /**
@@ -399,6 +401,7 @@ async function main() {
     const alta = await conReintento(() =>
       altaContactoWhatsapp(supabase, {
         empresaId,
+        origen: origenDeFuente(f["fuente"] ?? ""),
         contacto: {
           nombrePerfil: (f["Nombre del contacto"] ?? f["Nombre de la oportunidad"] ?? "").trim(),
           telefono,
@@ -410,15 +413,6 @@ async function main() {
     if (alta.estado === "creado") {
       clienteId = alta.clienteId;
       fichasCreadas++;
-      // El origen real de estas personas es la campaña, no un WhatsApp suelto:
-      // la puerta común marca WHATSAPP y aquí se afina con lo que dice el CSV.
-      await conReintento(async () => {
-        const { error } = await supabase
-          .from("clientes_sala")
-          .update({ origen: origenDeFuente(f["fuente"] ?? "") })
-          .eq("id", alta.clienteId);
-        if (error) throw error;
-      });
     } else if (alta.estado === "ya_existia") {
       clienteId = alta.clienteId;
       fichasExistentes++;
