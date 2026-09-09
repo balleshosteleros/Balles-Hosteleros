@@ -12,6 +12,7 @@
  * regla, una sola vez, para que la cumplan por igual la UI y el servidor.
  */
 
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { RESERVA_SLOT_MIN } from "@/features/sala/data/reservas";
 
 /** Los cuatro minutos válidos, en el orden en que se leen. */
@@ -59,3 +60,24 @@ export function redondearACuarto(hora: string): string | null {
 /** Mensaje único para toda la app: la regla se explica siempre igual. */
 export const MENSAJE_HORA_CUARTO =
   `Las reservas van en intervalos de ${RESERVA_SLOT_MIN} minutos: solo :00, :15, :30 y :45.`;
+
+/**
+ * Hora de AHORA MISMO, ya llevada al cuarto más cercano, en la zona de la
+ * empresa. Es la hora con la que nace todo walk-in.
+ *
+ * Un walk-in es gente que ya está en la puerta: su hora es siempre "ahora", así
+ * que no se le pregunta. Antes había que elegirla a mano con el cliente delante,
+ * y cualquier despiste dejaba la mesa apuntada a una hora que no era.
+ *
+ * El reloj es el de la EMPRESA, no el del ordenador de quien da el alta: desde
+ * otra zona horaria el navegador diría una hora que en el restaurante no es esa.
+ *
+ * Pasadas las 23:53 el redondeo cae en "00:00", que es lo correcto: sigue siendo
+ * el mismo día de negocio (el corte está en las 06:00).
+ */
+export function horaAhoraEnCuarto(tz: string, instante: Date = new Date()): string {
+  const { minutos } = ahoraEnZona(tz, instante);
+  const hh = String(Math.floor(minutos / 60)).padStart(2, "0");
+  const mm = String(minutos % 60).padStart(2, "0");
+  return redondearACuarto(`${hh}:${mm}`) ?? `${hh}:00`;
+}
