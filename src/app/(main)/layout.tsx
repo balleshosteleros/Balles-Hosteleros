@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppLayout } from "@/features/layout/components/app-layout";
 import { getEmpleadoGuardStatus } from "@/features/primer-acceso/data/empleado-status";
+import { GateDocumentacion } from "@/features/primer-acceso/components/GateDocumentacion";
 import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
 import { AuthServerSeed, type AppRole, type AuthProfile } from "@/features/auth/contexts/auth-context";
 import { createClient } from "@/lib/supabase/server";
@@ -10,16 +11,15 @@ import { CatalogoEmpresaProvider } from "@/features/empresa/contexts/catalogo-em
 export const dynamic = "force-dynamic";
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
-  const { shouldShowWizard, hasUser } = await getEmpleadoGuardStatus();
+  const { shouldShowWizard, hasUser, modo } = await getEmpleadoGuardStatus();
   // Sin sesión → login. Refuerza al middleware, que en producción deja pasar
   // las rutas de módulo sin sesión (fail-open). ?auth=1 evita el rebote móvil.
   if (!hasUser) {
     redirect("/?auth=1");
   }
-  // Empleado con perfil_completado=false → wizard bloqueante.
-  if (shouldShowWizard) {
-    redirect("/primer-acceso");
-  }
+  // Quien deba documentación se tapa con `GateDocumentacion`, NO con un
+  // redirect: el layout no sabe en qué pantalla está y mandaba al asistente
+  // hasta cuando la persona iba a fichar. Ver el comentario del componente.
 
   // Permisos del menú resueltos EN SERVIDOR (misma región que la BD) y
   // sembrados al AuthProvider antes del primer paint: el sidebar no espera a
@@ -91,7 +91,9 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         {/* key = empresa activa → remonta la página al cambiar de empresa, para
             que los client components recarguen sus datos con la nueva empresa. */}
         <div key={empresaActivaKey ?? "sin-empresa"} className="contents">
-          {children}
+          <GateDocumentacion activo={shouldShowWizard} modo={modo}>
+            {children}
+          </GateDocumentacion>
         </div>
       </AppLayout>
     </CatalogoEmpresaProvider>

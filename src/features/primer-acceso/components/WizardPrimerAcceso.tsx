@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Loader2, Check, ChevronRight, ChevronLeft, User, Home,
-  Heart, Shirt, Sparkles, ShieldCheck,
+  Heart, Shirt, Sparkles, ShieldCheck, FileText, Upload, Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,18 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   guardarPerfilCompleto,
+  subirYLeerDocumentoPropio,
+  confirmarDatosDocumentacion,
   type PerfilCompletoInput,
+  type TipoDocPropio,
 } from "@/features/primer-acceso/actions/perfil-actions";
+import type { ModoPrimerAcceso } from "@/features/primer-acceso/data/empleado-status";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 
 interface Prefilled {
+  doc_dni_anverso_path?: string | null;
+  doc_dni_reverso_path?: string | null;
+  doc_iban_path?: string | null;
   nombre?: string | null;
   apellidos?: string | null;
   email?: string | null;
@@ -45,21 +52,104 @@ interface Prefilled {
   pais?: string | null;
 }
 
-const PASOS = [
+/**
+ * Los pasos dependen de por qué entra la persona:
+ *
+ * - `alta` (onboarding entero): se le pide todo, contacto de emergencia incluido.
+ * - `documentos` (repesca): ya completó su perfil hace tiempo, así que NO se le
+ *   vuelve a pedir emergencia ni datos que ya dio — solo los papeles que faltan.
+ */
+const PASO_DOCUMENTOS = { id: "documentos", label: "Documentos", icon: FileText } as const;
+
+const PASOS_ALTA = [
   { id: "identidad", label: "Identidad", icon: User },
   { id: "domicilio", label: "Domicilio", icon: Home },
   { id: "emergencia", label: "Emergencia", icon: Heart },
-  { id: "ropa", label: "Tu talla", icon: Shirt },
+  { id: "ropa", label: "Uniforme", icon: Shirt },
+  PASO_DOCUMENTOS,
 ] as const;
 
-const TALLAS = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+const PASOS_DOCUMENTOS = [PASO_DOCUMENTOS] as const;
+
+/** De la S a la XXXL, pasando por todas. Es la talla del UNIFORME de trabajo. */
+const TALLAS = ["S", "M", "L", "XL", "XXL", "XXXL"];
+
+/** Los tres documentos que solo puede aportar el propio empleado. */
+const DOCUMENTOS: { tipo: TipoDocPropio; label: string; ayuda: string }[] = [
+  {
+    tipo: "dni_anverso",
+    label: "DNI o NIE — cara delantera",
+    ayuda: "La cara de la foto. Que se lean todos los datos.",
+  },
+  {
+    tipo: "dni_reverso",
+    label: "DNI o NIE — cara trasera",
+    ayuda: "La cara del domicilio.",
+  },
+  {
+    tipo: "iban",
+    label: "Certificado bancario",
+    ayuda:
+      "El documento que emite tu banco y puedes descargar desde su app. Tiene que verse tu nombre como titular y el IBAN completo. No vale el número escrito a mano.",
+  },
+];
+
+const ACEPTADOS = "image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf";
+
+/** Lo que la IA propone de cada documento, pendiente de que la persona lo apruebe. */
+interface DatosLeidos {
+  dni_nie: string;
+  fecha_nacimiento: string;
+  direccion: string;
+  iban: string;
+}
 
 type FormState = PerfilCompletoInput & { nacionalidad?: string | null };
 
-export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
+export function WizardPrimerAcceso({
+  prefilled,
+  modo,
+}: {
+  prefilled: Prefilled;
+  modo: ModoPrimerAcceso;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [paso, setPaso] = useState(0);
+
+  const PASOS = modo === "alta" ? PASOS_ALTA : PASOS_DOCUMENTOS;
+
+  // Documentos ya subidos (los que ya estuvieran en su ficha salen marcados).
+  const [subidos, setSubidos] = useState<Record<string, boolean>>({
+    dni_anverso: Boolean(prefilled.doc_dni_anverso_path),
+    dni_reverso: Boolean(prefilled.doc_dni_reverso_path),
+    iban: Boolean(prefilled.doc_iban_path),
+  });
+
+  // Lo que YA tenía entregado al abrir. Estado sin setter: se calcula una vez y
+  // se queda fijo, para que un documento que suba ahora no desaparezca de la
+  // lista a media pantalla. Solo se le piden los que le faltan: a quien ya mandó
+  // su certificado bancario no se le vuelve a poner delante, que parecería que
+  // se ha perdido.
+  const [yaEntregado] = useState<Record<string, boolean>>(() => ({
+    dni_anverso: Boolean(prefilled.doc_dni_anverso_path),
+    dni_reverso: Boolean(prefilled.doc_dni_reverso_path),
+    iban: Boolean(prefilled.doc_iban_path),
+  }));
+  const documentosQueFaltan = DOCUMENTOS.filter((d) => !yaEntregado[d.tipo]);
+  const documentosEntregados = DOCUMENTOS.filter((d) => yaEntregado[d.tipo]);
+  const [analizando, setAnalizando] = useState<TipoDocPropio | null>(null);
+  const [avisoIA, setAvisoIA] = useState<string | null>(null);
+  const inputsDoc = useRef<Partial<Record<TipoDocPropio, HTMLInputElement | null>>>({});
+
+  // Lo leído por la IA: se muestra en campos EDITABLES para que la persona lo
+  // revise. Nada de esto se guarda en su ficha hasta que pulsa el botón final.
+  const [leidos, setLeidos] = useState<DatosLeidos>({
+    dni_nie: prefilled.dni_nie ?? "",
+    fecha_nacimiento: prefilled.fecha_nacimiento ?? "",
+    direccion: prefilled.direccion ?? "",
+    iban: prefilled.iban ?? "",
+  });
 
   const [form, setForm] = useState<FormState>({
     dni_nie: prefilled.dni_nie ?? "",
@@ -91,28 +181,82 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
     setError(null);
   }
 
+  // Se valida por ID de paso, no por número: los pasos cambian según el modo y
+  // con índices fijos la validación se aplicaría al paso equivocado.
   function validarPaso(p: number): string | null {
-    // Solo se valida lo que este asistente pide. Lo que ya aportó en el proceso
-    // de selección (documento, IBAN, SS, dirección, fecha de nacimiento) llega
-    // relleno desde su candidatura y no se le vuelve a pedir.
-    if (p === 0) {
+    const id = PASOS[p]?.id;
+
+    if (id === "identidad") {
       if (!form.tipo_documento?.trim()) return "Elige el tipo de documento";
       if (!form.genero?.trim()) return "Elige el género";
       if (!form.estado_civil?.trim()) return "Elige el estado civil";
     }
-    if (p === 1) {
+    if (id === "domicilio") {
       if (!form.direccion?.trim()) return "La dirección es obligatoria";
       if (!form.codigo_postal?.trim()) return "El código postal es obligatorio";
       if (!form.ciudad?.trim()) return "La ciudad es obligatoria";
       if (!form.provincia?.trim()) return "La provincia es obligatoria";
       if (!form.pais?.trim()) return "El país es obligatorio";
     }
-    if (p === 2) {
+    // El contacto de emergencia solo se exige en un alta nueva. A quien ya
+    // estaba se le reabre esto SOLO por los documentos, y pedirle de paso un
+    // dato que nunca se le pidió lo dejaría fuera del sistema sin poder entrar.
+    if (id === "emergencia") {
       if (!form.contacto_emergencia_nombre?.trim() || !form.contacto_emergencia_telefono?.trim()) {
         return "El contacto de emergencia es obligatorio";
       }
     }
+    if (id === "documentos") {
+      const falta = DOCUMENTOS.find((d) => !subidos[d.tipo]);
+      if (falta) return `Falta subir: ${falta.label}`;
+      if (!leidos.dni_nie.trim()) return "Revisa el número de tu DNI o NIE";
+      if (!leidos.iban.trim()) return "Revisa tu número de cuenta (IBAN)";
+    }
     return null;
+  }
+
+  /** Sube el documento (queda guardado) y muestra lo que la IA propone. */
+  function elegirDoc(tipo: TipoDocPropio, file: File | undefined) {
+    if (!file) return;
+    setAnalizando(tipo);
+    setAvisoIA(null);
+    setError(null);
+    startTransition(async () => {
+      const res = await subirYLeerDocumentoPropio({ tipo, file });
+      setAnalizando(null);
+      const el = inputsDoc.current[tipo];
+      if (el) el.value = "";
+
+      if (!res.ok) {
+        setError(res.error ?? "No se pudo guardar el documento");
+        toast.error(res.error ?? "No se pudo guardar el documento");
+        return;
+      }
+
+      setSubidos((s) => ({ ...s, [tipo]: true }));
+      toast.success("Documento guardado");
+
+      const l = res.lectura;
+      if (l.menor_de_edad) {
+        setError(
+          `El documento indica ${l.edad} años. No se puede completar el alta: avisa a la empresa.`,
+        );
+        return;
+      }
+      // La IA rellena, la persona revisa. Solo se pisa lo que venga con valor.
+      setLeidos((prev) => ({
+        dni_nie: tipo === "dni_anverso" && l.valor ? l.valor : prev.dni_nie,
+        iban: tipo === "iban" && l.valor ? l.valor : prev.iban,
+        fecha_nacimiento: l.fecha_nacimiento ?? prev.fecha_nacimiento,
+        direccion: l.direccion ?? prev.direccion,
+      }));
+
+      if (l.motivo || (!l.valor && tipo !== "dni_reverso")) {
+        setAvisoIA(
+          "No hemos podido leer el documento automáticamente. Escribe los datos a mano, por favor.",
+        );
+      }
+    });
   }
 
   function next() {
@@ -140,9 +284,19 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
       }
     }
     startTransition(async () => {
-      const res = await guardarPerfilCompleto(form);
+      // Los datos que la persona ha revisado y aprobado del documento van
+      // siempre; el perfil entero solo en un alta nueva (en la repesca ya está
+      // completo y reescribirlo borraría lo que tiene).
+      const resDocs = await confirmarDatosDocumentacion(leidos);
+      if (!resDocs.ok) {
+        setError(resDocs.error ?? "Error al guardar tus datos");
+        toast.error(resDocs.error ?? "Error al guardar tus datos");
+        return;
+      }
+
+      const res = modo === "alta" ? await guardarPerfilCompleto(form) : { ok: true as const };
       if (res.ok) {
-        toast.success("¡Perfil completado!");
+        toast.success(modo === "alta" ? "¡Perfil completado!" : "¡Documentación entregada!");
         router.push("/mi-panel");
         router.refresh();
       } else {
@@ -153,6 +307,7 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
   }
 
   const PasoIcon = PASOS[paso].icon;
+  const pasoId = PASOS[paso].id;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -161,9 +316,15 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
           <Sparkles className="h-5 w-5 text-emerald-600" />
           <div>
-            <h1 className="text-base font-semibold">Bienvenido/a, {prefilled.nombre ?? "compañero/a"}</h1>
+            <h1 className="text-base font-semibold">
+              {modo === "alta"
+                ? `Bienvenido/a, ${prefilled.nombre ?? "compañero/a"}`
+                : `${prefilled.nombre ?? "Hola"}, nos falta tu documentación`}
+            </h1>
             <p className="text-xs text-muted-foreground">
-              Completa tu perfil antes de empezar a usar el sistema
+              {modo === "alta"
+                ? "Completa tu perfil antes de empezar a usar el sistema"
+                : "Son dos minutos y no hay que volver a pedírtelo"}
             </p>
           </div>
         </div>
@@ -206,7 +367,7 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
             sistema antes de que la documentación se pidiera entera en el proceso
             de selección. Quien entra hoy por reclutamiento llega con la ficha
             completa y no lo ve nunca (`perfil_completado` ya viene a true). */}
-        {paso === 0 && (
+        {pasoId === "identidad" && (
           <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
             <div className="text-xs leading-relaxed text-emerald-900 dark:text-emerald-200">
@@ -227,7 +388,7 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
           </div>
 
           {/* PASO 0 — Identidad */}
-          {paso === 0 && (
+          {pasoId === "identidad" && (
             <div className="space-y-3">
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -290,7 +451,7 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
           )}
 
           {/* PASO 1 — Domicilio */}
-          {paso === 1 && (
+          {pasoId === "domicilio" && (
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label>Dirección *</Label>
@@ -344,7 +505,7 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
 
 
           {/* PASO 2 — Contacto emergencia */}
-          {paso === 2 && (
+          {pasoId === "emergencia" && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 Persona a contactar en caso de emergencia (familiar, pareja, amigo cercano).
@@ -384,15 +545,15 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
           )}
 
           {/* PASO 3 — Talla de ropa de trabajo */}
-          {paso === 3 && (
+          {pasoId === "ropa" && (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label>Tu talla de ropa</Label>
+                <Label>Talla de uniforme</Label>
                 <Select
                   value={form.talla_uniforme ?? ""}
                   onValueChange={(v) => update("talla_uniforme", v)}
                 >
-                  <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Selecciona tu talla…" /></SelectTrigger>
                   <SelectContent>
                     {TALLAS.map((t) => (
                       <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -400,7 +561,146 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">
-                  Para preparar la ropa de trabajo que te toque. Puedes cambiarla más adelante.
+                  Es la talla del uniforme de trabajo. Puedes cambiarla más adelante.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* PASO — Documentos: se suben, la IA los lee y la persona aprueba */}
+          {pasoId === "documentos" && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Haz una foto de cada documento. Los leemos automáticamente y después
+                compruebas tú que los datos son correctos.
+              </p>
+
+              {documentosEntregados.length > 0 && (
+                <p className="flex items-start gap-2 rounded-md bg-emerald-50 px-2.5 py-2 text-[11px] text-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-200">
+                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Ya tenemos: {documentosEntregados.map((d) => d.label).join(", ")}. No hace
+                    falta que lo vuelvas a mandar.
+                  </span>
+                </p>
+              )}
+
+              <ul className="space-y-2">
+                {documentosQueFaltan.map((d) => {
+                  const hecho = subidos[d.tipo];
+                  const cargando = analizando === d.tipo;
+                  return (
+                    <li
+                      key={d.tipo}
+                      className={`rounded-lg border p-3 ${
+                        hecho ? "border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/20" : "border-dashed"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium flex items-center gap-1.5">
+                            {hecho && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                            {d.label}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">{d.ayuda}</p>
+                        </div>
+                        <input
+                          ref={(el) => {
+                            inputsDoc.current[d.tipo] = el;
+                          }}
+                          type="file"
+                          accept={ACEPTADOS}
+                          className="hidden"
+                          onChange={(e) => elegirDoc(d.tipo, e.target.files?.[0])}
+                        />
+                        <Button
+                          type="button"
+                          variant={hecho ? "outline" : "default"}
+                          size="sm"
+                          disabled={pending}
+                          onClick={() => inputsDoc.current[d.tipo]?.click()}
+                          className="shrink-0"
+                        >
+                          {cargando ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Upload className="h-3.5 w-3.5" />
+                          )}
+                          <span className="ml-1.5">{hecho ? "Cambiar" : "Subir"}</span>
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {analizando && (
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Wand2 className="h-3.5 w-3.5 animate-pulse" />
+                  Leyendo el documento…
+                </p>
+              )}
+
+              {/* Lo que ha leído la IA, en campos editables: la persona APRUEBA. */}
+              <div className="rounded-lg border bg-muted/30 p-3.5 space-y-3">
+                <p className="text-[13px] font-medium">Comprueba que estos datos son correctos</p>
+
+                {avisoIA && (
+                  <p className="rounded-md bg-amber-100 px-2.5 py-1.5 text-[11px] text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                    {avisoIA}
+                  </p>
+                )}
+
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Número de DNI o NIE *</Label>
+                    <Input
+                      value={leidos.dni_nie}
+                      onChange={(e) => {
+                        setLeidos((p) => ({ ...p, dni_nie: e.target.value }));
+                        setError(null);
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Fecha de nacimiento</Label>
+                    <Input
+                      type="date"
+                      value={leidos.fecha_nacimiento}
+                      onChange={(e) => {
+                        setLeidos((p) => ({ ...p, fecha_nacimiento: e.target.value }));
+                        setError(null);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Número de cuenta (IBAN) *</Label>
+                  <Input
+                    value={leidos.iban}
+                    onChange={(e) => {
+                      setLeidos((p) => ({ ...p, iban: e.target.value }));
+                      setError(null);
+                    }}
+                    placeholder="ES00 0000 0000 0000 0000 0000"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Domicilio</Label>
+                  <Input
+                    value={leidos.direccion}
+                    onChange={(e) => {
+                      setLeidos((p) => ({ ...p, direccion: e.target.value }));
+                      setError(null);
+                    }}
+                  />
+                </div>
+
+                <p className="text-[11px] text-muted-foreground">
+                  Los rellenamos leyendo tus documentos. Si algo no cuadra, corrígelo aquí antes
+                  de continuar.
                 </p>
               </div>
             </div>

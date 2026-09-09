@@ -11,9 +11,12 @@ export default async function PrimerAccesoPage() {
     // No es empleado o no autenticado
     redirect("/mi-panel");
   }
-  if (status.perfilCompletado) {
+  // Tener el perfil completo ya NO basta para saltarse esto: quien lo completó
+  // antes de que se pidiera la documentación vuelve aquí (modo "documentos")
+  // hasta que suba sus papeles. `shouldShowWizard` decide por los dos motivos.
+  if (!status.shouldShowWizard) {
     redirect("/mi-panel");
   }
 
-  return <WizardPrimerAcceso prefilled={status.prefilled} />;
+  return <WizardPrimerAcceso prefilled={status.prefilled} modo={status.modo} />;
 }

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { redirect } from "next/navigation";
 import { getEmpleadoGuardStatus } from "@/features/primer-acceso/data/empleado-status";
+import { GateDocumentacion } from "@/features/primer-acceso/components/GateDocumentacion";
 import { PWARegister } from "@/features/mi-panel/mobile/components/PWARegister";
 import { MobileBottomNav } from "@/features/mi-panel/mobile/components/MobileBottomNav";
 import { MobileFichajeProvider } from "@/features/mi-panel/mobile/components/MobileFichajeProvider";
@@ -62,7 +63,7 @@ export default async function MobileLayout({ children }: { children: React.React
   // Guardia de sesión: en producción el middleware deja pasar /m sin sesión
   // (fail-open), así que un usuario sin sesión (o caducada) veía un panel vacío
   // en vez de ir al login. ?auth=1 evita el rebote del redirect móvil "/"→"/m".
-  const { shouldShowWizard, hasUser } = await getEmpleadoGuardStatus();
+  const { shouldShowWizard, hasUser, modo } = await getEmpleadoGuardStatus();
   if (!hasUser) {
     // `?auth=1` es OBLIGATORIO: sin él, la regla de `next.config.ts` devolvería
     // "/" → "/m" por user-agent móvil y entraríamos en un rebote infinito.
@@ -70,10 +71,10 @@ export default async function MobileLayout({ children }: { children: React.React
     // `start_url` es "/m" a secas, así que el arranque caía en el bucle.
     redirect("/?auth=1");
   }
-  // Mismo guard de primer acceso que desktop.
-  if (shouldShowWizard) {
-    redirect("/primer-acceso");
-  }
+  // Mismo guard de primer acceso que desktop, y por el mismo motivo NO es un
+  // redirect: aquí es donde ficha la gente, y mandarles al asistente les dejaba
+  // sin poder registrar su jornada. Lo tapa `GateDocumentacion`, que deja
+  // pasar SIEMPRE las pantallas de fichaje.
 
   // Identidad (quién eres + en qué empresa estás) una sola vez para toda la
   // app móvil: la cabecera de CUALQUIER pantalla pinta el icono de empresa
@@ -118,7 +119,9 @@ export default async function MobileLayout({ children }: { children: React.React
             por tramos hasta 1100px, que es donde la rejilla deja de estirarse.
       */}
       <main className="mx-auto w-full max-w-screen-sm flex-1 bg-transparent md:max-w-3xl lg:max-w-5xl xl:max-w-[1100px]">
-        {children}
+        <GateDocumentacion activo={shouldShowWizard} modo={modo}>
+          {children}
+        </GateDocumentacion>
       </main>
       <MobileBottomNav />
       {/* Va en TODAS las pantallas de la app: si su aviso de fichaje revienta,

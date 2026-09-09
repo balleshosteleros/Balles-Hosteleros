@@ -2,8 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
-import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
+import {
+  MAX_IMAGEN_MB, MAX_IMAGEN_BYTES,
+  MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES,
+} from "@/shared/lib/documentos";
+import { leerDocumentoConIA } from "@/features/rrhh/services/documentacion/leer-documento-ia";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -90,7 +95,6 @@ export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
     .eq("user_id", user.id);
 
   if (!fichas || fichas.length === 0) return { ok: false, error: "No se encontró tu ficha de empleado" };
-  const empleado = fichas[0];
 
   // Se escribe SOLO lo que este asistente pide. Todo lo que llega del proceso de
   // selección —DNI, IBAN, SS, dirección, fecha de nacimiento, teléfono, género,
@@ -115,6 +119,143 @@ export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
       perfil_completado_at: new Date().toISOString(),
     })
     // A TODAS sus fichas (una por empresa), no solo a una.
+    .in("id", fichas.map((f) => f.id as string));
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/* ------------------------------------------------------------------ *
+ * Documentación identificativa que sube el propio empleado
+ * ------------------------------------------------------------------ */
+
+/** Los tres que solo puede aportar él, y la columna donde vive cada ruta.
+ *  El de la Seguridad Social NO está: lo genera RRHH del recorte de su nómina. */
+const DOCS_PROPIOS = {
+  dni_anverso: { columna: "doc_dni_anverso_path", campoIA: "dni_nie" },
+  dni_reverso: { columna: "doc_dni_reverso_path", campoIA: "dni_reverso" },
+  iban: { columna: "doc_iban_path", campoIA: "iban" },
+} as const;
+
+export type TipoDocPropio = keyof typeof DOCS_PROPIOS;
+
+const EXT_POR_MIME: Record<string, string> = {
+  "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+  "image/heic": "heic", "image/heif": "heif", "application/pdf": "pdf",
+};
+
+/**
+ * Guarda el documento en su sitio definitivo y lo lee con IA.
+ *
+ * El archivo se guarda ANTES de leerlo: si la IA falla o no lee nada, el
+ * documento ya está a salvo en la ficha y solo queda teclear el dato. Al revés
+ * —leer primero y guardar al confirmar— un fallo del modelo dejaría a la persona
+ * sin haber entregado nada.
+ *
+ * Multiempresa: quien trabaja en las dos sociedades tiene una ficha por empresa
+ * y el almacén está separado por empresa (una no puede abrir los archivos de la
+ * otra). Por eso el mismo documento se copia a la carpeta de CADA una: si solo
+ * se dejara en una, su ficha de la otra seguiría saliendo sin documentación.
+ *
+ * La IA solo PROPONE. Lo que devuelve va a la pantalla para que la persona lo
+ * revise; no se escribe en su ficha hasta que ella lo confirma.
+ */
+export async function subirYLeerDocumentoPropio(input: {
+  tipo: TipoDocPropio;
+  file: File;
+}) {
+  const { supabase, user } = await getCtx();
+  if (!user) return { ok: false as const, error: "No autenticado" };
+
+  const doc = DOCS_PROPIOS[input.tipo];
+  if (!doc) return { ok: false as const, error: "Tipo de documento no válido" };
+
+  if (!input.file || input.file.size === 0) {
+    return { ok: false as const, error: "No se ha recibido ningún archivo" };
+  }
+  if (input.file.size > MAX_DOCUMENTO_BYTES) {
+    return { ok: false as const, error: `El archivo supera ${MAX_DOCUMENTO_MB} MB` };
+  }
+  // La extensión sale del TIPO real, no del nombre que manda el navegador: ese
+  // nombre es texto libre y acabaría dentro de la ruta.
+  const ext = EXT_POR_MIME[input.file.type];
+  if (!ext) {
+    return { ok: false as const, error: "Formato no admitido. Sube una foto (JPG, PNG) o un PDF." };
+  }
+
+  // Las fichas salen del usuario AUTENTICADO, nunca de lo que mande el cliente:
+  // así nadie puede escribir en la carpeta de otro.
+  const { data: fichas } = await supabase
+    .from("empleados")
+    .select("id, empresa_id")
+    .eq("user_id", user.id);
+  if (!fichas || fichas.length === 0) {
+    return { ok: false as const, error: "No se encontró tu ficha de empleado" };
+  }
+
+  const buffer = Buffer.from(await input.file.arrayBuffer());
+  const admin = createAdminClient();
+
+  // Una copia en cada empresa donde trabaja, en la MISMA ruta que usa la subida
+  // manual de RRHH: `{empresa_id}/{empleado_id}/{tipo}.{ext}`.
+  for (const ficha of fichas) {
+    const path = `${ficha.empresa_id}/${ficha.id}/${input.tipo}.${ext}`;
+    const { error: errSubida } = await admin.storage
+      .from("empleados-docs")
+      .upload(path, buffer, { contentType: input.file.type, upsert: true });
+    if (errSubida) return { ok: false as const, error: errSubida.message };
+
+    const { error: errFicha } = await admin
+      .from("empleados")
+      .update({ [doc.columna]: path, updated_at: new Date().toISOString() })
+      .eq("id", ficha.id);
+    if (errFicha) return { ok: false as const, error: errFicha.message };
+  }
+
+  const lectura = await leerDocumentoConIA(doc.campoIA, input.file.type, buffer);
+
+  revalidatePath("/", "layout");
+  return { ok: true as const, lectura };
+}
+
+/**
+ * Guarda los datos que la persona ha REVISADO Y APROBADO tras leerlos la IA.
+ *
+ * Solo escribe lo que llega con valor: un campo vacío se deja como estaba en
+ * lugar de borrar lo que ya hubiera en la ficha. Va a TODAS sus fichas porque
+ * son datos de la persona, no de su relación con una empresa.
+ */
+export async function confirmarDatosDocumentacion(input: {
+  dni_nie?: string | null;
+  fecha_nacimiento?: string | null;
+  direccion?: string | null;
+  iban?: string | null;
+}) {
+  const { supabase, user } = await getCtx();
+  if (!user) return { ok: false, error: "No autenticado" };
+
+  const patch: Record<string, unknown> = {};
+  if (input.dni_nie?.trim()) patch.dni_nie = input.dni_nie.trim().toUpperCase();
+  if (input.iban?.trim()) patch.iban = input.iban.replace(/\s/g, "").toUpperCase();
+  if (input.direccion?.trim()) patch.direccion = input.direccion.trim();
+  if (input.fecha_nacimiento && /^\d{4}-\d{2}-\d{2}$/.test(input.fecha_nacimiento)) {
+    patch.fecha_nacimiento = input.fecha_nacimiento;
+  }
+  if (Object.keys(patch).length === 0) return { ok: true };
+
+  const { data: fichas } = await supabase
+    .from("empleados")
+    .select("id")
+    .eq("user_id", user.id);
+  if (!fichas || fichas.length === 0) {
+    return { ok: false, error: "No se encontró tu ficha de empleado" };
+  }
+
+  const { error } = await createAdminClient()
+    .from("empleados")
+    .update({ ...patch, updated_at: new Date().toISOString() })
     .in("id", fichas.map((f) => f.id as string));
 
   if (error) return { ok: false, error: error.message };
