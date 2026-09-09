@@ -35,8 +35,16 @@ type AlumnoRow = {
   estado: string;
   origen: string;
   ultimo_acceso_at: string | null;
+  accesos_num: number | null;
+  cliente_id: string | null;
   created_at: string;
 };
+
+/** Nombre a pintar de una ficha de cliente, que puede venir a medias. */
+function nombreCliente(c: { nombre: string | null; apellidos: string | null; email: string | null }) {
+  const n = [c.nombre, c.apellidos].filter(Boolean).join(" ").trim();
+  return n || c.email || "Sin nombre";
+}
 
 export async function listAlumnos(): Promise<{ ok: boolean; data: AlumnoEscuela[]; error?: string }> {
   try {
@@ -66,6 +74,30 @@ export async function listAlumnos(): Promise<{ ok: boolean; data: AlumnoEscuela[
       ((empresasR.data ?? []) as { id: string; nombre: string }[]).map((e) => [e.id, e.nombre]),
     );
 
+    // Las fichas de cliente enganchadas, en una sola consulta: la lista de
+    // alumnos enseña el nombre con el que están dados de alta como clientes,
+    // que a veces no es el mismo que el del alumno.
+    const clienteIds = [
+      ...new Set(
+        ((alumnosR.data ?? []) as AlumnoRow[]).map((r) => r.cliente_id).filter(Boolean) as string[],
+      ),
+    ];
+    const clientesR = clienteIds.length
+      ? await supabase
+          .from("clientes_sala")
+          .select("id, nombre, apellidos, email")
+          .eq("empresa_id", empresaId)
+          .in("id", clienteIds)
+      : { data: [] };
+    const nombrePorCliente = new Map(
+      ((clientesR.data ?? []) as {
+        id: string;
+        nombre: string | null;
+        apellidos: string | null;
+        email: string | null;
+      }[]).map((c) => [c.id, nombreCliente(c)]),
+    );
+
     const data = ((alumnosR.data ?? []) as AlumnoRow[]).map((r) => ({
       id: r.id,
       email: r.email,
@@ -79,6 +111,9 @@ export async function listAlumnos(): Promise<{ ok: boolean; data: AlumnoEscuela[
       estado: (r.estado as AlumnoEscuela["estado"]) ?? "ACTIVO",
       origen: r.origen ?? "ALTA_MANUAL",
       ultimoAccesoAt: r.ultimo_acceso_at ?? undefined,
+      accesosNum: r.accesos_num ?? 0,
+      clienteId: r.cliente_id ?? undefined,
+      clienteNombre: r.cliente_id ? nombrePorCliente.get(r.cliente_id) : undefined,
       createdAt: r.created_at,
       cursosMatriculados: matriculas.get(r.id) ?? [],
       leccionesCompletadas: completadas.get(r.id) ?? 0,
@@ -95,9 +130,32 @@ const esquemaAlumno = z.object({
   email: z.string().trim().toLowerCase().email("El correo no es válido"),
   telefono: z.string().trim().max(40).optional().or(z.literal("")),
   empresaClienteId: z.string().uuid().optional().or(z.literal("")),
+  clienteId: z.string().uuid().optional().or(z.literal("")),
   accesoTotal: z.boolean().default(true),
   estado: z.enum(["ACTIVO", "INACTIVO"]).default("ACTIVO"),
 });
+
+/**
+ * Ficha de cliente que le corresponde a un correo, si la hay.
+ *
+ * El alumno y el cliente son la misma persona y el correo es lo único que los
+ * identifica igual en los dos sitios. Solo se usa para PROPONER el enlace: si
+ * alguien lo ha puesto a mano, ese manda.
+ */
+async function clientePorEmail(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+  email: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("clientes_sala")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .ilike("email", email)
+    .limit(1)
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? null;
+}
 
 export type EntradaAlumno = z.input<typeof esquemaAlumno>;
 
@@ -118,6 +176,8 @@ export async function crearAlumno(
         email: v.email,
         telefono: v.telefono || null,
         empresa_cliente_id: v.empresaClienteId || null,
+        // Si no se elige ficha, se busca por el correo: casi siempre ya existe.
+        cliente_id: v.clienteId || (await clientePorEmail(supabase, empresaId, v.email)),
         acceso_total: v.accesoTotal,
         estado: v.estado,
         origen: "ALTA_MANUAL",
@@ -156,6 +216,9 @@ export async function actualizarAlumno(
         email: v.email,
         telefono: v.telefono || null,
         empresa_cliente_id: v.empresaClienteId || null,
+        // Vacío es vacío: si se quita la ficha a mano no se vuelve a enganchar
+        // sola por el correo. Solo se busca cuando nunca ha tenido ninguna.
+        cliente_id: v.clienteId || null,
         acceso_total: v.accesoTotal,
         estado: v.estado,
       })
@@ -183,6 +246,80 @@ export async function borrarAlumno(id: string): Promise<{ ok: boolean; error?: s
   } catch (e) {
     console.error("[escuela] borrarAlumno:", e);
     return { ok: false, error: friendlyError(e, "borrarAlumno") };
+  }
+}
+
+/**
+ * Buscador de fichas de cliente para enganchar a un alumno.
+ *
+ * Se usa cuando el correo del alumno no es el mismo con el que está dado de
+ * alta como cliente y hay que elegirla a mano.
+ */
+export async function buscarClientesParaAlumno(
+  texto: string,
+): Promise<{ ok: boolean; data: { id: string; nombre: string; email?: string }[] }> {
+  try {
+    // Las comas y los paréntesis son la sintaxis del filtro: si se cuelan tal
+    // cual, lo que se escribe en el buscador cambia la consulta.
+    const q = texto.trim().replace(/[,()%*\\]/g, " ").trim();
+    if (q.length < 2) return { ok: true, data: [] };
+    const { supabase, empresaId } = await ctx();
+    if (!empresaId) return { ok: true, data: [] };
+    const { data } = await supabase
+      .from("clientes_sala")
+      .select("id, nombre, apellidos, email")
+      .eq("empresa_id", empresaId)
+      .or(`nombre.ilike.%${q}%,apellidos.ilike.%${q}%,email.ilike.%${q}%`)
+      .order("nombre")
+      .limit(20);
+    const filas = (data ?? []) as {
+      id: string;
+      nombre: string | null;
+      apellidos: string | null;
+      email: string | null;
+    }[];
+    return {
+      ok: true,
+      data: filas.map((c) => ({ id: c.id, nombre: nombreCliente(c), email: c.email ?? undefined })),
+    };
+  } catch (e) {
+    console.error("[escuela] buscarClientesParaAlumno:", e);
+    return { ok: false, data: [] };
+  }
+}
+
+/**
+ * El alumno que hay detrás de una ficha de cliente, para el enlace de vuelta.
+ *
+ * Lo pregunta la ficha de cliente de la matriz: si esa persona es alumna de la
+ * escuela, allí sale el aviso con el enlace a su ficha de alumno.
+ */
+export async function alumnoDeCliente(
+  clienteId: string,
+): Promise<{ ok: boolean; alumno?: { id: string; nombre: string; email: string; estado: string } }> {
+  try {
+    const { supabase, empresaId } = await ctx();
+    if (!empresaId) return { ok: true };
+    const { data } = await supabase
+      .from("escuela_alumnos")
+      .select("id, nombre, email, estado")
+      .eq("empresa_id", empresaId)
+      .eq("cliente_id", clienteId)
+      .limit(1)
+      .maybeSingle();
+    if (!data) return { ok: true };
+    return {
+      ok: true,
+      alumno: {
+        id: data.id as string,
+        nombre: (data.nombre as string) || "",
+        email: data.email as string,
+        estado: (data.estado as string) ?? "ACTIVO",
+      },
+    };
+  } catch (e) {
+    console.error("[escuela] alumnoDeCliente:", e);
+    return { ok: false };
   }
 }
 

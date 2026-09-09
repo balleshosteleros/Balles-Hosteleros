@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Mail, Pencil, Trash2, UserPlus } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { IdCard, Mail, Pencil, Trash2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +34,9 @@ export function AlumnosTab({
   const [editando, setEditando] = useState<AlumnoEscuela | null>(null);
   const [abierto, setAbierto] = useState(false);
   const { confirm, dialog } = useConfirmDelete();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
   async function recargar() {
     const res = await listAlumnos();
@@ -42,6 +47,38 @@ export function AlumnosTab({
   useEffect(() => {
     void recargar();
   }, []);
+
+  /**
+   * Alumno pedido por URL (`?alumno=<id>`). Es como se llega desde la ficha de
+   * cliente: la del alumno se abre sola, sin buscarlo entre los cincuenta.
+   */
+  const alumnoPedido = searchParams?.get("alumno") ?? null;
+  useEffect(() => {
+    if (!alumnoPedido || alumnos.length === 0) return;
+    if (editando?.id === alumnoPedido) return;
+    const a = alumnos.find((x) => x.id === alumnoPedido);
+    if (a) {
+      setEditando(a);
+      setAbierto(true);
+    }
+    // `editando` queda fuera a propósito: solo hay que reaccionar a que cambie
+    // la URL o a que acaben de llegar los alumnos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alumnoPedido, alumnos]);
+
+  /**
+   * Cerrar es cerrar: si el id se queda en la URL, el efecto de arriba vuelve a
+   * abrir la ficha y no hay manera de salir.
+   */
+  function cerrarFicha() {
+    setAbierto(false);
+    if (searchParams?.get("alumno")) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("alumno");
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }
+  }
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -120,7 +157,19 @@ export function AlumnosTab({
                   {a.ultimoAccesoAt
                     ? ` · última entrada ${fechaLarga(a.ultimoAccesoAt.slice(0, 10))}`
                     : " · sin entrar todavía"}
+                  {a.accesosNum > 0
+                    ? ` · ${a.accesosNum} ${a.accesosNum === 1 ? "entrada" : "entradas"}`
+                    : ""}
                 </p>
+                {a.clienteId ? (
+                  <Link
+                    href={`/producto/clientes?cliente=${a.clienteId}`}
+                    className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    <IdCard className="h-3.5 w-3.5" />
+                    Ficha de cliente
+                  </Link>
+                ) : null}
               </div>
               <Button
                 variant="ghost"
@@ -158,7 +207,7 @@ export function AlumnosTab({
         alumno={editando}
         cursos={cursos}
         empresas={empresas}
-        onCerrar={() => setAbierto(false)}
+        onCerrar={cerrarFicha}
         onGuardado={recargar}
       />
       {dialog}

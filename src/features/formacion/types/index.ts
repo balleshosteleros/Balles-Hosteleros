@@ -51,6 +51,12 @@ export interface Curso {
   autor: string;
   /** Si está despublicado, el empleado no lo ve, pero el admin sí. */
   publicado: boolean;
+  /**
+   * Anunciado y todavía sin contenido. Se ve en la escuela con el distintivo
+   * «Próximamente» y no se puede abrir: no es lo mismo que despublicado, que es
+   * no existir para el alumno.
+   */
+  proximamente?: boolean;
 }
 
 // Sección = bloque dentro de un curso. Aparece como divisor en la sidebar

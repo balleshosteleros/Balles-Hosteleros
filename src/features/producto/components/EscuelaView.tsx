@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CalendarDays, ExternalLink, GraduationCap, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,6 +22,10 @@ export function EscuelaView() {
   const { cursos, hydrate } = useFormacionStore();
   const ambitoCargado = useFormacionStore((s) => s.ambito);
   const [empresas, setEmpresas] = useState<{ id: string; nombre: string }[]>([]);
+  // Se entra aquí desde la ficha de un cliente con `?alumno=<id>`: hay que
+  // aterrizar en Alumnos, no en Clases, o el enlace no lleva a ninguna parte.
+  const searchParams = useSearchParams();
+  const [pestana, setPestana] = useState(searchParams?.get("alumno") ? "alumnos" : "clases");
 
   useEffect(() => {
     if (ambitoCargado !== "escuela") void hydrate("", { ambito: "escuela" });
@@ -66,7 +71,7 @@ export function EscuelaView() {
         </a>
       </div>
 
-      <Tabs defaultValue="clases">
+      <Tabs value={pestana} onValueChange={setPestana}>
         <TabsList>
           <TabsTrigger value="clases">
             <CalendarDays className="mr-2 h-4 w-4" />

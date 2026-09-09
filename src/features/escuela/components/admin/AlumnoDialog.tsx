@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import {
   actualizarAlumno,
+  buscarClientesParaAlumno,
   crearAlumno,
   guardarMatriculas,
   type EntradaAlumno,
@@ -55,11 +57,18 @@ export function AlumnoDialog({
   const [matriculas, setMatriculas] = useState<string[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  /** Nombre de la ficha de cliente enganchada, solo para pintarla. */
+  const [clienteNombre, setClienteNombre] = useState("");
+  const [buscaCliente, setBuscaCliente] = useState("");
+  const [candidatos, setCandidatos] = useState<{ id: string; nombre: string; email?: string }[]>([]);
 
   useEffect(() => {
     if (!abierto) return;
     setError("");
     setMatriculas(alumno?.cursosMatriculados ?? []);
+    setClienteNombre(alumno?.clienteNombre ?? "");
+    setBuscaCliente("");
+    setCandidatos([]);
     setForm(
       alumno
         ? {
@@ -67,12 +76,28 @@ export function AlumnoDialog({
             email: alumno.email,
             telefono: alumno.telefono ?? "",
             empresaClienteId: alumno.empresaClienteId ?? "",
+            clienteId: alumno.clienteId ?? "",
             accesoTotal: alumno.accesoTotal,
             estado: alumno.estado,
           }
         : vacio(),
     );
   }, [abierto, alumno]);
+
+  // Buscador de fichas de cliente: espera a que se deje de escribir.
+  useEffect(() => {
+    if (!abierto || form.clienteId) return;
+    const q = buscaCliente.trim();
+    if (q.length < 2) {
+      setCandidatos([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      const res = await buscarClientesParaAlumno(q);
+      setCandidatos(res.data);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [abierto, buscaCliente, form.clienteId]);
 
   async function guardar() {
     setGuardando(true);
@@ -127,6 +152,71 @@ export function AlumnoDialog({
             <p className="text-xs text-muted-foreground">
               Es el correo con el que entra: ahí recibe su código.
             </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Ficha de cliente</Label>
+            {form.clienteId ? (
+              <div className="flex items-center gap-2 rounded-lg border p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{clienteNombre || "Ficha enganchada"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Es la misma persona en clientes y en la escuela.
+                  </p>
+                </div>
+                <Link
+                  href={`/producto/clientes?cliente=${form.clienteId}`}
+                  className="shrink-0 text-sm font-medium text-primary hover:underline"
+                >
+                  Ver ficha
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    set("clienteId", "");
+                    setClienteNombre("");
+                  }}
+                >
+                  Quitar
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Input
+                  value={buscaCliente}
+                  onChange={(e) => setBuscaCliente(e.target.value)}
+                  placeholder="Buscar por nombre o correo"
+                />
+                {candidatos.length ? (
+                  <ul className="max-h-40 divide-y overflow-y-auto rounded-lg border">
+                    {candidatos.map((c) => (
+                      <li key={c.id}>
+                        <button
+                          type="button"
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                          onClick={() => {
+                            set("clienteId", c.id);
+                            setClienteNombre(c.nombre);
+                            setBuscaCliente("");
+                            setCandidatos([]);
+                          }}
+                        >
+                          <span className="font-medium">{c.nombre}</span>
+                          {c.email ? (
+                            <span className="text-muted-foreground"> · {c.email}</span>
+                          ) : null}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Si lo dejas vacío se engancha sola con la ficha que tenga su mismo correo.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -232,6 +322,7 @@ function vacio(): EntradaAlumno {
     email: "",
     telefono: "",
     empresaClienteId: "",
+    clienteId: "",
     accesoTotal: true,
     estado: "ACTIVO",
   };

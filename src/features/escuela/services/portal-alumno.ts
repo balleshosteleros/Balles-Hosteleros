@@ -40,6 +40,8 @@ export interface CursoPortal {
   completadas: number;
   /** Lección por la que seguir: la primera sin completar. */
   seguirLeccionId: string | null;
+  /** Anunciado y todavía sin contenido: se enseña, pero no se puede abrir. */
+  proximamente: boolean;
 }
 
 export interface LeccionPortal {
@@ -181,7 +183,7 @@ export async function getCursosAlumno(alumno: AlumnoSesion): Promise<CursoPortal
   const [{ data: cursos }, { data: modulos }, { data: lecciones }, { data: progreso }] = await Promise.all([
     supa
       .from("formacion_cursos")
-      .select("id, titulo, descripcion, cover, orden")
+      .select("id, titulo, descripcion, cover, orden, proximamente")
       .in("id", visibles)
       .order("orden", { ascending: true }),
     supa.from("formacion_secciones").select("id, curso_id, orden, publicado").in("curso_id", visibles),
@@ -204,7 +206,13 @@ export async function getCursosAlumno(alumno: AlumnoSesion): Promise<CursoPortal
   );
   const hechas = new Set(((progreso ?? []) as { leccion_id: string }[]).map((p) => p.leccion_id));
 
-  return ((cursos ?? []) as { id: string; titulo: string; descripcion: string | null; cover: string | null }[]).map(
+  return ((cursos ?? []) as {
+    id: string;
+    titulo: string;
+    descripcion: string | null;
+    cover: string | null;
+    proximamente: boolean | null;
+  }[]).map(
     (c) => {
       const suyas = ((lecciones ?? []) as { id: string; curso_id: string; seccion_id: string; orden: number }[])
         .filter((l) => l.curso_id === c.id && !modulosOcultos.has(l.seccion_id))
@@ -223,6 +231,7 @@ export async function getCursosAlumno(alumno: AlumnoSesion): Promise<CursoPortal
         totalLecciones: suyas.length,
         completadas,
         seguirLeccionId: siguiente?.id ?? null,
+        proximamente: c.proximamente === true,
       };
     },
   );
@@ -370,6 +379,19 @@ export async function marcarLeccion(
   return !error;
 }
 
+/**
+ * Deja constancia de que el alumno ha entrado: la fecha y una entrada más.
+ *
+ * La suma la hace la base de datos para que dos pestañas abiertas a la vez no
+ * se pisen una a la otra.
+ */
 export async function registrarAcceso(alumnoId: string): Promise<void> {
-  await db().from("escuela_alumnos").update({ ultimo_acceso_at: new Date().toISOString() }).eq("id", alumnoId);
+  const { error } = await db().rpc("escuela_registrar_acceso", { p_alumno: alumnoId });
+  if (error) {
+    console.error("[escuela] registrarAcceso:", error);
+    await db()
+      .from("escuela_alumnos")
+      .update({ ultimo_acceso_at: new Date().toISOString() })
+      .eq("id", alumnoId);
+  }
 }

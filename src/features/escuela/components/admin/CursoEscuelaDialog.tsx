@@ -31,12 +31,19 @@ export function CursoEscuelaDialog({
   abierto: boolean;
   curso: Curso | null;
   onCerrar: () => void;
-  onGuardar: (datos: { titulo: string; descripcion: string; cover: string; publicado: boolean }) => void;
+  onGuardar: (datos: {
+    titulo: string;
+    descripcion: string;
+    cover: string;
+    publicado: boolean;
+    proximamente: boolean;
+  }) => void;
 }) {
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [cover, setCover] = useState("");
   const [publicado, setPublicado] = useState(true);
+  const [proximamente, setProximamente] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -46,6 +53,7 @@ export function CursoEscuelaDialog({
     setDescripcion(curso?.descripcion ?? "");
     setCover(curso?.cover ?? "");
     setPublicado(curso?.publicado ?? true);
+    setProximamente(curso?.proximamente ?? false);
   }, [abierto, curso]);
 
   function guardar() {
@@ -53,7 +61,13 @@ export function CursoEscuelaDialog({
       setError("El curso necesita un título.");
       return;
     }
-    onGuardar({ titulo: titulo.trim(), descripcion: descripcion.trim(), cover: cover.trim(), publicado });
+    onGuardar({
+      titulo: titulo.trim(),
+      descripcion: descripcion.trim(),
+      cover: cover.trim(),
+      publicado,
+      proximamente,
+    });
     onCerrar();
   }
 
@@ -103,6 +117,15 @@ export function CursoEscuelaDialog({
               </p>
             </div>
             <Switch checked={publicado} onCheckedChange={setPublicado} />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div>
+              <p className="text-sm font-medium">Próximamente</p>
+              <p className="text-xs text-muted-foreground">
+                Se anuncia con su portada, pero todavía no se puede abrir.
+              </p>
+            </div>
+            <Switch checked={proximamente} onCheckedChange={setProximamente} />
           </div>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
         </div>

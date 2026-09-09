@@ -25,7 +25,7 @@ async function ctx() {
 type CursoRow = {
   id: string; empresa_id: string; puesto_id: string | null; ambito: string;
   titulo: string; descripcion: string | null; cover: string | null;
-  categoria: string; orden: number; publicado: boolean;
+  categoria: string; orden: number; publicado: boolean; proximamente?: boolean | null;
   fecha_publicacion: string; autor: string;
 };
 function toCurso(r: CursoRow, puestoNombre: string | null): Curso {
@@ -43,6 +43,7 @@ function toCurso(r: CursoRow, puestoNombre: string | null): Curso {
     fechaPublicacion: r.fecha_publicacion ?? "",
     autor: r.autor ?? "",
     publicado: r.publicado ?? true,
+    proximamente: r.proximamente === true,
   };
 }
 type SeccionRow = { id: string; curso_id: string; titulo: string; orden: number; descripcion: string | null; publicado: boolean | null };
@@ -334,6 +335,7 @@ export async function dbCreateCurso(c: Curso): Promise<{ ok: boolean; error?: st
       id: c.id, empresa_id: empresaId, puesto_id: c.puestoId ?? null, ambito: c.ambito,
       titulo: c.titulo, descripcion: c.descripcion, cover: c.cover ?? null,
       categoria: c.categoria, orden: c.orden, publicado: c.publicado,
+      proximamente: c.proximamente === true,
       fecha_publicacion: c.fechaPublicacion || undefined, autor: c.autor, created_by: userId,
     });
     if (error) throw error;
@@ -352,6 +354,7 @@ export async function dbUpdateCurso(id: string, patch: Partial<Curso>): Promise<
     if (patch.puestoId !== undefined) upd.puesto_id = patch.puestoId ?? null;
     if (patch.orden !== undefined) upd.orden = patch.orden;
     if (patch.publicado !== undefined) upd.publicado = patch.publicado;
+    if (patch.proximamente !== undefined) upd.proximamente = patch.proximamente;
     const { error } = await supabase.from("formacion_cursos").update(upd).eq("id", id);
     if (error) throw error;
     return { ok: true };

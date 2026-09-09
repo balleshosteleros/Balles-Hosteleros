@@ -113,6 +113,11 @@ export function CursosTab() {
                           Oculto
                         </Badge>
                       ) : null}
+                      {curso.proximamente ? (
+                        <Badge variant="outline" className="text-xs">
+                          Próximamente
+                        </Badge>
+                      ) : null}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {modulos} {modulos === 1 ? "módulo" : "módulos"} · {numLecciones}{" "}
@@ -172,6 +177,7 @@ export function CursosTab() {
             fechaPublicacion: new Date().toISOString().slice(0, 10),
             autor: "",
             publicado: datos.publicado,
+            proximamente: datos.proximamente,
           });
         }}
       />

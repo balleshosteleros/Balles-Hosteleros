@@ -29,12 +29,10 @@ export function CursosAlumno({ cursos }: { cursos: CursoPortal[] }) {
           : 0;
         // Una portada puede ser una imagen o un degradado guardado como texto.
         const esImagen = !!c.cover && /^https?:\/\//.test(c.cover);
-        return (
-          <Link
-            key={c.id}
-            href={`/escuela/cursos/${c.id}`}
-            className="group overflow-hidden rounded-2xl border bg-background transition-shadow hover:shadow-md"
-          >
+        // Un curso anunciado se ve, pero no se abre: dentro no hay nada
+        // todavía y entrar en él solo decepciona.
+        const tarjeta = (
+          <>
             <div
               className="relative aspect-video w-full bg-muted"
               style={
@@ -56,12 +54,18 @@ export function CursosAlumno({ cursos }: { cursos: CursoPortal[] }) {
                   className="object-cover"
                 />
               ) : null}
+              {c.proximamente ? (
+                <span className="absolute inset-x-0 bottom-0 bg-black/55 py-2 text-center text-xs font-semibold uppercase tracking-widest text-white">
+                  Próximamente
+                </span>
+              ) : null}
             </div>
             <div className="space-y-2 p-4">
               <h3 className="font-semibold leading-tight">{c.titulo}</h3>
               {c.descripcion ? (
                 <p className="line-clamp-2 text-sm text-muted-foreground">{c.descripcion}</p>
               ) : null}
+              {c.proximamente ? null : (
               <div className="pt-1">
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                   <div
@@ -73,7 +77,29 @@ export function CursosAlumno({ cursos }: { cursos: CursoPortal[] }) {
                   {c.completadas} de {c.totalLecciones} lecciones · {porcentaje}%
                 </p>
               </div>
+              )}
             </div>
+          </>
+        );
+
+        if (c.proximamente) {
+          return (
+            <div
+              key={c.id}
+              className="overflow-hidden rounded-2xl border bg-background opacity-90"
+            >
+              {tarjeta}
+            </div>
+          );
+        }
+
+        return (
+          <Link
+            key={c.id}
+            href={`/escuela/cursos/${c.id}`}
+            className="group overflow-hidden rounded-2xl border bg-background transition-shadow hover:shadow-md"
+          >
+            {tarjeta}
           </Link>
         );
       })}

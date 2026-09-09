@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useModuloDisponible } from "@/features/empresa/contexts/catalogo-empresa-context";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   estadoPermiso,
   ETIQUETA_PERMISO,
@@ -60,7 +61,9 @@ import { guardarFichaCliente } from "@/features/sala/actions/cliente-ficha-actio
 import { ActividadCliente } from "@/features/sala/components/clientes/ActividadCliente";
 import { ComunicacionesCliente } from "@/features/sala/components/clientes/ComunicacionesCliente";
 import { HistorialVisitasCliente } from "@/features/sala/components/clientes/HistorialVisitasCliente";
+import { CalendarioClientes } from "@/features/sala/components/clientes/CalendarioClientes";
 import { PipelinesCliente } from "@/features/producto/pipeline/components/PipelinesCliente";
+import { AlumnoEnEscuela } from "@/features/escuela/components/admin/AlumnoEnEscuela";
 import {
   listClientesEnriquecidos,
   type ClienteEnriquecido,
@@ -252,6 +255,9 @@ export function ClientesView() {
   const moduloDisponible = useModuloDisponible();
   const haySala = moduloDisponible("SALA");
   const [showConfig, setShowConfig] = useState(false);
+  /** Calendario de cumpleaños y visitas: se abre desde la barra de herramientas. */
+  const [showCalendario, setShowCalendario] = useState(false);
+  const { empresaActual } = useEmpresa();
   const [pagina, setPagina] = useState(1);
 
   // Borrador de la ficha: se edita en local y solo se persiste al pulsar Guardar.
@@ -1037,6 +1043,19 @@ export function ClientesView() {
         onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
           <>
+            {/* Discreto a propósito: se consulta de vez en cuando, no es una
+                acción del día a día. Icono suelto, sin texto ni contador, para
+                no romper la barra (BARRA HORIZONTAL 1). */}
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9 text-muted-foreground hover:text-foreground"
+              onClick={() => setShowCalendario(true)}
+              title="Calendario de cumpleaños y visitas"
+              aria-label="Calendario de cumpleaños y visitas"
+            >
+              <CalendarDays className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
             <IOActions config={clientesIO} onSuccess={() => window.location.reload()} />
             <Button
               size="icon"
@@ -1050,6 +1069,19 @@ export function ClientesView() {
             </Button>
           </>
         }
+      />
+
+      <CalendarioClientes
+        abierto={showCalendario}
+        onClose={() => setShowCalendario(false)}
+        color={empresaActual.color}
+        zonaHoraria={zonaHoraria}
+        onAbrirCliente={(id) => {
+          const c = clientes.find((x) => x.id === id);
+          if (!c) return;
+          setShowCalendario(false);
+          abrirFicha(c);
+        }}
       />
 
       <Card>
@@ -1618,6 +1650,13 @@ export function ClientesView() {
                     software. */}
                 <div className="pt-2 border-t empty:hidden">
                   <PipelinesCliente clienteId={borrador.id} />
+                </div>
+
+                {/* Si además es alumno de la escuela, el enlace a su ficha de
+                    alumno. Misma persona, dos fichas, y desde aquí se llega a
+                    la otra. Solo en la MATRIZ: la escuela es del software. */}
+                <div className="pt-2 border-t empty:hidden">
+                  <AlumnoEnEscuela clienteId={borrador.id} />
                 </div>
 
                 {/* Actividad DEL CLIENTE: los cambios de sus datos de contacto,

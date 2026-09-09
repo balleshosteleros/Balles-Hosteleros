@@ -49,6 +49,15 @@ export interface AlumnoEscuela {
   /** Empresa cliente del alumno (la que tiene el software contratado). */
   empresaClienteId?: string;
   empresaClienteNombre?: string;
+  /**
+   * Su ficha de cliente en la matriz. Casi todos los alumnos ya estaban ahí
+   * como clientes: es la misma persona con dos fichas, y el enlace deja ir de
+   * una a otra sin buscarla a mano.
+   */
+  clienteId?: string;
+  clienteNombre?: string;
+  /** Veces que ha entrado en la escuela. */
+  accesosNum: number;
   /** true = ve todos los cursos publicados; false = solo los matriculados. */
   accesoTotal: boolean;
   estado: EstadoAlumno;
