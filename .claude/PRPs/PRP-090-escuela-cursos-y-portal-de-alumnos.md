@@ -211,6 +211,10 @@ ALTER TABLE public.escuela_accesos    ENABLE ROW LEVEL SECURITY;
 - `CursoVista` aprende a incrustar YouTube/Vimeo: antes una dirección de YouTube salía en negro.
 - Sembrado con lo visible en las capturas: las 11 clases de ago-sep 2026 y el curso «Máster en dirección y gestión hostelera» con el módulo «Bienvenida» y sus 3 lecciones (el texto de la primera, entero).
 
+### Importador de YouTube (08-09-2026)
+
+Los vídeos de GoHighLevel **no sirven**: viven dentro de su reproductor. Los buenos son los que ya están en YouTube. Por eso el back-office lleva un importador: se pega el enlace de una lista de reproducción o de un canal, enseña qué va a traer y crea las lecciones con su título y su vídeo. Sin clave de API y sin cuenta (lee el `ytInitialData` de la página), y vale con listas «no listadas». Idempotente por `video_url`.
+
 ### Lo que falta
 
 - **El contenido real de GoHighLevel**: la dirección de YouTube de cada lección y los textos del resto de módulos. Está detrás del login de la escuela vieja; hace falta acceso o un volcado.

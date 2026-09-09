@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { EyeOff, Pencil, Plus, Trash2 } from "lucide-react";
+import { EyeOff, Pencil, Plus, Trash2, MonitorPlay } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -13,6 +13,7 @@ import {
 } from "@/features/formacion/store/use-formacion-store";
 import type { Curso } from "@/features/formacion/types";
 import { CursoEscuelaDialog } from "./CursoEscuelaDialog";
+import { ImportarYoutubeDialog } from "./ImportarYoutubeDialog";
 
 /**
  * Cursos de la escuela. Cada tarjeta abre su editor, donde se montan los
@@ -28,6 +29,7 @@ export function CursosTab() {
   const ambitoCargado = useFormacionStore((s) => s.ambito);
   const [editando, setEditando] = useState<Curso | null>(null);
   const [abierto, setAbierto] = useState(false);
+  const [importando, setImportando] = useState<Curso | null>(null);
   const { confirm, dialog } = useConfirmDelete();
 
   useEffect(() => {
@@ -139,6 +141,15 @@ export function CursosTab() {
                   </Button>
                   <Button
                     variant="ghost"
+                    size="sm"
+                    onClick={() => setImportando(curso)}
+                    title="Traer vídeos de YouTube"
+                  >
+                    <MonitorPlay className="mr-2 h-3.5 w-3.5 text-red-600" />
+                    YouTube
+                  </Button>
+                  <Button
+                    variant="ghost"
                     size="icon"
                     className="ml-auto"
                     onClick={() => eliminar(curso)}
@@ -180,6 +191,13 @@ export function CursosTab() {
             proximamente: datos.proximamente,
           });
         }}
+      />
+      <ImportarYoutubeDialog
+        abierto={!!importando}
+        cursoId={importando?.id ?? ""}
+        cursoTitulo={importando?.titulo ?? ""}
+        onCerrar={() => setImportando(null)}
+        onImportado={() => void hydrate("", { ambito: "escuela" })}
       />
       {dialog}
     </div>
