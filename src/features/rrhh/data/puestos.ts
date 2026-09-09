@@ -1,3 +1,4 @@
+import type { ModoPago } from "@/features/rrhh/lib/coste-hora";
 // ─── Interfaces ───────────────────────────────────────────────
 
 export interface HorarioDia {
@@ -9,7 +10,15 @@ export interface HorarioDia {
 export interface NivelSalarial {
   nivel: number;
   vacaciones: string;
-  /** Salario BRUTO mensual: cifra principal del puesto. */
+  /**
+   * Cómo se le paga: sueldo fijo al mes, o por hora trabajada.
+   * Cambia lo que significa `salarioBruto`.
+   */
+  modoPago: ModoPago;
+  /**
+   * Salario BRUTO: cifra principal del puesto.
+   * En modo MENSUAL es el sueldo del mes; en modo HORAS, el precio de una hora.
+   */
   salarioBruto: number;
   // Neto (interno): se conserva por compatibilidad con contratación/gestoría.
   nominaNeta: number;
@@ -24,6 +33,12 @@ export interface NivelSalarial {
    * bruto x 12 / (52 x horas de la semana).
    */
   costeHora: number;
+  /**
+   * A cuánto se paga una hora extra en este puesto. Las horas extras que se
+   * hacen cada mes no son del puesto (van en la nómina), pero su precio sí.
+   * Quien cobra POR HORA la tiene al mismo precio que su hora normal.
+   */
+  precioHoraExtra: number;
   horarioSemanal: HorarioDia[];
   observaciones: string;
   estado: "activo" | "borrador" | "inactivo";
@@ -34,8 +49,6 @@ export interface PuestoSalarial {
   departamento: string;
   departamentoId: string;
   puesto: string;
-  /** Descripción del puesto (compartida, común a todos los niveles). */
-  descripcion: string;
   /** Nivel cabecera (el más bajo, normalmente 1). */
   nivel: number;
   /** Nº de niveles del puesto (1..N). */

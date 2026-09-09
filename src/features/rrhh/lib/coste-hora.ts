@@ -7,6 +7,46 @@
  */
 
 /**
+ * Cómo se le paga a un puesto.
+ *
+ * `MENSUAL`: cobra un sueldo fijo al mes, trabaje las horas que trabaje. Es el
+ * caso normal de plantilla.
+ *
+ * `HORAS`: cobra por hora trabajada (músicos, cantantes, extras). No tiene
+ * sueldo mensual ni horas semanales: si un mes no trabaja, no cobra. Por eso
+ * tampoco genera coste de vacaciones.
+ */
+export type ModoPago = "MENSUAL" | "HORAS";
+
+export const ETIQUETA_MODO_PAGO: Record<ModoPago, string> = {
+  MENSUAL: "Sueldo fijo al mes",
+  HORAS: "Por hora trabajada",
+};
+
+/** Qué significa el salario bruto en cada modo. */
+export const ETIQUETA_SALARIO: Record<ModoPago, string> = {
+  MENSUAL: "Salario bruto mensual (€)",
+  HORAS: "Precio bruto por hora (€)",
+};
+
+/**
+ * Precio de la hora según cómo se pague el puesto.
+ *
+ * En `HORAS` el salario bruto YA ES el precio de la hora: no hay nada que
+ * repartir. En `MENSUAL` se reparte el sueldo entre las horas de la jornada.
+ */
+export function costeHoraSegunModo(
+  modo: ModoPago,
+  salarioBruto: number | null | undefined,
+  horasSemanales: number | null | undefined,
+): number | null {
+  if (modo === "HORAS") {
+    return salarioBruto && salarioBruto > 0 ? salarioBruto : null;
+  }
+  return costeHoraDe(salarioBruto, horasSemanales);
+}
+
+/**
  * Precio de la hora a partir del sueldo mensual bruto y la jornada semanal:
  * bruto × 12 meses ÷ (52 semanas × horas de la semana).
  *

@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { createAdminClient } from "@/lib/supabase/admin";
-import { costeHoraDe } from "@/features/rrhh/lib/coste-hora";
+import { costeHoraSegunModo, type ModoPago } from "@/features/rrhh/lib/coste-hora";
 
 /**
  * Condiciones del puesto → empleado (snapshot versionado).
@@ -22,6 +22,8 @@ type Admin = ReturnType<typeof createAdminClient>;
 
 export interface CondicionesPuesto {
   nivel: number;
+  /** Sueldo fijo al mes, o precio por hora trabajada. */
+  modo_pago: ModoPago;
   /** Salario BRUTO pactado: la cifra del convenio y la que se declara a gestoría. */
   salario_bruto: number | null;
   /** Neto: `null` mientras no exista calculo real. NUNCA se rellena con el bruto. */
@@ -40,6 +42,8 @@ export interface CondicionesPuesto {
    * horas. Si viene vacío, se deduce del bruto y las horas semanales.
    */
   coste_hora: number | null;
+  /** A cuánto se le paga una hora extra. */
+  precio_hora_extra: number | null;
 }
 
 /**
@@ -53,7 +57,7 @@ export async function leerCondicionesPuesto(
   const { data } = await admin
     .from("puesto_salarios")
     .select(
-      "nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, coste_hora",
+      "nivel, modo_pago, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, coste_hora, precio_hora_extra",
     )
     .eq("puesto_id", puestoId)
     .order("nivel", { ascending: true })
@@ -69,8 +73,10 @@ export async function leerCondicionesPuesto(
   };
   const texto = (v: unknown): string | null =>
     typeof v === "string" ? v : v === null || v === undefined ? null : String(v);
+  const modoPago: ModoPago = row.modo_pago === "HORAS" ? "HORAS" : "MENSUAL";
   return {
     nivel: num(row.nivel) ?? 1,
+    modo_pago: modoPago,
     salario_bruto: num(row.salario_bruto),
     nomina_neta: num(row.nomina_neta),
     efectivo_extra: num(row.efectivo_extra) ?? 0,
@@ -80,7 +86,10 @@ export async function leerCondicionesPuesto(
     dias_libres: num(row.dias_libres),
     vacaciones: texto(row.vacaciones),
     horario_semanal: row.horario_semanal,
-    coste_hora: num(row.coste_hora) ?? costeHoraDe(num(row.salario_bruto), num(row.horas_semanales)),
+    precio_hora_extra: num(row.precio_hora_extra),
+    coste_hora:
+      num(row.coste_hora) ??
+      costeHoraSegunModo(modoPago, num(row.salario_bruto), num(row.horas_semanales)),
   };
 }
 
@@ -142,6 +151,10 @@ export async function escribirCondicionesVigentes(
     // El coste de la hora viaja con el resto: queda congelado en el histórico del
     // trabajador, así que tocar el puesto después no le cambia lo ya pactado.
     coste_hora: cond?.coste_hora ?? null,
+    // El modo viaja con el resto: quien entra cobrando por hora sigue cobrando
+    // por hora aunque luego cambie la plantilla del puesto.
+    modo_pago: cond?.modo_pago ?? "MENSUAL",
+    precio_hora_extra: cond?.precio_hora_extra ?? null,
     primer_dia: primerDia,
     tipo_contrato: tipoContrato,
     vigente_desde: primerDia,

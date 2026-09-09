@@ -8,9 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { jornadaDesdeHorario, formatHorasSemana } from "@/features/rrhh/services/jornada-desde-horario";
 import { NumberInput } from "@/shared/components/NumberInput";
 import { formatEur } from "@/shared/lib/numero";
-import { costeHoraDe } from "@/features/rrhh/lib/coste-hora";
+import {
+  costeHoraDe,
+  ETIQUETA_MODO_PAGO,
+  ETIQUETA_SALARIO,
+  type ModoPago,
+} from "@/features/rrhh/lib/coste-hora";
 import { Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -42,10 +48,12 @@ interface Props {
 type Depto = { id: string; nombre: string };
 
 /** Jornadas de contrato disponibles. Un puesto es completa o partida. */
-const JORNADAS = ["Completa", "Partida"];
 
 /** Vacaciones por defecto de cualquier puesto nuevo (convenio de hostelería). */
 const VACACIONES_DEFECTO = "30 días";
+
+/** Para quien cobra por hora: la parte de vacaciones ya va dentro de su precio. */
+const VACACIONES_INCLUIDAS = "Incluidas en salario";
 
 /** Cabeceras de la vista previa del horario. */
 const DIAS_SEMANA = ["L", "M", "X", "J", "V", "S", "D"];
@@ -54,6 +62,7 @@ function nivelVacio(nivel: number): NivelSalarial {
   return {
     nivel,
     vacaciones: VACACIONES_DEFECTO,
+    modoPago: "MENSUAL",
     salarioBruto: 0,
     nominaNeta: 0,
     efectivoExtra: 0,
@@ -62,6 +71,7 @@ function nivelVacio(nivel: number): NivelSalarial {
     horasSemanales: 0,
     diasLibres: 0,
     costeHora: 0,
+    precioHoraExtra: 10,
     horarioSemanal: [],
     observaciones: "",
     estado: "activo",
@@ -75,7 +85,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   // Datos compartidos del puesto
   const [nombre, setNombre] = useState("");
   const [departamentoId, setDepartamentoId] = useState("");
-  const [descripcion, setDescripcion] = useState("");
   // Datos de gestoría (compartidos por el puesto)
   const [convenio, setConvenio] = useState("");
   // Departamento que valida las solicitudes de quien ocupe este puesto.
@@ -111,6 +120,15 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   const cur = niveles[idx] ?? niveles[0];
   // Lo que costaría la hora con el sueldo y la jornada de arriba: se enseña como
   // ayuda para que se vea de dónde sale la cifra si no se escribe a mano.
+  const modoPago: ModoPago = cur?.modoPago === "HORAS" ? "HORAS" : "MENSUAL";
+  const porHoras = modoPago === "HORAS";
+  // Las dos formas habituales de pactar las vacaciones. Si un puesto ya tenía
+  // escrito otro texto, se conserva como opción para no perderlo al abrir.
+  const opcionesVacaciones = useMemo(() => {
+    const base = [VACACIONES_DEFECTO, VACACIONES_INCLUIDAS];
+    const actual = (cur?.vacaciones ?? "").trim();
+    return actual && !base.includes(actual) ? [actual, ...base] : base;
+  }, [cur?.vacaciones]);
   const costeHoraSugerido = costeHoraDe(cur?.salarioBruto ?? 0, cur?.horasSemanales ?? 0) ?? 0;
 
   // Vista previa de la semana del horario elegido.
@@ -121,9 +139,36 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   }, [turnos]);
   const patronElegido = patrones.find((p) => p.familiaId === horarioFamiliaId) ?? null;
 
+  // La jornada NO se teclea: sale del horario elegido. Horas, días libres y
+  // completa/parcial se calculan del patrón (promedio del ciclo si es rotativo).
+  const jornada = useMemo(
+    () => jornadaDesdeHorario(patronElegido?.semanas ?? [], turnos),
+    [patronElegido, turnos],
+  );
+
   const setCur = (patch: Partial<NivelSalarial>) => {
     setNiveles((prev) => prev.map((n, i) => (i === idx ? { ...n, ...patch } : n)));
   };
+
+  // El horario manda: en cuanto hay uno elegido, sus horas, días libres y tipo de
+  // jornada sustituyen a lo que hubiera guardado. Se ESCRIBEN en el nivel (no se
+  // calculan solo al pintar) porque al contratar estas condiciones se copian al
+  // empleado y de ahí viajan al contrato y a la gestoría.
+  useEffect(() => {
+    if (!jornada.hayHorario) return;
+    setNiveles((prev) =>
+      prev.map((n, i) =>
+        i === idx
+          ? {
+              ...n,
+              horasSemanales: jornada.horasSemanales,
+              diasLibres: jornada.diasLibres,
+              jornadaContrato: jornada.jornada,
+            }
+          : n,
+      ),
+    );
+  }, [jornada.hayHorario, jornada.horasSemanales, jornada.diasLibres, jornada.jornada, idx]);
 
   useEffect(() => {
     if (!open) return;
@@ -137,7 +182,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     // Datos compartidos
     setNombre(editing?.puesto ?? "");
     setDepartamentoId(editing?.departamentoId ?? "");
-    setDescripcion(editing?.descripcion ?? "");
     setConvenio(editing?.convenioColectivo ?? "");
     setValidadorDepartamentoId(editing?.validadorDepartamentoId ?? "");
     setIdx(0);
@@ -224,7 +268,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     const validacion = validarPuestoCompleto({
       nombre,
       departamentoId,
-      descripcion,
       convenioColectivo: convenio,
       validadorDepartamentoId: validadorDepartamentoId || null,
       cronogramaRol: cronogramaRol || null,
@@ -245,7 +288,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     try {
       let puestoId = editing?.id ?? "";
       if (esNuevo) {
-        const res = await createPuesto({ nombre: nombre.trim(), departamento_id: departamentoId, descripcion: descripcion.trim() || null });
+        const res = await createPuesto({ nombre: nombre.trim(), departamento_id: departamentoId });
         if (!res.ok || !res.data) { toast.error(res.error ?? "No se pudo crear el puesto"); return; }
         puestoId = (res.data as { id: string }).id;
       } else {
@@ -253,7 +296,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           id: puestoId,
           nombre: nombre.trim(),
           departamento_id: departamentoId,
-          descripcion: descripcion.trim() || null,
           convenio_colectivo: convenio,
         });
         if (!upd.ok) { toast.error(upd.error ?? "No se pudo actualizar el puesto"); return; }
@@ -267,7 +309,9 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           jornadaContrato: n.jornadaContrato,
           horasSemanales: n.horasSemanales,
           diasLibres: n.diasLibres,
+          modoPago: n.modoPago,
           costeHora: n.costeHora,
+          precioHoraExtra: n.precioHoraExtra,
           vacaciones: n.vacaciones,
           observaciones: n.observaciones,
           estado: n.estado,
@@ -374,11 +418,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="ps-desc">Descripción</Label>
-            <Textarea id="ps-desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Funciones y responsabilidades del puesto" className={claseFalta("descripcion")} />
-          </div>
-
           {/* Condiciones del puesto (niveles ocultos de momento: se edita uno solo) */}
           <div className="rounded-md border border-border/60 p-3 space-y-4">
             <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
@@ -387,26 +426,74 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
             </p>
 
             <div className="space-y-1.5">
-              <Label htmlFor="ps-bruto">Salario bruto mensual (€)</Label>
-              <NumberInput id="ps-bruto" value={cur?.salarioBruto ?? 0} onValueChange={(v) => setCur({ salarioBruto: v })} min={0} className={claseFalta("salarioBruto")} />
+              <Label htmlFor="ps-modo-pago">Cómo se paga</Label>
+              <select
+                id="ps-modo-pago"
+                value={modoPago}
+                onChange={(e) => setCur({ modoPago: e.target.value as ModoPago })}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              >
+                <option value="MENSUAL">{ETIQUETA_MODO_PAGO.MENSUAL}</option>
+                <option value="HORAS">{ETIQUETA_MODO_PAGO.HORAS}</option>
+              </select>
+              <p className="text-[11px] text-muted-foreground">
+                {porHoras
+                  ? "Cobra solo por las horas que trabaja: no tiene sueldo mensual ni vacaciones pagadas."
+                  : "Cobra el mismo sueldo cada mes, trabaje las horas que trabaje."}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ps-bruto">{ETIQUETA_SALARIO[modoPago]}</Label>
+              <NumberInput
+                id="ps-bruto"
+                value={cur?.salarioBruto ?? 0}
+                onValueChange={(v) => setCur({ salarioBruto: v })}
+                min={0}
+                decimales={porHoras}
+                className={claseFalta("salarioBruto")}
+              />
+              {porHoras && (
+                <p className="text-[11px] text-muted-foreground">
+                  Es lo que cuesta cada hora trabajada. El coste de personal sale de multiplicarlo
+                  por las horas que fiche.
+                </p>
+              )}
+            </div>
+
+            {/* Jornada, horas y días libres SALEN DEL HORARIO: no se teclean. */}
+            <div className={`rounded-md border p-3 ${jornada.hayHorario ? "border-border/60 bg-muted/40" : "border-destructive"}`}>
+              {jornada.hayHorario ? (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">Jornada</p>
+                      <p className="text-sm font-semibold">{jornada.jornada}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">Horas/semana</p>
+                      <p className="text-sm font-semibold tabular-nums">
+                        {formatHorasSemana(jornada.horasSemanales)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">Días libres</p>
+                      <p className="text-sm font-semibold tabular-nums">{jornada.diasLibres}</p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-2">
+                    Sale del horario de abajo{jornada.semanas > 1 ? `, promediando sus ${jornada.semanas} semanas` : ""}.
+                    {jornada.partida ? " El turno parte el día en dos tramos." : ""}
+                  </p>
+                </>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Elige el horario de abajo y aquí saldrán la jornada, las horas y los días libres.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="ps-jornada">Jornada</Label>
-                <select
-                  id="ps-jornada"
-                  value={cur?.jornadaContrato || "Completa"}
-                  onChange={(e) => setCur({ jornadaContrato: e.target.value })}
-                  className={`flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ${claseFalta("jornadaContrato")}`}
-                >
-                  {JORNADAS.map((j) => <option key={j} value={j}>{j}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ps-horas">Horas/semana</Label>
-                <NumberInput id="ps-horas" value={cur?.horasSemanales ?? 0} onValueChange={(v) => setCur({ horasSemanales: v })} min={0} max={60} className={claseFalta("horasSemanales")} />
-              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ps-coste-hora">Coste por hora (€)</Label>
                 <NumberInput
@@ -423,35 +510,33 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
                 </p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="ps-dias">Días libres</Label>
-                <NumberInput id="ps-dias" value={cur?.diasLibres ?? 0} onValueChange={(v) => setCur({ diasLibres: v })} min={0} max={7} decimales={false} className={claseFalta("diasLibres")} />
+                <Label htmlFor="ps-hora-extra">Precio de la hora extra (€)</Label>
+                <NumberInput
+                  id="ps-hora-extra"
+                  value={cur?.precioHoraExtra ?? 0}
+                  onValueChange={(v) => setCur({ precioHoraExtra: v })}
+                  min={0}
+                  decimales
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {porHoras
+                    ? "Quien cobra por hora cobra la extra al mismo precio que la normal."
+                    : "A cuánto se paga cada hora extra que haga."}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ps-vac">Vacaciones</Label>
-                <Input id="ps-vac" value={cur?.vacaciones ?? ""} onChange={(e) => setCur({ vacaciones: e.target.value })} placeholder="Ej. 30 días" className={claseFalta("vacaciones")} />
+                <select
+                  id="ps-vac"
+                  value={cur?.vacaciones ?? ""}
+                  onChange={(e) => setCur({ vacaciones: e.target.value })}
+                  className={`flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ${claseFalta("vacaciones")}`}
+                >
+                  {opcionesVacaciones.map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="ps-crono">Cronograma</Label>
-              <select
-                id="ps-crono"
-                value={cronogramaRol}
-                onChange={(e) => setCronogramaRol(e.target.value)}
-                className={`flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ${claseFalta("cronogramaRol")}`}
-              >
-                <option value="">
-                  {esNuevo ? "Se crea con el puesto" : "Selecciona…"}
-                </option>
-                {cronogramas.map((c) => (
-                  <option key={c.rol} value={c.rol}>
-                    {c.rol}{c.departamento ? ` · ${c.departamento}` : ""} ({c.tareas})
-                  </option>
-                ))}
-              </select>
-              <p className="text-[11px] text-muted-foreground">
-                Cronograma de tareas que sigue quien ocupe este puesto. Se elige entre los ya creados en Dirección.
-              </p>
             </div>
 
             {/* Horario del puesto: se hereda al empleado que se contrate. */}
@@ -507,6 +592,34 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
             <div className="space-y-1.5">
               <Label htmlFor="ps-convenio">Convenio colectivo</Label>
               <Input id="ps-convenio" value={convenio} onChange={(e) => setConvenio(e.target.value)} placeholder="Ej. Hostelería de Madrid" className={claseFalta("convenioColectivo")} />
+            </div>
+          </div>
+
+          {/* Cronograma: cierra la ficha junto al validador. */}
+          <div className="rounded-md border border-border/60 p-3 space-y-4">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Cronograma</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Tareas que sigue quien ocupe este puesto. Se elige entre los ya creados en Dirección.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ps-crono">Cronograma de tareas</Label>
+              <select
+                id="ps-crono"
+                value={cronogramaRol}
+                onChange={(e) => setCronogramaRol(e.target.value)}
+                className={`flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ${claseFalta("cronogramaRol")}`}
+              >
+                <option value="">
+                  {esNuevo ? "Se crea con el puesto" : "Selecciona…"}
+                </option>
+                {cronogramas.map((c) => (
+                  <option key={c.rol} value={c.rol}>
+                    {c.rol}{c.departamento ? ` · ${c.departamento}` : ""} ({c.tareas})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

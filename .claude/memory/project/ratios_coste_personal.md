@@ -5,7 +5,10 @@ Ahora salen de datos reales. `src/features/gerencia/actions/ratios-actions.ts`.
 
 ## DOS MODOS (botón arriba a la derecha)
 
-- **Pagos reales**: coste = `rrhh_pagos.nomina + ss_empresa`. Dato exacto de la gestoría.
+- **Pagos reales**: coste = `rrhh_pagos.total + ss_empresa`. ⚠️ **`total`, NO `nomina`**:
+  `total` = nómina + complemento + horas_extras + bonus + ajuste, y es lo que se paga de
+  verdad. Usar `nomina` dejaba fuera 1.655 € en BACANAL y 2.155 € en HABANA solo en agosto
+  (verificado: `total` cuadra con la suma de conceptos en las 22 filas del mes). Dato exacto de la gestoría.
   Solo existe con el mes cerrado y los pagos subidos; si no hay, cae a estimación y lo avisa.
   ⚠️ En este modo las **ausencias NO se suman aparte**: ya están dentro de la nómina.
   Las horas fichadas solo REPARTEN ese total entre áreas, departamentos y puestos.
@@ -21,15 +24,16 @@ Ahora salen de datos reales. `src/features/gerencia/actions/ratios-actions.ts`.
    HABANA sumadas. Los ratios de la pantalla SÍ filtran bien (7 `.eq("empresa_id")`); el
    fallo estuvo en las consultas de verificación. **Todo número de coste se mira por empresa.**
 
-## Cifras reales de agosto 2026 (modo Pagos reales)
+## Cifras reales de agosto 2026 (modo Pagos reales, ya con `total`)
 
-| Empresa | Facturación | Coste personal | % |
-|---|---|---|---|
-| HABANA | 26.580,94 € | 5.600,68 € | **21,1 %** |
-| BACANAL | 13.660,76 € | 11.818,16 € | **86,5 %** |
+| Empresa | Pagado | Seg. Social | Coste | Facturación | % | Días abierto |
+|---|---|---|---|---|---|---|
+| HABANA | 6.307 € | 1.449 € | 7.756,07 € | 26.580,94 € | **29,2 %** | 31 |
+| BACANAL | 10.360 € | 3.113 € | 13.473,43 € | 13.660,76 € | **98,6 %** | **17** |
 
-BACANAL se dispara porque las 10 personas de vacaciones de agosto (140 días) eran TODAS
-suyas: facturó la mitad y pagó el doble. Es real, no un error.
+BACANAL casi no gana dinero en agosto, y es REAL: **solo abrió 17 de 31 días** y las 10
+personas de vacaciones (140 días) eran todas suyas. Por día abierto factura casi igual que
+HABANA (803 € vs 857 €), pero paga la plantilla el mes entero.
 
 ## Proyección a fin de mes
 

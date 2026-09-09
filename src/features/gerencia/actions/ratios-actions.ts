@@ -1,7 +1,11 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
-import { costeHoraDe, SS_EMPRESA_PCT_DEFECTO } from "@/features/rrhh/lib/coste-hora";
+import {
+  costeHoraSegunModo,
+  SS_EMPRESA_PCT_DEFECTO,
+  type ModoPago,
+} from "@/features/rrhh/lib/coste-hora";
 import type {
   AreaRatios,
   CosteAusencia,
@@ -112,6 +116,8 @@ function agrupar(iso: string, periodo: PeriodoRatios): { clave: string; etiqueta
 
 interface CosteEmpleado {
   nombre: string;
+  /** Sueldo fijo al mes, o precio por hora trabajada. */
+  modoPago: ModoPago;
   costeHora: number;
   /** Lo que cuesta un día sin trabajar: el sueldo del mes repartido en 30 días. */
   costeDia: number;
@@ -172,11 +178,11 @@ async function construirCostes(
   );
 
   // Condiciones propias vigentes (`vigente_hasta` a nulo): son la fuente buena.
-  const condiciones = new Map<string, { bruto: number; horas: number; costeHora: number | null }>();
+  const condiciones = new Map<string, { bruto: number; horas: number; costeHora: number | null; modoPago: ModoPago }>();
   if (fichaIds.length > 0) {
     const { data } = await supabase
       .from("empleado_condiciones")
-      .select("empleado_id, salario_bruto, horas_semanales, coste_hora")
+      .select("empleado_id, salario_bruto, horas_semanales, coste_hora, modo_pago")
       .eq("empresa_id", empresaId)
       .in("empleado_id", fichaIds)
       .is("vigente_hasta", null);
@@ -185,16 +191,17 @@ async function construirCostes(
         bruto: toNum(c.salario_bruto),
         horas: toNum(c.horas_semanales),
         costeHora: c.coste_hora == null ? null : toNum(c.coste_hora),
+        modoPago: c.modo_pago === "HORAS" ? "HORAS" : "MENSUAL",
       });
     }
   }
 
   // Salario del puesto: plantilla de la que se tira cuando la ficha no lo tiene.
-  const salarioPuesto = new Map<string, { bruto: number; horas: number; costeHora: number | null }>();
+  const salarioPuesto = new Map<string, { bruto: number; horas: number; costeHora: number | null; modoPago: ModoPago }>();
   if (puestoIds.length > 0) {
     const { data } = await supabase
       .from("puesto_salarios")
-      .select("puesto_id, salario_bruto, horas_semanales, coste_hora")
+      .select("puesto_id, salario_bruto, horas_semanales, coste_hora, modo_pago")
       .eq("empresa_id", empresaId)
       .in("puesto_id", puestoIds);
     for (const p of data ?? []) {
@@ -202,6 +209,7 @@ async function construirCostes(
         bruto: toNum(p.salario_bruto),
         horas: toNum(p.horas_semanales),
         costeHora: p.coste_hora == null ? null : toNum(p.coste_hora),
+        modoPago: p.modo_pago === "HORAS" ? "HORAS" : "MENSUAL",
       });
     }
   }
@@ -225,8 +233,12 @@ async function construirCostes(
 
     // Precio de la hora: manda el guardado en las condiciones y, si no lo hay,
     // se deduce del sueldo. Así un coste corregido a mano se respeta siempre.
-    const horaDe = (c?: { bruto: number; horas: number; costeHora: number | null }) =>
-      c ? (c.costeHora && c.costeHora > 0 ? c.costeHora : costeHoraDe(c.bruto, c.horas)) : null;
+    const horaDe = (c?: { bruto: number; horas: number; costeHora: number | null; modoPago: ModoPago }) =>
+      c
+        ? c.costeHora && c.costeHora > 0
+          ? c.costeHora
+          : costeHoraSegunModo(c.modoPago, c.bruto, c.horas)
+        : null;
 
     const horaPropia = horaDe(propias);
     const horaPuesto = horaDe(dePuesto);
@@ -235,14 +247,22 @@ async function construirCostes(
     const costeHora = usaPropias ? horaPropia : horaPuesto;
     const tieneCoste = costeHora !== null && costeHora > 0;
 
-    const brutoOrigen = usaPropias ? propias?.bruto ?? 0 : dePuesto?.bruto ?? 0;
+    const origen = usaPropias ? propias : dePuesto;
+    const modoPago: ModoPago = origen?.modoPago === "HORAS" ? "HORAS" : "MENSUAL";
+    const brutoOrigen = origen?.bruto ?? 0;
 
     mapa.set(e.user_id, {
       nombre: `${e.nombre ?? ""} ${e.apellidos ?? ""}`.trim() || "Sin nombre",
+      modoPago,
       // Coste REAL de empresa: el bruto más la Seguridad Social que paga la
       // empresa por encima. El bruto solo es lo que cobra el trabajador.
       costeHora: tieneCoste ? costeHora! * factorSS : 0,
-      costeDia: brutoOrigen > 0 ? (brutoOrigen / DIAS_MES_NOMINA) * factorSS : 0,
+      // Quien cobra POR HORA no cobra los días que no trabaja: su día de
+      // ausencia no cuesta nada. Solo el sueldo mensual se sigue pagando.
+      costeDia:
+        modoPago === "HORAS" || brutoOrigen <= 0
+          ? 0
+          : (brutoOrigen / DIAS_MES_NOMINA) * factorSS,
       tieneCoste,
       salarioDelPuesto: tieneCoste && !usaPropias,
       puesto: principal?.puestos?.nombre ?? "Sin puesto",
@@ -563,6 +583,10 @@ export async function getRatiosDashboard(
       const userId = a.user_id as string | null;
       if (!userId) continue;
       const info = costes.get(userId);
+      // Quien cobra POR HORA no cobra lo que no trabaja: su ausencia no genera
+      // coste, así que no entra en este apartado (que es de coste, no de días
+      // libres). Contarla a 0 € solo ensuciaría el recuento.
+      if (info?.modoPago === "HORAS") continue;
       // Sin precio para su día no se puede valorar: se deja fuera y ya se avisa
       // en el aviso de cobertura.
       const costeDia = info?.costeDia ?? 0;
@@ -623,7 +647,7 @@ export async function getRatiosDashboard(
       const periodosDelRango = mesesEntre(fromIso, toIso);
       const { data: pagos, error: errPagos } = await supabase
         .from("rrhh_pagos")
-        .select("nomina, ss_empresa, periodo")
+        .select("total, nomina, ss_empresa, periodo")
         .eq("empresa_id", empresaId)
         .in("periodo", periodosDelRango);
       if (errPagos) throw errPagos;
@@ -632,11 +656,15 @@ export async function getRatiosDashboard(
       if (filas.length > 0) {
         modo = "NOMINA";
         for (const pago of filas) {
-          // La Seguridad Social se suma tal cual viene de la gestoría; si esa
-          // fila no la trae, se completa con el % configurado.
-          const nomina = toNum(pago.nomina);
-          const ss = pago.ss_empresa != null ? toNum(pago.ss_empresa) : nomina * (seguridadSocialPct / 100);
-          costeNomina += nomina + ss;
+          // `total` = nómina + complementos + horas extras + bonus + ajustes. Es lo
+          // que se le paga de verdad a la persona. Usar solo `nomina` dejaba fuera
+          // complementos y extras: en agosto, 1.655 € de BACANAL y 2.155 € de HABANA.
+          const cobrado = toNum(pago.total);
+          // La Seguridad Social viene de la gestoría; si esa fila no la trae, se
+          // completa con el % configurado sobre lo cobrado.
+          const ss =
+            pago.ss_empresa != null ? toNum(pago.ss_empresa) : cobrado * (seguridadSocialPct / 100);
+          costeNomina += cobrado + ss;
         }
       }
     }

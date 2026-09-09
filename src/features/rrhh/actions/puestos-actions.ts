@@ -5,7 +5,7 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { friendlyError } from "@/shared/lib/friendly-errors";
-import { costeHoraDe } from "@/features/rrhh/lib/coste-hora";
+import { costeHoraSegunModo, type ModoPago } from "@/features/rrhh/lib/coste-hora";
 import {
   NORMAS_BASE,
   type PuestoSalarial,
@@ -30,6 +30,7 @@ async function getContext() {
 // Salario embebido dentro de un puesto (una fila por NIVEL).
 type SalarioEmbed = {
   nivel: number | null;
+  modo_pago: string | null;
   salario_bruto: number | string | null;
   nomina_neta: number | string | null;
   efectivo_extra: number | string | null;
@@ -38,6 +39,7 @@ type SalarioEmbed = {
   horas_semanales: number | string | null;
   dias_libres: number | null;
   coste_hora: number | string | null;
+  precio_hora_extra: number | string | null;
   vacaciones: string | null;
   horario_semanal: HorarioDia[] | null;
   observaciones: string | null;
@@ -49,7 +51,6 @@ type SalarioEmbed = {
 type PuestoRow = {
   id: string; // puestos.id
   nombre: string | null;
-  descripcion: string | null;
   departamentos: { id: string; nombre: string | null } | null;
   puesto_salarios: SalarioEmbed[] | SalarioEmbed | null;
   convenio_colectivo: string | null;
@@ -63,6 +64,7 @@ function embedToNivel(sal: SalarioEmbed): NivelSalarial {
   return {
     nivel: sal.nivel ?? 1,
     vacaciones: sal.vacaciones ?? "",
+    modoPago: sal.modo_pago === "HORAS" ? "HORAS" : "MENSUAL",
     salarioBruto: Number(sal.salario_bruto) || 0,
     nominaNeta: Number(sal.nomina_neta) || 0,
     efectivoExtra: Number(sal.efectivo_extra) || 0,
@@ -70,9 +72,14 @@ function embedToNivel(sal: SalarioEmbed): NivelSalarial {
     jornadaContrato: sal.jornada_contrato ?? "",
     horasSemanales: Number(sal.horas_semanales) || 0,
     // Si la fila aún no lo tiene escrito, se deduce para no enseñar un 0 falso.
+    precioHoraExtra: Number(sal.precio_hora_extra) || 0,
     costeHora:
       Number(sal.coste_hora) ||
-      costeHoraDe(Number(sal.salario_bruto), Number(sal.horas_semanales)) ||
+      costeHoraSegunModo(
+        sal.modo_pago === "HORAS" ? "HORAS" : "MENSUAL",
+        Number(sal.salario_bruto),
+        Number(sal.horas_semanales),
+      ) ||
       0,
     diasLibres: sal.dias_libres ?? 0,
     horarioSemanal: sal.horario_semanal ?? [],
@@ -93,7 +100,6 @@ function rowToPuesto(r: PuestoRow, conCronograma: Set<string>): PuestoSalarial {
     departamento: r.departamentos?.nombre ?? "",
     departamentoId: r.departamentos?.id ?? "",
     puesto: r.nombre ?? "",
-    descripcion: r.descripcion ?? "",
     nivel: cab?.nivel ?? 1,
     nivelesCount: niveles.length || 1,
     vacaciones: cab?.vacaciones ?? "",
@@ -128,7 +134,7 @@ export async function listPuestosEmpresa(): Promise<{
       supabase
         .from("puestos")
         .select(
-          "id, nombre, descripcion, convenio_colectivo, tipo_contrato_defecto, validador_departamento_id, validador_departamento:departamentos!validador_departamento_id(nombre), departamentos!departamento_id(id, nombre), puesto_salarios(nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, coste_hora, vacaciones, horario_semanal, observaciones, estado, updated_at)",
+          "id, nombre, convenio_colectivo, tipo_contrato_defecto, validador_departamento_id, validador_departamento:departamentos!validador_departamento_id(nombre), departamentos!departamento_id(id, nombre), puesto_salarios(nivel, modo_pago, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, coste_hora, precio_hora_extra, vacaciones, horario_semanal, observaciones, estado, updated_at)",
         )
         .eq("empresa_id", empresaId),
       supabase
@@ -160,6 +166,8 @@ export interface UpsertSalarioInput {
   /** Nivel del puesto (1..N). Por defecto 1. */
   nivel?: number;
   /** Salario BRUTO mensual (cifra principal del puesto). */
+  /** Sueldo fijo al mes (MENSUAL) o precio por hora (HORAS). */
+  modoPago?: ModoPago;
   salarioBruto?: number;
   nominaNeta?: number;
   efectivoExtra?: number;
@@ -169,6 +177,8 @@ export interface UpsertSalarioInput {
   diasLibres?: number;
   /** Coste de la hora. Si no viene (o viene a 0) se deduce del bruto y las horas. */
   costeHora?: number;
+  /** A cuánto se paga una hora extra. */
+  precioHoraExtra?: number;
   vacaciones?: string;
   horarioSemanal?: HorarioDia[];
   observaciones?: string;
@@ -190,7 +200,21 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
     // NORMA: las condiciones del puesto no admiten huecos. Se copian al empleado
     // al contratar, así que un salario a 0 o unas horas sin poner acababan
     // dentro de su contrato y en el alta a la gestoría.
-    if (!(bruto > 0)) return { ok: false, error: "El salario bruto del puesto es obligatorio" };
+    const modoPago: ModoPago = input.modoPago === "HORAS" ? "HORAS" : "MENSUAL";
+    const porHoras = modoPago === "HORAS";
+
+    if (!(bruto > 0)) {
+      return {
+        ok: false,
+        error: porHoras
+          ? "El precio por hora del puesto es obligatorio"
+          : "El salario bruto del puesto es obligatorio",
+      };
+    }
+    // Todo puesto se rellena igual, cobre por mes o por hora: mismas casillas y
+    // ninguna a medias. Lo que cambia entre modos es qué SIGNIFICA el bruto, no
+    // los datos que hay que dar. Quien cobra por hora marca sus vacaciones como
+    // "Incluidas en salario", que es la verdad de su contrato.
     if (!input.jornadaContrato?.trim()) return { ok: false, error: "La jornada del puesto es obligatoria" };
     if (!(Number(input.horasSemanales) > 0)) return { ok: false, error: "Las horas semanales del puesto son obligatorias" };
     if (input.diasLibres === null || input.diasLibres === undefined) {
@@ -203,6 +227,7 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
       empresa_id: empresaId,
       puesto_id: input.puestoId,
       nivel: input.nivel ?? 1,
+      modo_pago: modoPago,
       salario_bruto: bruto,
       nomina_neta: null,
       efectivo_extra: 0,
@@ -210,12 +235,15 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
       jornada_contrato: input.jornadaContrato ?? null,
       horas_semanales: input.horasSemanales ?? null,
       dias_libres: input.diasLibres ?? null,
-      // Si no se escribe a mano se guarda ya calculado: el dato queda congelado
-      // en la plantilla y viaja al empleado al contratarlo.
-      coste_hora:
-        input.costeHora && input.costeHora > 0
+      // En HORAS el precio de la hora ES el bruto. En MENSUAL se reparte el
+      // sueldo entre las horas, salvo que se haya escrito un coste a mano.
+      // Quien cobra por hora cobra la extra igual que la normal.
+      precio_hora_extra: porHoras ? bruto : (input.precioHoraExtra ?? null),
+      coste_hora: porHoras
+        ? bruto
+        : input.costeHora && input.costeHora > 0
           ? input.costeHora
-          : costeHoraDe(bruto, input.horasSemanales ?? null),
+          : costeHoraSegunModo(modoPago, bruto, input.horasSemanales ?? null),
       vacaciones: input.vacaciones ?? null,
       horario_semanal: input.horarioSemanal ?? [],
       observaciones: input.observaciones ?? null,
@@ -245,7 +273,7 @@ export async function listNivelesDePuesto(
     const { data, error } = await supabase
       .from("puesto_salarios")
       .select(
-        "nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, coste_hora, vacaciones, horario_semanal, observaciones, estado, updated_at",
+        "nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, coste_hora, precio_hora_extra, vacaciones, horario_semanal, observaciones, estado, updated_at",
       )
       .eq("empresa_id", empresaId)
       .eq("puesto_id", puestoId)
