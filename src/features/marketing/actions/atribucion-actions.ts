@@ -11,6 +11,8 @@ export interface CampanaAtribucionRow {
   estado: EstadoCampana;
   ultimaEjecucion: string | null;
   origen: string | null;
+  /** Palabra que viaja en el enlace del correo (`?c=enero`). */
+  palabra: string | null;
   enviados: number;
   abiertos: number;
   reservasGeneradas: number;
@@ -27,6 +29,7 @@ function mapRow(row: Row): CampanaAtribucionRow {
     estado: row.estado as EstadoCampana,
     ultimaEjecucion: (row.ultima_ejecucion as string | null) ?? null,
     origen: (row.origen as string | null) ?? null,
+    palabra: (row.palabra as string | null) ?? null,
     enviados: Number(row.enviados ?? 0),
     abiertos: Number(row.abiertos ?? 0),
     reservasGeneradas: Number(row.reservas_generadas ?? 0),

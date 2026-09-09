@@ -55,6 +55,8 @@ interface Props {
   colorPrimario: string | null;
   colorTexto: string | null;
   origen: string | null;
+  /** Campaña que trajo al cliente (`?c=enero`), si vino de un correo. */
+  campana?: string | null;
   productosTicket?: ProductoTicketPublico[];
   ticketOnly?: boolean;
   /** Si es true, oculta el header con logo (modo iframe / embed). */
@@ -127,6 +129,7 @@ export function ReservaPublicaForm({
   colorPrimario,
   colorTexto,
   origen,
+  campana = null,
   productosTicket = [],
   ticketOnly = false,
   embedded = false,
@@ -393,6 +396,7 @@ export function ReservaPublicaForm({
     const r = await crearReservaPublicaAction({
       empresaSlug,
       origen,
+      campana,
       nombre: nombre.trim(),
       apellidos: apellidos.trim(),
       // Entero, con el prefijo dentro: es un solo campo.

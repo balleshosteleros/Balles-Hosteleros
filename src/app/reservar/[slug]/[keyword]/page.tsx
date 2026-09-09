@@ -86,12 +86,28 @@ function normalizarOrigen(raw: string): string | null {
   return /^[A-Z0-9_]+$/.test(upper) && upper.length <= 32 ? upper : null;
 }
 
+/**
+ * `?c=enero` — qué campaña trajo al cliente.
+ *
+ * El canal ya lo dice la palabra clave del enlace (EMAIL); esto distingue el
+ * correo de enero del de cumpleaños, que comparten enlace a propósito. Es una
+ * URL pública: lo que no encaje se descarta y la reserva entra sin campaña.
+ */
+function normalizarCampana(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const limpio = decodeURIComponent(raw).trim().toLowerCase();
+  return /^[a-z0-9]{1,24}$/.test(limpio) ? limpio : null;
+}
+
 export default async function ReservarCortoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; keyword: string }>;
+  searchParams: Promise<{ c?: string }>;
 }) {
   const { slug, keyword } = await params;
+  const { c } = await searchParams;
   const empresa = await fetchEmpresaBySlug(slug);
   if (!empresa) notFound();
 
@@ -114,6 +130,7 @@ export default async function ReservarCortoPage({
       colorTexto={empresa.colorTexto}
       zonaHoraria={empresa.zonaHoraria}
       origen={normalizarOrigen(keyword)}
+      campana={normalizarCampana(c)}
       productosTicket={productosTicket}
       ticketOnly={linkInfo.vendeTickets}
       hrefWeb={hrefWeb}

@@ -294,12 +294,13 @@ async function keywordsDeCanalReserva(): Promise<string[]> {
       auth: { persistSession: false, autoRefreshToken: false },
     })
     const { data } = await db.from('reserva_links').select('palabra_clave')
-    // Los tres canales fijos van SIEMPRE, existan ya o no en la BD: un local
-    // recién abierto tiene que funcionar sin esperar a un despliegue nuevo.
+    // Los canales fijos van SIEMPRE, existan ya o no en la BD: un local recién
+    // abierto tiene que funcionar sin esperar a un despliegue nuevo. `email` es
+    // el canal de los correos del propio software, así que va con ellos.
     // Ojo: una campaña nueva creada a mano (`BLACK_FRIDAY`) sí necesita el
     // siguiente despliegue para que su enlace corto atribuya bajo el dominio
     // propio. Mientras tanto atribuye igual por el dominio del sistema.
-    const vistos = new Set<string>(['google', 'instagram', 'facebook'])
+    const vistos = new Set<string>(['google', 'instagram', 'facebook', 'email'])
     for (const r of data ?? []) {
       const k = String(r.palabra_clave ?? '').trim().toLowerCase()
       // Solo lo que es seguro meter en una regex; una palabra clave rara no

@@ -100,6 +100,42 @@ export async function fotoDeLaCarta(
   return { url: donde[0].url, alt: donde[0].nombre };
 }
 
+const MESES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+] as const;
+
+/**
+ * Palabra de la campaña del mes: `enero`, `febrero`… Una al mes, así que el mes
+ * la identifica sin inventar nada.
+ */
+export function palabraDelMes(mes: number): string {
+  return MESES[mes - 1];
+}
+
+/**
+ * El enlace del correo con su campaña detrás: `…/reservar/email?c=enero`.
+ *
+ * El canal sigue siendo uno (EMAIL, lo que se graba en `reservas.origen`) y la
+ * palabra dice QUÉ correo trajo la mesa. Sin esto, las quince campañas
+ * mostrarían la misma cifra de mesas: todas las que entraron por correo.
+ *
+ * Se concatena con `?` a pelo porque `buildReservaUrl` nunca devuelve query.
+ */
+export function urlConCampana(url: string, palabra: string): string {
+  return `${url}?c=${palabra}`;
+}
+
 /**
  * Palabra clave única del canal correo. Coincide con `EMAIL` de
  * `features/sala/data/origenes.ts`, donde ya tiene etiqueta y color: si aquí se
@@ -201,7 +237,7 @@ export async function construirCorreoDelMes(
     fotoUrl: foto?.url ?? null,
     fotoAlt: foto?.alt,
     ctaTexto: seed.ctaTexto,
-    ctaUrl: enlace.url,
+    ctaUrl: urlConCampana(enlace.url, palabraDelMes(seed.mes)),
     concursoPremio: PREMIO_CONCURSO,
     concursoUrl: urlConcurso(seed.clave, dominio, empresa.slug),
     urlBaja: urlBajaDeEmpresa(dominio, empresa.slug),
@@ -274,6 +310,7 @@ export async function sembrarCampanasAnualesAEmpresa(
       nombre: seed.nombre,
       estado: "borrador",
       reserva_link_id: correo.reservaLinkId,
+      palabra: palabraDelMes(seed.mes),
       // Un envío al mes, el día 1 a las 11:00. La hora exacta la decide quien
       // lo envía: el día sorpresa del concurso es parte del juego.
       recurrencia_cron: `0 11 1 ${seed.mes} *`,

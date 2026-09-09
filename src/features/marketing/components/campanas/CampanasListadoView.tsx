@@ -207,7 +207,7 @@ export function CampanasListadoView({ canal }: Props) {
                           {r.origen && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase bg-sky-600/10 text-sky-700 dark:text-sky-400 border border-sky-600/20 rounded px-1.5 py-px">
                               <Link2 className="h-2.5 w-2.5" />
-                              {r.origen}
+                              {r.palabra ? `${r.origen} · ${r.palabra}` : r.origen}
                             </span>
                           )}
                           {abriendo === r.campanaId && (
