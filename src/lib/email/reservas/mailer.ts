@@ -131,6 +131,7 @@ type EmpresaRow = {
   nombre: string;
   logo_url: string | null;
   isotipo_url: string | null;
+  logo_alt_url?: string | null;
   color: string | null;
   color_secundario: string | null;
   /**
@@ -410,7 +411,7 @@ export async function enviarReservaEmail(
     await Promise.all([
       admin
         .from("empresas")
-        .select("nombre, logo_url, isotipo_url, color, color_secundario, datos_generales")
+        .select("nombre, logo_url, isotipo_url, logo_alt_url, color, color_secundario, datos_generales")
         .eq("id", empresaId)
         .maybeSingle(),
       admin
@@ -432,6 +433,7 @@ export async function enviarReservaEmail(
     nombre: (empresaData?.nombre as string | undefined) ?? "",
     logo_url: (empresaData?.logo_url as string | null | undefined) ?? null,
     isotipo_url: (empresaData?.isotipo_url as string | null | undefined) ?? null,
+    logo_alt_url: (empresaData?.logo_alt_url as string | null | undefined) ?? null,
     color: (empresaData?.color as string | null | undefined) ?? null,
     color_secundario:
       (empresaData?.color_secundario as string | null | undefined) ?? null,
@@ -1044,6 +1046,7 @@ function renderHtml(input: RenderInput): string {
       nombre: empresaNombre,
       logo_url: input.empresa.logo_url,
       isotipo_url: input.empresa.isotipo_url,
+      logo_alt_url: input.empresa.logo_alt_url ?? null,
       color: input.empresa.color,
     },
     telefono: input.empresa.telefono,

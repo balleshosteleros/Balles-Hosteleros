@@ -109,6 +109,13 @@ export interface MarcaEmpresa {
   nombre: string;
   logo_url: string | null;
   isotipo_url: string | null;
+  /**
+   * Versión del logo para fondos de color (Ajustes → Imagen de marca). El
+   * isotipo normal va en el color de la marca, así que sobre la cabecera —que
+   * es de ese mismo color— desaparece: en HABANA el isotipo rosa sobre fondo
+   * rosa no se veía. Si está, manda.
+   */
+  logo_alt_url?: string | null;
   color: string | null;
   /** Segundo color de Imagen de marca. Si falta, se deriva del primario. */
   color_secundario?: string | null;
@@ -156,10 +163,27 @@ export function envolverEmail(input: EnvolturaInput): string {
   const textoSobrePrimario = colorContraste(primario);
   const empresaNombre = input.empresa.nombre || "";
 
-  const marcaSrc = input.empresa.isotipo_url || input.empresa.logo_url;
-  const cabeceraHtml = marcaSrc
+  // Logo sobre la cabecera de color. Dos casos:
+  //
+  // 1. Hay versión para fondos de color (`logo_alt_url`): se pinta directamente
+  //    sobre el color de la marca, que es como se ve mejor.
+  // 2. No la hay: el isotipo normal lleva el color de la marca y sobre esa
+  //    misma cabecera se pierde (HABANA: rosa sobre rosa). Se pone entonces
+  //    dentro de un óvalo blanco, que lo hace legible con cualquier marca.
+  //
+  // No se usan filtros CSS para blanquearlo: Gmail y Outlook los ignoran, así
+  // que el logo saldría invisible justo en los clientes que más se usan.
+  const altUrl = input.empresa.logo_alt_url?.trim();
+  const logoParaFondo = altUrl && /^https:\/\//.test(altUrl) ? altUrl : null;
+  const marcaSrc = logoParaFondo ?? (input.empresa.isotipo_url || input.empresa.logo_url);
+  const imgHtml = marcaSrc
     ? `<img src="${escapeAttr(marcaSrc)}" alt="${escapeAttr(empresaNombre)}" style="max-height:60px;max-width:220px;display:block;margin:0 auto;" />`
-    : `<div style="font-size:22px;font-weight:700;color:${textoSobrePrimario};letter-spacing:0.2px;">${escapeHtml(empresaNombre)}</div>`;
+    : "";
+  const cabeceraHtml = !marcaSrc
+    ? `<div style="font-size:22px;font-weight:700;color:${textoSobrePrimario};letter-spacing:0.2px;">${escapeHtml(empresaNombre)}</div>`
+    : logoParaFondo
+      ? imgHtml
+      : `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr><td style="background:#ffffff;border-radius:999px;padding:14px 22px;">${imgHtml}</td></tr></table>`;
 
   return `<!doctype html>
 <html lang="es">
