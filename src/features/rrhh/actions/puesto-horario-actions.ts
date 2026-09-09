@@ -17,7 +17,14 @@ export type PatronElegible = {
   familiaId: string;
   patronId: string;
   nombre: string;
+  /** Primera semana, para la vista previa de la ficha. */
   dias: (string | null)[];
+  /**
+   * TODAS las semanas del ciclo (lunes→domingo cada una). Un patrón rotativo
+   * alterna varias, y las horas del contrato son el promedio del ciclo — por eso
+   * no basta con la primera. Ver `jornadaDesdeHorario`.
+   */
+  semanas: (string | null)[][];
 };
 
 async function getContext() {
@@ -92,6 +99,10 @@ export async function getHorarioPuesto(puestoId: string | null): Promise<{
         patronId: p.id,
         nombre: p.nombre,
         dias: normaDias(p.semanas?.[0]?.dias ?? []),
+        semanas: (p.semanas ?? [])
+          .slice()
+          .sort((a, b) => a.orden - b.orden)
+          .map((sem) => normaDias(sem.dias)),
       }));
 
     const familiaSeleccionada =
