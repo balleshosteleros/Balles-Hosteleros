@@ -17,6 +17,13 @@ const QR_HOST = process.env.NEXT_PUBLIC_QR_HOST?.trim() || 'qr.balleshosteleros.
 const SOFTWARE_HOST =
   process.env.NEXT_PUBLIC_SOFTWARE_HOST?.trim() || 'software.balleshosteleros.com'
 
+// Portal de formación de los ALUMNOS. Vive bajo `/escuela` y se publica en su
+// propio subdominio, el mismo que llevaba al portal de GoHighLevel: así el
+// enlace "Acceso Alumnos" de la web y todo lo repartido sigue valiendo, y el
+// alumno no nota el cambio de casa.
+const ESCUELA_HOST =
+  process.env.NEXT_PUBLIC_ESCUELA_HOST?.trim() || 'laescuela.balleshosteleros.com'
+
 // Subdominios del dominio principal que sirven una PÁGINA WEB de empresa y no la
 // app (p.ej. `bacanal.balleshosteleros.com`). Sirven para enseñar una web antes de
 // apuntarle su dominio real, sin tocar el DNS de producción del cliente.
@@ -493,6 +500,20 @@ const nextConfig: NextConfig = {
           source: '/',
           has: [{ type: 'host' as const, value: SOFTWARE_HOST }],
           destination: '/software',
+        },
+        // El portal de alumnos, en su subdominio y sin `/escuela` en la URL.
+        // `/login` entra aquí también porque es la dirección que reparte el
+        // portal viejo de GoHighLevel: quien la tenga guardada aterriza donde
+        // debe en vez de en un 404.
+        {
+          source: '/',
+          has: [{ type: 'host' as const, value: ESCUELA_HOST }],
+          destination: '/escuela',
+        },
+        {
+          source: '/login',
+          has: [{ type: 'host' as const, value: ESCUELA_HOST }],
+          destination: '/escuela',
         },
         // Documentos legales en la raíz: `/legal/privacidad` en vez de
         // `/software/legal/privacidad`.
