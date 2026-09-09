@@ -26,17 +26,39 @@ function db() {
   );
 }
 
+/**
+ * Filtro para buscar un correo en los tres huecos de la ficha.
+ *
+ * Una persona es UNA ficha aunque tenga correo personal y de empresa: si solo
+ * se mirara la llave, al juntar dos fichas le habríamos cerrado la puerta a
+ * quien entraba con el otro correo.
+ */
+function filtroPorCualquierCorreo(email: string): string {
+  // Las comas y los paréntesis son la sintaxis del filtro; un correo no los
+  // lleva, y si vienen es que alguien está probando a colarlos.
+  const e = email.trim().toLowerCase().replace(/[,()%*\\]/g, "");
+  return `email.ilike.${e},email_personal.ilike.${e},email_empresa.ilike.${e}`;
+}
+
 async function buscarAlumnoPorEmail(email: string) {
   const marca = await getMarcaEscuela();
   if (!marca) return null;
   const { data } = await db()
     .from("escuela_alumnos")
-    .select("id, nombre, email, estado")
+    .select("id, nombre, email, email_personal, email_empresa, estado")
     .eq("empresa_id", marca.empresaId)
-    .ilike("email", email.trim())
+    .or(filtroPorCualquierCorreo(email))
+    .limit(1)
     .maybeSingle();
   if (!data || data.estado !== "ACTIVO") return null;
-  return { id: data.id as string, nombre: (data.nombre as string) ?? "", email: data.email as string, marca };
+  // El código va al correo por el que ha pedido entrar, no al principal de la
+  // ficha: puede que del otro buzón ni siquiera tenga las llaves.
+  const escrito = email.trim().toLowerCase();
+  const suyos = [data.email, data.email_personal, data.email_empresa]
+    .filter(Boolean)
+    .map((x) => (x as string).toLowerCase());
+  const destino = suyos.includes(escrito) ? escrito : (data.email as string);
+  return { id: data.id as string, nombre: (data.nombre as string) ?? "", email: destino, marca };
 }
 
 /** Envía el código. Devuelve siempre lo mismo, exista o no el alumno. */
@@ -132,7 +154,8 @@ export async function alumnoDesdeUsuario(input: {
     .from("escuela_alumnos")
     .select("id, estado")
     .eq("empresa_id", marca.empresaId)
-    .ilike("email", email)
+    .or(filtroPorCualquierCorreo(email))
+    .limit(1)
     .maybeSingle();
 
   if (existente) {
@@ -147,6 +170,7 @@ export async function alumnoDesdeUsuario(input: {
     .insert({
       empresa_id: marca.empresaId,
       email,
+      email_personal: email,
       nombre: input.nombre ?? "",
       empresa_cliente_id: input.empresaClienteId ?? null,
       usuario_id: input.userId,

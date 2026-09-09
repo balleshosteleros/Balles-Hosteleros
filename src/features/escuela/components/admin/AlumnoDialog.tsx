@@ -73,7 +73,8 @@ export function AlumnoDialog({
       alumno
         ? {
             nombre: alumno.nombre,
-            email: alumno.email,
+            emailPersonal: alumno.emailPersonal ?? "",
+            emailEmpresa: alumno.emailEmpresa ?? "",
             telefono: alumno.telefono ?? "",
             empresaClienteId: alumno.empresaClienteId ?? "",
             clienteId: alumno.clienteId ?? "",
@@ -141,16 +142,27 @@ export function AlumnoDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="email">Correo</Label>
+            <Label htmlFor="email-personal">Correo personal</Label>
             <Input
-              id="email"
+              id="email-personal"
               type="email"
-              value={form.email}
-              onChange={(e) => set("email", e.target.value)}
-              placeholder="alumno@restaurante.com"
+              value={form.emailPersonal ?? ""}
+              onChange={(e) => set("emailPersonal", e.target.value)}
+              placeholder="nombre@gmail.com"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="email-empresa">Correo de empresa</Label>
+            <Input
+              id="email-empresa"
+              type="email"
+              value={form.emailEmpresa ?? ""}
+              onChange={(e) => set("emailEmpresa", e.target.value)}
+              placeholder="direccion@restaurante.com"
             />
             <p className="text-xs text-muted-foreground">
-              Es el correo con el que entra: ahí recibe su código.
+              Entra con cualquiera de los dos, y el código le llega al que use.
             </p>
           </div>
 
@@ -319,7 +331,8 @@ export function AlumnoDialog({
 function vacio(): EntradaAlumno {
   return {
     nombre: "",
-    email: "",
+    emailPersonal: "",
+    emailEmpresa: "",
     telefono: "",
     empresaClienteId: "",
     clienteId: "",

@@ -43,7 +43,14 @@ export type EstadoAlumno = "ACTIVO" | "INACTIVO";
 
 export interface AlumnoEscuela {
   id: string;
+  /** Llave de acceso: el de empresa si lo tiene, si no el personal. */
   email: string;
+  /**
+   * Los dos correos de la persona. Una persona es UNA ficha aunque entre con
+   * dos correos distintos, y al portal se entra con cualquiera de ellos.
+   */
+  emailPersonal?: string;
+  emailEmpresa?: string;
   nombre: string;
   telefono?: string;
   /** Empresa cliente del alumno (la que tiene el software contratado). */

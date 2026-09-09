@@ -83,8 +83,10 @@ export function AlumnosTab({
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return alumnos;
-    return alumnos.filter(
-      (a) => a.nombre.toLowerCase().includes(q) || a.email.toLowerCase().includes(q),
+    return alumnos.filter((a) =>
+      [a.nombre, a.email, a.emailPersonal, a.emailEmpresa]
+        .filter(Boolean)
+        .some((campo) => (campo as string).toLowerCase().includes(q)),
     );
   }, [alumnos, busqueda]);
 
@@ -150,7 +152,7 @@ export function AlumnosTab({
                   ) : null}
                 </div>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  {a.email}
+                  {[a.emailPersonal, a.emailEmpresa].filter(Boolean).join(" · ") || a.email}
                   {a.empresaClienteNombre ? ` · ${a.empresaClienteNombre}` : ""} ·{" "}
                   {a.leccionesCompletadas}{" "}
                   {a.leccionesCompletadas === 1 ? "lección vista" : "lecciones vistas"}

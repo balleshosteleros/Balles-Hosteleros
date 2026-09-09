@@ -28,6 +28,8 @@ async function ctx() {
 type AlumnoRow = {
   id: string;
   email: string;
+  email_personal: string | null;
+  email_empresa: string | null;
   nombre: string;
   telefono: string | null;
   empresa_cliente_id: string | null;
@@ -101,6 +103,8 @@ export async function listAlumnos(): Promise<{ ok: boolean; data: AlumnoEscuela[
     const data = ((alumnosR.data ?? []) as AlumnoRow[]).map((r) => ({
       id: r.id,
       email: r.email,
+      emailPersonal: r.email_personal ?? undefined,
+      emailEmpresa: r.email_empresa ?? undefined,
       nombre: r.nombre ?? "",
       telefono: r.telefono ?? undefined,
       empresaClienteId: r.empresa_cliente_id ?? undefined,
@@ -127,13 +131,26 @@ export async function listAlumnos(): Promise<{ ok: boolean; data: AlumnoEscuela[
 
 const esquemaAlumno = z.object({
   nombre: z.string().trim().min(1, "El alumno necesita un nombre").max(200),
-  email: z.string().trim().toLowerCase().email("El correo no es válido"),
+  emailPersonal: z.string().trim().toLowerCase().email("El correo personal no es válido").optional().or(z.literal("")),
+  emailEmpresa: z.string().trim().toLowerCase().email("El correo de empresa no es válido").optional().or(z.literal("")),
   telefono: z.string().trim().max(40).optional().or(z.literal("")),
   empresaClienteId: z.string().uuid().optional().or(z.literal("")),
   clienteId: z.string().uuid().optional().or(z.literal("")),
   accesoTotal: z.boolean().default(true),
   estado: z.enum(["ACTIVO", "INACTIVO"]).default("ACTIVO"),
+}).refine((v) => !!(v.emailPersonal || v.emailEmpresa), {
+  message: "El alumno necesita al menos un correo",
+  path: ["emailPersonal"],
 });
+
+/**
+ * La llave con la que se le identifica: la de empresa si la tiene, y si no la
+ * personal — igual que el login de un empleado. Da lo mismo para entrar, porque
+ * al portal se accede con cualquiera de los dos.
+ */
+function llaveDeAcceso(v: { emailPersonal?: string; emailEmpresa?: string }): string {
+  return (v.emailEmpresa || v.emailPersonal || "").trim().toLowerCase();
+}
 
 /**
  * Ficha de cliente que le corresponde a un correo, si la hay.
@@ -173,11 +190,13 @@ export async function crearAlumno(
       .insert({
         empresa_id: empresaId,
         nombre: v.nombre,
-        email: v.email,
+        email: llaveDeAcceso(v),
+        email_personal: v.emailPersonal || null,
+        email_empresa: v.emailEmpresa || null,
         telefono: v.telefono || null,
         empresa_cliente_id: v.empresaClienteId || null,
         // Si no se elige ficha, se busca por el correo: casi siempre ya existe.
-        cliente_id: v.clienteId || (await clientePorEmail(supabase, empresaId, v.email)),
+        cliente_id: v.clienteId || (await clientePorEmail(supabase, empresaId, llaveDeAcceso(v))),
         acceso_total: v.accesoTotal,
         estado: v.estado,
         origen: "ALTA_MANUAL",
@@ -213,7 +232,9 @@ export async function actualizarAlumno(
       .from("escuela_alumnos")
       .update({
         nombre: v.nombre,
-        email: v.email,
+        email: llaveDeAcceso(v),
+        email_personal: v.emailPersonal || null,
+        email_empresa: v.emailEmpresa || null,
         telefono: v.telefono || null,
         empresa_cliente_id: v.empresaClienteId || null,
         // Vacío es vacío: si se quita la ficha a mano no se vuelve a enganchar
