@@ -17,7 +17,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { es } from "date-fns/locale";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ahoraEnZona, formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
-import { diaNegocioDe } from "@/features/sala/lib/dia-negocio";
+import { HORA_CORTE_DIA_NEGOCIO, diaNegocioDe, turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useBloqueoCambioEmpresa } from "@/shared/hooks/useBloqueoCambioEmpresa";
 import { Plus, Search, ChevronLeft, ChevronRight, Check, Move, Map as MapIcon, List as ListIcon, Lock, Table2, ArrowLeftRight, ArrowRight } from "lucide-react";
@@ -46,7 +46,7 @@ import {
   compararReservasPorJornada,
   franjasSolapan,
 } from "@/features/sala/lib/reserva-conflicto";
-import { esHoraEnCuarto } from "@/features/sala/lib/reserva-cuartos";
+import { esHoraEnCuarto, horaAhoraEnCuarto } from "@/features/sala/lib/reserva-cuartos";
 import { SelectorHoraCuartos } from "@/features/sala/components/reservas/SelectorHoraCuartos";
 import {
   SelectorMesaConAvisos,
@@ -908,11 +908,35 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     forzarMesaBloqueada?: boolean;
   }) => void;
 }) {
+  const { empresaActual } = useEmpresa();
+  const zonaHorariaEmpresa = empresaActual.zonaHoraria;
+  /**
+   * Hora con la que nace un walk-in: la de AHORA en el reloj de la empresa,
+   * redondeada al cuarto más cercano. No se pregunta porque no hay nada que
+   * preguntar — el cliente está en la puerta. Si no es para ahora mismo, eso
+   * es lista de espera, no un walk-in.
+   */
+  const horaWalkIn = () => horaAhoraEnCuarto(zonaHorariaEmpresa);
+  /** Hora del alta si se abrió ya en walk-in (desde "Sentar walk-in" del plano). */
+  const [horaWalkInAlAbrir] = useState(() =>
+    tipoAltaInicial === "WALKIN" ? horaAhoraEnCuarto(empresaActual.zonaHoraria) : "",
+  );
+  /**
+   * Última hora puesta sola por el modo walk-in. Sirve para una única cosa: si
+   * se cambia a Cliente o a Lista de espera SIN haberla tocado, se vacía. Una
+   * reserva por teléfono no puede heredar en silencio la hora del reloj.
+   */
+  const [horaAutoWalkIn, setHoraAutoWalkIn] = useState(horaWalkInAlAbrir);
   const [form, setForm] = useState({
     // El teléfono se guarda SIEMPRE con prefijo: un número sin él no sirve
     // para llamar a quien no es del país y además duplica fichas de cliente.
     cliente: "", apellidos: "", telefonoPrefijo: PREFIJO_POR_DEFECTO, telefono: "", email: "",
-    fecha, hora: "", turno,
+    fecha,
+    // El walk-in abre con la hora ya puesta; el resto de altas la eligen.
+    hora: horaWalkInAlAbrir,
+    // Y con el turno que le toca a esa hora, no con el que estuviera mirándose:
+    // un walk-in de las 21:00 es cena aunque la pantalla viniera de comida.
+    turno: horaWalkInAlAbrir ? turnoDeHora(horaWalkInAlAbrir) : turno,
     // Siempre 2 por defecto: la capacidad de la mesa no dice cuánta gente viene.
     comensales: 2,
     zona: (mesaPreseleccionada?.zona ?? "") as ZonaSala | "",
@@ -1249,6 +1273,48 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     if (mesaBanner) return mesaOcupadaEn(slotElegido, mesaBanner.codigo);
     return !slotElegido.hayMesaLibre;
   }, [esListaEspera, slotElegido, mesaBanner, mesaOcupadaEn]);
+
+  /**
+   * Horas que ofrece el desplegable, con su aviso de solape (⏰).
+   *
+   * Son las del horario del turno y, SOLO en walk-in, también la de ahora
+   * mismo cuando el horario no la contempla: el cliente ya está dentro, así
+   * que su hora tiene que poder verse y guardarse aunque el turno vaya justo
+   * de horario. Sin esto el desplegable se quedaba en "— Elige hora —" con la
+   * hora ya puesta por dentro, y parecía que el alta estaba sin rellenar.
+   *
+   * El orden es el del SERVICIO, no el del reloj: la madrugada va al final,
+   * porque las 00:30 son el cierre de la noche y no el principio del día.
+   */
+  const horasOferta = useMemo(() => {
+    // Sin horario calculado no hay lista que ofrecer: la hora se elige en la
+    // cuadrícula de cuartos, como siempre.
+    if (slots.length === 0) return [];
+    const minutosServicio = (h: string) => {
+      const [hh, mm] = h.split(":").map(Number);
+      const t = (hh || 0) * 60 + (mm || 0);
+      return hh < HORA_CORTE_DIA_NEGOCIO ? t + 24 * 60 : t;
+    };
+    const opciones = slots.map((s) => ({
+      hora: s.hora,
+      // ⏰ = peligro de HORARIO. El aforo no depende de la hora, así que aquí
+      // nunca sale 👥.
+      // En lista de espera no se marca nada: apuntarse es justamente para una
+      // hora SIN mesa libre, así que el ⏰ saldría en casi todas y avisaría de
+      // lo que ya se da por hecho.
+      pisa: esListaEspera
+        ? false
+        : mesaBanner
+          ? mesaOcupadaEn(s, mesaBanner.codigo)
+          : !s.hayMesaLibre,
+    }));
+    const hora = form.hora.slice(0, 5);
+    if (esWalkIn && hora && !opciones.some((o) => o.hora === hora)) {
+      opciones.push({ hora, pisa: false });
+      opciones.sort((a, b) => minutosServicio(a.hora) - minutosServicio(b.hora));
+    }
+    return opciones;
+  }, [slots, esListaEspera, esWalkIn, mesaBanner, mesaOcupadaEn, form.hora]);
 
   /**
    * Peligro por AFORO (👥): el grupo no encaja en la capacidad de la mesa.
@@ -1747,10 +1813,23 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               key={op.tipo}
               type="button"
               aria-pressed={activo}
-              onClick={() =>
+              onClick={() => {
+                // Walk-in: la hora se pone sola y se refresca en el momento de
+                // pulsar, no en el de abrir la ventana — entre una cosa y otra
+                // puede haber pasado un cuarto de hora largo.
+                const horaAhora = op.tipo === "WALKIN" ? horaWalkIn() : "";
+                setHoraAutoWalkIn(horaAhora);
                 setForm((p) => ({
                   ...p,
                   tipoAlta: op.tipo,
+                  // La hora del walk-in es AHORA: el cliente está en la puerta.
+                  // Al salir de walk-in se retira, pero solo si seguía siendo la
+                  // que puso el sistema: lo que haya escrito una persona manda.
+                  ...(op.tipo === "WALKIN"
+                    ? { hora: horaAhora, turno: turnoDeHora(horaAhora) }
+                    : p.hora && p.hora === horaAutoWalkIn
+                      ? { hora: "" }
+                      : {}),
                   // Ni el walk-in ni la lista de espera llevan garantía ni
                   // cupón: uno ya está sentado y el otro aún no tiene mesa.
                   // El tipo queda en Gratis.
@@ -1766,8 +1845,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                   // preseleccionada desde el plano) se suelta, para no dejarla
                   // pillada por alguien que todavía está esperando.
                   ...(op.tipo === "LISTA_ESPERA" ? { mesaId: "" } : {}),
-                }))
-              }
+                }));
+              }}
               className={cn(
                 "h-8 rounded-md text-xs font-medium transition-colors",
                 activo
@@ -1869,7 +1948,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             la MESA elegida si la hay (esa mesa está pillada a esa hora); si aún
             no hay mesa, avisa cuando no queda ningún hueco para el grupo. */}
         <div><Label className="text-xs">Hora *</Label>
-          {slots.length > 0 ? (
+          {horasOferta.length > 0 ? (
             <select
               value={form.hora.slice(0, 5)}
               onChange={(e) => setForm((p) => ({ ...p, hora: e.target.value }))}
@@ -1879,23 +1958,11 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               )}
             >
               <option value="">— Elige hora —</option>
-              {slots.map((s) => {
-                // ⏰ = peligro de HORARIO. El aforo no depende de la hora, así
-                // que aquí nunca sale 👥.
-                // En lista de espera no se marca nada: apuntarse es justamente
-                // para una hora SIN mesa libre, así que el ⏰ saldría en casi
-                // todas y avisaría de lo que ya se da por hecho.
-                const pisa = esListaEspera
-                  ? false
-                  : mesaBanner
-                    ? mesaOcupadaEn(s, mesaBanner.codigo)
-                    : !s.hayMesaLibre;
-                return (
-                  <option key={s.hora} value={s.hora}>
-                    {s.hora}{pisa ? "  ⏰" : ""}
-                  </option>
-                );
-              })}
+              {horasOferta.map((o) => (
+                <option key={o.hora} value={o.hora}>
+                  {o.hora}{o.pisa ? "  ⏰" : ""}
+                </option>
+              ))}
             </select>
           ) : (
             // Sin horario definido (o fallo al calcularlo) no se bloquea el
@@ -2649,6 +2716,29 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     grupoId: (row.grupo_id as string | null) ?? null,
     codigoId: (row.codigo_id as string | null) ?? null,
     codigo: (row.codigo as string | null) ?? null,
+    ...(() => {
+      // PostgREST devuelve el embebido como objeto o como array de uno según la
+      // relación; se admiten los dos para no depender de ese detalle.
+      const c = row.reserva_codigos as
+        | { titulo_interno?: string; titulo_cliente?: string; beneficio_tipo?: string; beneficio_valor?: number | null; producto_descripcion?: string | null }
+        | Array<Record<string, unknown>>
+        | null;
+      const cupon = (Array.isArray(c) ? c[0] : c) as
+        | { titulo_interno?: string; titulo_cliente?: string; beneficio_tipo?: string; beneficio_valor?: number | null; producto_descripcion?: string | null }
+        | undefined;
+      if (!cupon) return { cuponTitulo: null, cuponBeneficio: null };
+      const valor = cupon.beneficio_valor ?? null;
+      const beneficio =
+        cupon.beneficio_tipo === "porcentaje"
+          ? `${valor ?? 0}% de descuento`
+          : cupon.beneficio_tipo === "importe"
+            ? `${String(valor ?? 0).replace(".", ",")} € de descuento`
+            : (cupon.producto_descripcion ?? "Producto gratis");
+      return {
+        cuponTitulo: cupon.titulo_interno ?? cupon.titulo_cliente ?? null,
+        cuponBeneficio: beneficio,
+      };
+    })(),
     reconfirmadaAt: (row.reconfirmada_at as string | null) ?? null,
     externalId: (row.external_id as string | null) ?? null,
     externalOrigen: (row.external_origen as string | null) ?? null,

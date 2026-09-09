@@ -2,6 +2,7 @@
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  BadgePercent,
   Banknote,
   CreditCard,
   Ticket,
@@ -155,13 +156,26 @@ export function ReservaFlagsChips({
   if (reserva.tipoCategoria === "cupon" && reserva.importePagado != null && reserva.importePagado > 0) {
     chips.push({ key: "cupon", label: `Cupón pagado ${reserva.importePagado}€`, icon: <Ticket className={iconSize} />, cls: "text-emerald-600 border-emerald-500/40 bg-emerald-500/10" });
   }
+  // ── Cupón de la reserva ──────────────────────────────────────────────
+  //
+  // Se enseña el TÍTULO, no el código. El código de seis letras es lo que
+  // teclea el cliente para que el sistema lo verifique; al camarero que cierra
+  // la cuenta "K7M2QP" no le dice nada, y "Cumpleaños · Ana Pérez · 10%" sí.
+  // El código queda en el tooltip, por si hay que buscarlo.
   if (reserva.codigo) {
+    const titulo = reserva.cuponTitulo?.trim();
+    const beneficio = reserva.cuponBeneficio?.trim();
     chips.push({
       key: "codigo_cupon",
-      label: `Cupón ${reserva.codigo}`,
-      icon: <Ticket className={iconSize} />,
-      cls: "text-amber-700 dark:text-amber-400 border-amber-500/40 bg-amber-500/10",
-      extra: reserva.codigo,
+      label: [titulo || `Cupón ${reserva.codigo}`, beneficio, `Código ${reserva.codigo}`]
+        .filter(Boolean)
+        .join("\n"),
+      icon: <BadgePercent className={iconSize} />,
+      // En ámbar y con borde marcado: es dinero que no se cobra, y tiene que
+      // saltar a la vista entre el resto de indicadores.
+      cls: "text-amber-700 dark:text-amber-400 border-amber-500/60 bg-amber-500/15 font-semibold",
+      extra: titulo || reserva.codigo,
+      tooltip: [titulo, beneficio, `Código ${reserva.codigo}`].filter(Boolean).join("\n"),
     });
   }
   // Incumplió la política y el cobro sigue sin decidir: es lo más urgente que
@@ -267,7 +281,18 @@ export function ReservaFlagsChips({
                 {c.icon}
                 {c.key === "garantia" && <span>{reserva.garantiaImporte}€</span>}
                 {c.key === "cupon" && <span>{reserva.importePagado}€</span>}
-                {c.extra && <span>{c.extra}</span>}
+                {c.extra && (
+                  <span
+                    className={cn(
+                      // El título de un cupón puede ser largo ("Cumpleaños ·
+                      // Ana Pérez · 10% (gratis si son 11) · 2026") y no puede
+                      // empujar al resto de indicadores fuera de la fila.
+                      c.key === "codigo_cupon" && "max-w-[11rem] truncate",
+                    )}
+                  >
+                    {c.extra}
+                  </span>
+                )}
               </span>
             </TooltipTrigger>
             <TooltipContent side="top" className={c.tooltip ? "max-w-xs whitespace-pre-wrap text-left" : undefined}>

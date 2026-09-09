@@ -37,22 +37,35 @@ import { CAMPANA_CUMPLEANOS_SEED } from "@/lib/seeds/campana-cumpleanos";
 import type { Admin } from "./campanas-anuales";
 
 const CLAVE = CAMPANA_CUMPLEANOS_SEED.clave;
+const CLAVE_FELICITACION = CAMPANA_CUMPLEANOS_SEED.claveFelicitacion;
 /** Marcador del enlace de baja que la plantilla deja escrito en el HTML. */
 const MARCADOR_BAJA = "{{TOKEN_BAJA}}";
 /** Tope por empresa y pasada. Con 13.000 fichas salen ~35 al día; 300 es techo de avería. */
 const TOPE_POR_PASADA = 300;
 
-export interface ResumenCumpleanos {
-  empresaId: string;
-  /** false = la campaña está en borrador o no existe: no se hace nada. */
-  encendida: boolean;
+/** Lo que ha hecho uno de los dos momentos en una pasada. */
+export interface ResumenMomento {
   /** Fecha (en la zona de la empresa) de los cumpleaños atendidos. */
-  fechaObjetivo?: string;
+  fechaObjetivo: string;
   candidatos: number;
   enviados: number;
   omitidos: number;
   fallidos: number;
+}
+
+export interface ResumenCumpleanos {
+  empresaId: string;
+  /** El aviso de los diez días antes, con su descuento y su código. */
+  aviso: ResumenMomento | null;
+  /** La felicitación del día. No vende nada. */
+  felicitacion: ResumenMomento | null;
+  /** false = las dos están en borrador o no existen: no se hace nada. */
+  encendida: boolean;
   errores: string[];
+}
+
+function momentoVacio(fecha: string): ResumenMomento {
+  return { fechaObjetivo: fecha, candidatos: 0, enviados: 0, omitidos: 0, fallidos: 0 };
 }
 
 interface CampanaCanal {
@@ -100,14 +113,25 @@ function fechaES(iso: string): string {
 /** Sustituye los marcadores del texto por los datos de esta persona. */
 function rellenar(
   texto: string,
-  datos: { nombre: string; empresa: string; codigo: string; caducidad: string; minimo: number; url: string },
+  datos: {
+    nombre: string;
+    empresa: string;
+    codigo: string;
+    caducidad: string;
+    descuento: number;
+    amigos: number;
+    mesa: number;
+    url: string;
+  },
 ): string {
   return texto
     .split("{{NOMBRE}}").join(datos.nombre)
     .split("{{EMPRESA}}").join(datos.empresa)
     .split("{{CODIGO}}").join(datos.codigo)
     .split("{{CADUCIDAD}}").join(datos.caducidad)
-    .split("{{MINIMO}}").join(String(datos.minimo))
+    .split("{{DESCUENTO}}").join(String(datos.descuento))
+    .split("{{AMIGOS}}").join(String(datos.amigos))
+    .split("{{MESA}}").join(String(datos.mesa))
     .split("{{URL}}").join(datos.url);
 }
 
@@ -123,8 +147,16 @@ function nombreDePila(nombre: string): string {
 /**
  * Crea el cupón personal del cumpleañero.
  *
- * Un solo uso, con su mínimo de comensales y con fecha de caducidad: un regalo
- * sin caducidad se guarda "para otro día" y no llena ninguna mesa.
+ * El cupón vale un descuento —el 10%— y sirva la mesa que sirva: poner un mínimo
+ * dejaría fuera a quien viene a cenar en pareja el día de su cumpleaños, que es
+ * la mitad de los casos.
+ *
+ * Lo de "gratis si venís once" NO es otro cupón: es lo que dice el título que
+ * lee el camarero al cerrar la cuenta. Un segundo código obligaría al cliente a
+ * elegir cuál usa antes de saber cuánta gente va a juntar.
+ *
+ * Un solo uso y con fecha de caducidad: un regalo sin caducidad se guarda "para
+ * otro día" y no llena ninguna mesa.
  */
 async function crearCuponCumpleanos(
   admin: Admin,
@@ -153,17 +185,19 @@ async function crearCuponCumpleanos(
     .insert({
       empresa_id: args.empresaId,
       codigo: codigo as string,
-      // El título interno es lo que ve sala: tiene que decir de quién es sin
-      // abrir nada.
-      titulo_interno: `Cumpleaños · ${nombre} · ${anio}`.slice(0, 120),
-      titulo_cliente: "Tu cumpleaños lo invita la casa",
-      beneficio_tipo: "producto_gratis",
-      producto_descripcion:
-        `Comida del cumpleañero gratis (mesa de ${args.reglas.minimoPersonas} o más)`.slice(0, 200),
+      // El título es lo que ve el camarero: tiene que decir de quién es y qué
+      // hay que aplicar sin abrir nada ni preguntar a nadie.
+      titulo_interno:
+        `Cumpleaños · ${nombre} · ${args.reglas.descuentoPorcentaje}% (gratis si son ${args.reglas.mesaParaGratis}) · ${anio}`.slice(0, 120),
+      titulo_cliente: `${args.reglas.descuentoPorcentaje}% por tu cumpleaños`,
+      beneficio_tipo: "porcentaje",
+      beneficio_valor: args.reglas.descuentoPorcentaje,
       unidad_stock: "reservas",
       stock_total: 1,
       fecha_caducidad: caducidad,
-      minimo_personas: args.reglas.minimoPersonas,
+      // Sin mínimo: el descuento vale para cualquier mesa. El "gratis" de la
+      // mesa llena lo aplica sala, que es quien ve cuántos se sientan.
+      minimo_personas: null,
       cliente_id: args.cliente.id,
       origen: "CUMPLEANOS",
       activo: true,
@@ -198,11 +232,9 @@ export async function procesarCumpleanosDeEmpresa(
 ): Promise<ResumenCumpleanos> {
   const resumen: ResumenCumpleanos = {
     empresaId,
+    aviso: null,
+    felicitacion: null,
     encendida: false,
-    candidatos: 0,
-    enviados: 0,
-    omitidos: 0,
-    fallidos: 0,
     errores: [],
   };
 
@@ -210,11 +242,14 @@ export async function procesarCumpleanosDeEmpresa(
     .from("campanas_marketing")
     .select("id, canal, estado, payload")
     .eq("empresa_id", empresaId)
-    .in("canal", ["email", "whatsapp", "sms"]);
+    .in("canal", ["email", "whatsapp", "sms"])
+    .eq("estado", "activa");
 
-  const campanas = (filas ?? [])
-    .filter((r) => (r.payload as Record<string, unknown> | null)?.claveSeed === CLAVE)
-    .filter((r) => r.estado === "activa")
+  const claveDe = (r: { payload: unknown }) =>
+    (r.payload as Record<string, unknown> | null)?.claveSeed as string | undefined;
+
+  const deAviso = (filas ?? [])
+    .filter((r) => claveDe(r) === CLAVE)
     .map(
       (r): CampanaCanal => ({
         id: r.id as string,
@@ -222,11 +257,20 @@ export async function procesarCumpleanosDeEmpresa(
         payload: (r.payload as Record<string, unknown>) ?? {},
       }),
     );
-  if (!campanas.length) return resumen;
+  const felicitacion = (filas ?? [])
+    .filter((r) => claveDe(r) === CLAVE_FELICITACION && r.canal === "email")
+    .map(
+      (r): CampanaCanal => ({
+        id: r.id as string,
+        canal: "email",
+        payload: (r.payload as Record<string, unknown>) ?? {},
+      }),
+    )[0];
+
+  if (!deAviso.length && !felicitacion) return resumen;
   resumen.encendida = true;
 
-  const porCanal = new Map(campanas.map((c) => [c.canal, c]));
-  const reglas = reglasDe(campanas[0].payload);
+  const reglas = reglasDe(deAviso[0]?.payload ?? felicitacion?.payload ?? null);
 
   const { data: empresaRow } = await admin
     .from("empresas")
@@ -237,41 +281,99 @@ export async function procesarCumpleanosDeEmpresa(
 
   const zona = await getZonaHorariaEmpresa(admin, empresaId);
   const hoy = fechaEnZona(new Date(), zona);
-  const objetivo = sumarDias(hoy, reglas.diasAntes);
-  resumen.fechaObjetivo = objetivo;
+  const urlReserva = await urlDeReserva(admin, deAviso, empresaId);
+
+  // ── Momento 1: el aviso, diez días antes ────────────────────────────
+  if (deAviso.length) {
+    const objetivo = sumarDias(hoy, reglas.diasAntes);
+    resumen.aviso = await procesarMomento(admin, {
+      empresaId,
+      empresaNombre,
+      campanas: deAviso,
+      objetivo,
+      reglas,
+      urlReserva,
+      conCupon: true,
+      errores: resumen.errores,
+    });
+  }
+
+  // ── Momento 2: la felicitación, el mismo día ────────────────────────
+  if (felicitacion) {
+    resumen.felicitacion = await procesarMomento(admin, {
+      empresaId,
+      empresaNombre,
+      campanas: [felicitacion],
+      objetivo: hoy,
+      reglas,
+      urlReserva,
+      // Sin cupón: este correo no vende nada, así que no hay nada que canjear.
+      conCupon: false,
+      errores: resumen.errores,
+    });
+  }
+
+  const ahora = new Date().toISOString();
+  const todas = [...deAviso.map((c) => c.id), ...(felicitacion ? [felicitacion.id] : [])];
+  await admin.from("campanas_marketing").update({ ultima_ejecucion: ahora }).in("id", todas);
+
+  return resumen;
+}
+
+/**
+ * Un momento: los que cumplen tal día reciben tal cosa.
+ *
+ * Los dos momentos comparten todo salvo el cupón —el aviso lo lleva, la
+ * felicitación no— y el día que miran. Escribirlos dos veces habría garantizado
+ * que uno de los dos se quedara sin alguna de las reglas: el "una vez al año",
+ * el tope de la pasada, el permiso por canal.
+ */
+async function procesarMomento(
+  admin: Admin,
+  args: {
+    empresaId: string;
+    empresaNombre: string;
+    campanas: CampanaCanal[];
+    objetivo: string;
+    reglas: ReglasCumpleanos;
+    urlReserva: string;
+    conCupon: boolean;
+    errores: string[];
+  },
+): Promise<ResumenMomento> {
+  const { empresaId, empresaNombre, campanas, objetivo, reglas, urlReserva, conCupon, errores } = args;
+  const salida = momentoVacio(objetivo);
+  const porCanal = new Map(campanas.map((c) => [c.canal, c]));
 
   const { data: clientesRaw, error: errClientes } = await admin.rpc("clientes_sala_cumpleanos", {
     p_empresa_id: empresaId,
     p_fecha: objetivo,
   });
   if (errClientes) {
-    resumen.errores.push(`No se pudo leer quién cumple años: ${errClientes.message}`);
-    return resumen;
+    errores.push(`No se pudo leer quién cumple años: ${errClientes.message}`);
+    return salida;
   }
 
   const clientes = (clientesRaw ?? []) as ClienteCumple[];
-  resumen.candidatos = clientes.length;
-  if (!clientes.length) return resumen;
+  salida.candidatos = clientes.length;
+  if (!clientes.length) return salida;
 
-  const yaFelicitados = await yaFelicitadosEsteAnio(
+  const yaEscritos = await yaFelicitadosEsteAnio(
     admin,
     campanas.map((c) => c.id),
     objetivo.slice(0, 4),
   );
 
-  const urlReserva = await urlDeReserva(admin, campanas, empresaId);
   const ahora = new Date().toISOString();
   let procesados = 0;
 
   for (const cliente of clientes) {
     if (procesados >= TOPE_POR_PASADA) {
-      resumen.errores.push(
-        `Tope de ${TOPE_POR_PASADA} felicitaciones alcanzado; el resto queda sin enviar`,
-      );
+      errores.push(`Tope de ${TOPE_POR_PASADA} mensajes alcanzado; el resto queda sin enviar`);
       break;
     }
-    if (yaFelicitados.has(cliente.id)) {
-      resumen.omitidos++;
+    if (yaEscritos.has(cliente.id)) {
+      salida.omitidos++;
       continue;
     }
 
@@ -280,40 +382,47 @@ export async function procesarCumpleanosDeEmpresa(
     const puedeSms = cliente.acepta_marketing_sms && !!telefono && porCanal.has("sms");
     const puedeEmail = cliente.acepta_marketing_email && !!cliente.email && porCanal.has("email");
     if (!puedeWhatsapp && !puedeSms && !puedeEmail) {
-      resumen.omitidos++;
+      salida.omitidos++;
       continue;
     }
     procesados++;
 
-    const cupon = await crearCuponCumpleanos(admin, {
-      empresaId,
-      cliente,
-      fechaCumple: objetivo,
-      reglas,
-    });
-    if (!cupon) {
-      resumen.fallidos++;
-      resumen.errores.push(`No se pudo crear el cupón de ${cliente.nombre}`);
-      continue;
+    // El cupón se crea ANTES de enviar: si se enviara primero y el cupón
+    // fallara, el cliente tendría un correo con un código que no existe.
+    let cupon: { id: string; codigo: string; caducidad: string } | null = null;
+    if (conCupon) {
+      cupon = await crearCuponCumpleanos(admin, {
+        empresaId,
+        cliente,
+        fechaCumple: objetivo,
+        reglas,
+      });
+      if (!cupon) {
+        salida.fallidos++;
+        errores.push(`No se pudo crear el cupón de ${cliente.nombre}`);
+        continue;
+      }
     }
 
     const datos = {
       nombre: nombreDePila(cliente.nombre),
       empresa: empresaNombre,
-      codigo: cupon.codigo,
-      caducidad: fechaES(cupon.caducidad),
-      minimo: reglas.minimoPersonas,
+      codigo: cupon?.codigo ?? "",
+      caducidad: cupon ? fechaES(cupon.caducidad) : "",
+      descuento: reglas.descuentoPorcentaje,
+      amigos: reglas.amigosParaGratis,
+      mesa: reglas.mesaParaGratis,
       url: urlReserva,
     };
 
-    // ── 1. WhatsApp, y SMS de respaldo ──────────────────────────────────
-    //
-    // Los dos van en la MISMA llamada: el orquestador ya sabe caer de uno al
-    // otro, cobrar el saldo y devolverlo si el mensaje no sale.
     let enviadoPor: CampanaCanal | null = null;
     let referencia: string | null = null;
     let ultimoError = "";
 
+    // ── WhatsApp, y SMS de respaldo ───────────────────────────────────
+    //
+    // Los dos van en la MISMA llamada: el orquestador ya sabe caer de uno al
+    // otro, cobrar el saldo y devolverlo si el mensaje no sale.
     if (puedeWhatsapp || puedeSms) {
       const wa = porCanal.get("whatsapp");
       const sms = porCanal.get("sms");
@@ -323,7 +432,15 @@ export async function procesarCumpleanosDeEmpresa(
         telefono,
         plantillaWhatsapp: puedeWhatsapp ? (wa?.payload.plantilla as string) : undefined,
         variables: puedeWhatsapp
-          ? [datos.nombre, datos.empresa, String(datos.minimo), datos.codigo, datos.caducidad, datos.url]
+          ? [
+              datos.nombre,
+              datos.empresa,
+              String(datos.descuento),
+              datos.codigo,
+              datos.caducidad,
+              String(datos.mesa),
+              datos.url,
+            ]
           : undefined,
         textoSms: puedeSms ? rellenar((sms?.payload.cuerpo as string) ?? "", datos) : undefined,
         actor: { origen: "AUTOMATICO" },
@@ -336,7 +453,7 @@ export async function procesarCumpleanosDeEmpresa(
       }
     }
 
-    // ── 2. Correo ───────────────────────────────────────────────────────
+    // ── Correo ────────────────────────────────────────────────────────
     if (!enviadoPor && puedeEmail) {
       const email = porCanal.get("email")!;
       const html = rellenar((email.payload.cuerpoHtml as string) ?? "", datos)
@@ -345,7 +462,7 @@ export async function procesarCumpleanosDeEmpresa(
       const r = await enviarCorreoMarketing({
         empresaNombre,
         para: cliente.email!,
-        asunto: (email.payload.asunto as string) ?? "Tu cumpleaños lo invitamos nosotros",
+        asunto: rellenar((email.payload.asunto as string) ?? "", datos),
         html,
       });
       if (r.ok) {
@@ -356,12 +473,11 @@ export async function procesarCumpleanosDeEmpresa(
       }
     }
 
-    // ── 3. Registro ─────────────────────────────────────────────────────
-    const destino =
-      enviadoPor?.canal === "email" ? cliente.email : (telefono ?? cliente.email);
+    // ── Registro ──────────────────────────────────────────────────────
+    const destino = enviadoPor?.canal === "email" ? cliente.email : (telefono ?? cliente.email);
 
     if (enviadoPor) {
-      resumen.enviados++;
+      salida.enviados++;
       await admin.from("campanas_envios").insert({
         campana_id: enviadoPor.id,
         empresa_id: empresaId,
@@ -372,10 +488,10 @@ export async function procesarCumpleanosDeEmpresa(
         proveedor_id: referencia,
       });
     } else {
-      resumen.fallidos++;
+      salida.fallidos++;
       // El cupón se desactiva: nadie recibió el código, así que dejarlo vivo
       // solo ensucia el listado de cupones de sala.
-      await admin.from("reserva_codigos").update({ activo: false }).eq("id", cupon.id);
+      if (cupon) await admin.from("reserva_codigos").update({ activo: false }).eq("id", cupon.id);
       await admin.from("campanas_envios").insert({
         campana_id: (porCanal.get("email") ?? campanas[0]).id,
         empresa_id: empresaId,
@@ -387,14 +503,7 @@ export async function procesarCumpleanosDeEmpresa(
     }
   }
 
-  // La marca de ejecución va en las tres: las tres han corrido, aunque solo una
-  // haya escrito a cada persona.
-  await admin
-    .from("campanas_marketing")
-    .update({ ultima_ejecucion: ahora })
-    .in("id", campanas.map((c) => c.id));
-
-  return resumen;
+  return salida;
 }
 
 /** Enlace de reserva de la campaña, para el SMS y el WhatsApp. */

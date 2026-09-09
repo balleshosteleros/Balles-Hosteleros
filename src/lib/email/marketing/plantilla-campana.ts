@@ -58,6 +58,12 @@ export interface CampanaEmailInput {
   } | null;
   /** Enlace de baja. Obligatorio en todo correo comercial. */
   urlBaja: string;
+  /**
+   * Cierre del correo. Por defecto "Te esperamos.", que es lo que toca cuando el
+   * correo invita a venir; la felicitación de cumpleaños no invita a nada y ahí
+   * un "te esperamos" suena a que algo se está vendiendo.
+   */
+  pie?: string;
   telefono?: string | null;
 }
 
@@ -188,7 +194,7 @@ export function renderCampanaEmail(input: CampanaEmailInput): string {
     titular: input.titular,
     subtitulo: input.subtitulo,
     contenido: partes.join("\n"),
-    pie: "Te esperamos.",
+    pie: input.pie ?? "Te esperamos.",
     telefono: input.telefono ?? null,
   });
 }

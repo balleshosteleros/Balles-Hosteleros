@@ -338,8 +338,17 @@ export interface Reserva {
   bloqueada?: boolean;
   grupoId?: string | null;
   codigoId?: string | null;
-  /** Código de 6 chars del cupón aplicado (PRP-052). */
+  /** Código de 6 chars del cupón aplicado (PRP-052). Es lo que teclea el cliente. */
   codigo?: string | null;
+  /**
+   * Título del cupón: lo que el camarero lee al cerrar la cuenta.
+   *
+   * El código identifica, el título EXPLICA. "K7M2QP" no le dice a nadie qué
+   * hay que descontar; "Cumpleaños · Ana Pérez · 2026" sí.
+   */
+  cuponTitulo?: string | null;
+  /** El beneficio en una línea: "10% de descuento", "Postre gratis"… */
+  cuponBeneficio?: string | null;
   reconfirmadaAt?: string | null;
   externalId?: string | null;
   externalOrigen?: string | null;

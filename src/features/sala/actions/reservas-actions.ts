@@ -111,6 +111,10 @@ const RESERVA_COLUMNAS =
   "bloqueada, grupo_id, codigo_id, codigo, reconfirmada_at, " +
   "external_id, external_origen, created_at, duracion_minutos, " +
   "reserva_ticket_productos(nombre), " +
+  // El cupón de la reserva, con su TÍTULO: es lo que el camarero mira al cerrar
+  // la cuenta. El código de seis letras es lo que teclea el cliente para que el
+  // sistema lo verifique, y por sí solo no dice qué hay que aplicar.
+  "reserva_codigos(titulo_interno, titulo_cliente, beneficio_tipo, beneficio_valor, producto_descripcion), " +
   // Cuándo pagó el ticket y cuándo lo canjeó por esta mesa. El dinero vive en
   // la COMPRA, no en la reserva: la reserva solo guarda el importe congelado.
   //
