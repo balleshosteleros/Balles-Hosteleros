@@ -89,8 +89,17 @@ export async function fotoDeLaCarta(
     .filter((i) => !/\bsin\b/i.test(i.nombre));
   if (!items.length) return null;
 
-  const libres = items.filter((i) => !yaUsadas.has(i.url));
-  const donde = libres.length ? libres : items;
+  // Primero las fotos alojadas en la carpeta de ESTA empresa. HABANA tiene
+  // siete platos cuya foto quedó en la carpeta de BACANAL desde la migración de
+  // la carta: la imagen es correcta, pero colgar el correo de un local del
+  // almacén de otro es frágil —el día que allí se borre, este correo sale roto—
+  // y en pantalla despista. Si no hubiera ninguna propia se usan las que haya:
+  // mejor una foto prestada que un correo sin foto.
+  const propias = items.filter((i) => i.url.includes(empresaId));
+  const candidatas = propias.length ? propias : items;
+
+  const libres = candidatas.filter((i) => !yaUsadas.has(i.url));
+  const donde = libres.length ? libres : candidatas;
 
   for (const pista of pistas) {
     const p = pista.toLowerCase();

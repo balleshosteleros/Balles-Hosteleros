@@ -905,7 +905,7 @@ export function ReservaPublicaForm({
                   })}
                   contextoSerial={`${fecha}|${turnoPorHora}|${personas}`}
                   onResult={(r) => setCuponValido(r === null ? null : r.ok)}
-                  label="Código de cupón"
+                  label="Código promocional"
                 />
               ) : (
                 <button

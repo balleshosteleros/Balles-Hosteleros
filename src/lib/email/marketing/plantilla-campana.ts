@@ -55,6 +55,12 @@ export interface CampanaEmailInput {
     condiciones: string;
     /** "Válido hasta el 21/09/2026". Vacío = sin fecha. */
     caducidad?: string | null;
+    /**
+     * Dónde se escribe el código. Un cupón que no dice cómo usarse acaba en un
+     * correo de "¿y esto dónde lo pongo?" —o peor, en una reserva hecha sin él
+     * y una discusión en la puerta—.
+     */
+    comoUsarlo?: string | null;
   } | null;
   /** Enlace de baja. Obligatorio en todo correo comercial. */
   urlBaja: string;
@@ -116,6 +122,9 @@ function bloqueCupon(
   const caducidad = cupon.caducidad
     ? `<div style="margin-top:10px;font-size:12px;color:#64748b;">${escapeHtml(cupon.caducidad)}</div>`
     : "";
+  const comoUsarlo = cupon.comoUsarlo
+    ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid ${withAlpha(primario, 0.25)};font-size:13px;color:#475569;line-height:1.5;">${escapeHtml(cupon.comoUsarlo)}</div>`
+    : "";
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border:2px dashed ${primario};border-radius:12px;margin-top:22px;">
     <tr>
       <td style="padding:20px;text-align:center;background:${withAlpha(primario, 0.05)};">
@@ -124,6 +133,7 @@ function bloqueCupon(
         <div style="margin-top:12px;font-size:15px;color:#0f172a;line-height:1.5;">${escapeHtml(cupon.concepto)}</div>
         <div style="margin-top:4px;font-size:13px;color:#475569;line-height:1.5;">${escapeHtml(cupon.condiciones)}</div>
         ${caducidad}
+        ${comoUsarlo}
       </td>
     </tr>
   </table>`;

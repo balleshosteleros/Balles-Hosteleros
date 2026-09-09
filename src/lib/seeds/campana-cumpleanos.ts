@@ -137,15 +137,15 @@ export const CAMPANA_CUMPLEANOS_SEED: CampanaCumpleanosSeed = {
     // El asunto no dice "cumpleaños": si lo dijera, se lee entero en la bandeja
     // y ya no hay nada que abrir.
     asunto: "Nos hemos acordado de una fecha",
-    preheader: "Un 10% para tu mesa. Y si venís once, ese 10% eres tú.",
+    preheader: "Un 10% de descuento por tu cumpleaños. Y si vienes con diez, no pagas nada.",
     badge: "Falta poco",
     titular: "Hay una fecha tuya marcada en nuestro calendario",
-    subtitulo: "Y no pensamos dejarla pasar",
+    subtitulo: "Y viene con un 10% de descuento",
     entradilla:
-      "No hace falta que nos digas cuál es, {{NOMBRE}}: ya la tenemos apuntada. Queda poco, y cuando llegue nos gustaría que la celebrases aquí.",
+      "No hace falta que nos digas cuál es, {{NOMBRE}}: ya la tenemos apuntada. Por tu cumpleaños te damos un {{DESCUENTO}}% de descuento en tu mesa.",
     cuerpo: [
-      "Hasta entonces te guardamos un {{DESCUENTO}}% en tu mesa. Es tuyo, lleva tu nombre y solo se puede usar una vez.",
-      "(Y ahí está la gracia: ven con {{AMIGOS}} amigos y sois {{MESA}} a la mesa, así que ese {{DESCUENTO}}% es justo lo que cuesta tu parte. O sea que tú no pagas: te invitamos.)",
+      "Tienes tres semanas para gastarlo: desde hoy —diez días antes— hasta diez días después de tu cumpleaños. El código lleva tu nombre y solo vale una vez.",
+      "Y si te presentas con {{AMIGOS}} amigos, ese {{DESCUENTO}}% eres tú: lo tuyo lo pagamos nosotros.",
     ],
     ctaTexto: "Reservar mi mesa",
     fotoPistas: ["tarta", "postre", "chuletón", "chuleton", "solomillo", "arroz"],
@@ -176,7 +176,10 @@ export const CAMPANA_CUMPLEANOS_SEED: CampanaCumpleanosSeed = {
     // acentuada obliga a codificar el mensaje entero en UCS-2, que baja el tope
     // de 160 a 70 caracteres y parte el aviso en dos SMS cobrados aparte.
     cuerpo:
-      "{{NOMBRE}}, tenemos una fecha tuya apuntada. Un {{DESCUENTO}}% para tu mesa en {{EMPRESA}}: codigo {{CODIGO}}, hasta el {{CADUCIDAD}}. Ven con {{AMIGOS}} amigos y ese {{DESCUENTO}}% es tu parte: te invitamos. {{URL}}",
+      // Apretado a conciencia: con el nombre, el codigo, la fecha y el enlace
+      // reales esto queda en ~150 caracteres. Pasar de 160 lo parte en dos SMS
+      // y duplica el coste de cada felicitacion.
+      "{{NOMBRE}}: por tu cumple, {{DESCUENTO}}% en {{EMPRESA}}. Codigo {{CODIGO}} hasta el {{CADUCIDAD}}. Con {{AMIGOS}} amigos no pagas nada. {{URL}}",
   },
 
   whatsapp: {
@@ -184,6 +187,6 @@ export const CAMPANA_CUMPLEANOS_SEED: CampanaCumpleanosSeed = {
     plantilla: "cumpleanos_invitacion",
     idioma: "es",
     cuerpo:
-      "{{NOMBRE}}, tenemos una fecha tuya apuntada y queda poco. En {{EMPRESA}} te guardamos un {{DESCUENTO}}% para tu mesa: tu código es {{CODIGO}} y vale hasta el {{CADUCIDAD}}. Y si vienes con {{AMIGOS}} amigos, sois {{MESA}} y ese {{DESCUENTO}}% es justo tu parte: te invitamos. Reserva aquí: {{URL}}",
+      "{{NOMBRE}}, por tu cumpleaños te damos un {{DESCUENTO}}% de descuento en {{EMPRESA}}. Tu código es {{CODIGO}} y puedes gastarlo hasta el {{CADUCIDAD}}, diez días después de tu cumpleaños. Y si te presentas con {{AMIGOS}} amigos, ese {{DESCUENTO}}% eres tú: lo tuyo lo pagamos nosotros. Reserva aquí: {{URL}}",
   },
 };

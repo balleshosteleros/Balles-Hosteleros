@@ -110,9 +110,14 @@ export async function construirCorreoAviso(
     ctaUrl: urlConCampana(enlace.url, PALABRA_CUMPLEANOS),
     cupon: {
       codigo: M.codigo,
-      concepto: `${M.descuento}% de descuento en tu mesa`,
-      condiciones: `Un solo uso · ven con ${M.amigos} amigos y te invitamos`,
-      caducidad: `Válido hasta el ${M.caducidad}`,
+      concepto: `${M.descuento}% de descuento por tu cumpleaños`,
+      condiciones: `Un solo uso · con ${M.amigos} amigos, no pagas nada`,
+      caducidad: `Para gastar desde hoy y hasta el ${M.caducidad}`,
+      // Las mismas palabras que ve en el portal al reservar ("¿Tienes un código
+      // promocional?"): si el correo lo llama de otra manera, lo busca y no lo
+      // encuentra.
+      comoUsarlo:
+        "Al reservar, pulsa donde pone «¿Tienes un código promocional?» y escribe este código.",
     },
     // El cumpleaños no lleva concurso: ya trae su propio regalo, y dos ganchos
     // en el mismo correo se hacen sombra.
