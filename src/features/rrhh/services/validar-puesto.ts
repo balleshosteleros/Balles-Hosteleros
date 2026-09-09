@@ -11,8 +11,10 @@
  *
  * Vale para crear y para editar: un puesto ya creado tampoco se puede vaciar.
  *
- * Única excepción: OBSERVACIONES puede quedarse en blanco (es una nota libre,
- * no un dato que viaje al contrato del empleado).
+ * Excepciones: OBSERVACIONES puede quedarse en blanco (es una nota libre, no un
+ * dato que viaje al contrato del empleado). La DESCRIPCIÓN ya no se pide: no
+ * salía del backoffice (no viaja a la vacante, ni al portal de empleo, ni al
+ * contrato, ni a la gestoría), así que exigirla solo frenaba el alta.
  *
  * Sin dependencias de servidor a propósito: se importa desde cliente y servidor.
  */
@@ -21,18 +23,18 @@
 export interface PuestoCompletoInput {
   nombre: string;
   departamentoId: string;
-  descripcion: string;
   convenioColectivo: string;
-  validadorDepartamentoId: string | null;
-  /** Cronograma de tareas vinculado (rol). */
-  cronogramaRol: string | null;
-  /** Horario del puesto: familia del patrón elegido en Horarios. */
-  horarioFamiliaId: string | null;
   salarioBruto: number;
   jornadaContrato: string;
   horasSemanales: number;
   diasLibres: number;
   vacaciones: string;
+  /** Horario del puesto: familia del patrón elegido en Horarios. */
+  horarioFamiliaId: string | null;
+  /** Cronograma de tareas vinculado (rol). Va al final de la ficha. */
+  cronogramaRol: string | null;
+  /** Departamento que valida las solicitudes. Último campo de la ficha. */
+  validadorDepartamentoId: string | null;
 }
 
 /** Campos del formulario: todos deben venir rellenos (salvo observaciones). */
@@ -42,16 +44,15 @@ export type CampoPuesto = keyof PuestoCompletoInput;
 const ETIQUETAS: Record<CampoPuesto, string> = {
   nombre: "Puesto",
   departamentoId: "Departamento",
-  descripcion: "Descripción",
   convenioColectivo: "Convenio colectivo",
-  validadorDepartamentoId: "Valida este departamento",
-  cronogramaRol: "Cronograma",
-  horarioFamiliaId: "Horario",
   salarioBruto: "Salario bruto mensual",
   jornadaContrato: "Jornada",
   horasSemanales: "Horas/semana",
   diasLibres: "Días libres",
   vacaciones: "Vacaciones",
+  horarioFamiliaId: "Horario",
+  cronogramaRol: "Cronograma",
+  validadorDepartamentoId: "Valida este departamento",
 };
 
 export interface ResultadoValidacionPuesto {
@@ -76,7 +77,7 @@ export function validarPuestoCompleto(
 
   if (vacio(input.nombre)) faltan.push("nombre");
   if (vacio(input.departamentoId)) faltan.push("departamentoId");
-  if (vacio(input.descripcion)) faltan.push("descripcion");
+  if (vacio(input.convenioColectivo)) faltan.push("convenioColectivo");
   if (!(input.salarioBruto > 0)) faltan.push("salarioBruto");
   if (vacio(input.jornadaContrato)) faltan.push("jornadaContrato");
   if (!(input.horasSemanales > 0)) faltan.push("horasSemanales");
@@ -84,11 +85,11 @@ export function validarPuestoCompleto(
     faltan.push("diasLibres");
   }
   if (vacio(input.vacaciones)) faltan.push("vacaciones");
-  if (vacio(input.cronogramaRol)) faltan.push("cronogramaRol");
   if (vacio(input.horarioFamiliaId)) faltan.push("horarioFamiliaId");
-  // Observaciones NO se valida: es el único campo que puede quedar en blanco.
-  if (vacio(input.convenioColectivo)) faltan.push("convenioColectivo");
+  // Cronograma y validador cierran la ficha, en ese orden.
+  if (vacio(input.cronogramaRol)) faltan.push("cronogramaRol");
   if (vacio(input.validadorDepartamentoId)) faltan.push("validadorDepartamentoId");
+  // Observaciones NO se valida: es el único campo que puede quedar en blanco.
 
   if (faltan.length === 0) return { ok: true, faltan: [], mensaje: "" };
 
