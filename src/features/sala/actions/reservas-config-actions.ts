@@ -115,6 +115,9 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     valoracionEmailHorasDespues:    (row.valoracion_email_horas_despues as number) ?? 24,
     valoracionEmailHoraEnvio:       (row.valoracion_email_hora_envio as string) ?? "10:00",
     valoracionPideCocina:           Boolean(row.valoracion_pide_cocina ?? true),
+    valoracionPideBebida: Boolean(row.valoracion_pide_bebida ?? false),
+    valoracionPideMusica: Boolean(row.valoracion_pide_musica ?? false),
+    valoracionPideEspectaculo: Boolean(row.valoracion_pide_espectaculo ?? false),
     valoracionPideServicio:         Boolean(row.valoracion_pide_servicio ?? true),
     valoracionPideAmbiente:         Boolean(row.valoracion_pide_ambiente ?? true),
 
@@ -233,7 +236,10 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("valoracionEmailActivo"           in updates) db.valoracion_email_activo           = updates.valoracionEmailActivo;
     if ("valoracionEmailHorasDespues"     in updates) db.valoracion_email_horas_despues    = updates.valoracionEmailHorasDespues;
     if ("valoracionEmailHoraEnvio"        in updates) db.valoracion_email_hora_envio       = updates.valoracionEmailHoraEnvio;
-    if ("valoracionPideCocina"            in updates) db.valoracion_pide_cocina            = updates.valoracionPideCocina;
+    if ("valoracionPideCocina" in updates) db.valoracion_pide_cocina = updates.valoracionPideCocina;
+    if ("valoracionPideBebida" in updates) db.valoracion_pide_bebida = updates.valoracionPideBebida;
+    if ("valoracionPideMusica" in updates) db.valoracion_pide_musica = updates.valoracionPideMusica;
+    if ("valoracionPideEspectaculo" in updates) db.valoracion_pide_espectaculo = updates.valoracionPideEspectaculo;
     if ("valoracionPideServicio"          in updates) db.valoracion_pide_servicio          = updates.valoracionPideServicio;
     if ("valoracionPideAmbiente"          in updates) db.valoracion_pide_ambiente          = updates.valoracionPideAmbiente;
     if ("cerrarMotorWebActivo"  in updates) db.cerrar_motor_web_activo  = updates.cerrarMotorWebActivo;

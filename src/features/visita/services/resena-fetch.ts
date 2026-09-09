@@ -37,6 +37,9 @@ export type ResenaPagina = {
    */
   campos: {
     cocina: boolean;
+    bebida: boolean;
+    musica: boolean;
+    espectaculo: boolean;
     servicio: boolean;
     ambiente: boolean;
   };
@@ -107,7 +110,7 @@ export async function fetchResenaPagina(
     const { data: cfgReservas } = await supabase
       .from("empresa_reservas_config")
       .select(
-        "valoracion_pide_cocina, valoracion_pide_servicio, valoracion_pide_ambiente",
+        "valoracion_pide_cocina, valoracion_pide_bebida, valoracion_pide_servicio, valoracion_pide_ambiente, valoracion_pide_musica, valoracion_pide_espectaculo",
       )
       .eq("empresa_id", empresa.id)
       .maybeSingle();
@@ -144,6 +147,9 @@ export async function fetchResenaPagina(
       // antes de poder elegir.
       campos: {
         cocina: cfgReservas?.valoracion_pide_cocina ?? true,
+        bebida: cfgReservas?.valoracion_pide_bebida ?? false,
+        musica: cfgReservas?.valoracion_pide_musica ?? false,
+        espectaculo: cfgReservas?.valoracion_pide_espectaculo ?? false,
         servicio: cfgReservas?.valoracion_pide_servicio ?? true,
         ambiente: cfgReservas?.valoracion_pide_ambiente ?? true,
       },

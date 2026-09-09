@@ -577,6 +577,9 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   // Qué se le pregunta al cliente. No todos los restaurantes valoran lo mismo:
   // HABANA nunca ha puntuado la cocina. La nota global se pregunta siempre.
   valoracionPideCocina: boolean;
+  valoracionPideBebida: boolean;
+  valoracionPideMusica: boolean;
+  valoracionPideEspectaculo: boolean;
   valoracionPideServicio: boolean;
   valoracionPideAmbiente: boolean;
 

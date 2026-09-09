@@ -83,9 +83,15 @@ const HORAS_DIA: string[] = Array.from(
  * no está aquí porque se pregunta siempre.
  */
 const VALORACION_CAMPOS = [
-  { clave: "valoracionPideCocina",   etiqueta: "Cocina" },
-  { clave: "valoracionPideServicio", etiqueta: "Servicio" },
-  { clave: "valoracionPideAmbiente", etiqueta: "Ambiente" },
+  // Catálogo CERRADO: el local elige cuáles aparecen, no inventa nombres. Con
+  // texto libre, "Copas" y "Bebida" serían dos columnas distintas en el
+  // informe y no se podrían comparar locales ni años entre sí.
+  { clave: "valoracionPideCocina",      etiqueta: "Comida" },
+  { clave: "valoracionPideBebida",      etiqueta: "Bebida" },
+  { clave: "valoracionPideServicio",    etiqueta: "Servicio" },
+  { clave: "valoracionPideAmbiente",    etiqueta: "Ambiente" },
+  { clave: "valoracionPideMusica",      etiqueta: "Música" },
+  { clave: "valoracionPideEspectaculo", etiqueta: "Espectáculo" },
 ] as const satisfies readonly {
   clave: keyof EmpresaReservasConfig;
   etiqueta: string;

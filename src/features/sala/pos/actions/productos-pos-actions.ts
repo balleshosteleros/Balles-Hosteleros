@@ -20,6 +20,9 @@ export async function listProductosPOS(): Promise<
       .eq("empresa_id", empresaId)
       .eq("tipo", "venta")
       .eq("estado", "Activo")
+      // Fuera del terminal lo que solo se enseña en la carta pero se comanda en
+      // otro local (los platos de BACANAL que HABANA muestra en su carta).
+      .eq("visible_terminal", true)
       .order("categoria", { ascending: true })
       .order("nombre", { ascending: true });
 

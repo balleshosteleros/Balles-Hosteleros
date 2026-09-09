@@ -22,7 +22,7 @@
  */
 
 import { useState } from "react";
-import { Loader2, Check, Star } from "lucide-react";
+import { Angry, Check, Frown, Laugh, Loader2, Meh, Smile, Star } from "lucide-react";
 
 type Props = {
   token: string;
@@ -40,7 +40,14 @@ type Props = {
    * en Reservas → Configuración → Comunicaciones. Solo aplica en modo
    * desglosado. Si se apagan todas, queda la nota general de siempre.
    */
-  campos?: { cocina: boolean; servicio: boolean; ambiente: boolean };
+  campos?: {
+    cocina: boolean;
+    bebida: boolean;
+    servicio: boolean;
+    ambiente: boolean;
+    musica: boolean;
+    espectaculo: boolean;
+  };
   /**
    * true = con este enlace ya se valoró antes. Se enseña el agradecimiento en
    * vez del formulario: solo se admite una valoración por visita, y dejar el
@@ -68,12 +75,26 @@ export function ResenaForm({
   redirigir5EstrellasGoogle,
   googleReviewUrl,
   desglosado = false,
-  campos = { cocina: true, servicio: true, ambiente: true },
+  campos = {
+    cocina: true,
+    bebida: false,
+    servicio: true,
+    ambiente: true,
+    musica: false,
+    espectaculo: false,
+  },
   yaRespondio = false,
 }: Props) {
   // Si la empresa apagó todas las preguntas, no hay nada que desglosar: se cae
   // a la estrella única, que se pregunta siempre.
-  const desglose = desglosado && (campos.cocina || campos.servicio || campos.ambiente);
+  const desglose =
+    desglosado &&
+    (campos.cocina ||
+      campos.bebida ||
+      campos.servicio ||
+      campos.ambiente ||
+      campos.musica ||
+      campos.espectaculo);
   // La nota que llega del correo es la valoración GENERAL de la experiencia.
   // La estrella que pulsó en el correo rellena SOLO la comida, que es lo que
   // se le preguntó allí. Servicio y ambiente empiezan vacíos.
@@ -83,8 +104,13 @@ export function ResenaForm({
   // había forma de distinguir lo que él había valorado de lo que le habíamos
   // rellenado nosotros. Enviaba tres notas creyendo haber dado una.
   const [comida, setComida] = useState<number>(ratingInicial ?? 0);
+  const [bebida, setBebida] = useState<number>(0);
+  const [musica, setMusica] = useState<number>(0);
+  const [espectaculo, setEspectaculo] = useState<number>(0);
   /** Enlace a Google. Solo se rellena cuando la nota es de 5 estrellas. */
   const [urlResena, setUrlResena] = useState<string | null>(null);
+  /** Nota media que se acabó enviando. Decide la cara de la pantalla final. */
+  const [notaFinal, setNotaFinal] = useState<number | null>(null);
   const [servicio, setServicio] = useState<number>(0);
   const [ambiente, setAmbiente] = useState<number>(0);
   const [comentario, setComentario] = useState("");
@@ -105,8 +131,11 @@ export function ResenaForm({
     desglose
       ? [
           campos.cocina ? comida : 0,
+          campos.bebida ? bebida : 0,
           campos.servicio ? servicio : 0,
           campos.ambiente ? ambiente : 0,
+          campos.musica ? musica : 0,
+          campos.espectaculo ? espectaculo : 0,
         ]
       : [comida]
   ).filter((n) => n > 0);
@@ -133,6 +162,10 @@ export function ResenaForm({
           ...(desglose
             ? {
                 ratingComida: (campos.cocina && comida) || undefined,
+                ratingBebida: (campos.bebida && bebida) || undefined,
+                ratingMusica: (campos.musica && musica) || undefined,
+                ratingEspectaculo:
+                  (campos.espectaculo && espectaculo) || undefined,
                 ratingServicio: (campos.servicio && servicio) || undefined,
                 ratingAmbiente: (campos.ambiente && ambiente) || undefined,
               }
@@ -161,6 +194,7 @@ export function ResenaForm({
       ) {
         setUrlResena(body.redirect || googleReviewUrl!);
       }
+      setNotaFinal(media);
       setExito(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo enviar");
@@ -192,10 +226,21 @@ export function ResenaForm({
             className="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full text-white"
             style={{ background: color }}
           >
-            <Check className="h-7 w-7" />
+            <CaraSegunNota nota={notaFinal} />
           </div>
+
+          {/* La nota, con la misma estrella del color de marca que acaba de
+              pulsar en la pantalla anterior: reconoce lo que hizo. */}
+          {urlResena && (
+            <div className="mb-3 flex items-center justify-center gap-1.5">
+              <span className="text-2xl font-bold" style={{ color }}>
+                5
+              </span>
+              <Star className="h-6 w-6" style={{ color }} fill={color} />
+            </div>
+          )}
           <h2 className="text-xl font-semibold">
-            {urlResena ? "¡Cinco estrellas!" : `¡Gracias${nombreLead ? `, ${nombreLead}` : ""}!`}
+            {`¡Gracias${nombreLead ? `, ${nombreLead}` : ""}!`}
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             {urlResena
@@ -206,36 +251,34 @@ export function ResenaForm({
           </p>
 
           {/* Invitación a reseñar en Google, solo tras 5 estrellas.
-              El texto apela a algo cierto —un negocio de barrio compite contra
-              cadenas con presupuesto— y agradece por adelantado. Nada de
-              culpar a quien no lo haga: la culpa genera rechazo y, en alguien
-              que ya tiene el formulario de Google delante, se puede volver en
-              contra dentro de la propia reseña. */}
+              El botón lleva la G de Google —inline, no una imagen remota, que
+              en un móvil con mala cobertura tarda o no carga— porque reconocer
+              la marca del destino es lo que hace que se pulse: el cliente sabe
+              exactamente a dónde va.
+              Texto corto a propósito: esta pantalla se lee de pasada, en el
+              móvil y con prisa. Un párrafo largo aquí se salta entero. */}
           {urlResena && (
             <div className="mt-7 space-y-4 border-t border-gray-100 pt-6">
-              <div className="text-3xl leading-none" aria-hidden>
-                🙏
-              </div>
               <p className="text-base font-semibold text-gray-900">
-                ¿Nos regalas 30 segundos más?
+                ¿Nos dejas tu reseña?
               </p>
               <p className="text-sm leading-relaxed text-gray-600">
-                Somos un negocio de barrio, sin presupuesto de publicidad. Lo que
-                escribas en Google es, literalmente, lo que hace que otra gente
-                nos encuentre y se anime a venir.
+                Es lo que hace que otros nos descubran.
               </p>
               <a
                 href={urlResena}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full rounded-xl px-4 py-4 text-center text-base font-bold text-white shadow-lg transition-transform hover:scale-[1.02]"
-                style={{ background: color }}
+                className="flex w-full items-center justify-center gap-3 rounded-xl bg-white px-4 py-4 text-base font-bold text-gray-700 shadow-lg ring-1 ring-gray-200 transition-transform hover:scale-[1.02]"
               >
-                Escribir mi reseña en Google
+                <svg className="h-5 w-5 shrink-0" viewBox="0 0 48 48" aria-hidden="true">
+                  <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.1-3.8 6.6-9.4 6.6-16.1z" />
+                  <path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.5-3.8-12.2-9H4.5v5.7C8.1 41.1 15.4 46 24 46z" />
+                  <path fill="#FBBC05" d="M11.8 28.2c-.4-1.3-.7-2.7-.7-4.2s.2-2.9.7-4.2v-5.7H4.5C3 17.1 2.1 20.4 2.1 24s.9 6.9 2.4 9.9l7.3-5.7z" />
+                  <path fill="#EA4335" d="M24 10.8c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.3 29.9 2 24 2 15.4 2 8.1 6.9 4.5 14.1l7.3 5.7c1.7-5.2 6.5-9 12.2-9z" />
+                </svg>
+                Reseñar en Google
               </a>
-              <p className="text-xs text-gray-400">
-                Se abre en otra ventana · Nos harías un favor enorme
-              </p>
             </div>
           )}
         </div>
@@ -255,11 +298,25 @@ export function ResenaForm({
               {campos.cocina && (
                 <FilaEstrellas label="Comida" valor={comida} onChange={setComida} color={color} />
               )}
+              {campos.bebida && (
+                <FilaEstrellas label="Bebida" valor={bebida} onChange={setBebida} color={color} />
+              )}
               {campos.servicio && (
                 <FilaEstrellas label="Servicio" valor={servicio} onChange={setServicio} color={color} />
               )}
               {campos.ambiente && (
                 <FilaEstrellas label="Ambiente" valor={ambiente} onChange={setAmbiente} color={color} />
+              )}
+              {campos.musica && (
+                <FilaEstrellas label="Música" valor={musica} onChange={setMusica} color={color} />
+              )}
+              {campos.espectaculo && (
+                <FilaEstrellas
+                  label="Espectáculo"
+                  valor={espectaculo}
+                  onChange={setEspectaculo}
+                  color={color}
+                />
               )}
             </div>
           ) : (
@@ -273,17 +330,22 @@ export function ResenaForm({
             </>
           )}
 
-          <div className="mt-5">
-            <label className="block text-xs font-medium text-gray-700">
+          {/* El comentario escrito es lo que de verdad sirve para corregir: una
+              nota dice que algo falló, el texto dice el qué. Va con etiqueta
+              legible y caja alta —no en letra diminuta al final— porque antes
+              pasaba desapercibido y casi nadie escribía. Sigue siendo
+              opcional: obligarlo hunde el número de respuestas. */}
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-800">
               ¿Quieres contarnos algo más?{" "}
-              <span className="text-gray-400">(opcional)</span>
+              <span className="font-normal text-gray-400">(opcional)</span>
             </label>
             <textarea
               value={comentario}
               onChange={(e) => setComentario(e.target.value)}
               maxLength={1000}
-              rows={3}
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2"
+              rows={4}
+              className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm leading-relaxed placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2"
               style={{ outlineColor: color }}
               placeholder="Cuéntanos lo bueno y lo que podemos mejorar"
             />
@@ -375,4 +437,21 @@ function Estrellas({
       })}
     </div>
   );
+}
+
+
+/**
+ * La cara de la pantalla final, según lo que puntuó el cliente.
+ *
+ * No es adorno: devuelve lo que acaba de decir. A quien lo pasó mal, una cara
+ * radiante le suena a que no le han escuchado; a quien lo pasó bien, un tick
+ * neutro le sabe a poco. Sin nota (enlace ya usado) vuelve el tick de siempre.
+ */
+function CaraSegunNota({ nota }: { nota: number | null }) {
+  if (nota === null) return <Check className="h-7 w-7" />;
+  if (nota >= 5) return <Laugh className="h-8 w-8" />;
+  if (nota >= 4) return <Smile className="h-8 w-8" />;
+  if (nota >= 3) return <Meh className="h-8 w-8" />;
+  if (nota >= 2) return <Frown className="h-8 w-8" />;
+  return <Angry className="h-8 w-8" />;
 }

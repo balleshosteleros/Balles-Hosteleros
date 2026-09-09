@@ -27,6 +27,9 @@ const Schema = z.object({
   comentario: z.string().trim().max(1000).optional().default(""),
   // Desglose (solo en la valoración tras una reserva). Opcionales: el cliente
   // puede puntuar solo lo que le apetezca.
+  ratingBebida: z.number().int().min(1).max(5).optional(),
+  ratingMusica: z.number().int().min(1).max(5).optional(),
+  ratingEspectaculo: z.number().int().min(1).max(5).optional(),
   ratingComida: Estrella.optional(),
   ratingServicio: Estrella.optional(),
   ratingAmbiente: Estrella.optional(),
@@ -66,6 +69,9 @@ export async function POST(req: Request) {
     rating,
     comentario,
     ratingComida,
+    ratingBebida,
+    ratingMusica,
+    ratingEspectaculo,
     ratingServicio,
     ratingAmbiente,
   } = parsed.data;
@@ -154,6 +160,9 @@ export async function POST(req: Request) {
       telefono: lead.telefono ?? null,
       comentario: comentario || null,
       rating,
+      rating_bebida: ratingBebida ?? null,
+      rating_musica: ratingMusica ?? null,
+      rating_espectaculo: ratingEspectaculo ?? null,
       rating_comida: ratingComida ?? null,
       rating_servicio: ratingServicio ?? null,
       rating_ambiente: ratingAmbiente ?? null,

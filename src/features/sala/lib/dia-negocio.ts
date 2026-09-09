@@ -15,6 +15,8 @@
  * según dónde, y eso rompe cualquier comparación entre locales.
  */
 
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
+
 /** Hora (0-23) en la que empieza un día de negocio nuevo. */
 export const HORA_CORTE_DIA_NEGOCIO = 6;
 
@@ -73,4 +75,18 @@ function isoDe(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * Día de negocio EN CURSO ahora mismo, en la zona de la empresa.
+ *
+ * Se calcula con la hora del restaurante y no con la del servidor (UTC en
+ * producción) ni con la del dispositivo: a las 01:00 de la madrugada en Madrid
+ * el servidor ya va por el día siguiente, y un plato agotado esta noche
+ * volvería a la carta en mitad del propio servicio.
+ */
+export function diaNegocioHoy(tz: string, instante: Date = new Date()): string {
+  const { fecha, minutos } = ahoraEnZona(tz, instante);
+  const hh = String(Math.floor(minutos / 60)).padStart(2, "0");
+  return diaNegocioDe(fecha, `${hh}:00`);
 }
