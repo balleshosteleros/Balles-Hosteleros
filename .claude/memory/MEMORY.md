@@ -32,6 +32,7 @@
 - [Tipos reales BD Supabase](feedback/supabase_tipos_reales.md) — profiles.empresa_id es uuid, profiles.user_id sin UNIQUE; usar 035/038 como modelo, no 008
 - [RLS join anon](feedback/rls_join_anon.md) — `using (... exists(select from otra_tabla ...))` falla silencioso si el rol no puede leer otra_tabla; alternativas: policy explícita, RPC security definer, denormalizar, o service-role en server component
 - [Página Web — CMS multi-tenant](project/pagina_web_cms.md) — Marketing > Página Web (PRP-029) operativo 2026-04-18; editor de bloques, preview live, Vercel Domains, importador Bacanal
+- [Web de BALLES: dominio, copia vieja y legales](project/web_balles_dominio_y_legales.md) — `balleshosteleros.com` ya no sirve la web vieja de GHL (404 en todas sus rutas: no se puede volver a clonar). Una página PUBLICADA que conserve `html_replica` tapa a la web nueva en su ruta. Las 3 políticas de BALLES ya son las del software, como HABANA y BACANAL. En `direccionFiscal` va SOLO la calle o el domicilio sale duplicado en las legales
 - [Panel Comandas KDS](project/cocina_comandas_kds.md) — kanban realtime en /cocina/comandas; extiende pos_ticket_lineas con estado_cocina; POS persiste al enviar a cocina
 - [Supabase Realtime](feedback/supabase_realtime.md) — patrón publication + channel + RLS; cronómetro global único vía context; primer uso en PRP-027
 - [Sidebar acordeón](feedback/sidebar_acordeon.md) — solo un módulo de DEPARTAMENTOS abierto a la vez; abrir uno cierra el anterior
