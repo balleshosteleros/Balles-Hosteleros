@@ -252,7 +252,7 @@ export function ReunionesView() {
                 <div className="flex items-center gap-2">
                   {r.meetLink && (
                     <Badge variant="outline" className="text-[10px] gap-1">
-                      <Video className="h-3 w-3" /> Meet
+                      <Video className="h-3 w-3" /> Vídeo
                     </Badge>
                   )}
                   {r.resumenIA && (
@@ -301,7 +301,7 @@ export function ReunionesView() {
               />
             </div>
             <div>
-              <Label>Link Google Meet (opcional)</Label>
+              <Label>Enlace de videollamada (opcional)</Label>
               <Input
                 value={form.meetLink}
                 onChange={(e) =>
@@ -356,7 +356,7 @@ export function ReunionesView() {
                 rel="noreferrer"
                 className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700"
               >
-                <Video className="h-4 w-4" /> Abrir Google Meet
+                <Video className="h-4 w-4" /> Abrir videollamada
                 <ExternalLink className="h-3 w-3" />
               </a>
             )}
