@@ -259,6 +259,7 @@ export const datosSchemaPorTipo = {
   premios: premiosDatosSchema,
   historia: historiaDatosSchema,
   instagram: instagramDatosSchema,
+  imagen: imagenDatosSchema,
 } as const;
 
 export const bloqueSchema = z.discriminatedUnion("tipo", [
