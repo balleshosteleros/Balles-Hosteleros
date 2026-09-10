@@ -145,6 +145,7 @@ export default async function PublicCatchAllPage({ params, searchParams }: PageP
         logoUrl: match.isotipo_url,
         redes: match.redes,
         empleoActivo: match.empleo_activo,
+        reservasActivas: match.reservas_activas,
       }}
       hrefPoliticaCookies="/politica-de-cookies"
     />

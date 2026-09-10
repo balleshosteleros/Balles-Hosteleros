@@ -23,6 +23,12 @@ export interface PaginaContexto {
    * enviarle visitantes a un portal sin vacantes es una vía muerta.
    */
   empleoActivo?: boolean;
+  /**
+   * Se le puede reservar mesa. `false` quita el botón "Reservar" de la barra:
+   * la gestora del grupo no tiene sala, y su web de formación enseñaba un botón
+   * que abría el formulario de reservar mesa de un restaurante.
+   */
+  reservasActivas?: boolean;
   /** Enlaces ya normalizados desde Ajustes → datos generales. */
   redes?: {
     instagram: string | null;
@@ -187,7 +193,7 @@ export function PaginaPublicaShell({
   // cuando esa sección no existe.
   const hrefReservar = visibleEn(bloquesLimpios, "reservas")
     ? "#reservas"
-    : contexto?.empresaSlug
+    : contexto?.empresaSlug && contexto?.reservasActivas !== false
       ? `/reservar`
       : null;
   const nav: Array<{ href: string; label: string }> = [];

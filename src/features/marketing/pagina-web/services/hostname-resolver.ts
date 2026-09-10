@@ -5,6 +5,7 @@
  * Se ejecuta en Server Components de la ruta catch-all (public-site).
  */
 import { createAnonClient } from "@/lib/supabase/anon";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Bloque, BrandingSnapshot } from "../types";
 
 export interface HostnameMatch {
@@ -38,6 +39,12 @@ export interface HostnameMatch {
   redes: RedesEmpresa;
   /** Hay vacantes publicadas ahora mismo. Gobierna el enlace "Empleo" del menú. */
   empleo_activo: boolean;
+  /**
+   * La empresa tiene sala, es decir, se le puede reservar mesa. Gobierna el
+   * botón "Reservar" de la barra: BALLES no es un restaurante y le salía un
+   * botón que abría el formulario de reservar mesa.
+   */
+  reservas_activas: boolean;
 }
 
 export interface RedesEmpresa {
@@ -175,7 +182,11 @@ export async function resolverHostname(
     // las empresas que YA tienen web publicada (migración 015).
     // Las dos lecturas van en paralelo: son independientes y encadenarlas
     // sumaba su latencia a cada carga de la portada.
-    const [{ data: empresaRow }, { count: vacantesPublicas }] = await Promise.all([
+    // `salas` y `locales` no tienen política para el visitante anónimo: se leen
+    // con el cliente de servicio, y solo para contar (no sale ningún dato).
+    const admin = createAdminClient();
+
+    const [{ data: empresaRow }, { count: vacantesPublicas }, { count: salasEmpresa }] = await Promise.all([
       supabase
         .from("empresas_web_publica")
         .select("id, nombre, slug, logo_url, isotipo_url, instagram, facebook, tiktok, whatsapp, color_primario, color_secundario, color_texto")
@@ -192,6 +203,14 @@ export async function resolverHostname(
         .eq("empresa_id", pag.empresa_id)
         .eq("visible_publicamente", true)
         .eq("estado_publicacion", "publicada"),
+      // ¿Se le puede reservar mesa? Una empresa sin sala no es un restaurante:
+      // la gestora del grupo tenía en su web de formación un botón "Reservar"
+      // que abría el formulario de reservar mesa. Se mira el dato real, igual
+      // que con las vacantes, en vez de pedir un interruptor en Ajustes.
+      admin
+        .from("salas")
+        .select("id, locales!inner(empresa_id)", { count: "exact", head: true })
+        .eq("locales.empresa_id", pag.empresa_id),
     ]);
 
     const emp = (empresaRow ?? {}) as {
@@ -234,6 +253,9 @@ export async function resolverHostname(
       // `null` (error de lectura) se trata como "sí hay": ante la duda es mejor
       // enseñar el enlace que esconder por error un portal con ofertas activas.
       empleo_activo: vacantesPublicas === null ? true : vacantesPublicas > 0,
+      // Ante un error de lectura, NO se enseña: un botón de reservar mesa en la
+      // web de una empresa que no tiene sala es peor que no tenerlo.
+      reservas_activas: (salasEmpresa ?? 0) > 0,
       redes: {
         instagram: urlRed("instagram", dg.instagram),
         facebook: urlRed("facebook", dg.facebook),
