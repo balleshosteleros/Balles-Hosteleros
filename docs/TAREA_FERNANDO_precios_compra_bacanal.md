@@ -5,6 +5,91 @@
 
 ---
 
+## 🔒 10-SEP — YA SE PUEDE CERRAR EL ALMACÉN · 5 decisiones que hemos tomado por vosotros
+
+> **Está hecho y funcionando.** Es lo que pediste el 27-ago: *"almacén abierto se edita
+> y el sistema recalcula; almacén cerrado no se toca nada"*. Lo que necesitamos ahora es
+> que **confirméis o cambiéis cinco decisiones** que hemos tenido que tomar para poder
+> terminarlo, y que **alguien lo pruebe en pantalla** (producción nos pide login).
+
+### Cómo se usa
+
+Al **confirmar un inventario** ahora sale una pantalla que dice lo que va a pasar, y
+dentro una casilla: **«Cerrar el almacén con este recuento»**. Si la marcas:
+
+- A partir de ese día, **nadie puede tocar nada anterior**: ni apuntar una merma con
+  fecha vieja, ni deshacer un albarán ya recibido, ni corregir existencias hacia atrás.
+- En **Stock** aparece un aviso: *«Almacén cerrado hasta el 8/9, por Fulano»*, y las
+  filas viejas del historial salen con un **candado**.
+- Si de verdad hace falta corregir algo de antes, hay un botón **Reabrir** que pide el
+  motivo y lo deja registrado. No es un botón de cada día.
+
+El «Deshacer» deja de ser un concepto aparte: **en período abierto se corrige y se borra
+con normalidad** y el sistema recalcula solo; en período cerrado, no se toca. Lo que
+aparezca después se arregla en el inventario siguiente.
+
+### ⚠️ Lo que cambia aunque no cerréis nada
+
+Un recuento ahora **manda sobre todo lo anterior a él**. Antes se guardaba como una
+resta ("había 10, has contado 8, quito 2"); ahora se guarda como un hecho ("el día 8
+había 8").
+
+> **Qué significa en la práctica:** si el lunes contáis 43 botellas y el martes alguien
+> mete un albarán del viernes pasado con 12 más, **siguen siendo 43**. Y está bien: esas
+> 12 ya estaban en la estantería cuando contasteis. Antes se habrían sumado dos veces.
+
+También veréis en el historial de casi todos los productos una línea nueva llamada
+**«Saldo inicial»**, con fecha del 9 de septiembre. **No es un error ni un ajuste**: son
+263 productos que tenían existencias pero ningún movimiento que las explicara (venían de
+cargas antiguas y del espejo de Ágora). Es la foto de partida. **Ninguna existencia ha
+cambiado**, lo comprobamos producto a producto.
+
+### 🙋 LAS 5 DECISIONES — decidnos si os valen
+
+Las hemos dejado así para poder terminar. Cambiar cualquiera es fácil ahora:
+
+1. **Solo se cierran días terminados** (como pronto, ayer). *Por qué:* las ventas del TPV
+   no llegan hasta la madrugada siguiente. Si cerráramos "hoy a las seis", las ventas de
+   hoy se quedarían fuera al llegar mañana.
+2. **Cierra y reabre quien tenga Logística con permiso de edición.** ¿Debería ser solo
+   dirección?
+3. **Reabrir exige motivo** y reabre solo el último cierre (reabrir septiembre no reabre
+   agosto).
+4. **El corte es por empresa, no por almacén.** Cocina y barra no se pueden cerrar por
+   separado: el almacén de Balles no distingue entre los dos (en los inventarios es solo
+   una etiqueta). Si lo queréis separado, es otra tarea.
+5. **El recuento se fecha a la hora en que se cuenta** (o al final del día, si es de un
+   día pasado), en vez de a mediodía como antes. Hacía falta para que el recuento quede
+   *después* de las ventas de ese día.
+
+### 🚨 Dos avisos de seguridad que os tocan a vosotros
+
+- **Confirmar un inventario, borrar una merma y corregir existencias no piden ningún
+  permiso**: los puede hacer cualquier usuario de la empresa. La casilla de cerrar sí
+  está protegida, pero lo de al lado no. Nos parece que debería mirarse.
+- La tabla de existencias tiene la **escritura abierta a cualquier usuario autenticado**
+  desde el principio. No es de esta fase, pero conviene saberlo.
+
+### 🗑️ Retirado: el botón «Sincronizar» de Ágora
+
+Traía las existencias de Ágora y **pisaba el stock de Balles sin dejar rastro** en el
+historial. Lo hemos quitado: decidiste en julio que **Balles manda el stock**, y ahora
+que el saldo sale del histórico, un botón que lo escribe por fuera deja un número que el
+libro no puede explicar. Las **ventas siguen entrando solas cada madrugada**, que es el
+camino bueno; el panel de Ágora sigue ahí, ahora solo informando.
+
+### 🙏 Lo que necesitamos: que alguien lo pruebe
+
+Producción pide login y no podemos entrar. ¿Podéis hacer esto y contarnos?
+
+1. Abrir un inventario, confirmarlo **sin** marcar la casilla → las existencias cambian.
+2. Confirmar otro **marcando** «Cerrar el almacén».
+3. Ir a Stock: ¿se ve el aviso? ¿Salen los candados en las filas viejas?
+4. Intentar apuntar una merma de un día anterior al corte → debería avisar con claridad.
+5. Reabrir con un motivo → debería volver a dejar.
+
+---
+
 ## ⚖️ 09-SEP — LAS RECETAS COSTABAN MIL VECES DE MÁS · corregido lo evidente, 3 decisiones para vosotros
 
 > **Gracias por la carga de escandallos y por cerrar la ronda con Borja.** Al revisarla

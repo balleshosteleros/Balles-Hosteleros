@@ -80,7 +80,36 @@ La merma de prueba de **Larios Rose** (5 ud, HABANA) dejó el stock en **−2,6*
 
 ---
 
-## 4. Fase 2 — Se elimina el "deshacer"
+## 4. Fase 2 — Se elimina el "deshacer" ✅ HECHA (2026-09-09/10)
+
+> **Estado: implementada y desplegada.** Migraciones `20260909200000_kardex_recalculo_anclado`
+> y `20260909210000_almacen_cierres` aplicadas en producción; código en `849ef743`,
+> `0d22679c` y `04eebe53`.
+>
+> **Lo que se construyó**, además de lo que pedía este apartado:
+> - El kardex **se recalcula solo**: `saldo_resultante` era "el saldo vivo al escribir",
+>   no "el saldo a esa fecha", y con un movimiento atrasado quedaba descolocado (8 de
+>   65 filas ya lo estaban). Ahora un trigger reencadena el histórico del producto.
+> - Los inventarios y los ajustes pasan a ser **anclas** (`saldo_fijado`): dicen cuánto
+>   hay en vez de cuánto se mueve. Sin eso, un albarán que llegue tarde descuadraba
+>   todo lo posterior a un recuento.
+> - **263 anclas de "Saldo inicial"**: había 255 productos con existencias y ni un
+>   apunte. Ninguna existencia cambió; ahora el libro las explica.
+> - La guarda del cierre vive en un **trigger de base de datos**, no en la aplicación:
+>   los movimientos entran por cuatro sitios (TypeScript, el RPC del albarán, las
+>   cascadas al borrar un producto y cualquier cliente con la clave de servicio).
+> - El cierre es **por día terminado**, no "a fecha y hora": las ventas de Ágora llegan
+>   estampadas a las 12:00 del día de negocio y no entran hasta la mañana siguiente.
+>
+> **Decisiones tomadas por defecto**, pendientes de que Iván las confirme o cambie:
+> quién cierra (rol con Logística editable), reabrir exige motivo y reabre solo el
+> último cierre, el corte es por empresa, y los inventarios se estampan a la hora real
+> del recuento (`inventarios.contado_at`).
+>
+> **Fuera de alcance, avisado a Iván:** confirmar un inventario, borrar una merma y
+> corregir existencias siguen sin pedir permiso de rol; y `stock` tiene la RLS de
+> escritura abierta (`using(true)`).
+
 
 ### 4.1 Qué se quita
 

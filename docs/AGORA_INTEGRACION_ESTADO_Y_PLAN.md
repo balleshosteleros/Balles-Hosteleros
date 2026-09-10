@@ -6,6 +6,24 @@
 > **Relacionado:** `.claude/PRPs/PRP-024-auditoria-tecnica-logistica-agora-pos.md`, `.claude/memory/feedback/regla_seguridad_agora.md`
 > **Estado:** catálogo+stock de **ambas empresas migrados desde Ágora el 2026-06-10** por el otro dev (`migrar-catalogo.mjs`, Excel curado). El espejo del 09-06 quedó **supersedido**. **Recurrencia implementada** (`e43411d`): cron 08:00 + botón manual reflejan el stock de Ágora a diario — falta solo añadir `AGORA_API_URL`/`AGORA_API_TOKEN` en Vercel. **Escritura hacia Ágora confirmada y probada** (§1bis). Abierto: env en Vercel, sedes Getafe/Alcorcón, recetas reales/food-cost.
 
+> ### ⛔ 2026-09-10 — EL ESPEJO DE STOCK SE HA RETIRADO (PRP-080 Fase 2)
+>
+> Todo lo que este documento cuenta más abajo sobre **reflejar el stock de Ágora en
+> Balles** (`espejoStockAgora`, el botón "Sincronizar", `filter=Stocks`) **ya no
+> existe**: el servicio, la acción y el botón se han borrado.
+>
+> Dos razones que se suman:
+> 1. Iván decidió el 07-jul que **Balles manda el stock**, no Ágora. El espejo era el
+>    apaño de la transición.
+> 2. Desde el 09-sep el kardex **recalcula los saldos desde el histórico**. Un espejo
+>    que escribe `stock.cantidad_actual` por su cuenta deja un saldo que el libro no
+>    explica; y con un almacén cerrado, ni siquiera se podría corregir.
+>
+> Lo que **sí** sigue vivo y es el camino bueno: la ingesta diaria de ventas
+> (`agora-ventas-ingesta.ts` + `api/cron/agora-sync`), su parte en `agora_sync_log`, y
+> el descuento de stock por ventas (hoy apagado a propósito, `stock_descuento_desde`).
+
+
 ---
 
 ## 1. Resumen ejecutivo

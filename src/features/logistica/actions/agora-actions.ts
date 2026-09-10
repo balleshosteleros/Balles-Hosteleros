@@ -15,7 +15,6 @@
 
 import { revalidatePath } from "next/cache";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
-import { espejoStockAgora } from "@/features/logistica/services/agora-stock-mirror";
 import type { AgoraSyncStatus } from "@/features/logistica/types/agora";
 
 // ─── TIPOS DE RESPUESTA ───────────────────────────────────────────────────────
@@ -40,87 +39,24 @@ export interface AgoraSyncLog {
   error_records: number;
   retry_count: number;
   error_detail: unknown;
+  /** Parte de la pasada: facturas, líneas, complementos y qué pasó con el stock. */
+  sales_data: unknown;
 }
 
-// ─── INICIAR SINCRONIZACIÓN ───────────────────────────────────────────────────
-
-/**
- * Dispara el espejo de stock Ágora → Balles para la empresa del usuario.
- * (Sustituye al sync de ventas heredado, superado por la Opción A el 2026-06-10.)
- *
- * Si falla, devuelve el error exacto sin intentar arreglarlo.
- * El componente AgoraSyncStatus mostrará el error al usuario y pedirá aprobación.
- *
- * @param esReintentoAprobado - true solo si el usuario aprobó explícitamente reintentar
- */
-export async function syncVentasAgoraAction(
-  esReintentoAprobado = false
-): Promise<AgoraSyncActionResult> {
-  void esReintentoAprobado; // el espejo nunca reintenta solo; el botón ya es el reintento manual
-  try {
-    const { empresaId, userId } = await getLogisticaContext();
-
-    if (!empresaId) {
-      return {
-        ok: false,
-        status: "error",
-        mensaje: "No se pudo obtener el empresa_id del usuario autenticado.",
-        totalRecords: 0,
-        okRecords: 0,
-        errorRecords: 0,
-        retryCount: 0,
-      };
-    }
-
-    const result = await espejoStockAgora(empresaId, userId ?? null);
-
-    revalidatePath("/logistica");
-
-    if (!result.success) {
-      // Regla Seguridad Ágora: devolver error exacto sin modificarlo
-      return {
-        ok: false,
-        status: result.status,
-        mensaje: result.errorMessage ?? "Error desconocido en el espejo de stock con Ágora.",
-        totalRecords: result.totalRecords,
-        okRecords: result.okRecords,
-        errorRecords: result.errorRecords,
-        retryCount: result.retryCount,
-      };
-    }
-
-    const notaOmitidos =
-      result.omitidosSinProducto > 0
-        ? ` (${result.omitidosSinProducto} posiciones de Ágora sin producto equivalente en Balles, omitidas)`
-        : "";
-    const mensajeExito =
-      result.status === "ok"
-        ? `Espejo de stock completado: ${result.okRecords} posiciones actualizadas desde Ágora.${notaOmitidos}`
-        : `Espejo parcial: ${result.okRecords} de ${result.totalRecords} posiciones reflejadas. ${result.errorRecords} con errores.${notaOmitidos}`;
-
-    return {
-      ok: true,
-      status: result.status,
-      mensaje: mensajeExito,
-      totalRecords: result.totalRecords,
-      okRecords: result.okRecords,
-      errorRecords: result.errorRecords,
-      retryCount: result.retryCount,
-    };
-  } catch (err) {
-    // Error inesperado — Regla Seguridad Ágora: mostrar error exacto
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    return {
-      ok: false,
-      status: "error",
-      mensaje: `Error inesperado en el espejo de stock con Ágora: ${errorMessage}`,
-      totalRecords: 0,
-      okRecords: 0,
-      errorRecords: 0,
-      retryCount: 0,
-    };
-  }
-}
+// ─── EL ESPEJO DE STOCK YA NO EXISTE ─────────────────────────────────────────
+//
+// Aquí vivía `syncVentasAgoraAction`, que traía las existencias de Ágora y **pisaba
+// `stock.cantidad_actual`** con ellas, sin dejar ni un apunte en el historial.
+//
+// Se retira en el PRP-080 Fase 2 por dos razones que se suman:
+//   1. Iván decidió en julio que **Balles manda el stock**, no Ágora. El espejo era
+//      un apaño de la transición.
+//   2. Desde que el kardex se recalcula solo, el saldo sale del histórico. Un espejo
+//      que escribe el saldo por su cuenta lo deja en un valor que el libro no explica,
+//      hasta el siguiente movimiento — y con el almacén cerrado, ni eso.
+//
+// Lo que sí sigue: la ingesta de ventas (`agora-ventas-ingesta.ts`), que es el camino
+// bueno, y su registro en `agora_sync_log`, que se sigue leyendo aquí abajo.
 
 // ─── ÚLTIMO REGISTRO DE SYNC ──────────────────────────────────────────────────
 
@@ -141,7 +77,7 @@ export async function getLastSyncLog(): Promise<{
 
     const { data, error } = await supabase
       .from("agora_sync_log")
-      .select("id, sync_at, status, total_records, ok_records, error_records, retry_count, error_detail")
+      .select("id, sync_at, status, total_records, ok_records, error_records, retry_count, error_detail, sales_data")
       .eq("empresa_id", empresaId)
       .order("sync_at", { ascending: false })
       .limit(1)
@@ -177,7 +113,7 @@ export async function getSyncLogHistory(limit = 10): Promise<{
 
     const { data, error } = await supabase
       .from("agora_sync_log")
-      .select("id, sync_at, status, total_records, ok_records, error_records, retry_count, error_detail")
+      .select("id, sync_at, status, total_records, ok_records, error_records, retry_count, error_detail, sales_data")
       .eq("empresa_id", empresaId)
       .order("sync_at", { ascending: false })
       .limit(limit);
