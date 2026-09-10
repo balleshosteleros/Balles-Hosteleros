@@ -79,7 +79,7 @@ const DOCUMENTOS: { tipo: TipoDocPropio; label: string; ayuda: string }[] = [
   {
     tipo: "dni_anverso",
     label: "DNI o NIE — cara delantera",
-    ayuda: "Donde está tu foto. Que se lean bien todos los datos.",
+    ayuda: "Donde está tu foto.",
   },
   {
     tipo: "dni_reverso",
@@ -89,8 +89,7 @@ const DOCUMENTOS: { tipo: TipoDocPropio; label: string; ayuda: string }[] = [
   {
     tipo: "iban",
     label: "Certificado bancario",
-    ayuda:
-      "El documento que emite tu banco y puedes descargar desde su app. Tiene que verse tu nombre como titular y el IBAN completo. No vale el número escrito a mano.",
+    ayuda: "El que te da tu banco desde su app, con tu nombre y el IBAN.",
   },
 ];
 
@@ -140,7 +139,6 @@ export function WizardPrimerAcceso({
     iban: Boolean(prefilled.doc_iban_path),
   }));
   const documentosQueFaltan = DOCUMENTOS.filter((d) => !yaEntregado[d.tipo]);
-  const documentosEntregados = DOCUMENTOS.filter((d) => yaEntregado[d.tipo]);
   const [analizando, setAnalizando] = useState<TipoDocPropio | null>(null);
   const [avisoIA, setAvisoIA] = useState<string | null>(null);
   const inputsDoc = useRef<Partial<Record<TipoDocPropio, HTMLInputElement | null>>>({});
@@ -605,32 +603,10 @@ export function WizardPrimerAcceso({
           {/* PASO — Documentos: se suben, la IA los lee y la persona aprueba */}
           {pasoId === "documentos" && (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Sube cada documento: desde el móvil puedes hacerle una foto directamente. Los
-                leemos automáticamente y después compruebas tú que los datos son correctos. Si
-                alguno sale mal, puedes repetirlo antes de terminar.
-              </p>
-
-              {/* Sin esto la pantalla se contradice: arriba los datos salen en gris
-                  («ya los tenemos») y abajo se le exige subir el documento. Las dos
-                  cosas son ciertas —tenemos el NÚMERO, no la COPIA— pero hay que
-                  decirlo o parece un error del sistema. */}
-              {hayBloqueado && (
-                <p className="rounded-md border bg-muted/40 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                  Tus datos ya los tenemos, por eso salen en gris más abajo. Lo que nos falta es
-                  la <b>copia del documento</b>: la foto o el archivo.
-                </p>
-              )}
-
-              {documentosEntregados.length > 0 && (
-                <p className="flex items-start gap-2 rounded-md bg-emerald-50 px-2.5 py-2 text-[11px] text-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-200">
-                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    Ya tenemos: {documentosEntregados.map((d) => d.label).join(", ")}. No hace
-                    falta que lo vuelvas a mandar.
-                  </span>
-                </p>
-              )}
+              {/* Sin parrafo de bienvenida: nadie lee un texto antes de hacer una
+                  foto, y los botones ya dicen qué hacer. Tampoco se nombra lo que
+                  ya está entregado — como no se nombra el resto de lo que consta
+                  en su ficha: si no se le pide, no se menciona. */}
 
               <ul className="space-y-2">
                 {documentosQueFaltan.map((d) => {

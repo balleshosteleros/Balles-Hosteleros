@@ -147,12 +147,39 @@ const EXT_POR_MIME: Record<string, string> = {
 };
 
 /**
- * Guarda el documento en su sitio definitivo y lo lee con IA.
+ * Qué le falta al documento para darlo por bueno, en palabras que la persona
+ * pueda usar para repetirlo. `null` = el documento vale.
  *
- * El archivo se guarda ANTES de leerlo: si la IA falla o no lee nada, el
- * documento ya está a salvo en la ficha y solo queda teclear el dato. Al revés
- * —leer primero y guardar al confirmar— un fallo del modelo dejaría a la persona
- * sin haber entregado nada.
+ * Se mira el dato que ESE documento tiene que contener: si el modelo ha leído la
+ * imagen y no aparece, o no es el documento que se pedía o no hay quien lo lea.
+ * En ambos casos guardar la foto no sirve de nada.
+ */
+function problemaConElDocumento(
+  tipo: TipoDocPropio,
+  lectura: { valor: string | null; direccion: string | null },
+): string | null {
+  if (tipo === "dni_anverso" && !lectura.valor) {
+    return "No hemos podido leer tu DNI o NIE en esa imagen. Comprueba que sea la cara de la foto y repítela con buena luz, sin reflejos y con el documento entero dentro.";
+  }
+  if (tipo === "dni_reverso" && !lectura.direccion) {
+    return "No hemos encontrado tu domicilio en esa imagen. Comprueba que sea la cara de detrás del documento y repítela con buena luz.";
+  }
+  if (tipo === "iban" && !lectura.valor) {
+    return "No hemos encontrado ningún IBAN en ese documento. Tiene que ser el certificado de titularidad que emite tu banco, con tu nombre y el número de cuenta completo.";
+  }
+  return null;
+}
+
+/**
+ * Lee el documento con IA y, si vale, lo guarda en su sitio definitivo.
+ *
+ * Se LEE primero: una foto movida, la cara equivocada o directamente otra cosa
+ * no deben quedarse dentro como si fueran su DNI. Si no se puede leer, se
+ * rechaza y se le dice por qué, para que repita sabiendo qué ha fallado.
+ *
+ * La excepción que evita dejar a nadie tirado: si el fallo es NUESTRO —sin clave
+ * de IA, el modelo caído, un formato que no sabe leer— el documento sí se
+ * guarda y solo queda teclear el dato a mano.
  *
  * Multiempresa: quien trabaja en las dos sociedades tiene una ficha por empresa
  * y el almacén está separado por empresa (una no puede abrir los archivos de la
@@ -250,6 +277,35 @@ export async function subirYLeerDocumentoPropio(input: {
     destino = fichas;
   }
 
+  // ── Se LEE antes de guardar, y si no vale NO se guarda ──────────────────
+  //
+  // Antes se guardaba primero para que un fallo de la IA no dejara a la persona
+  // sin haber entregado nada. El efecto secundario: una foto movida, la cara
+  // equivocada o directamente otra cosa se quedaban dentro como si fueran su
+  // DNI. Ahora se lee primero: si el documento no se puede leer se rechaza y se
+  // le dice POR QUÉ, para que repita sabiendo qué ha fallado.
+  //
+  // La distinción que evita dejar a nadie tirado: si el fallo es NUESTRO —sin
+  // clave de IA, el modelo caído, un formato que no sabe leer— el documento SÍ
+  // se guarda y solo queda teclear el dato. Solo se rechaza cuando la IA ha
+  // mirado la imagen y no ha encontrado lo que tenía que encontrar.
+  const lectura = await leerDocumentoConIA(doc.campoIA, input.file.type, buffer);
+  const falloNuestro =
+    lectura.motivo === "ia_no_configurada" ||
+    lectura.motivo === "ia_fallo" ||
+    lectura.motivo === "no_soportado";
+
+  if (!falloNuestro) {
+    if (lectura.menor_de_edad) {
+      return {
+        ok: false as const,
+        error: `El documento indica ${lectura.edad} años. No podemos darte de alta: avisa a la empresa.`,
+      };
+    }
+    const problema = problemaConElDocumento(input.tipo, lectura);
+    if (problema) return { ok: false as const, error: problema };
+  }
+
   // Una copia en cada empresa que la necesite, en la MISMA ruta que usa la
   // subida manual de RRHH: `{empresa_id}/{empleado_id}/{tipo}.{ext}`.
   for (const ficha of destino) {
@@ -265,8 +321,6 @@ export async function subirYLeerDocumentoPropio(input: {
       .eq("id", ficha.id);
     if (errFicha) return { ok: false as const, error: errFicha.message };
   }
-
-  const lectura = await leerDocumentoConIA(doc.campoIA, input.file.type, buffer);
 
   // ⛔ AQUÍ NO SE REVALIDA. Al subir el ÚLTIMO documento, revalidar el layout
   // hacía que el guard se recalculara en ese mismo instante, viera que ya no
