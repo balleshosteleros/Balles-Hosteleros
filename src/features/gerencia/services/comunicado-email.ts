@@ -14,14 +14,15 @@
  *     abre desde la ficha del comunicado, así que aunque el archivo sea enorme
  *     el trabajador puede llegar a él.
  *
- * Server-only: usa la clave de servicio para resolver destinatarios. La RLS de
- * `usuarios` solo deja ver el propio perfil, así que con la sesión del usuario
- * un comunicado "a toda la empresa" se habría quedado en una sola persona.
+ * A quién va lo decide `comunicado-destinatarios`, la misma lista que usan la
+ * campana de la app y el push del móvil: los tres avisos llegan siempre a la
+ * misma gente.
  */
 
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolverAudienciaComunicado } from "@/features/gerencia/services/comunicado-destinatarios";
 import { sendEmail } from "@/lib/email/send";
 import {
   fetchEmpresaMarca,
@@ -31,7 +32,11 @@ import {
 } from "@/lib/email/comunicado-header";
 import { getSiteUrl } from "@/lib/site-url";
 import { escapeHtml } from "@/lib/email/escape-html";
-import { BUCKET_COMUNICADOS, type ComunicadoAdjunto } from "@/features/gerencia/data/comunicados-adjuntos";
+import {
+  BUCKET_COMUNICADOS,
+  normalizarAdjuntos,
+  type ComunicadoAdjunto,
+} from "@/features/gerencia/data/comunicados-adjuntos";
 
 /**
  * Tope de lo que se manda como archivo adjunto en un mismo correo.
@@ -50,10 +55,6 @@ interface ComunicadoFila {
   asunto: string | null;
   cuerpo: string | null;
   estado: string;
-  toda_empresa: boolean;
-  roles_destinatarios: string[] | null;
-  departamentos_destinatarios: string[] | null;
-  empleados_destinatarios: string[] | null;
   adjuntos: unknown;
 }
 
@@ -74,106 +75,6 @@ function aTextoPlano(html: string): string {
     .replace(/&amp;/g, "&")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-}
-
-/** Un correo de migración o vacío no es una dirección a la que escribir. */
-function esEmailUtil(e: string): boolean {
-  return e.includes("@") && !e.endsWith("@sin-email.migracion");
-}
-
-/**
- * Correos de los destinatarios del comunicado.
- *
- * La lista base son los EMPLEADOS ACTIVOS de la empresa (es quien cobra y
- * trabaja allí). El departamento y el rol se leen de `usuarios`, que es donde
- * viven, cruzando por `user_id`; no se filtra `usuarios` por empresa porque
- * quien trabaja en dos empresas solo tiene una como principal y se quedaría
- * fuera de la suya secundaria.
- */
-async function resolverEmails(
-  supabase: ReturnType<typeof createAdminClient>,
-  c: ComunicadoFila,
-): Promise<string[]> {
-  const { data: plantilla } = await supabase
-    .from("empleados")
-    .select("user_id, email_personal, email_empresa")
-    .eq("empresa_id", c.empresa_id)
-    .eq("estado", "Activo");
-
-  const empleados = (plantilla ?? []) as Array<{
-    user_id: string | null;
-    email_personal: string | null;
-    email_empresa: string | null;
-  }>;
-
-  const emailDe = (e: (typeof empleados)[number]) =>
-    (e.email_empresa || e.email_personal || "").trim().toLowerCase();
-
-  if (c.toda_empresa === true) {
-    return Array.from(new Set(empleados.map(emailDe).filter(esEmailUtil)));
-  }
-
-  const elegidos = new Set<string>((c.empleados_destinatarios ?? []).filter(Boolean));
-
-  const departamentos = (c.departamentos_destinatarios ?? []).filter(Boolean);
-  const roles = (c.roles_destinatarios ?? []).filter(Boolean);
-  const userIdsPlantilla = empleados
-    .map((e) => e.user_id)
-    .filter((id): id is string => !!id);
-
-  if ((departamentos.length > 0 || roles.length > 0) && userIdsPlantilla.length > 0) {
-    const { data: perfiles } = await supabase
-      .from("usuarios")
-      .select("user_id, departamento, rol_label")
-      .in("user_id", userIdsPlantilla);
-
-    const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
-    const deps = departamentos.map(norm);
-    const rols = roles.map(norm);
-
-    for (const p of (perfiles ?? []) as Array<{
-      user_id: string;
-      departamento: string | null;
-      rol_label: string | null;
-    }>) {
-      const dep = norm(p.departamento);
-      const rol = norm(p.rol_label);
-      // El departamento también cuenta como "rol" porque en la pantalla de
-      // Gerencia ambas listas se solapan (el rol se etiqueta con el área).
-      if ((dep && deps.includes(dep)) || (rol && rols.includes(rol)) || (dep && rols.includes(dep))) {
-        elegidos.add(p.user_id);
-      }
-    }
-  }
-
-  return Array.from(
-    new Set(
-      empleados
-        .filter((e) => e.user_id && elegidos.has(e.user_id))
-        .map(emailDe)
-        .filter(esEmailUtil),
-    ),
-  );
-}
-
-/** Normaliza el JSONB `adjuntos` a una lista tipada. */
-export function normalizarAdjuntos(raw: unknown): ComunicadoAdjunto[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const r = item as Record<string, unknown>;
-    const path = typeof r.path === "string" ? r.path : "";
-    const name = typeof r.name === "string" ? r.name : "";
-    if (!path || !name) return [];
-    return [
-      {
-        path,
-        name,
-        size: typeof r.size === "number" ? r.size : 0,
-        mime: typeof r.mime === "string" ? r.mime : null,
-      },
-    ];
-  });
 }
 
 /** Bloque HTML con los documentos: enlace al software para cada uno. */
@@ -209,9 +110,7 @@ export async function enviarComunicadoPorEmail(
 
     const { data, error } = await supabase
       .from("comunicados")
-      .select(
-        "id, empresa_id, titulo, asunto, cuerpo, estado, toda_empresa, roles_destinatarios, departamentos_destinatarios, empleados_destinatarios, adjuntos",
-      )
+      .select("id, empresa_id, titulo, asunto, cuerpo, estado, adjuntos")
       .eq("id", comunicadoId)
       .maybeSingle();
     if (error) throw error;
@@ -221,7 +120,7 @@ export async function enviarComunicadoPorEmail(
       return { ok: false, enviados: 0, destinatarios: 0, error: "El comunicado no está publicado" };
     }
 
-    const emails = await resolverEmails(supabase, c);
+    const { emails } = await resolverAudienciaComunicado(comunicadoId);
     if (emails.length === 0) {
       return { ok: false, enviados: 0, destinatarios: 0, error: "Ningún destinatario tiene correo" };
     }

@@ -8,7 +8,6 @@ import { SolicitudModal } from "@/features/mi-panel/components/SolicitudModal";
 import { MisSolicitudesList } from "@/features/mi-panel/components/MisSolicitudesList";
 import { MisTareasCronogramaWidget } from "@/features/mi-panel/components/MisTareasCronogramaWidget";
 import { WidgetBoundary } from "@/shared/components/WidgetBoundary";
-// import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate"; // desactivado en pruebas
 import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
 import { PointsHeroCard } from "@/features/mi-panel/components/PointsHeroCard";
 import { ResumenTiles } from "@/features/mi-panel/components/ResumenTiles";
@@ -87,9 +86,6 @@ export function MiPanelView() {
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-5">
-      {/* Gate bloqueante de notificaciones desactivado durante las pruebas:
-          los empleados no deben verse forzados a pulsar "Visto" para trabajar. */}
-      {/* <NotificacionesGate /> */}
       {/* Cabecera */}
       <div className="flex items-start justify-between gap-2">
         <div>

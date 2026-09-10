@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser, getCatalogoEmpresa } from "@/features/empresa/lib/empresa-server";
 import { CatalogoEmpresaProvider } from "@/features/empresa/contexts/catalogo-empresa-context";
 import { EmpresaActivaSeed } from "@/features/empresa/components/EmpresaActivaSeed";
+import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +95,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
             pantalla sigue tapada: así el menú y el logotipo nunca se ven de dos
             empresas distintas a la vez. */}
         <EmpresaActivaSeed empresaActivaId={empresaActivaKey} />
+        {/* Avisos sin ver: saltan nada más entrar, en cualquier pantalla —no solo
+            en Mi panel—, para que un comunicado se lea sí o sí. Si la persona
+            debe documentación, primero eso: no se apilan dos avisos encima. */}
+        {!bloquea && <NotificacionesGate />}
         {/* key = empresa activa → remonta la página al cambiar de empresa, para
             que los client components recarguen sus datos con la nueva empresa. */}
         <div key={empresaActivaKey ?? "sin-empresa"} className="contents">

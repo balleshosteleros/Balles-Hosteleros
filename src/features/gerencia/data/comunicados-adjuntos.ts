@@ -39,3 +39,27 @@ export function tamanoLegible(bytes: number): string {
   const kb = Math.max(1, Math.round(bytes / 1024));
   return `${kb} KB`;
 }
+
+/**
+ * Normaliza a lista tipada lo que venga de la BD o del aviso: solo pasan los
+ * documentos completos. Un adjunto a medias se descarta antes que pintar una
+ * fila con un enlace roto.
+ */
+export function normalizarAdjuntos(raw: unknown): ComunicadoAdjunto[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const r = item as Record<string, unknown>;
+    const path = typeof r.path === "string" ? r.path : "";
+    const name = typeof r.name === "string" ? r.name : "";
+    if (!path || !name) return [];
+    return [
+      {
+        path,
+        name,
+        size: typeof r.size === "number" ? r.size : 0,
+        mime: typeof r.mime === "string" ? r.mime : null,
+      },
+    ];
+  });
+}

@@ -11,7 +11,7 @@ import { WidgetBoundary } from "@/shared/components/WidgetBoundary";
 import { getMobileIdentidad } from "@/features/mi-panel/mobile/lib/mobile-identidad-data";
 import { getCatalogoEmpresa } from "@/features/empresa/lib/empresa-server";
 import { CatalogoEmpresaProvider } from "@/features/empresa/contexts/catalogo-empresa-context";
-// import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate"; // desactivado en pruebas
+import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate";
 
 export const dynamic = "force-dynamic";
 
@@ -131,9 +131,9 @@ export default async function MobileLayout({ children }: { children: React.React
       <WidgetBoundary nombre="fichaje-provider" silencioso>
         <MobileFichajeProvider />
       </WidgetBoundary>
-      {/* Gate bloqueante de notificaciones desactivado durante las pruebas:
-          los empleados no deben verse forzados a pulsar "Visto" para trabajar. */}
-      {/* <NotificacionesGate /> */}
+      {/* Avisos sin ver: saltan nada más abrir la app, para que un comunicado
+          se lea sí o sí y su documento se pueda abrir desde el propio aviso. */}
+      <NotificacionesGate />
     </div>
     </MobileIdentidadProvider>
     </CatalogoEmpresaProvider>

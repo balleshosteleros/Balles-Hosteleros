@@ -10,13 +10,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FileCheck2, BellRing, Loader2 } from "lucide-react";
+import { FileCheck2, BellRing, Loader2, Megaphone, Paperclip } from "lucide-react";
 import {
   listNotificacionesPendientes,
   marcarNotificacionVista,
   accionarLiquidacion,
   type NotificacionApp,
 } from "@/features/notificaciones/actions/notificaciones-actions";
+import {
+  normalizarAdjuntos,
+  tamanoLegible,
+  urlAdjuntoComunicado,
+} from "@/features/gerencia/data/comunicados-adjuntos";
 
 function fmt(n: number): string {
   return n.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €";
@@ -47,6 +52,13 @@ export function NotificacionesGate() {
   if (!actual) return null;
 
   const esLiquidacion = actual.tipo === "liquidacion" && actual.requiereAccion && !!actual.refId;
+  const esComunicado = actual.tipo === "comunicado";
+  // El comunicado se lee ENTERO aquí mismo, con sus documentos: el trabajador no
+  // tiene que ir a buscarlo a otra pantalla para enterarse de lo que le afecta.
+  const cuerpoComunicado = esComunicado
+    ? ((actual.payload.cuerpo as string | undefined) ?? actual.mensaje ?? "")
+    : "";
+  const adjuntos = esComunicado ? normalizarAdjuntos(actual.payload.adjuntos) : [];
   const siguiente = () => {
     setPasoTexto(false);
     setPend((prev) => prev.slice(1));
@@ -111,14 +123,54 @@ export function NotificacionesGate() {
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-              {esLiquidacion ? <FileCheck2 className="h-5 w-5" /> : <BellRing className="h-5 w-5" />}
+              {esLiquidacion ? (
+                <FileCheck2 className="h-5 w-5" />
+              ) : esComunicado ? (
+                <Megaphone className="h-5 w-5" />
+              ) : (
+                <BellRing className="h-5 w-5" />
+              )}
             </span>
             {actual.titulo}
           </AlertDialogTitle>
-          {actual.mensaje && !esLiquidacion && (
+          {actual.mensaje && !esLiquidacion && !esComunicado && (
             <AlertDialogDescription>{actual.mensaje}</AlertDialogDescription>
           )}
         </AlertDialogHeader>
+
+        {esComunicado && (cuerpoComunicado || adjuntos.length > 0) && (
+          <div className="space-y-3">
+            {cuerpoComunicado && (
+              <div className="max-h-64 overflow-y-auto whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+                {cuerpoComunicado}
+              </div>
+            )}
+            {adjuntos.length > 0 && (
+              <div className="space-y-1.5 border-t pt-3">
+                <p className="text-[11px] font-medium text-muted-foreground">
+                  {adjuntos.length === 1 ? "Documento adjunto" : "Documentos adjuntos"}
+                </p>
+                {adjuntos.map((a) => (
+                  <a
+                    key={a.path}
+                    href={urlAdjuntoComunicado(a.path)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                  >
+                    <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{a.name}</span>
+                    {a.size > 0 && (
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                        {tamanoLegible(a.size)}
+                      </span>
+                    )}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {esLiquidacion && (
           <div className="rounded-lg border bg-muted/30 p-3 text-sm">
