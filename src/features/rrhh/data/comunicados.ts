@@ -90,3 +90,17 @@ export const TIPO_COMUNICADO_PUNTO: Record<TipoComunicado, string> = {
   novedades: "bg-amber-400",
   informativo: "bg-emerald-500",
 };
+
+/** Recuadro del comunicado, del color de su tipo. */
+export const TIPO_COMUNICADO_BORDE: Record<TipoComunicado, string> = {
+  urgente: "border-rose-300 dark:border-rose-900",
+  novedades: "border-amber-300 dark:border-amber-900",
+  informativo: "border-emerald-300 dark:border-emerald-900",
+};
+
+/** Fondo suave del mismo color, para la cabecera plegada. */
+export const TIPO_COMUNICADO_FONDO: Record<TipoComunicado, string> = {
+  urgente: "bg-rose-50/60 dark:bg-rose-950/20",
+  novedades: "bg-amber-50/60 dark:bg-amber-950/20",
+  informativo: "bg-emerald-50/60 dark:bg-emerald-950/20",
+};

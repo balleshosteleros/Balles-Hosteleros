@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Inbox, Link as LinkIcon, Check, FileText, Image as ImageIcon, FileSpreadsheet, File } from "lucide-react";
+import {
+  Loader2,
+  Inbox,
+  Link as LinkIcon,
+  Check,
+  ChevronDown,
+  FileText,
+  Image as ImageIcon,
+  FileSpreadsheet,
+  File,
+} from "lucide-react";
 import {
   listarComunicadosVisibles,
   type ComunicadoVisible,
@@ -11,6 +21,8 @@ import { formatFechaHoraEnZona, claveDiaEnZona } from "@/features/empresa/lib/zo
 import {
   TIPO_COMUNICADO_LABEL,
   TIPO_COMUNICADO_COLOR,
+  TIPO_COMUNICADO_BORDE,
+  TIPO_COMUNICADO_FONDO,
   tipoComunicado,
 } from "@/features/rrhh/data/comunicados";
 import {
@@ -22,16 +34,17 @@ import {
 /**
  * Los comunicados del trabajador.
  *
- * Se leen como un tablón, no como una tabla: cada comunicado es una tarjeta con
- * la marca de la empresa, su tipo en color y sus documentos como fichas que se
- * pulsan. Van agrupados por cuándo llegaron, para que de un vistazo se separe lo
- * de hoy de lo de hace un mes (Iván, 10-09-2026).
+ * Van todos PLEGADOS, uno debajo de otro, y solo se abre el que se pulsa: así se
+ * ve de un vistazo lo que hay sin bajar media pantalla por cada uno. Cada
+ * comunicado lleva su recuadro del color de su tipo, y mientras no se ha abierto
+ * lleva la etiqueta «Nuevo» en verde; al abrirlo por primera vez queda visto
+ * (Iván, 10-09-2026).
  */
 
 /** Icono y color del documento según su extensión. */
 function pintaDocumento(nombre: string) {
   const ext = nombre.split(".").pop()?.toLowerCase() ?? "";
-  if (["pdf"].includes(ext)) return { Icono: FileText, color: "text-rose-600", fondo: "bg-rose-50 dark:bg-rose-950/30" };
+  if (ext === "pdf") return { Icono: FileText, color: "text-rose-600", fondo: "bg-rose-50 dark:bg-rose-950/30" };
   if (["jpg", "jpeg", "png", "gif", "webp", "heic"].includes(ext))
     return { Icono: ImageIcon, color: "text-violet-600", fondo: "bg-violet-50 dark:bg-violet-950/30" };
   if (["xls", "xlsx", "csv", "numbers"].includes(ext))
@@ -42,10 +55,8 @@ function pintaDocumento(nombre: string) {
 }
 
 /**
- * Documento como ficha cuadrada, no como una fila de hoja de cálculo.
- *
- * Se llama como el comunicado, no como el archivo: los nombres de archivo salen
- * con guiones bajos y extensiones y quedan feos. Si hay más de uno, se numeran.
+ * Documento como ficha, no como fila de hoja de cálculo. Se llama como el
+ * comunicado —los nombres de archivo quedan feos— y se numera si hay varios.
  */
 function FichaDocumento({
   a,
@@ -93,90 +104,112 @@ const GRUPO_LABEL: Record<string, string> = {
   antes: "Anteriores",
 };
 
-function TarjetaComunicado({ c }: { c: ComunicadoVisible }) {
+function TarjetaComunicado({
+  c,
+  abierto,
+  onAbrir,
+}: {
+  c: ComunicadoVisible;
+  abierto: boolean;
+  onAbrir: () => void;
+}) {
   const tipo = tipoComunicado(c.tipo);
   const nuevo = !c.vistoEl;
   return (
     <article
-      className={`overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md ${
-        nuevo ? "ring-2 ring-primary/20" : ""
+      className={`overflow-hidden rounded-2xl border-2 bg-card shadow-sm transition-shadow ${TIPO_COMUNICADO_BORDE[tipo]} ${
+        abierto ? "shadow-md" : "hover:shadow-md"
       }`}
     >
-      <div className="flex items-start gap-3 p-5 pb-3">
+      <button
+        type="button"
+        onClick={onAbrir}
+        aria-expanded={abierto}
+        className={`flex w-full items-center gap-3 p-4 text-left ${TIPO_COMUNICADO_FONDO[tipo]}`}
+      >
         {c.isotipoUrl ? (
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-border/60">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-border/60">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={c.isotipoUrl} alt="" className="h-7 w-7 object-contain" />
+            <img src={c.isotipoUrl} alt="" className="h-6 w-6 object-contain" />
           </span>
         ) : null}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold leading-tight">{c.titulo}</h3>
+            <h3 className="text-base font-semibold leading-tight">{c.titulo}</h3>
             <span
               className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${TIPO_COMUNICADO_COLOR[tipo]}`}
             >
               {TIPO_COMUNICADO_LABEL[tipo]}
             </span>
             {nuevo && (
-              <span className="rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold text-primary-foreground">
+              <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-semibold text-white">
                 Nuevo
               </span>
             )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {formatFechaHoraEnZona(c.createdAt, c.zonaHoraria, { month: "long" })}
           </p>
         </div>
-      </div>
+        <ChevronDown
+          className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+            abierto ? "rotate-180" : ""
+          }`}
+        />
+      </button>
 
-      {c.contenido && (
-        <p className="whitespace-pre-line px-5 text-[15px] leading-relaxed text-foreground/90">
-          {c.contenido}
-        </p>
-      )}
+      {abierto && (
+        <div className="border-t">
+          {c.contenido && (
+            <p className="whitespace-pre-line px-5 pt-5 text-[15px] leading-relaxed text-foreground/90">
+              {c.contenido}
+            </p>
+          )}
 
-      {c.enlace && (
-        <div className="px-5 pt-4">
-          <a
-            href={c.enlace}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            <LinkIcon className="h-4 w-4" />
-            {(c.enlaceTexto ?? "").trim() || "Abrir enlace"}
-          </a>
-        </div>
-      )}
+          {c.enlace && (
+            <div className="px-5 pt-4">
+              <a
+                href={c.enlace}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                <LinkIcon className="h-4 w-4" />
+                {(c.enlaceTexto ?? "").trim() || "Abrir enlace"}
+              </a>
+            </div>
+          )}
 
-      {c.adjuntos.length > 0 && (
-        <div className="px-5 pt-5">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {c.adjuntos.length === 1 ? "Documento adjunto" : "Documentos adjuntos"}
-          </p>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-            {c.adjuntos.map((a, i) => (
-              <FichaDocumento
-                key={a.path}
-                a={a}
-                titulo={c.titulo}
-                numero={c.adjuntos.length > 1 ? i + 1 : null}
-              />
-            ))}
+          {c.adjuntos.length > 0 && (
+            <div className="px-5 pt-5">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {c.adjuntos.length === 1 ? "Documento adjunto" : "Documentos adjuntos"}
+              </p>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
+                {c.adjuntos.map((a, i) => (
+                  <FichaDocumento
+                    key={a.path}
+                    a={a}
+                    titulo={c.titulo}
+                    numero={c.adjuntos.length > 1 ? i + 1 : null}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-5 border-t bg-muted/20 px-5 py-2.5">
+            {c.vistoEl ? (
+              <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <Check className="h-3.5 w-3.5" />
+                Visto el {formatFechaHoraEnZona(c.vistoEl, c.zonaHoraria, { month: "long" })}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Sin leer</p>
+            )}
           </div>
         </div>
       )}
-
-      <div className="mt-5 border-t bg-muted/20 px-5 py-2.5">
-        {c.vistoEl ? (
-          <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            <Check className="h-3.5 w-3.5" />
-            Visto el {formatFechaHoraEnZona(c.vistoEl, c.zonaHoraria, { month: "long" })}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">Sin leer</p>
-        )}
-      </div>
     </article>
   );
 }
@@ -184,25 +217,37 @@ function TarjetaComunicado({ c }: { c: ComunicadoVisible }) {
 export function MisComunicadosView() {
   const [items, setItems] = useState<ComunicadoVisible[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Solo hay uno abierto a la vez: el que se acaba de pulsar. */
+  const [abierto, setAbierto] = useState<string | null>(null);
 
   useEffect(() => {
     let cancel = false;
     listarComunicadosVisibles().then((res) => {
       if (cancel) return;
-      const lista = res.ok ? res.data : [];
-      setItems(lista);
+      setItems(res.ok ? res.data : []);
       setLoading(false);
-      // Esta pantalla enseña el comunicado ENTERO, así que abrirla es leerlo:
-      // de aquí sale el alcance que ve quien lo publicó. El «visto» de cada uno
-      // se queda tal y como estaba en esta pantalla hasta que se recargue, para
-      // que no cambie delante de los ojos mientras se está leyendo.
-      const sinLeer = lista.filter((c) => !c.vistoEl).map((c) => c.id);
-      if (sinLeer.length > 0) void marcarComunicadosVistos(sinLeer);
     });
     return () => {
       cancel = true;
     };
   }, []);
+
+  /**
+   * Abrir un comunicado es leerlo: de ahí sale el «visto» del trabajador y el
+   * alcance que ve quien lo publicó. Se apunta la primera vez y ya no cambia.
+   */
+  const abrir = (c: ComunicadoVisible) => {
+    if (abierto === c.id) {
+      setAbierto(null);
+      return;
+    }
+    setAbierto(c.id);
+    if (!c.vistoEl) {
+      const ahora = new Date().toISOString();
+      setItems((prev) => prev.map((x) => (x.id === c.id ? { ...x, vistoEl: ahora } : x)));
+      void marcarComunicadosVistos([c.id]);
+    }
+  };
 
   if (loading) {
     return (
@@ -234,9 +279,9 @@ export function MisComunicadosView() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 p-4 md:p-6">
+    <div className="mx-auto max-w-3xl space-y-7 p-4 md:p-6">
       {grupos.map((g, i) => (
-        <section key={`${g.clave}-${i}`} className="space-y-4">
+        <section key={`${g.clave}-${i}`} className="space-y-3">
           <div className="flex items-center gap-3">
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               {GRUPO_LABEL[g.clave]}
@@ -244,7 +289,12 @@ export function MisComunicadosView() {
             <span className="h-px flex-1 bg-border" />
           </div>
           {g.lista.map((c) => (
-            <TarjetaComunicado key={c.id} c={c} />
+            <TarjetaComunicado
+              key={c.id}
+              c={c}
+              abierto={abierto === c.id}
+              onAbrir={() => abrir(c)}
+            />
           ))}
         </section>
       ))}

@@ -129,6 +129,11 @@ export function MisComunicadosMobile() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
                     <h3 className="truncate text-sm font-semibold">{c.titulo}</h3>
+                    {!c.vistoEl && (
+                      <span className="shrink-0 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        Nuevo
+                      </span>
+                    )}
                     <span className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">
                       {formatRel(c.createdAt, c.zonaHoraria)}
                     </span>
