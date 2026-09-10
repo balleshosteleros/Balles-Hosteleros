@@ -224,6 +224,41 @@ Ver `.claude/memory/` → `project_qr_redireccion_dominio_propio`.
 
 ---
 
+## Roles: una sola ficha para el grupo, en vez de tres copias
+
+**Decidido el 10-09-2026 (Iván):** el rol es **uno para todo el grupo**. Nadie
+es jefe de sala en una casa y contable en la otra, así que no se separa por
+empresa.
+
+**Lo que queda a medias:** el modelo es mixto. La asignación ya es única
+—`usuarios.rol_id` es uno solo por persona y la tabla de accesos a empresas ni
+siquiera tiene columna de rol—, pero la ficha del rol está **copiada en cada
+empresa** (`empresa_roles`, emparejadas por nombre) y hay dos formas de leer los
+permisos que no dan lo mismo si esas copias divergen:
+
+- Por `rol_id`, la ficha fija: menú lateral, iconos de la barra, landing por rol
+  y el guardia de rutas (`proxy.ts`).
+- Por empresa activa + nombre del rol: chat, tareas, cronogramas, validadores de
+  RRHH, contratación y avisos manuales.
+
+Con las copias iguales no se nota nada. Cuando divergen —le pasó a BALLES, que
+se quedó sin Videovigilancia, Aplicaciones ni Contraseñas— la misma persona ve
+una cosa en el menú y otra en el chat. Ya están igualadas y la propagación ya no
+borra los módulos que solo existen en una empresa (PRODUCTO en la matriz).
+
+**La mejora:** dejar **una sola tabla de roles del grupo** y que los dos caminos
+lean de ahí. Así no pueden volver a descuadrarse por construcción.
+
+**Por qué se aplaza:** hoy no duele —las tres copias están iguales— y toca
+muchos archivos. Se hace cuando haya hueco. Si algún día hiciera falta rol
+distinto por empresa (un socio, una empresa de fuera del grupo), esto se
+replantea entero: habría que añadir el rol a la tabla de accesos y revisar uno a
+uno los sitios que hoy leen la ficha fija.
+
+Ver `.claude/memory/` → `project_rol_asignacion_global_fila_por_empresa`.
+
+---
+
 ## Cómo usar este documento
 
 Cuando aparezca una mejora que se decide aplazar, **añadirla aquí con el
