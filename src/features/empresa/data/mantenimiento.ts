@@ -39,10 +39,8 @@ export function diasSinActualizar(desde: string, hoy: string): number {
   return Math.max(0, Math.floor(ms / 86400000));
 }
 
-export const LOCALES = ["HABANA", "BACANAL", "CENTRAL", "TERRAZA", "ALMACÉN"];
 export const ESTADOS: Estado[] = ["PENDIENTE", "EN PROGRESO", "ESCALADO", "TERMINADO"];
 export const GRAVEDADES: Gravedad[] = ["LEVE", "GRAVE", "MUY GRAVE"];
-export const AREAS = ["GERENCIA", "SEGURO", "DIRECCIÓN", "MANTENIMIENTO", "RRHH"];
 export const REPARADORES = ["MANTENIMIENTO", "SEGURO", "PROVEEDOR EXTERNO"];
 
 export const RESULTADOS: ResultadoActualizacion[] = ["TERMINADO", "EN PROGRESO"];

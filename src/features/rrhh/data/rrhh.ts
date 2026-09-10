@@ -9,7 +9,3 @@
 // formularios (Comunicados, Encuestas, Bonus, Reclutamiento). Su unificación con
 // los clones de otros módulos (accesos-apps, salarios, roles-empresa) es OLA2-10.
 
-export const DEPARTAMENTOS = [
-  "DIRECCIÓN", "GERENTE", "JEFE DE SALA", "CAMAREROS", "COCINA",
-  "CACHIMBEROS", "ARTISTAS", "MANTENIMIENTO", "RRPP", "ADMINISTRATIVO",
-];

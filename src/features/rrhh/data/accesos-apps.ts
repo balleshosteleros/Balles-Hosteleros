@@ -1,6 +1,7 @@
 // External app access & credentials management
 // Datos en Supabase (tabla `accesos_apps`). Aquí solo viven los tipos
-// y las constantes (CATEGORIAS_APP, DEPARTAMENTOS) que se usan en la UI.
+// y las constantes (CATEGORIAS_APP) que se usan en la UI. Los departamentos
+// salen de la empresa, no de una lista escrita aquí.
 
 export type EstadoApp = "Activo" | "Inactivo" | "Archivado";
 export type NivelPermiso = "ver_enlace" | "ver_usuario" | "ver_credenciales" | "editar";
@@ -191,19 +192,3 @@ export function faviconDesdeUrl(url: string, nombre?: string): string {
 // la visibilidad es 100% data-driven — cada app y cada credencial elige sus
 // departamentos. Si mañana asignas una app a Sala, Sala la verá.
 // "Todos" es un comodín = visible para toda la empresa.
-export const DEPARTAMENTOS = [
-  "Dirección",
-  "Gerencia",
-  "Recursos humanos",
-  "Marketing",
-  "Contabilidad",
-  "Gestoría",
-  "Jurídico",
-  "Logística",
-  "Mantenimiento",
-  "Calidad",
-  "Cocina",
-  "Sala",
-  "Artistas",
-  "Todos",
-];

@@ -123,17 +123,3 @@ export const NORMAS_BASE: NormaSalarial[] = [
   },
 ];
 
-export const DEPARTAMENTOS_DISPONIBLES = [
-  "Director",
-  "Gestoría",
-  "Contabilidad",
-  "Calidad",
-  "Marketing",
-  "RR.HH",
-  "Gerencia",
-  "Logística",
-  "Sala",
-  "Cocina",
-  "Operaciones",
-  "Entretenimiento",
-];

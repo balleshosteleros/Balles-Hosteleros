@@ -45,18 +45,14 @@ export interface CronogramaOperativo {
 
 export type TerminaTipo = "fecha" | "repeticiones";
 
-import { fallbackCronogramas } from "../data/cronogramasMockData";
-
 export function useCronogramasOperativos() {
   const { empresaActual } = useEmpresa();
   const empresaDbId = empresaActual?.dbId ?? null;
 
-  const [data, setData] = useState<CronogramaOperativo[]>(() =>
-    fallbackCronogramas.map((it, idx) => ({
-      ...it,
-      id: it.id ? `${it.id}-${it.rol}-${idx}` : `mock-${idx}`,
-    })),
-  );
+  // Arranca VACÍO. Antes se sembraba con un centenar de tareas de ejemplo, así
+  // que Mi Cronograma enseñaba trabajo inventado hasta que llegaban las reales
+  // —y si no llegaba ninguna, se quedaban ahí para siempre.
+  const [data, setData] = useState<CronogramaOperativo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const supabase = createClient();
 
@@ -77,19 +73,9 @@ export function useCronogramasOperativos() {
 
     const { data: result, error } = await query;
 
-    if (!error && result && result.length > 0) {
-      setData(result as CronogramaOperativo[]);
-    } else if (!empresaDbId) {
-      // Solo caemos al mock si NO hay empresa activa (modo dev/landing).
-      const sanitized = fallbackCronogramas.map((it, idx) => ({
-        ...it,
-        id: it.id ? `${it.id}-${it.rol}-${idx}` : `mock-${idx}`,
-      }));
-      setData(sanitized);
-    } else {
-      // Empresa activa sin tareas → lista vacía
-      setData([]);
-    }
+    // Sin tareas, lista vacía: los cronogramas se crean a mano y no se rellenan
+    // con ejemplos, ni siquiera cuando no hay empresa activa.
+    setData(!error && result ? (result as CronogramaOperativo[]) : []);
     setIsLoading(false);
   }, [supabase, empresaDbId]);
 

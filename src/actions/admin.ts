@@ -636,35 +636,6 @@ export async function updateEmployeeProfile(
   return { success: true }
 }
 
-export async function getDepartamentosDisponibles(): Promise<{
-  data: string[]
-  error?: string
-}> {
-  try {
-    const admin = createAdminClient()
-    // Recoge los rol distintos de cronogramas_operativos como lista canónica
-    const { data, error } = await admin
-      .from('cronogramas_operativos')
-      .select('rol')
-      .not('rol', 'is', null)
-    if (error) return { data: [], error: friendlyError(error, "getDepartamentosDisponibles") }
-    const set = new Set<string>()
-    for (const row of data ?? []) {
-      const r = (row as { rol: string | null }).rol
-      if (r && r.trim()) set.add(r.trim().toUpperCase())
-    }
-    return { data: Array.from(set).sort() }
-  } catch {
-    // Fallback razonable si admin no está disponible
-    return {
-      data: [
-        'DIRECCION', 'SALA', 'COCINA', 'CALIDAD', 'RECURSOS HUMANOS',
-        'MARKETING', 'LOGISTICA', 'CONTABILIDAD', 'GESTORIA', 'JURIDICO', 'GERENCIA',
-      ],
-    }
-  }
-}
-
 export async function deleteEmployee(userId: string) {
   const invoker = await requireAdmin()
 

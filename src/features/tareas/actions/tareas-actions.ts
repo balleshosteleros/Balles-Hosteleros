@@ -5,7 +5,6 @@ import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { getMiInformacionLaboral } from "@/features/rrhh/actions/empleados-actions";
 import { parseISO, format } from "date-fns";
 import { es } from "date-fns/locale";
-import { fallbackCronogramas } from "@/features/direccion/data/cronogramasMockData";
 import { getModuloForCronograma } from "@/features/direccion/data/cronogramaAreas";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
@@ -515,34 +514,29 @@ function tocaHoy(t: CronogramaTareaRow, hoy: Date): boolean {
 
 async function getCronogramasParaSync(rol: string): Promise<CronogramaTareaRow[]> {
   try {
-    const { supabase } = await getAppContext();
-    
-    // 1. Intento normalizado
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return [];
+
+    // Se compara sin tildes ni mayúsculas: los cronogramas se han escrito a
+    // mano y "LOGISTICA" y "LOGÍSTICA" son el mismo rol.
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+    const rolNorm = norm(rol);
+
     const { data, error } = await supabase
       .from("cronogramas_operativos")
       .select("*")
-      .ilike("rol", rol.trim());
-    
-    if (!error && data && data.length > 0) {
-      return data as CronogramaTareaRow[];
+      .eq("empresa_id", empresaId);
+    if (error) {
+      console.error("[getCronogramasParaSync]", error.message);
+      return [];
     }
 
-    // 2. Si no hay datos, probamos con fallback manual para ser 100% seguros
-    const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-    const rolNorm = norm(rol);
-    
-    // Intentar buscar todos y filtrar en JS (más lento pero infalible ante acentos/mayúsculas)
-    const { data: allData } = await supabase.from("cronogramas_operativos").select("*");
-    const matches = (allData || []).filter(r => norm(r.rol) === rolNorm);
-    
-    if (matches.length > 0) return matches as CronogramaTareaRow[];
-
-    // 3. Fallback a Mock si nada funcionó
-    console.log(`[sync] Usando fallback mock para rol: ${rol}`);
-    return fallbackCronogramas
-      .filter(f => norm(f.rol || "") === rolNorm) as unknown as CronogramaTareaRow[];
+    // Sin coincidencia no se inventa nada: antes se caía a unas tareas de
+    // ejemplo que ni siquiera eran de esta empresa.
+    return (data ?? []).filter((r) => norm(String(r.rol ?? "")) === rolNorm) as CronogramaTareaRow[];
   } catch (err) {
-    console.error("[getCronogramasParaSync] Fatal:", err);
+    console.error("[getCronogramasParaSync]", err);
     return [];
   }
 }
@@ -597,50 +591,39 @@ interface SeedSummary {
   yaExistian: number;
 }
 
+/**
+ * Roles que tienen cronograma en la empresa activa.
+ *
+ * Antes, si la tabla estaba vacía, esto SEMBRABA 100 tareas de ejemplo con
+ * roles inventados y sin tildes ("DIRECCION", "LOGISTICA", "GERENTE"), que
+ * luego no casaban con ningún departamento real. Los cronogramas se crean a
+ * mano: si no hay, la lista sale vacía y ya está.
+ */
 export async function getRolesCronograma(): Promise<Result<string[]>> {
   try {
     const { supabase, empresaId } = await getAppContext();
-    
-    const { data: initialData, error } = await supabase
+    if (!empresaId) return { ok: true, data: [] };
+
+    const { data, error } = await supabase
       .from("cronogramas_operativos")
-      .select("rol");
-    let data = initialData;
-    
+      .select("rol")
+      .eq("empresa_id", empresaId);
+
     if (error) {
-      console.error("[getRolesCronograma] DB Error:", error);
+      console.error("[getRolesCronograma]", error.message);
+      return { ok: true, data: [] };
     }
 
-    if (!data || data.length === 0) {
-      try {
-        console.log("[getRolesCronograma] Sembrando cronogramas_operativos desde mock...");
-        const toInsert = fallbackCronogramas.slice(0, 100).map((f) => ({
-          rol: (f.rol || "GENERAL").toUpperCase().trim(),
-          tarea: f.tarea || "Tarea sin título",
-          frecuencia: (f.frecuencia || "OTRO").toUpperCase(),
-          empresa_id: empresaId,
-        }));
-        await supabase.from("cronogramas_operativos").insert(toInsert);
-        const { data: data2 } = await supabase.from("cronogramas_operativos").select("rol");
-        if (data2) data = data2;
-      } catch (seedErr) {
-        console.error("[getRolesCronograma] Seeding failed:", seedErr);
-      }
-    }
+    const roles = Array.from(
+      new Set((data ?? []).map((r) => String(r.rol ?? "").trim())),
+    )
+      .filter(Boolean)
+      .sort();
 
-    let roles: string[] = [];
-    if (data && data.length > 0) {
-      roles = Array.from(new Set(data.map(r => r.rol.trim()))).filter(Boolean).sort();
-    }
-    
-    if (roles.length === 0) {
-       roles = Array.from(new Set(fallbackCronogramas.map(f => f.rol.toUpperCase().trim()))).sort();
-    }
-    
     return { ok: true, data: roles };
   } catch (err) {
-    console.error("[getRolesCronograma] Fatal Error, returning Mock Fallback:", err);
-    const mockRoles = Array.from(new Set(fallbackCronogramas.map(f => f.rol.toUpperCase().trim()))).sort();
-    return { ok: true, data: mockRoles };
+    console.error("[getRolesCronograma]", err);
+    return { ok: true, data: [] };
   }
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { getOpcionesSegmento } from "@/features/notificaciones/actions/aviso-manual-actions";
 import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
@@ -15,7 +16,6 @@ import {
 } from "@/features/rrhh/actions/bonus-actions";
 import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
 import type { PuestoSalarial } from "@/features/rrhh/data/puestos";
-import { DEPARTAMENTOS } from "@/features/rrhh/data/rrhh";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -400,10 +400,13 @@ function TabResultados({ bonus, empresaId }: { bonus: Bonus; empresaId: string }
   );
 }
 
-function TabConfiguracion({ bonus, config, puestos, onChange }: {
+function TabConfiguracion({ bonus, config, puestos, departamentos, onChange }: {
   bonus: Bonus;
   config: ReturnType<typeof getConfigBonusEmpresa>;
   puestos: PuestoSalarial[];
+  /** Departamentos REALES de la empresa. Antes era una lista escrita a mano que
+   *  mezclaba puestos (GERENTE, JEFE DE SALA) con nombres inventados. */
+  departamentos: string[];
   onChange: (p: Partial<Bonus>) => void;
 }) {
   const b = bonus;
@@ -523,9 +526,14 @@ function TabConfiguracion({ bonus, config, puestos, onChange }: {
             </Select>
             <Input value={b.destinatariosTexto} onChange={(e) => onChange({ destinatariosTexto: e.target.value })} placeholder="Texto de destinatarios" className="flex-1" />
           </div>
+          {b.destinatarios.tipo === "departamentos" && departamentos.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Esta empresa no tiene departamentos activos.
+            </p>
+          )}
           {b.destinatarios.tipo === "departamentos" && (
             <div className="flex flex-wrap gap-2">
-              {DEPARTAMENTOS.map((d) => (
+              {departamentos.map((d) => (
                 <Badge key={d} variant={b.destinatarios.ids.includes(d) ? "default" : "outline"} className="cursor-pointer"
                   onClick={() => {
                     const ids = b.destinatarios.ids.includes(d) ? b.destinatarios.ids.filter((x) => x !== d) : [...b.destinatarios.ids, d];
@@ -659,10 +667,11 @@ function TabConfiguracion({ bonus, config, puestos, onChange }: {
   );
 }
 
-function DetalleBonus({ bonus: initial, config, puestos, empresaId, onBack, onSaved, initialTab = "detalles" }: {
+function DetalleBonus({ bonus: initial, config, puestos, departamentos, empresaId, onBack, onSaved, initialTab = "detalles" }: {
   bonus: Bonus;
   config: ReturnType<typeof getConfigBonusEmpresa>;
   puestos: PuestoSalarial[];
+  departamentos: string[];
   empresaId: string;
   onBack: () => void;
   onSaved: (b: Bonus) => void;
@@ -729,7 +738,7 @@ function DetalleBonus({ bonus: initial, config, puestos, empresaId, onBack, onSa
           <TabResultados bonus={b} empresaId={empresaId} />
         </TabsContent>
         <TabsContent value="config">
-          <TabConfiguracion bonus={b} config={config} puestos={puestos} onChange={update} />
+          <TabConfiguracion bonus={b} config={config} puestos={puestos} departamentos={departamentos} onChange={update} />
         </TabsContent>
       </Tabs>
     </div>
@@ -742,6 +751,9 @@ export function BonusView() {
   const config = getConfigBonusEmpresa(eId);
   const [bonusList, setBonusList] = useState<Bonus[]>([]);
   const [puestos, setPuestos] = useState<PuestoSalarial[]>([]);
+  // Departamentos REALES de la empresa, la misma fuente que el resto del
+  // software. Antes venían de una lista escrita a mano donde la mitad no existía.
+  const [departamentos, setDepartamentos] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<{ bonus: Bonus; tab: string } | null>(null);
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
@@ -757,12 +769,15 @@ export function BonusView() {
     let activo = true;
     setLoading(true);
     setSelected(null);
-    Promise.all([listBonusEmpresa(), listPuestosEmpresa()]).then(([bonus, res]) => {
-      if (!activo) return;
-      setBonusList(bonus);
-      setPuestos(res.puestos);
-      setLoading(false);
-    });
+    Promise.all([listBonusEmpresa(), listPuestosEmpresa(), getOpcionesSegmento()]).then(
+      ([bonus, res, opciones]) => {
+        if (!activo) return;
+        setBonusList(bonus);
+        setPuestos(res.puestos);
+        setDepartamentos(opciones.departamentos.map((d) => d.nombre));
+        setLoading(false);
+      },
+    );
     return () => { activo = false; };
   }, [eId]);
 
@@ -811,6 +826,7 @@ export function BonusView() {
           bonus={selected.bonus}
           config={config}
           puestos={puestos}
+          departamentos={departamentos}
           empresaId={eId}
           onBack={() => { void recargar(); setSelected(null); }}
           onSaved={handleSaved}

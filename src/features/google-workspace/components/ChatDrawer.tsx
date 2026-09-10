@@ -41,7 +41,6 @@ import {
   updateCanalDepartamentos,
   listEmpleadosEmpresa,
   listMiembrosPorCanal,
-  purgeCanalesObsoletos,
   sendMensajeAdjunto,
   getAdjuntoSignedUrl,
   marcarCanalLeido,
@@ -116,23 +115,18 @@ const PREF_DEFAULT: PrefCanal = { silenciado: false, fijado: false };
 //
 // Fallback (solo si la empresa aún no tiene departamentos dados de alta): las
 // secciones del índice lateral.
-const DEPARTAMENTOS_FALLBACK = [
-  "DIRECCIÓN",
-  "SALA",
-  "COCINA",
-  "GERENCIA",
-  "CALIDAD",
-  "RECURSOS HUMANOS",
-  "MARKETING",
-  "LOGÍSTICA",
-  "CONTABILIDAD",
-  "GESTORÍA",
-  "JURÍDICO",
-];
 
+/**
+ * Departamentos que deben tener canal. Salen SIEMPRE de la empresa.
+ *
+ * Si la consulta falla no se cae a una lista escrita a mano: esa lista no tenía
+ * ARTISTAS, MANTENIMIENTO ni PRODUCTO, así que se creaban unos canales sí y
+ * otros no según qué empresa mirara. Sin datos, no se crea nada y ya se
+ * reintentará: un canal de menos se arregla solo al recargar.
+ */
 async function getDepartamentosConGrupo(): Promise<string[]> {
   const res = await listDepartamentosParaChat();
-  return res.ok && res.data.length > 0 ? res.data : DEPARTAMENTOS_FALLBACK;
+  return res.ok ? res.data : [];
 }
 
 function mapDbCanal(r: Record<string, unknown>): Canal {
@@ -425,12 +419,17 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       }
       let data = res.data as Record<string, unknown>[];
 
-      // 2. Solo admins/directores mantienen el catálogo de departamentos
-      //    (purgan obsoletos y crean los que falten). Un usuario normal ve la
-      //    lista ya filtrada y no debe recrear departamentos que no ve.
+      // 2. Solo admins/directores crean los canales de departamento que falten.
+      //    Un usuario normal ve la lista ya filtrada y no debe recrear
+      //    departamentos que no ve.
+      //
+      //    NO se purga nada: antes se borraban los canales cuyo nombre no
+      //    estuviera en la lista, y con ella se llevaba por delante los de
+      //    ARTISTAS y MANTENIMIENTO —departamentos reales— con sus mensajes.
+      //    Un canal creado a mano se queda: sobra un canal de más antes que
+      //    borrar una conversación.
       if (res.esAdmin) {
         const departamentos = await getDepartamentosConGrupo();
-        await purgeCanalesObsoletos(departamentos, empresaSlug);
 
         const existentes = new Set(
           data.map((d) => String(d.nombre ?? "").trim().toUpperCase()),

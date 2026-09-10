@@ -6,7 +6,8 @@
 // la app en el panel del cohete. Las CONTRASEÑAS viven en el apartado «Accesos»
 // (AccesosTab.tsx) — aquí no se muestran ni se editan.
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef , useMemo } from "react";
+import { getOpcionesSegmento } from "@/features/notificaciones/actions/aviso-manual-actions";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,7 +32,6 @@ import {
 } from "lucide-react";
 import {
   CATEGORIAS_APP,
-  DEPARTAMENTOS,
   faviconDesdeUrl,
   type AccesoApp,
   type EstadoApp,
@@ -73,13 +73,26 @@ export function AplicacionesTab() {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const [apps, setApps] = useState<AccesoApp[]>([]);
+  // Departamentos REALES de la empresa. Antes era una lista escrita a mano en
+  // Title Case ("Recursos humanos") que no casaba con los reales (MAYÚSCULAS),
+  // así que el filtro por departamento no habría encontrado nunca a nadie.
+  const [departamentosReales, setDepartamentosReales] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingApp, setSavingApp] = useState(false);
+
+  // "Todos" es un comodín del propio catálogo, no un departamento: va aparte.
+  const opcionesDepartamento = useMemo(
+    () => ["Todos", ...departamentosReales],
+    [departamentosReales],
+  );
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     // Solo la empresa activa (aislamiento multiempresa, igual que en Accesos).
+    void getOpcionesSegmento().then((o) => {
+      if (alive) setDepartamentosReales(o.departamentos.map((d) => d.nombre));
+    });
     listAllAccesosApps(empresaActual.id)
       .then((rows) => {
         if (alive) setApps(rows);
@@ -519,7 +532,7 @@ export function AplicacionesTab() {
                 </PopoverTrigger>
                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                   <div className="max-h-64 overflow-y-auto py-1">
-                    {DEPARTAMENTOS.map((dep) => {
+                    {opcionesDepartamento.map((dep) => {
                       const checked = (form.departamentos ?? []).includes(dep);
                       return (
                         <label
