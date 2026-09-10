@@ -601,6 +601,25 @@ const nextConfig: NextConfig = {
           permanent: false,
         },
       ]),
+      // La web del producto tenía una copia hecha con bloques en el dominio del
+      // grupo (`balleshosteleros.com/software`), aparte de la de verdad, que
+      // vive en su propio subdominio. Dos webs distintas del mismo producto
+      // confunden y se pisan en Google. La copia se despublica y la dirección
+      // manda a la buena.
+      ...WEB_HOSTS_FIJOS.filter((h) => h.endsWith('balleshosteleros.com')).flatMap((host) => [
+        {
+          source: '/software',
+          has: [{ type: 'host' as const, value: host }],
+          destination: `https://${SOFTWARE_HOST}`,
+          permanent: true,
+        },
+        {
+          source: '/software/:resto*',
+          has: [{ type: 'host' as const, value: host }],
+          destination: `https://${SOFTWARE_HOST}/:resto*`,
+          permanent: true,
+        },
+      ]),
       // La web comercial del SOFTWARE no puede servirse desde el subdominio de
       // la escuela. Todo el proyecto vive en la misma app, así que
       // `laescuela.balleshosteleros.com/software` respondía con la web del
