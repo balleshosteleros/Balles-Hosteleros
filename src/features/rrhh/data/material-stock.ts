@@ -88,6 +88,8 @@ export interface MovimientoMaterial {
   empleadoId: string | null;
   empleadoNombre: string | null;
   motivo: string | null;
+  /** Texto libre opcional. Lo unico que no es obligatorio en los formularios. */
+  observaciones: string | null;
   proveedor: string | null;
   documentoReferencia: string | null;
   costeUnitario: number | null;

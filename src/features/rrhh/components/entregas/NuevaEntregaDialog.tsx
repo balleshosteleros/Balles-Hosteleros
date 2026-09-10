@@ -260,12 +260,12 @@ export function NuevaEntregaDialog({
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="entrega-nota">Nota</Label>
+              <Label htmlFor="entrega-nota">Observaciones</Label>
               <Textarea
                 id="entrega-nota"
                 value={nota}
                 onChange={(e) => setNota(e.target.value)}
-                placeholder="Opcional: estado de la pieza, observaciones…"
+                placeholder="Opcional"
                 rows={3}
               />
             </div>

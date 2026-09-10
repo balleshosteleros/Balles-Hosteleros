@@ -55,6 +55,7 @@ export function BajaAlmacenDialog({
   const [unidades, setUnidades] = useState("1");
   const [fecha, setFecha] = useState(hoyISO());
   const [motivo, setMotivo] = useState("");
+  const [observaciones, setObservaciones] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -75,6 +76,7 @@ export function BajaAlmacenDialog({
     setUnidades("1");
     setFecha(hoyISO());
     setMotivo("");
+    setObservaciones("");
   }, [open]);
 
   const elegida = useMemo(
@@ -108,6 +110,7 @@ export function BajaAlmacenDialog({
       unidades: cuantas,
       fecha,
       motivo,
+      observaciones: observaciones.trim() || null,
     });
     setGuardando(false);
     if (!res.ok) { toast.error(res.error); return; }
@@ -188,6 +191,17 @@ export function BajaAlmacenDialog({
                 onChange={(e) => setMotivo(e.target.value)}
                 placeholder="Por ejemplo: se mancharon de lejía en el almacén; llegaron rotas del proveedor…"
                 rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="baja-observaciones">Observaciones</Label>
+              <Textarea
+                id="baja-observaciones"
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+                placeholder="Opcional"
+                rows={2}
               />
             </div>
 

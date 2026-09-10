@@ -28,6 +28,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   deltasDe,
+  MOVIMIENTOS_CON_MOTIVO,
   type TipoMovimiento,
   type UbicacionMaterial,
 } from "@/features/rrhh/data/material-stock";
@@ -57,6 +58,7 @@ export interface RegistrarMovimientoInput {
   empleadoId?: string | null;
   recuentoId?: string | null;
   motivo?: string | null;
+  observaciones?: string | null;
   proveedor?: string | null;
   documentoReferencia?: string | null;
   costeUnitario?: number | null;
@@ -83,14 +85,6 @@ const MOVIMIENTOS_DE_UNA_UNIDAD: TipoMovimiento[] = [
   "no_devuelta",
 ];
 
-/** Los que no tienen sentido sin explicacion escrita. */
-const EXIGEN_MOTIVO: TipoMovimiento[] = [
-  "deterioro_trabajador",
-  "deterioro_almacen",
-  "no_devuelta",
-  "ajuste_recuento",
-];
-
 /**
  * Escribe un movimiento en el libro.
  *
@@ -113,6 +107,7 @@ export async function registrarMovimiento(
     empleadoId = null,
     recuentoId = null,
     motivo = null,
+    observaciones = null,
     proveedor = null,
     documentoReferencia = null,
     costeUnitario = null,
@@ -130,7 +125,7 @@ export async function registrarMovimiento(
   if (unidades < 1) {
     return { ok: false, ids: [], error: "Las unidades tienen que ser al menos 1" };
   }
-  if (EXIGEN_MOTIVO.includes(tipoMovimiento) && !motivo?.trim()) {
+  if (MOVIMIENTOS_CON_MOTIVO.includes(tipoMovimiento) && !motivo?.trim()) {
     return { ok: false, ids: [], error: "Hay que explicar el motivo" };
   }
 
@@ -163,6 +158,7 @@ export async function registrarMovimiento(
       empleado_id: empleadoId,
       recuento_id: recuentoId,
       motivo: motivo?.trim() || null,
+      observaciones: observaciones?.trim() || null,
       proveedor: proveedor?.trim() || null,
       documento_referencia: documentoReferencia?.trim() || null,
       coste_unitario: costeUnitario,

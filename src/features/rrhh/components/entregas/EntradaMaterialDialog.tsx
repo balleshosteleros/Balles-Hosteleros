@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -54,6 +55,7 @@ export function EntradaMaterialDialog({
   const [proveedor, setProveedor] = useState("");
   const [documento, setDocumento] = useState("");
   const [coste, setCoste] = useState("");
+  const [observaciones, setObservaciones] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -76,6 +78,7 @@ export function EntradaMaterialDialog({
     setProveedor("");
     setDocumento("");
     setCoste("");
+    setObservaciones("");
   }, [open]);
 
   const tipoElegido = useMemo(
@@ -97,10 +100,18 @@ export function EntradaMaterialDialog({
       toast.error("Las unidades tienen que ser un número entero de al menos 1");
       return;
     }
+    if (!proveedor.trim()) {
+      toast.error("Pon el proveedor");
+      return;
+    }
+    if (!documento.trim()) {
+      toast.error("Pon el nº de albarán o factura");
+      return;
+    }
     // La coma decimal es lo que escribe la gente aquí; el número la lleva punto.
-    const costeNum = coste.trim() ? Number(coste.replace(",", ".")) : null;
-    if (costeNum !== null && !Number.isFinite(costeNum)) {
-      toast.error("El coste no es un número");
+    const costeNum = Number(coste.replace(",", "."));
+    if (!coste.trim() || !Number.isFinite(costeNum) || costeNum < 0) {
+      toast.error("Pon el coste por unidad");
       return;
     }
 
@@ -110,9 +121,10 @@ export function EntradaMaterialDialog({
       talla: tipoElegido.requiereTalla ? talla : null,
       unidades: cuantas,
       fecha,
-      proveedor: proveedor.trim() || null,
-      documentoReferencia: documento.trim() || null,
+      proveedor: proveedor.trim(),
+      documentoReferencia: documento.trim(),
       costeUnitario: costeNum,
+      observaciones: observaciones.trim() || null,
     });
     setGuardando(false);
     if (!res.ok) { toast.error(res.error); return; }
@@ -218,7 +230,6 @@ export function EntradaMaterialDialog({
                   id="entrada-proveedor"
                   value={proveedor}
                   onChange={(e) => setProveedor(e.target.value)}
-                  placeholder="Opcional"
                 />
               </div>
               <div className="space-y-2">
@@ -227,7 +238,6 @@ export function EntradaMaterialDialog({
                   id="entrada-documento"
                   value={documento}
                   onChange={(e) => setDocumento(e.target.value)}
-                  placeholder="Opcional"
                 />
               </div>
               <div className="space-y-2">
@@ -237,12 +247,22 @@ export function EntradaMaterialDialog({
                   inputMode="decimal"
                   value={coste}
                   onChange={(e) => setCoste(e.target.value)}
-                  placeholder="Opcional"
                 />
                 <p className="text-xs text-muted-foreground">
                   Permite saber cuánto cuesta lo que se pierde.
                 </p>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="entrada-observaciones">Observaciones</Label>
+              <Textarea
+                id="entrada-observaciones"
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+                placeholder="Opcional"
+                rows={2}
+              />
             </div>
           </div>
         )}

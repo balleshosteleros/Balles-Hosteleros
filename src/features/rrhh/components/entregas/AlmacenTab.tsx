@@ -239,7 +239,7 @@ export function AlmacenTab() {
                     <TableHead>Quién</TableHead>
                     <TableHead className="text-right">Almacén</TableHead>
                     <TableHead className="text-right">En manos</TableHead>
-                    <TableHead>Motivo</TableHead>
+                    <TableHead>Motivo y observaciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -288,8 +288,15 @@ export function AlmacenTab() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-[16rem] truncate">
-                        {m.motivo ?? "—"}
+                      <TableCell className="text-sm text-muted-foreground max-w-[18rem]">
+                        {/* El motivo explica por qué se perdió; las observaciones
+                            son lo que alguien quiso apuntar además. */}
+                        <span className="block truncate">{m.motivo ?? "—"}</span>
+                        {m.observaciones && (
+                          <span className="block truncate text-xs italic">
+                            {m.observaciones}
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

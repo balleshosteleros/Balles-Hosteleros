@@ -154,6 +154,7 @@ type FilaMovimiento = {
   entrega_id: string | null;
   empleado_id: string | null;
   motivo: string | null;
+  observaciones: string | null;
   proveedor: string | null;
   documento_referencia: string | null;
   coste_unitario: number | null;
@@ -177,7 +178,7 @@ export async function listMovimientosMaterial(
   const { data, error } = await db
     .from("material_movimientos")
     .select(
-      "id, tipo_id, tipo_nombre, categoria, talla, fecha, tipo_movimiento, delta_almacen, delta_manos, entrega_id, empleado_id, motivo, proveedor, documento_referencia, coste_unitario, revierte_a, created_por_nombre, created_at",
+      "id, tipo_id, tipo_nombre, categoria, talla, fecha, tipo_movimiento, delta_almacen, delta_manos, entrega_id, empleado_id, motivo, observaciones, proveedor, documento_referencia, coste_unitario, revierte_a, created_por_nombre, created_at",
     )
     .eq("empresa_id", empresaId)
     .order("fecha", { ascending: false })
@@ -225,6 +226,7 @@ export async function listMovimientosMaterial(
       empleadoId: f.empleado_id,
       empleadoNombre: f.empleado_id ? nombres.get(f.empleado_id) ?? null : null,
       motivo: f.motivo,
+      observaciones: f.observaciones,
       proveedor: f.proveedor,
       documentoReferencia: f.documento_referencia,
       costeUnitario: f.coste_unitario,
@@ -240,14 +242,20 @@ export async function listMovimientosMaterial(
 // Escritura manual
 // ------------------------------------------------------------------
 
+/**
+ * Regla de Iban (10-09-2026): en el almacen TODOS los campos son obligatorios
+ * menos las observaciones. Un albaran sin proveedor ni numero no se puede
+ * reclamar despues, y sin coste no se sabe cuanto vale lo que se pierde.
+ */
 const entradaSchema = z.object({
   tipoId: z.string().uuid("Elige un tipo de material"),
   talla: z.string().trim().max(20).nullable(),
   unidades: z.number().int("Las unidades son números enteros").min(1, "Al menos una unidad"),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida"),
-  proveedor: z.string().trim().max(200).nullable(),
-  documentoReferencia: z.string().trim().max(100).nullable(),
-  costeUnitario: z.number().min(0).nullable(),
+  proveedor: z.string().trim().min(1, "Pon el proveedor").max(200),
+  documentoReferencia: z.string().trim().min(1, "Pon el nº de albarán o factura").max(100),
+  costeUnitario: z.number("Pon el coste por unidad").min(0, "El coste no puede ser negativo"),
+  observaciones: z.string().trim().max(1000).nullable(),
 });
 
 export type EntradaMaterialInput = z.infer<typeof entradaSchema>;
@@ -288,6 +296,7 @@ export async function registrarEntradaMaterial(input: EntradaMaterialInput) {
       proveedor: parsed.data.proveedor,
       documentoReferencia: parsed.data.documentoReferencia,
       costeUnitario: parsed.data.costeUnitario,
+      observaciones: parsed.data.observaciones,
       usuarioId: userId,
       usuarioNombre: await nombreUsuarioActual(db, userId),
     });
@@ -306,6 +315,7 @@ const bajaSchema = z.object({
   unidades: z.number().int("Las unidades son números enteros").min(1, "Al menos una unidad"),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida"),
   motivo: z.string().trim().min(1, "Explica por qué se da de baja").max(500),
+  observaciones: z.string().trim().max(1000).nullable(),
 });
 
 export type BajaAlmacenInput = z.infer<typeof bajaSchema>;
@@ -355,6 +365,7 @@ export async function registrarBajaAlmacen(input: BajaAlmacenInput) {
       unidades: parsed.data.unidades,
       fecha: parsed.data.fecha,
       motivo: parsed.data.motivo,
+      observaciones: parsed.data.observaciones,
       usuarioId: userId,
       usuarioNombre: await nombreUsuarioActual(db, userId),
     });
