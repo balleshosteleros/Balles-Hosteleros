@@ -276,10 +276,12 @@ export async function saveRolesToSupabase(
       // upsert por id (preservando ids reales) + borrado selectivo de los que
       // desaparecieron y no tienen usuarios.
 
-      // 1) Roles existentes en BD para esta empresa (id + nombre).
+      // 1) Roles existentes en BD para esta empresa (id + nombre + permisos).
+      //    Los `permisos` hacen falta para NO borrar módulos que solo existen
+      //    allí (ver más abajo).
       const { data: existentes, error: readError } = await admin
         .from('empresa_roles')
-        .select('id, nombre')
+        .select('id, nombre, permisos')
         .eq('empresa_id', emp)
       if (readError) {
         if (esEmpresaActual) return { error: readError.message }
@@ -298,12 +300,31 @@ export async function saveRolesToSupabase(
           .map((row) => {
             const match = permisosPorNombre.get(normalizeRolNombre(row.nombre as string))
             if (!match) return null
+
+            // En la empresa ACTUAL manda la pantalla, tal cual. En las OTRAS
+            // empresas del grupo se propagan los permisos, pero CONSERVANDO los
+            // módulos que aquí no existen: la pantalla solo pinta los
+            // departamentos de la empresa que se está editando, así que un
+            // módulo propio de otra sociedad (PRODUCTO en la matriz) no viaja en
+            // la lista y un volcado a pelo lo borraba sin que nadie lo tocase.
+            const permisos = esEmpresaActual
+              ? match.permisos
+              : (() => {
+                  const enviados = new Set(
+                    match.permisos.map((p) => normalizarModulo(p.modulo)),
+                  )
+                  const soloDeAlli = ((row.permisos ?? []) as PermisoModulo[]).filter(
+                    (p) => !enviados.has(normalizarModulo(p.modulo)),
+                  )
+                  return [...match.permisos, ...soloDeAlli]
+                })()
+
             return {
               id: row.id as string,
               empresa_id: emp,
               nombre: row.nombre as string,
               descripcion: match.descripcion,
-              permisos: match.permisos,
+              permisos,
             }
           })
           .filter((f): f is NonNullable<typeof f> => f !== null)
