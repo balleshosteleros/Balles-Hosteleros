@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona, ZONA_HORARIA_FALLBACK } from "@/features/empresa/lib/zona-horaria";
@@ -12,8 +12,23 @@ import {
   updateComunicado,
   deleteComunicado,
   listEmpleadosParaComunicado,
+  crearUrlsSubidaComunicado,
   type EmpleadoSelector,
 } from "@/features/gerencia/actions/comunicados-actions";
+import { createClient as createSupabaseBrowser } from "@/lib/supabase/client";
+import {
+  BUCKET_COMUNICADOS,
+  MAX_ADJUNTOS_COMUNICADO,
+  tamanoLegible,
+  urlAdjuntoComunicado,
+  type ComunicadoAdjunto,
+} from "@/features/gerencia/data/comunicados-adjuntos";
+import {
+  MAX_DOCUMENTO_BYTES,
+  MAX_DOCUMENTO_MB,
+  mensajeDocumentoDemasiadoGrande,
+  traducirErrorSubida,
+} from "@/shared/lib/documentos";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,7 +46,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   CalendarDays, MoreHorizontal, Eye, Clock, Archive,
-  Trash2, FileText, Users, Building2, ArrowLeft, Save, Upload, X, AlertTriangle, ImageIcon, Bell,
+  Trash2, FileText, Users, ArrowLeft, Save, Upload, X, AlertTriangle, Bell, Mail, Paperclip,
   ChevronLeft, ChevronRight, Settings, ShieldAlert,
 } from "lucide-react";
 import {
@@ -94,9 +109,12 @@ interface EditorForm {
   envioFecha: string;
   envioHora: string;
   textoNotificacion: string;
-  adjuntos: string[];
-  portadaColor: string;
-  portadaTitulo: string;
+  /** Documentos YA subidos al almacén (los que trae un comunicado guardado). */
+  adjuntos: ComunicadoAdjunto[];
+  /** Archivos recién elegidos, todavía en el navegador. Se suben al guardar. */
+  archivosNuevos: File[];
+  /** Mandarlo también por correo, además del aviso dentro de la app. */
+  enviarEmail: boolean;
   observaciones: string;
 }
 
@@ -105,7 +123,7 @@ const emptyForm: EditorForm = {
   recurrencia: "sin_repeticion", prioridad: "normal", todaEmpresa: true,
   rolesDestinatarios: [], departamentosDestinatarios: [], empleadosDestinatarios: [], programado: false,
   envioFecha: "", envioHora: "", textoNotificacion: "", adjuntos: [],
-  portadaColor: "hsl(var(--primary))", portadaTitulo: "", observaciones: "",
+  archivosNuevos: [], enviarEmail: false, observaciones: "",
 };
 
 function formFromComunicado(c: Comunicado): EditorForm {
@@ -117,30 +135,59 @@ function formFromComunicado(c: Comunicado): EditorForm {
     departamentosDestinatarios: [],
     empleadosDestinatarios: [],
     programado: !!c.envio, envioFecha: fecha || "", envioHora: hora || "",
-    textoNotificacion: `Nuevo comunicado: ${c.titulo}`, adjuntos: [],
-    portadaColor: "hsl(var(--primary))", portadaTitulo: c.titulo, observaciones: c.observaciones,
+    textoNotificacion: `Nuevo comunicado: ${c.titulo}`,
+    adjuntos: [...c.adjuntos], archivosNuevos: [], enviarEmail: c.enviarEmail,
+    observaciones: c.observaciones,
   };
 }
 
 function ComunicadoEditor({
-  comunicado, onBack, onSave, empleadosReales, rolesReales, departamentosReales, empresaNombre,
+  comunicado, onBack, onSave, empleadosReales, departamentosReales, empresaNombre, empresaColor,
 }: {
   comunicado: Comunicado | null;
   onBack: () => void;
   onSave: (form: EditorForm) => void | Promise<void>;
   empleadosReales: EmpleadoSelector[];
-  /** Roles REALES de la empresa. Nada de listas escritas a mano: un rol que no
-   *  existe deja el comunicado sin llegarle a nadie, y sin avisar. */
-  rolesReales: string[];
   departamentosReales: { id: string; nombre: string }[];
   empresaNombre: string;
+  /** Color de marca de la empresa (Ajustes → Imagen de marca). La cabecera del
+   *  comunicado se monta sola con él, igual que el correo: nada que configurar. */
+  empresaColor: string;
 }) {
   const isEdit = !!comunicado;
   const { user } = useAuth();
   const [form, setForm] = useState<EditorForm>(comunicado ? formFromComunicado(comunicado) : emptyForm);
   const [preview, setPreview] = useState(false);
   const [empleadoFilter, setEmpleadoFilter] = useState("");
+  const inputArchivos = useRef<HTMLInputElement>(null);
   const u = (patch: Partial<EditorForm>) => setForm(f => ({ ...f, ...patch }));
+
+  /**
+   * Añade los archivos elegidos. Se valida AQUÍ el tamaño, antes de subir: si
+   * se dejara para el almacén, el usuario esperaría la subida entera de un
+   * archivo que iba a ser rechazado igualmente.
+   */
+  const anadirArchivos = (lista: FileList | null) => {
+    const nuevos = Array.from(lista ?? []);
+    if (nuevos.length === 0) return;
+
+    const grande = nuevos.find(f => f.size > MAX_DOCUMENTO_BYTES);
+    if (grande) {
+      toast.error(mensajeDocumentoDemasiadoGrande(grande.name));
+      return;
+    }
+
+    const yaHay = form.adjuntos.length + form.archivosNuevos.length;
+    const hueco = MAX_ADJUNTOS_COMUNICADO - yaHay;
+    if (hueco <= 0) {
+      toast.error(`Un comunicado admite como máximo ${MAX_ADJUNTOS_COMUNICADO} documentos`);
+      return;
+    }
+    if (nuevos.length > hueco) {
+      toast.error(`Solo caben ${hueco} documento${hueco === 1 ? "" : "s"} más en este comunicado`);
+    }
+    u({ archivosNuevos: [...form.archivosNuevos, ...nuevos.slice(0, hueco)] });
+  };
 
   // Al crear (no editar), preseleccionar como creador al usuario de la sesión
   // (es quien redacta el comunicado). El value del select es el userId, que
@@ -152,9 +199,6 @@ function ComunicadoEditor({
     }
   }, [comunicado, user?.id, empleadosReales]);
 
-  const toggleRole = (role: string) => {
-    u({ rolesDestinatarios: form.rolesDestinatarios.includes(role) ? form.rolesDestinatarios.filter(r => r !== role) : [...form.rolesDestinatarios, role] });
-  };
 
   const toggleDepartamento = (nombre: string) => {
     u({
@@ -191,21 +235,22 @@ function ComunicadoEditor({
           <Button variant="outline" size="sm" onClick={() => setPreview(false)}><ArrowLeft className="h-4 w-4 mr-1" />Volver al editor</Button>
         </div>
         <Card className="overflow-hidden">
-          <div className="h-32 flex items-end p-6" style={{ background: form.portadaColor }}>
-            <h1 className="text-2xl font-bold text-white drop-shadow-sm">{form.portadaTitulo || form.titulo || "Sin título"}</h1>
+          <div className="h-32 flex items-end p-6" style={{ background: empresaColor }}>
+            <h1 className="text-2xl font-bold text-white drop-shadow-sm">{form.titulo || "Sin título"}</h1>
           </div>
           <CardContent className="p-6 space-y-4">
             {form.asunto && <p className="text-sm text-muted-foreground">Asunto: {form.asunto}</p>}
             <div className="whitespace-pre-wrap text-sm leading-relaxed">{form.cuerpo || "Sin contenido"}</div>
-            {form.adjuntos.length > 0 && (
+            {(form.adjuntos.length > 0 || form.archivosNuevos.length > 0) && (
               <div className="pt-2 border-t">
                 <p className="text-xs text-muted-foreground mb-1">Adjuntos:</p>
-                {form.adjuntos.map((a, i) => <Badge key={i} variant="outline" className="mr-1">{a}</Badge>)}
+                {form.adjuntos.map(a => <Badge key={a.path} variant="outline" className="mr-1">{a.name}</Badge>)}
+                {form.archivosNuevos.map((f, i) => <Badge key={`nuevo-${i}`} variant="outline" className="mr-1">{f.name}</Badge>)}
               </div>
             )}
           </CardContent>
           <div className="px-6 pb-4 text-xs text-muted-foreground border-t pt-3">
-            <span>{empresaNombre}</span> · <span>{form.todaEmpresa ? "Toda la empresa" : form.rolesDestinatarios.join(", ")}</span>
+            <span>{empresaNombre}</span> · <span>{form.todaEmpresa ? "Toda la plantilla" : form.departamentosDestinatarios.join(", ") || "Sin destinatarios"}</span>
           </div>
         </Card>
       </div>
@@ -229,66 +274,53 @@ function ComunicadoEditor({
 
       <div className="flex-1 flex overflow-hidden">
         <ScrollArea className="flex-1">
-          <div className="p-6 max-w-3xl space-y-6">
-            <Card className="overflow-hidden">
-              <div className="relative h-36 flex items-end p-5 group" style={{ background: form.portadaColor }}>
-                <Input
-                  value={form.portadaTitulo}
-                  onChange={e => u({ portadaTitulo: e.target.value })}
-                  placeholder="Título de portada..."
-                  className="bg-transparent border-0 text-white placeholder:text-white/60 text-xl font-bold focus-visible:ring-0 p-0 h-auto shadow-none"
-                />
-                <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => {
-                    const colors = ["hsl(var(--primary))", "#1e3a5f", "#2d5016", "#6b2142", "#4a2c6b", "#b85c38"];
-                    const i = colors.indexOf(form.portadaColor);
-                    u({ portadaColor: colors[(i + 1) % colors.length] });
-                  }}><ImageIcon className="h-3 w-3 mr-1" />Cambiar</Button>
-                  <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => u({ portadaColor: "hsl(var(--muted))", portadaTitulo: "" })}><X className="h-3 w-3" /></Button>
+          <div className="p-6 pb-28 max-w-3xl space-y-6">
+            {/* El comunicado se escribe sobre la hoja tal y como se recibe: la
+                franja de marca de la empresa arriba y el texto dentro. No hay
+                nada que montar ni colores que elegir. */}
+            <Card className="overflow-hidden shadow-sm">
+              <div className="h-2" style={{ background: empresaColor }} />
+              <CardContent className="p-8 space-y-7">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground">Título</Label>
+                  <Input
+                    value={form.titulo}
+                    onChange={e => u({ titulo: e.target.value })}
+                    placeholder="Cambio de horario de invierno"
+                    className="text-2xl font-bold border-0 rounded-none px-0 h-auto py-1 focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/40 placeholder:font-normal"
+                  />
                 </div>
-              </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground">Asunto</Label>
+                  <Input
+                    value={form.asunto}
+                    onChange={e => u({ asunto: e.target.value })}
+                    placeholder="Entra en vigor el domingo 26 de octubre"
+                    className="border-0 rounded-none px-0 h-auto py-1 text-base focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/40"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground">Mensaje</Label>
+                  <Textarea
+                    value={form.cuerpo}
+                    onChange={e => u({ cuerpo: e.target.value })}
+                    placeholder="Escribe aquí lo que quieres contarle al equipo…"
+                    className="border-0 px-0 focus-visible:ring-0 shadow-none min-h-[320px] resize-y text-base leading-7 placeholder:text-muted-foreground/40"
+                  />
+                </div>
+              </CardContent>
             </Card>
 
-            <div className="space-y-4">
-              <div>
-                <Label className="text-xs text-muted-foreground">Título del comunicado</Label>
-                <Input value={form.titulo} onChange={e => u({ titulo: e.target.value })} placeholder="Título interno del comunicado..." className="text-lg font-semibold border-0 border-b rounded-none px-0 focus-visible:ring-0 shadow-none" />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Asunto</Label>
-                <Input value={form.asunto} onChange={e => u({ asunto: e.target.value })} placeholder="Asunto del comunicado..." className="border-0 border-b rounded-none px-0 focus-visible:ring-0 shadow-none" />
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-xs text-muted-foreground mb-2 block">Contenido del comunicado</Label>
-              <div className="border rounded-lg overflow-hidden">
-                <div className="flex items-center gap-1 px-3 py-1.5 bg-muted/40 border-b text-xs text-muted-foreground">
-                  <button className="px-2 py-0.5 rounded hover:bg-muted font-bold">N</button>
-                  <button className="px-2 py-0.5 rounded hover:bg-muted italic">I</button>
-                  <button className="px-2 py-0.5 rounded hover:bg-muted underline">S</button>
-                  <Separator orientation="vertical" className="h-4 mx-1" />
-                  <button className="px-2 py-0.5 rounded hover:bg-muted">• Lista</button>
-                  <button className="px-2 py-0.5 rounded hover:bg-muted">1. Lista</button>
-                </div>
-                <Textarea
-                  value={form.cuerpo}
-                  onChange={e => u({ cuerpo: e.target.value })}
-                  placeholder="Escribe aquí el contenido del comunicado..."
-                  className="border-0 focus-visible:ring-0 rounded-none shadow-none min-h-[260px] resize-y"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-xs text-muted-foreground">Observaciones internas</Label>
-              <Textarea value={form.observaciones} onChange={e => u({ observaciones: e.target.value })} rows={2} placeholder="Notas internas no visibles en el comunicado..." />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">Notas internas</Label>
+              <p className="text-xs text-muted-foreground/70">No salen en el comunicado; solo las ves tú.</p>
+              <Textarea value={form.observaciones} onChange={e => u({ observaciones: e.target.value })} rows={2} className="resize-y" />
             </div>
           </div>
         </ScrollArea>
 
         <ScrollArea className="w-80 xl:w-96 border-l bg-muted/20 shrink-0">
-          <div className="p-4 space-y-5">
+          <div className="p-4 pb-28 space-y-5">
             <div>
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estado</Label>
               <Select value={form.estado} onValueChange={v => u({ estado: v as EstadoComunicado })}>
@@ -313,24 +345,6 @@ function ComunicadoEditor({
                 </div>
                 {!form.todaEmpresa && (
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Por área o rol:</p>
-                      {rolesReales.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          Esta empresa no tiene roles configurados todavía.
-                        </p>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {rolesReales.map(role => (
-                            <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                              <Checkbox checked={form.rolesDestinatarios.includes(role)} onCheckedChange={() => toggleRole(role)} />
-                              {role}
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground">Por departamento:</p>
                       {departamentosReales.length === 0 ? (
@@ -423,9 +437,10 @@ function ComunicadoEditor({
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="sin_repeticion">Sin repetición</SelectItem>
+                      <SelectItem value="diaria">Diaria</SelectItem>
                       <SelectItem value="semanal">Semanal</SelectItem>
                       <SelectItem value="mensual">Mensual</SelectItem>
-                      <SelectItem value="personalizado">Personalizado</SelectItem>
+                      <SelectItem value="anual">Anual</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -443,18 +458,73 @@ function ComunicadoEditor({
             <Separator />
 
             <div>
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1"><Mail className="h-3.5 w-3.5" />Enviar por correo</Label>
+              <div className="mt-2 flex items-center gap-2">
+                <Switch checked={form.enviarEmail} onCheckedChange={v => u({ enviarEmail: v })} id="sw-email" />
+                <Label htmlFor="sw-email" className="text-sm">
+                  {form.enviarEmail ? "También por correo" : "Solo aviso en la app"}
+                </Label>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {form.enviarEmail
+                  ? "Al publicarlo saldrá un correo a los destinatarios con el comunicado y sus documentos. Se manda una sola vez."
+                  : "El comunicado llegará al móvil y a Mi panel, pero no al correo."}
+              </p>
+            </div>
+
+            <Separator />
+
+            <div>
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1"><Upload className="h-3.5 w-3.5" />Documentos adjuntos</Label>
               <div className="mt-2 space-y-2">
-                {form.adjuntos.map((a, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-md border px-3 py-1.5 text-sm bg-card">
-                    <span className="truncate">{a}</span>
-                    <button onClick={() => u({ adjuntos: form.adjuntos.filter((_, idx) => idx !== i) })} className="text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+                {form.adjuntos.map(a => (
+                  <div key={a.path} className="flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm bg-card">
+                    <a
+                      href={urlAdjuntoComunicado(a.path)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 min-w-0 hover:underline"
+                    >
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{a.name}</span>
+                      {a.size > 0 && <span className="text-xs text-muted-foreground shrink-0">{tamanoLegible(a.size)}</span>}
+                    </a>
+                    <button
+                      type="button"
+                      aria-label={`Quitar ${a.name}`}
+                      onClick={() => u({ adjuntos: form.adjuntos.filter(x => x.path !== a.path) })}
+                      className="text-muted-foreground hover:text-destructive shrink-0"
+                    ><X className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
-                <Button variant="outline" size="sm" className="w-full" onClick={() => u({ adjuntos: [...form.adjuntos, `documento_${form.adjuntos.length + 1}.pdf`] })}>
+                {form.archivosNuevos.map((f, i) => (
+                  <div key={`nuevo-${i}-${f.name}`} className="flex items-center justify-between gap-2 rounded-md border border-dashed px-3 py-1.5 text-sm bg-card">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{f.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{tamanoLegible(f.size)}</span>
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Quitar ${f.name}`}
+                      onClick={() => u({ archivosNuevos: form.archivosNuevos.filter((_, idx) => idx !== i) })}
+                      className="text-muted-foreground hover:text-destructive shrink-0"
+                    ><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                ))}
+                <input
+                  ref={inputArchivos}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={e => { anadirArchivos(e.target.files); e.target.value = ""; }}
+                />
+                <Button variant="outline" size="sm" className="w-full" onClick={() => inputArchivos.current?.click()}>
                   <Upload className="h-4 w-4 mr-1" />Adjuntar documento
                 </Button>
-                <p className="text-[11px] text-muted-foreground">Máx. 10 MB por archivo</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Hasta {MAX_ADJUNTOS_COMUNICADO} documentos, máx. {MAX_DOCUMENTO_MB} MB cada uno.
+                </p>
               </div>
             </div>
 
@@ -682,7 +752,27 @@ function filaAComunicado(fila: Record<string, unknown>): Comunicado {
     },
     prioridad: (texto(fila.prioridad) || "normal") as Comunicado["prioridad"],
     observaciones: texto(fila.observaciones),
+    adjuntos: normalizarAdjuntosFila(fila.adjuntos),
+    enviarEmail: fila.enviar_email === true,
   };
+}
+
+/** El JSONB `adjuntos` puede venir de cualquier forma: solo pasan los completos. */
+function normalizarAdjuntosFila(raw: unknown): ComunicadoAdjunto[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap(item => {
+    if (!item || typeof item !== "object") return [];
+    const r = item as Record<string, unknown>;
+    const path = typeof r.path === "string" ? r.path : "";
+    const name = typeof r.name === "string" ? r.name : "";
+    if (!path || !name) return [];
+    return [{
+      path,
+      name,
+      size: typeof r.size === "number" ? r.size : 0,
+      mime: typeof r.mime === "string" ? r.mime : null,
+    }];
+  });
 }
 
 export function ComunicadosView() {
@@ -695,10 +785,9 @@ export function ComunicadosView() {
   const tz = empresaActual?.zonaHoraria ?? ZONA_HORARIA_FALLBACK;
   const [comunicados, setComunicados] = useState<Comunicado[]>([]);
   const [empleadosReales, setEmpleadosReales] = useState<EmpleadoSelector[]>([]);
-  // Roles y departamentos REALES de la empresa: los mismos que usa el resto del
+  // Departamentos REALES de la empresa: los mismos que usa el resto del
   // software para segmentar avisos. Una lista escrita a mano se desincroniza y
   // deja comunicados sin destinatario.
-  const [rolesReales, setRolesReales] = useState<string[]>([]);
   const [departamentosReales, setDepartamentosReales] = useState<{ id: string; nombre: string }[]>([]);
   const [cargando, setCargando] = useState(true);
 
@@ -721,7 +810,6 @@ export function ComunicadosView() {
     const res = await listEmpleadosParaComunicado();
     if (res.ok) setEmpleadosReales(res.data);
     const opciones = await getOpcionesSegmento();
-    setRolesReales(opciones.roles);
     setDepartamentosReales(opciones.departamentos);
   }, []);
 
@@ -849,6 +937,41 @@ export function ComunicadosView() {
     const envio = form.programado && form.envioFecha
       ? `${form.envioFecha}${form.envioHora ? `T${form.envioHora}:00` : "T00:00:00"}`
       : null;
+
+    // Los documentos suben DIRECTOS al almacén con una URL firmada. Si pasaran
+    // por la acción de guardado, cualquier PDF de más de 4,5 MB fallaría.
+    const adjuntos: ComunicadoAdjunto[] = [...form.adjuntos];
+    if (form.archivosNuevos.length > 0) {
+      const urls = await crearUrlsSubidaComunicado(
+        form.archivosNuevos.map(f => ({ name: f.name, type: f.type })),
+      );
+      if (!urls.ok) {
+        toast.error(urls.error ?? "No se pudieron preparar los documentos");
+        return;
+      }
+      const supabase = createSupabaseBrowser();
+      for (let i = 0; i < form.archivosNuevos.length; i++) {
+        const file = form.archivosNuevos[i];
+        const destino = urls.data[i];
+        const { error } = await supabase.storage
+          .from(BUCKET_COMUNICADOS)
+          .uploadToSignedUrl(destino.path, destino.token, file, {
+            contentType: file.type || "application/octet-stream",
+          });
+        if (error) {
+          console.error("[comunicados] subida:", error.message);
+          toast.error(traducirErrorSubida(error, `No se pudo subir "${file.name}"`));
+          return;
+        }
+        adjuntos.push({
+          path: destino.path,
+          name: file.name,
+          size: file.size,
+          mime: file.type || null,
+        });
+      }
+    }
+
     const payload = {
       titulo: form.titulo,
       asunto: form.asunto,
@@ -857,19 +980,34 @@ export function ComunicadosView() {
       prioridad: form.prioridad,
       recurrencia: form.recurrencia,
       todaEmpresa: form.todaEmpresa,
-      rolesDestinatarios: form.todaEmpresa ? [] : form.rolesDestinatarios,
+      rolesDestinatarios: [],
       empleadosDestinatarios: form.todaEmpresa ? [] : form.empleadosDestinatarios,
       departamentosDestinatarios: form.todaEmpresa ? [] : form.departamentosDestinatarios,
       envio,
       observaciones: form.observaciones,
+      adjuntos,
+      enviarEmail: form.enviarEmail,
     };
     const res = editorMode === "create"
       ? await createComunicado(payload)
       : editingComunicado
         ? await updateComunicado(editingComunicado.id, payload)
         : { ok: false, error: "Sin contexto" };
-    if (res.ok) toast.success("Comunicado guardado");
-    else toast.error(("error" in res && res.error) || "Error al guardar comunicado");
+
+    if (res.ok) {
+      toast.success("Comunicado guardado");
+      // El correo se dice aparte: que salga el comunicado y no salga el correo
+      // es exactamente lo que nadie se entera de que ha pasado.
+      const enviados = res.emailEnviados ?? 0;
+      const errorEmail = res.emailError;
+      if (enviados > 0) {
+        toast.success(`Correo enviado a ${enviados} ${enviados === 1 ? "persona" : "personas"}`);
+      } else if (errorEmail) {
+        toast.error(`El comunicado se publicó, pero el correo no salió: ${errorEmail}`);
+      }
+    } else {
+      toast.error(res.error || "Error al guardar comunicado");
+    }
     await loadComunicados();
     closeEditor();
   };
@@ -882,9 +1020,9 @@ export function ComunicadosView() {
           onBack={closeEditor}
           onSave={saveEditor}
           empleadosReales={empleadosReales}
-          rolesReales={rolesReales}
           departamentosReales={departamentosReales}
           empresaNombre={empresaResuelta ? empresaActual?.nombre ?? "" : ""}
+          empresaColor={empresaActual?.color ?? "hsl(var(--primary))"}
         />
         <ValidacionFaltantesDialog
           open={faltantesComunicado.length > 0}
@@ -911,10 +1049,7 @@ export function ComunicadosView() {
       th: <TableHead key="titulo">Título</TableHead>,
       td: (c) => (
         <TableCell key="titulo">
-          <div>
-            <p className="font-semibold text-sm">{c.titulo}</p>
-            <p className="text-xs text-muted-foreground">Empresa: {empresaResuelta ? empresaActual?.nombre : ""}</p>
-          </div>
+          <p className="font-semibold text-sm">{c.titulo}</p>
         </TableCell>
       ),
     },
@@ -954,7 +1089,7 @@ export function ComunicadosView() {
         <TableCell key="destinatarios">
           <div className="flex flex-wrap gap-1">
             {c.todaEmpresa ? (
-              <Badge variant="secondary" className="text-[11px] gap-1"><Building2 className="h-3 w-3" />{c.destinatarios.empresas} empresa</Badge>
+              <Badge variant="secondary" className="text-[11px] gap-1"><Users className="h-3 w-3" />Todos</Badge>
             ) : (
               <>
                 <Badge variant="secondary" className="text-[11px] gap-1"><Users className="h-3 w-3" />{c.destinatarios.departamentos} dptos</Badge>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, ChevronRight, X, Megaphone } from "lucide-react";
+import { Loader2, ChevronRight, X, Megaphone, Paperclip } from "lucide-react";
 import {
   listarComunicadosVisibles,
   type ComunicadoVisible,
@@ -11,6 +11,10 @@ import {
   formatFechaHoraEnZona,
 } from "@/features/empresa/lib/zona-horaria";
 import { cn } from "@/shared/lib/utils";
+import {
+  tamanoLegible,
+  urlAdjuntoComunicado,
+} from "@/features/gerencia/data/comunicados-adjuntos";
 
 const PRIORIDAD_STYLE: Record<string, { label: string; dot: string; tint: string }> = {
   alta: { label: "Urgente", dot: "bg-rose-500", tint: "border-rose-200 bg-rose-50/40" },
@@ -174,6 +178,30 @@ function ComunicadoDetalle({
           <article className="mt-5 whitespace-pre-line text-base leading-relaxed text-foreground">
             {comunicado.contenido}
           </article>
+        )}
+        {comunicado.adjuntos.length > 0 && (
+          <div className="mt-6 space-y-2 border-t border-border/60 pt-4">
+            <p className="text-xs font-medium text-muted-foreground">
+              {comunicado.adjuntos.length === 1 ? "Documento adjunto" : "Documentos adjuntos"}
+            </p>
+            {comunicado.adjuntos.map((a) => (
+              <a
+                key={a.path}
+                href={urlAdjuntoComunicado(a.path)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-3 text-sm active:bg-muted"
+              >
+                <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="truncate">{a.name}</span>
+                {a.size > 0 && (
+                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                    {tamanoLegible(a.size)}
+                  </span>
+                )}
+              </a>
+            ))}
+          </div>
         )}
       </div>
     </div>

@@ -28,13 +28,7 @@
  */
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { sendEmail } from "@/lib/email/send";
-import {
-  fetchEmpresaMarca,
-  comunicadoHeaderInline,
-  comunicadoHeaderHtml,
-  comunicadoEmailHtml,
-} from "@/lib/email/comunicado-header";
+import { enviarComunicadoPorEmail } from "@/features/gerencia/services/comunicado-email";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,10 +41,7 @@ type Comunicado = {
   cuerpo: string | null;
   recurrencia: string;
   envio: string;
-  toda_empresa: boolean;
-  roles_destinatarios: string[] | null;
-  departamentos_destinatarios: string[] | null;
-  empleados_destinatarios: string[] | null;
+  enviar_email: boolean;
 };
 
 /** Siguiente ocurrencia según la recurrencia. Conserva la hora del envío. */
@@ -75,18 +66,6 @@ function siguienteEnvio(iso: string, recurrencia: string): string | null {
   }
 }
 
-/** Texto plano de respaldo para los clientes que no pintan HTML. */
-function aTextoPlano(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) return NextResponse.json({ error: "Configuración inválida" }, { status: 503 });
@@ -103,7 +82,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("comunicados")
     .select(
-      "id, empresa_id, titulo, asunto, cuerpo, recurrencia, envio, toda_empresa, roles_destinatarios, departamentos_destinatarios, empleados_destinatarios",
+      "id, empresa_id, titulo, asunto, cuerpo, recurrencia, envio, enviar_email",
     )
     .neq("recurrencia", "sin_repeticion")
     .not("envio", "is", null)
@@ -148,54 +127,14 @@ export async function GET(request: Request) {
         console.error("[cron comunicados] notif:", e);
       }
 
-      // 3) Correo a la plantilla destinataria: empleados ACTIVOS de la empresa.
-      //    Se lee directo (admin client) porque `chat_empleados` depende del
-      //    usuario en sesión y aquí no hay ninguno, y además no trae el correo.
-      const { data: destinatarios } = await supabase
-        .from("empleados")
-        .select("email_personal, email_empresa")
-        .eq("empresa_id", c.empresa_id)
-        .eq("estado", "Activo");
-      const emails = Array.from(
-        new Set(
-          (destinatarios ?? [])
-            .map((r) => {
-              const row = r as { email_personal: string | null; email_empresa: string | null };
-              return (row.email_empresa || row.email_personal || "").trim().toLowerCase();
-            })
-            .filter((e) => e.includes("@") && !e.endsWith("@sin-email.migracion")),
-        ),
-      );
-
-      if (emails.length > 0) {
-        const marca = await fetchEmpresaMarca(c.empresa_id);
-        const asunto = c.asunto?.trim() || c.titulo;
-        const cuerpo = c.cuerpo ?? "";
-        let html: string;
-        let attachments: { filename: string; content: Buffer; contentType?: string }[] = [];
-        if (marca) {
-          const inline = await comunicadoHeaderInline(marca, c.titulo);
-          const cabecera = inline ? inline.html : comunicadoHeaderHtml(marca, c.titulo);
-          html = comunicadoEmailHtml(cabecera, cuerpo, marca.nombre);
-          if (inline) attachments = [inline.attachment];
-        } else {
-          html = comunicadoEmailHtml("", cuerpo);
-        }
-
-        for (const to of emails) {
-          const res = await sendEmail({
-            to,
-            subject: asunto,
-            html,
-            text: aTextoPlano(cuerpo),
-            fromName: marca?.nombre || undefined,
-            empresaId: c.empresa_id,
-            // El comunicado ya trae su propia cabecera: que no se añada la genérica.
-            brandHeader: false,
-            attachments,
-          });
-          if (res.ok) correos++;
-        }
+      // 3) Correo a los destinatarios, con sus documentos adjuntos. Se hace por
+      //    el MISMO camino que al publicarlo a mano (`comunicado-email`): antes
+      //    este cron tenía su propia copia, que mandaba el comunicado a la
+      //    plantilla entera aunque fuera para un solo departamento.
+      if (c.enviar_email === true) {
+        const res = await enviarComunicadoPorEmail(c.id);
+        correos += res.enviados;
+        if (!res.ok && res.error) errores.push(`${c.titulo} (correo): ${res.error}`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

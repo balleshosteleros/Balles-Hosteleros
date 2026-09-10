@@ -3,6 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import {
+  BUCKET_COMUNICADOS,
+  MAX_ADJUNTOS_COMUNICADO,
+  type ComunicadoAdjunto,
+} from "@/features/gerencia/data/comunicados-adjuntos";
 
 async function getContext() {
   const supabase = await createClient();
@@ -76,6 +81,75 @@ export async function listEmpleadosParaComunicado(): Promise<{
   }
 }
 
+/** Deja el nombre del archivo en algo que el almacén acepta como ruta. */
+function sanitizeFilename(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "_")
+    .slice(0, 120);
+}
+
+/**
+ * URLs de subida firmadas para que el navegador suba los adjuntos DIRECTO al
+ * bucket. Si el archivo pasara por la Server Action, un PDF de más de 4,5 MB
+ * fallaría siempre (límite del body en Vercel).
+ *
+ * Se suben a `<empresa>/_pendientes/`: el comunicado todavía no existe cuando
+ * se elige el archivo. Al guardar solo viajan los metadatos.
+ */
+export async function crearUrlsSubidaComunicado(
+  archivos: Array<{ name: string; type: string }>,
+): Promise<
+  { ok: true; data: Array<{ token: string; path: string }> } | { ok: false; error: string }
+> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId || !user) return { ok: false, error: "No autenticado" };
+
+    const lista = (archivos ?? []).slice(0, MAX_ADJUNTOS_COMUNICADO);
+    if (lista.length === 0) return { ok: false, error: "No hay archivos que subir" };
+
+    const salida: Array<{ token: string; path: string }> = [];
+    let idx = 0;
+    for (const a of lista) {
+      const safe = sanitizeFilename(a.name || "documento");
+      const path = `${empresaId}/_pendientes/${Date.now()}_${idx}_${safe}`;
+      idx += 1;
+      const { data, error } = await supabase.storage
+        .from(BUCKET_COMUNICADOS)
+        .createSignedUploadUrl(path);
+      if (error || !data) {
+        console.error("[comunicados] signedUpload:", error?.message);
+        return { ok: false, error: "No se pudo preparar la subida" };
+      }
+      salida.push({ token: data.token, path: data.path });
+    }
+    return { ok: true, data: salida };
+  } catch (err) {
+    console.error("[comunicados] crearUrlsSubidaComunicado:", err);
+    return { ok: false, error: "Error al preparar la subida" };
+  }
+}
+
+/**
+ * Resultado de guardar un comunicado.
+ *
+ * El correo se informa APARTE del guardado: el comunicado puede quedar
+ * perfectamente publicado y el correo no haber salido (nadie con dirección,
+ * transporte caído...). Si eso se devolviera como un simple `ok`, quien lo
+ * publica se iría convencido de que la plantilla lo tiene en su bandeja.
+ */
+export interface ResultadoGuardarComunicado {
+  ok: boolean;
+  error?: string;
+  data?: Record<string, unknown> | null;
+  /** Cuántos correos salieron de verdad. 0 si no se pidió mandarlo por correo. */
+  emailEnviados?: number;
+  /** Por qué no salió el correo, si se pidió y falló. */
+  emailError?: string;
+}
+
 export interface ComunicadoInput {
   titulo: string;
   asunto?: string;
@@ -89,6 +163,10 @@ export interface ComunicadoInput {
   departamentosDestinatarios?: string[];
   envio?: string | null;
   observaciones?: string;
+  /** Documentos ya subidos al bucket; aquí solo viajan sus metadatos. */
+  adjuntos?: ComunicadoAdjunto[];
+  /** Además del aviso en la app, mandarlo por correo al publicarlo. */
+  enviarEmail?: boolean;
 }
 
 function toRow(input: ComunicadoInput) {
@@ -105,10 +183,58 @@ function toRow(input: ComunicadoInput) {
     departamentos_destinatarios: input.departamentosDestinatarios ?? [],
     envio: input.envio ?? null,
     observaciones: input.observaciones ?? null,
+    adjuntos: input.adjuntos ?? [],
+    enviar_email: input.enviarEmail ?? false,
   };
 }
 
-export async function createComunicado(input: ComunicadoInput) {
+/**
+ * Avisos de un comunicado recién publicado: push al móvil, campana in-app y,
+ * si se pidió, correo con los documentos adjuntos.
+ *
+ * Ningún fallo de aviso tumba la publicación: el comunicado ya está guardado.
+ * Devuelve el resultado del correo para poder decirlo en pantalla, porque un
+ * correo que no sale es justo lo que nadie se entera de que no ha salido.
+ */
+async function avisarComunicadoPublicado(
+  comunicadoId: string,
+  enviarEmail: boolean,
+): Promise<{ emailEnviados: number; emailError?: string }> {
+  try {
+    const { notificarComunicadoNuevo } = await import(
+      "@/features/mi-panel/mobile/lib/push-comunicado"
+    );
+    await notificarComunicadoNuevo(comunicadoId);
+  } catch (e) {
+    console.error("[comunicados] push:", e);
+  }
+  try {
+    // Notificación in-app (campana + registro) — motor de alertas PRP-065.
+    const { emitirNotifComunicado } = await import(
+      "@/features/notificaciones/actions/emisores-actions"
+    );
+    await emitirNotifComunicado(comunicadoId);
+  } catch (e) {
+    console.error("[comunicados] notif:", e);
+  }
+
+  if (!enviarEmail) return { emailEnviados: 0 };
+  try {
+    const { enviarComunicadoPorEmail } = await import(
+      "@/features/gerencia/services/comunicado-email"
+    );
+    const res = await enviarComunicadoPorEmail(comunicadoId);
+    return { emailEnviados: res.enviados, emailError: res.ok ? undefined : res.error };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error desconocido";
+    console.error("[comunicados] email:", msg);
+    return { emailEnviados: 0, emailError: msg };
+  }
+}
+
+export async function createComunicado(
+  input: ComunicadoInput,
+): Promise<ResultadoGuardarComunicado> {
   try {
     const { supabase, user, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
@@ -125,19 +251,11 @@ export async function createComunicado(input: ComunicadoInput) {
     if (error) throw error;
 
     if (data?.id && data?.estado === "publicado") {
-      try {
-        const { notificarComunicadoNuevo } = await import(
-          "@/features/mi-panel/mobile/lib/push-comunicado"
-        );
-        await notificarComunicadoNuevo(data.id as string);
-      } catch (e) {
-        console.error("[comunicados] push:", e);
-      }
-      // Notificación in-app (campana + registro) — motor de alertas PRP-065.
-      const { emitirNotifComunicado } = await import(
-        "@/features/notificaciones/actions/emisores-actions"
+      const aviso = await avisarComunicadoPublicado(
+        data.id as string,
+        input.enviarEmail === true,
       );
-      await emitirNotifComunicado(data.id as string);
+      return { ok: true, data, ...aviso };
     }
 
     return { ok: true, data };
@@ -148,13 +266,16 @@ export async function createComunicado(input: ComunicadoInput) {
   }
 }
 
-export async function updateComunicado(id: string, input: ComunicadoInput) {
+export async function updateComunicado(
+  id: string,
+  input: ComunicadoInput,
+): Promise<ResultadoGuardarComunicado> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
     const { data: anterior } = await supabase
       .from("comunicados")
-      .select("estado")
+      .select("estado, email_enviado_at")
       .eq("id", id)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -172,19 +293,14 @@ export async function updateComunicado(id: string, input: ComunicadoInput) {
     const eraBorrador = anterior?.estado !== "publicado";
     const ahoraPublicado = (input.estado ?? "borrador") === "publicado";
     if (eraBorrador && ahoraPublicado) {
-      try {
-        const { notificarComunicadoNuevo } = await import(
-          "@/features/mi-panel/mobile/lib/push-comunicado"
-        );
-        await notificarComunicadoNuevo(id);
-      } catch (e) {
-        console.error("[comunicados] push update:", e);
-      }
-      // Notificación in-app (campana + registro) — motor de alertas PRP-065.
-      const { emitirNotifComunicado } = await import(
-        "@/features/notificaciones/actions/emisores-actions"
+      // El correo solo sale la PRIMERA vez. Si ya salió, volver a guardar el
+      // comunicado no vuelve a llenar la bandeja de toda la plantilla.
+      const yaSalioElCorreo = !!anterior?.email_enviado_at;
+      const aviso = await avisarComunicadoPublicado(
+        id,
+        input.enviarEmail === true && !yaSalioElCorreo,
       );
-      await emitirNotifComunicado(id);
+      return { ok: true, ...aviso };
     }
 
     return { ok: true };

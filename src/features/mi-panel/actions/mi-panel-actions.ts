@@ -9,6 +9,7 @@ import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
 import { generarCartaBajaVoluntariaPDF } from "@/features/rrhh/services/firmas/baja-voluntaria-pdf";
 import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { ComunicadoAdjunto } from "@/features/gerencia/data/comunicados-adjuntos";
 import { resolverDestinatario } from "@/features/rrhh/services/email-plantillas/resolver";
 import type {
   DiaCalendario,
@@ -1775,6 +1776,28 @@ export interface ComunicadoVisible {
   createdAt: string;
   /** Zona horaria de la empresa para formatear `createdAt` (instante). */
   zonaHoraria: string;
+  /** Documentos que acompañan al comunicado. Vacío = ninguno. */
+  adjuntos: ComunicadoAdjunto[];
+}
+
+/** El JSONB `adjuntos` puede venir de cualquier forma: solo pasan los completos. */
+function adjuntosDeComunicado(raw: unknown): ComunicadoAdjunto[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const r = item as Record<string, unknown>;
+    const path = typeof r.path === "string" ? r.path : "";
+    const name = typeof r.name === "string" ? r.name : "";
+    if (!path || !name) return [];
+    return [
+      {
+        path,
+        name,
+        size: typeof r.size === "number" ? r.size : 0,
+        mime: typeof r.mime === "string" ? r.mime : null,
+      },
+    ];
+  });
 }
 
 export async function listarComunicadosVisibles(): Promise<{
@@ -1791,7 +1814,7 @@ export async function listarComunicadosVisibles(): Promise<{
     const { data, error } = await supabase
       .from("comunicados")
       .select(
-        "id, titulo, cuerpo, prioridad, created_at, estado, toda_empresa, roles_destinatarios, empleados_destinatarios, departamentos_destinatarios",
+        "id, titulo, cuerpo, prioridad, created_at, estado, toda_empresa, roles_destinatarios, empleados_destinatarios, departamentos_destinatarios, adjuntos",
       )
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false })
@@ -1841,6 +1864,7 @@ export async function listarComunicadosVisibles(): Promise<{
         prioridad: (c.prioridad as string) ?? "normal",
         createdAt: c.created_at as string,
         zonaHoraria,
+        adjuntos: adjuntosDeComunicado(c.adjuntos),
       })),
     };
   } catch (err: unknown) {
