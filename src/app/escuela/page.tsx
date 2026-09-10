@@ -17,7 +17,7 @@ export default async function EscuelaClasesPage() {
       </div>
     );
   }
-  if (!alumno) return <AccesoAlumno marca={marca} />;
+  if (!alumno) return <AccesoAlumno />;
 
   const clases = await getClasesAlumno(alumno);
   // El día de hoy es el del reloj de la ESCUELA, no el del navegador del alumno:

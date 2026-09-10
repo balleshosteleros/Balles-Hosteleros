@@ -16,7 +16,7 @@ export default async function EscuelaCursoPage({
   const { cursoId } = await params;
   const { marca, alumno } = await cargarPortal();
   if (!marca) return null;
-  if (!alumno) return <AccesoAlumno marca={marca} />;
+  if (!alumno) return <AccesoAlumno />;
 
   const curso = await getCursoDetalle(alumno, cursoId);
   // Un curso que no es suyo no existe para él: mismo resultado que uno borrado.

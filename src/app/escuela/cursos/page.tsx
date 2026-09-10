@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Cursos" };
 export default async function EscuelaCursosPage() {
   const { marca, alumno } = await cargarPortal();
   if (!marca) return null;
-  if (!alumno) return <AccesoAlumno marca={marca} />;
+  if (!alumno) return <AccesoAlumno />;
 
   const cursos = await getCursosAlumno(alumno);
 

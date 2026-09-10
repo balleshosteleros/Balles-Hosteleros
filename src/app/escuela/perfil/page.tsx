@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Mi perfil" };
 export default async function EscuelaPerfilPage() {
   const { marca, alumno } = await cargarPortal();
   if (!marca) return null;
-  if (!alumno) return <AccesoAlumno marca={marca} />;
+  if (!alumno) return <AccesoAlumno />;
 
   const perfil = await getPerfil(alumno);
 
