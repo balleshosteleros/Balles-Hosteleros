@@ -203,6 +203,8 @@ export function ResenaForm({
     }
   };
 
+  const mensaje = mensajeSegunNota(notaFinal, nombreLead, yaRespondio);
+
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center px-6 py-12">
       <div className="mb-8 text-center">
@@ -239,16 +241,8 @@ export function ResenaForm({
               <Star className="h-6 w-6" style={{ color }} fill={color} />
             </div>
           )}
-          <h2 className="text-xl font-semibold">
-            {`¡Gracias${nombreLead ? `, ${nombreLead}` : ""}!`}
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            {urlResena
-              ? `${nombreLead ? `${nombreLead}, n` : "N"}os has alegrado el día. Gracias de verdad.`
-              : yaRespondio
-                ? "Ya habías valorado esta visita, así que tu opinión está registrada. Esperamos verte pronto."
-                : "Tu opinión es muy importante para nosotros. Esperamos verte pronto."}
-          </p>
+          <h2 className="text-xl font-semibold">{mensaje.titulo}</h2>
+          <p className="mt-2 text-sm leading-relaxed text-gray-600">{mensaje.texto}</p>
 
           {/* Invitación a reseñar en Google, solo tras 5 estrellas.
               El botón lleva la G de Google —inline, no una imagen remota, que
@@ -454,4 +448,61 @@ function CaraSegunNota({ nota }: { nota: number | null }) {
   if (nota >= 3) return <Meh className="h-8 w-8" />;
   if (nota >= 2) return <Frown className="h-8 w-8" />;
   return <Angry className="h-8 w-8" />;
+}
+
+
+/**
+ * Qué se le dice al cliente según lo que acaba de puntuar.
+ *
+ * La misma frase para todos suena a formulario automático justo cuando más
+ * importa: a quien lo pasó mal, "tu opinión es muy importante" le suena a
+ * burla. Con nota baja se pide perdón y se le dice que Calidad va a llamarle
+ * —promesa que sostiene el aviso automático del endpoint, no la buena
+ * voluntad de que alguien entre a mirar el listado.
+ */
+function mensajeSegunNota(
+  nota: number | null,
+  nombre: string | null,
+  yaRespondio: boolean,
+): { titulo: string; texto: string } {
+  const con = nombre ? `, ${nombre}` : "";
+  if (yaRespondio) {
+    return {
+      titulo: `¡Gracias${con}!`,
+      texto:
+        "Ya habías valorado esta visita, así que tu opinión está registrada. Esperamos verte pronto.",
+    };
+  }
+  if (nota === null) {
+    return {
+      titulo: `¡Gracias${con}!`,
+      texto: "Tu opinión es muy importante para nosotros. Esperamos verte pronto.",
+    };
+  }
+  if (nota >= 5) {
+    return {
+      titulo: `¡Gracias${con}!`,
+      texto:
+        "Nos has alegrado el día. Saber que lo hicimos bien es lo que nos motiva a seguir cuidando cada detalle.",
+    };
+  }
+  if (nota >= 4) {
+    return {
+      titulo: `¡Gracias${con}!`,
+      texto:
+        "Nos alegra que lo hayas pasado bien. Vamos a trabajar para que la próxima visita sea aún mejor.",
+    };
+  }
+  if (nota >= 3) {
+    return {
+      titulo: `Gracias por la sinceridad${con}`,
+      texto:
+        "Sabemos que podíamos haberlo hecho mejor. Vamos a trabajar en ello para que la próxima visita sea mucho mejor.",
+    };
+  }
+  return {
+    titulo: `Lo sentimos${con}`,
+    texto:
+      "Esta no es la experiencia que queremos dar, y te pedimos disculpas. Nuestro departamento de Calidad se pondrá en contacto contigo para escucharte y buscar una solución.",
+  };
 }

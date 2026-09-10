@@ -185,6 +185,20 @@ export async function POST(req: Request) {
   // cualquier empresa) se avisa por correo, una sola vez, para poder verla
   // funcionar. No hace falta una marca aparte: si solo existe esta reseña
   // propia, es que es la primera. A partir de la segunda no vuelve a salir.
+  // Nota baja: aviso inmediato al departamento de Calidad del local. Lo exige
+  // la promesa que le acabamos de hacer al cliente en pantalla ("Calidad se
+  // pondrá en contacto contigo"): sin este correo, la queja se quedaría en el
+  // listado esperando a que alguien entrara a mirarlo, y prometer una llamada
+  // que no llega es peor que no prometer nada.
+  if (rating <= 2) {
+    void avisarCalidadNotaBaja(supabase, {
+      empresaId: lead.empresa_id as string,
+      nombre: lead.nombre as string | null,
+      rating,
+      comentario,
+    });
+  }
+
   await avisarPrimeraValoracion(supabase, {
     empresaId: lead.empresa_id,
     nombre: lead.nombre,
@@ -294,5 +308,59 @@ async function avisarPrimeraValoracion(
     });
   } catch (e) {
     console.error("[resena] aviso primera valoracion:", e);
+  }
+}
+
+
+/**
+ * Avisa al departamento de Calidad del local de una valoración de 1 o 2
+ * estrellas, con el comentario del cliente y sus datos de contacto.
+ *
+ * Silencioso a propósito: la valoración ya está guardada y un fallo de correo
+ * no puede tumbar la respuesta al cliente. Si el local no tiene correo de
+ * Calidad configurado, no se manda nada — no se inventa un destinatario.
+ */
+async function avisarCalidadNotaBaja(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  datos: {
+    empresaId: string;
+    nombre: string | null;
+    rating: number;
+    comentario: string | null | undefined;
+  },
+): Promise<void> {
+  try {
+    const { data: emp } = await supabase
+      .from("empresas")
+      .select("nombre, datos_generales")
+      .eq("id", datos.empresaId)
+      .maybeSingle();
+    if (!emp) return;
+
+    const dg = (emp.datos_generales as Record<string, unknown> | null) ?? {};
+    const destino = String(dg.correoCalidad ?? "").trim();
+    if (!destino) return;
+
+    const local = (emp.nombre as string | null) ?? "";
+    const cliente = datos.nombre?.trim() || "Un cliente";
+
+    const html =
+      `<p><strong>${cliente}</strong> ha valorado con <strong>${datos.rating} de 5</strong> ` +
+      `su visita a ${local}.</p>` +
+      (datos.comentario
+        ? `<p style="margin:12px 0;padding:12px;background:#f6f6f6;border-radius:8px">` +
+          `<em>“${datos.comentario}”</em></p>`
+        : `<p style="color:#666">No dejó comentario escrito.</p>`) +
+      `<p><strong>Se le ha dicho que Calidad se pondrá en contacto con él</strong> ` +
+      `para buscar una solución. Sus datos están en Calidad → Reseñas.</p>`;
+
+    await sendEmail({
+      to: destino,
+      subject: `Valoración de ${datos.rating}★ en ${local} — hay que llamar`,
+      html,
+    });
+  } catch (err) {
+    console.error("[visita/resena] avisarCalidadNotaBaja:", err);
   }
 }
