@@ -195,7 +195,10 @@ function Columna({
   return (
     <div
       className={cn(
-        "flex w-72 shrink-0 flex-col rounded-lg border transition-colors",
+        // Las fases se reparten el ancho para que el tablero entero quepa en
+        // pantalla sin arrastrar de lado. El mínimo evita columnas ilegibles
+        // cuando el pipeline tiene muchas fases: ahí sí vuelve el desplazamiento.
+        "flex min-w-[190px] flex-1 basis-0 flex-col rounded-lg border transition-colors",
         encima ? "bg-primary/5 ring-1 ring-primary/30" : "bg-muted/30",
       )}
       onDragOver={(e) => {
