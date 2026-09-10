@@ -14,6 +14,11 @@ import {
 import { Send, X, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { createComunicado } from "@/features/gerencia/actions/comunicados-actions";
+import {
+  TIPOS_COMUNICADO,
+  TIPO_COMUNICADO_LABEL,
+  type TipoComunicado,
+} from "@/features/rrhh/data/comunicados";
 import type { RecetaConExtras } from "../actions/recetas-actions";
 import { formatEur } from "@/shared/lib/numero";
 
@@ -51,7 +56,7 @@ function construirPlantilla(receta: RecetaConExtras, diaEntrada: string): { titu
 
 export function ComunicadoRecetaDialog({ open, onOpenChange, receta }: Props) {
   const [diaEntrada, setDiaEntrada] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [prioridad, setPrioridad] = useState<"baja" | "normal" | "alta" | "urgente">("normal");
+  const [tipo, setTipo] = useState<TipoComunicado>("informativo");
   const [destino, setDestino] = useState<"empresa" | "departamento">("empresa");
   const [saving, setSaving] = useState(false);
 
@@ -75,7 +80,7 @@ export function ComunicadoRecetaDialog({ open, onOpenChange, receta }: Props) {
       const res = await createComunicado({
         titulo: titulo.trim(),
         cuerpo: contenido.trim(),
-        prioridad,
+        tipo,
         todaEmpresa: destino === "empresa",
         rolesDestinatarios: destino === "empresa" ? [] : ["Cocina"],
       });
@@ -116,14 +121,13 @@ export function ComunicadoRecetaDialog({ open, onOpenChange, receta }: Props) {
               />
             </div>
             <div>
-              <Label className="text-xs">Prioridad</Label>
-              <Select value={prioridad} onValueChange={(v) => setPrioridad(v as typeof prioridad)}>
+              <Label className="text-xs">Tipo</Label>
+              <Select value={tipo} onValueChange={(v) => setTipo(v as TipoComunicado)}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="baja">Baja</SelectItem>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="alta">Alta</SelectItem>
-                  <SelectItem value="urgente">Urgente</SelectItem>
+                  {TIPOS_COMUNICADO.map((t) => (
+                    <SelectItem key={t} value={t}>{TIPO_COMUNICADO_LABEL[t]}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
