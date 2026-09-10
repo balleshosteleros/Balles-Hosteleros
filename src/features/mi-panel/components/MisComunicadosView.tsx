@@ -25,6 +25,7 @@ import {
   TIPO_COMUNICADO_FONDO,
   tipoComunicado,
 } from "@/features/rrhh/data/comunicados";
+import { TextoConEnlaces } from "@/shared/components/TextoConEnlaces";
 import {
   tamanoLegible,
   urlAdjuntoComunicado,
@@ -162,7 +163,7 @@ function TarjetaComunicado({
         <div className="border-t">
           {c.contenido && (
             <p className="whitespace-pre-line px-5 pt-5 text-[15px] leading-relaxed text-foreground/90">
-              {c.contenido}
+              <TextoConEnlaces texto={c.contenido} />
             </p>
           )}
 

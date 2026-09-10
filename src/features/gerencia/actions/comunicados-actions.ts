@@ -166,7 +166,7 @@ export async function listEmpleadosParaComunicado(): Promise<{
         })),
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = friendlyError(err, "comunicados");
     console.error("[comunicados] listEmpleadosParaComunicado:", msg);
     return { ok: false, data: [], error: msg };
   }
@@ -374,7 +374,7 @@ export async function createComunicado(
 
     return { ok: true, data };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = friendlyError(err, "comunicados");
     console.error("[comunicados] createComunicado:", msg);
     return { ok: false, error: msg };
   }
@@ -441,7 +441,7 @@ export async function cambiarEstadoComunicado(
 
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = friendlyError(err, "comunicados");
     console.error("[comunicados] cambiarEstadoComunicado:", msg);
     return { ok: false, error: msg };
   }
@@ -490,7 +490,7 @@ export async function enviarCorreoComunicado(
       emailError: res.ok ? undefined : res.error,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = friendlyError(err, "comunicados");
     console.error("[comunicados] enviarCorreoComunicado:", msg);
     return { ok: false, error: msg };
   }
@@ -535,7 +535,7 @@ export async function updateComunicado(
 
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = friendlyError(err, "comunicados");
     console.error("[comunicados] updateComunicado:", msg);
     return { ok: false, error: msg };
   }
@@ -553,7 +553,7 @@ export async function deleteComunicado(id: string) {
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = friendlyError(err, "comunicados");
     console.error("[comunicados] deleteComunicado:", msg);
     return { ok: false, error: msg };
   }

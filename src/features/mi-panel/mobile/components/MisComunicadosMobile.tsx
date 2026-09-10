@@ -12,6 +12,7 @@ import {
   formatFechaHoraEnZona,
 } from "@/features/empresa/lib/zona-horaria";
 import { cn } from "@/shared/lib/utils";
+import { TextoConEnlaces } from "@/shared/components/TextoConEnlaces";
 import {
   TIPO_COMUNICADO_LABEL,
   tipoComunicado,
@@ -229,7 +230,7 @@ function ComunicadoDetalle({
         </p>
         {comunicado.contenido && (
           <article className="mt-5 whitespace-pre-line text-base leading-relaxed text-foreground">
-            {comunicado.contenido}
+            <TextoConEnlaces texto={comunicado.contenido} />
           </article>
         )}
         {comunicado.enlace && (

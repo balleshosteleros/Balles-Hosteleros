@@ -11,6 +11,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { FileCheck2, BellRing, Loader2, Megaphone, Paperclip, Link as LinkIcon } from "lucide-react";
+import { TextoConEnlaces } from "@/shared/components/TextoConEnlaces";
 import {
   listNotificacionesPendientes,
   marcarNotificacionVista,
@@ -162,7 +163,7 @@ export function NotificacionesGate() {
           <div className="space-y-3">
             {cuerpoComunicado && (
               <div className="max-h-64 overflow-y-auto whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-                {cuerpoComunicado}
+                <TextoConEnlaces texto={cuerpoComunicado} />
               </div>
             )}
             {enlaceComunicado && (

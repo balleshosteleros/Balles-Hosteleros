@@ -93,9 +93,28 @@ function cuerpoPlanoAHtml(texto: string): string {
     .split(/\n{2,}/)
     .map(
       (parrafo) =>
-        `<p style="margin:0 0 16px 0;">${escapeHtml(parrafo).replace(/\n/g, "<br />")}</p>`,
+        `<p style="margin:0 0 16px 0;">${enlazar(escapeHtml(parrafo)).replace(/\n/g, "<br />")}</p>`,
     )
     .join("");
+}
+
+/**
+ * Las direcciones escritas dentro del mensaje se pueden PULSAR en el correo.
+ *
+ * Se aplica sobre el texto YA escapado: así una dirección con `&` no rompe el
+ * enlace y el resto del mensaje sigue protegido.
+ */
+function enlazar(htmlEscapado: string): string {
+  return htmlEscapado.replace(
+    /((?:https?:\/\/|www\.)[^\s<]+)/gi,
+    (bruto) => {
+      const m = bruto.match(/[).,;:!?»&quot;']+$/);
+      const cola = m ? m[0] : "";
+      const url = cola ? bruto.slice(0, bruto.length - cola.length) : bruto;
+      const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+      return `<a href="${href}" style="color:#1D4ED8;text-decoration:underline;">${url}</a>${cola}`;
+    },
+  );
 }
 
 /**

@@ -68,6 +68,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -352,7 +358,7 @@ function ComunicadoEditor({
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setPreview(true)}><Eye className="h-4 w-4 mr-1" />Previsualizar</Button>
-          <Button size="sm" onClick={() => onSave(form, "publicar")}>
+          <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => onSave(form, "publicar")}>
             <Send className="h-4 w-4 mr-1" />{vaProgramado ? "Programar" : "Publicar"}
           </Button>
         </div>
@@ -814,6 +820,42 @@ function ComunicadoCalendario({ comunicados, vista, setVista, mesOffset, setMesO
 }
 
 /**
+ * Enseña QUIÉNES son al pasar el ratón por encima de la píldora.
+ *
+ * Antes había que entrar en la ficha para saber a qué departamentos o a qué
+ * personas iba el comunicado; el listado solo decía cuántos eran.
+ */
+function ConQuienes({
+  titulo,
+  nombres,
+  children,
+}: {
+  titulo: string;
+  nombres: string[];
+  children: ReactNode;
+}) {
+  const lista = nombres.filter(Boolean);
+  if (lista.length === 0) return <>{children}</>;
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span>{children}</span>
+        </TooltipTrigger>
+        <TooltipContent side="left" className="max-w-xs">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider opacity-70">{titulo}</p>
+          <ul className="space-y-0.5 text-xs">
+            {lista.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/**
  * Fila de `comunicados` (BD) → comunicado de pantalla.
  *
  * Los destinatarios se cuentan de lo que hay guardado: `toda_empresa` significa
@@ -926,7 +968,6 @@ export function ComunicadosView() {
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editorMode, setEditorMode] = useState<"list" | "create" | "edit">("list");
   const [editingComunicado, setEditingComunicado] = useState<Comunicado | null>(null);
 
@@ -978,8 +1019,6 @@ export function ComunicadosView() {
     return lista;
   }, [comunicados, search, filtros, orden]);
 
-  const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const toggleAll = () => setSelected(prev => prev.size === filtered.length ? new Set() : new Set(filtered.map(c => c.id)));
 
   const openEdit = (c: Comunicado) => { setEditingComunicado(c); setEditorMode("edit"); };
   const openCreate = () => { setEditingComunicado(null); setEditorMode("create"); };
@@ -1229,6 +1268,12 @@ export function ComunicadosView() {
     { campo: "destinatarios", label: "Destinatarios" },
   ];
 
+  /** Del login al nombre de la persona, para poder decir QUIÉNES son. */
+  const nombreDeEmpleado = (userId: string): string => {
+    const e = empleadosReales.find((x) => x.userId === userId);
+    return e ? `${e.nombre} ${e.apellidos}`.trim() : "";
+  };
+
   const columnDefs: Record<string, { th: ReactNode; td: (c: Comunicado) => ReactNode }> = {
     titulo: {
       th: <TableHead key="titulo">Título</TableHead>,
@@ -1287,8 +1332,12 @@ export function ComunicadosView() {
               <Badge variant="secondary" className="text-[11px] gap-1"><Users className="h-3 w-3" />Todos</Badge>
             ) : (
               <>
-                <Badge variant="secondary" className="text-[11px] gap-1"><Users className="h-3 w-3" />{c.destinatarios.departamentos} dptos</Badge>
-                <Badge variant="outline" className="text-[11px] gap-1">{c.destinatarios.empleados} empleados</Badge>
+                <ConQuienes titulo="Departamentos" nombres={c.departamentosDestinatarios}>
+                  <Badge variant="secondary" className="text-[11px] gap-1 cursor-default"><Users className="h-3 w-3" />{c.destinatarios.departamentos} dptos</Badge>
+                </ConQuienes>
+                <ConQuienes titulo="Empleados" nombres={c.empleadosDestinatarios.map(nombreDeEmpleado)}>
+                  <Badge variant="outline" className="text-[11px] gap-1 cursor-default">{c.destinatarios.empleados} empleados</Badge>
+                </ConQuienes>
               </>
             )}
           </div>
@@ -1355,7 +1404,6 @@ export function ComunicadosView() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10"><Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} /></TableHead>
                   {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
@@ -1363,14 +1411,13 @@ export function ComunicadosView() {
               <TableBody>
                 {filtered.map(c => (
                   <TableRow key={c.id}>
-                    <TableCell><Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleSelect(c.id)} /></TableCell>
                     {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
                         {/* Lo que estaba escrito y sin mandar se publica desde
                             aquí, a la vista, sin tener que abrir la ficha. */}
                         {c.estado !== "publicado" && (
-                          <Button variant="outline" size="sm" className="h-8" onClick={() => pedirPublicar(c)}>
+                          <Button size="sm" className="h-8 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => pedirPublicar(c)}>
                             <Send className="h-3.5 w-3.5 mr-1" />Publicar
                           </Button>
                         )}
@@ -1392,7 +1439,7 @@ export function ComunicadosView() {
                   </TableRow>
                 ))}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={columnasRender.length + 2} className="text-center text-muted-foreground py-8">{cargando ? "Cargando…" : "No se encontraron comunicados"}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={columnasRender.length + 1} className="text-center text-muted-foreground py-8">{cargando ? "Cargando…" : "No se encontraron comunicados"}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -1438,7 +1485,7 @@ export function ComunicadosView() {
               <Button variant="outline" onClick={() => setPublicando(null)} disabled={publicandoBusy}>
                 Cancelar
               </Button>
-              <Button onClick={confirmarPublicar} disabled={publicandoBusy}>
+              <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={confirmarPublicar} disabled={publicandoBusy}>
                 <Send className="h-4 w-4 mr-1" />
                 {publicandoBusy ? "Publicando…" : "Publicar"}
               </Button>
