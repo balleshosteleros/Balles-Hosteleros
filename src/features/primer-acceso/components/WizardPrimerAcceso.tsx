@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -96,6 +96,9 @@ const DOCUMENTOS: { tipo: TipoDocPropio; label: string; ayuda: string }[] = [
 
 const ACEPTADOS = "image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf";
 
+/** Puntero grueso = se maneja con el dedo, o sea que hay cámara detrás. */
+const CONSULTA_TACTIL = "(pointer: coarse)";
+
 /** Lo que la IA propone de cada documento, pendiente de que la persona lo apruebe. */
 interface DatosLeidos {
   dni_nie: string;
@@ -142,6 +145,24 @@ export function WizardPrimerAcceso({
   const [avisoIA, setAvisoIA] = useState<string | null>(null);
   const inputsDoc = useRef<Partial<Record<TipoDocPropio, HTMLInputElement | null>>>({});
   const inputsCam = useRef<Partial<Record<TipoDocPropio, HTMLInputElement | null>>>({});
+
+  // `capture` solo hace algo en el MÓVIL: en un ordenador el navegador lo ignora
+  // y abre el mismo selector de archivos, con lo que salían dos botones que
+  // hacían exactamente lo mismo. Se detecta el puntero grueso (dedo) y solo ahí
+  // se ofrece «Hacer foto»; en escritorio, un único botón.
+  //
+  // En un efecto y no al montar el estado: en el servidor no hay `window`, y
+  // calcularlo durante el render rompería la hidratación.
+  const suscribirPuntero = useCallback((avisar: () => void) => {
+    const mq = window.matchMedia(CONSULTA_TACTIL);
+    mq.addEventListener("change", avisar);
+    return () => mq.removeEventListener("change", avisar);
+  }, []);
+  const esTactil = useSyncExternalStore(
+    suscribirPuntero,
+    () => window.matchMedia(CONSULTA_TACTIL).matches,
+    () => false, // En el servidor no hay puntero: se asume escritorio.
+  );
 
   // Lo leído por la IA: se muestra en campos editables para que la persona lo
   // revise. Nada de esto se guarda en su ficha hasta que pulsa el botón final.
@@ -585,10 +606,21 @@ export function WizardPrimerAcceso({
           {pasoId === "documentos" && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Haz una foto de cada documento o sube el archivo. Los leemos automáticamente y
-                después compruebas tú que los datos son correctos. Si una foto sale mal, puedes
-                repetirla antes de terminar.
+                Sube cada documento: desde el móvil puedes hacerle una foto directamente. Los
+                leemos automáticamente y después compruebas tú que los datos son correctos. Si
+                alguno sale mal, puedes repetirlo antes de terminar.
               </p>
+
+              {/* Sin esto la pantalla se contradice: arriba los datos salen en gris
+                  («ya los tenemos») y abajo se le exige subir el documento. Las dos
+                  cosas son ciertas —tenemos el NÚMERO, no la COPIA— pero hay que
+                  decirlo o parece un error del sistema. */}
+              {hayBloqueado && (
+                <p className="rounded-md border bg-muted/40 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                  Tus datos ya los tenemos, por eso salen en gris más abajo. Lo que nos falta es
+                  la <b>copia del documento</b>: la foto o el archivo.
+                </p>
+              )}
 
               {documentosEntregados.length > 0 && (
                 <p className="flex items-start gap-2 rounded-md bg-emerald-50 px-2.5 py-2 text-[11px] text-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-200">
@@ -643,29 +675,37 @@ export function WizardPrimerAcceso({
                           onChange={(e) => elegirDoc(d.tipo, e.target.files?.[0])}
                         />
                         <div className="flex shrink-0 flex-col gap-1.5">
+                          {esTactil && (
+                            <Button
+                              type="button"
+                              variant={hecho ? "outline" : "default"}
+                              size="sm"
+                              disabled={pending}
+                              onClick={() => inputsCam.current[d.tipo]?.click()}
+                            >
+                              {cargando ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Camera className="h-3.5 w-3.5" />
+                              )}
+                              <span className="ml-1.5">{hecho ? "Repetir foto" : "Hacer foto"}</span>
+                            </Button>
+                          )}
                           <Button
                             type="button"
-                            variant={hecho ? "outline" : "default"}
-                            size="sm"
-                            disabled={pending}
-                            onClick={() => inputsCam.current[d.tipo]?.click()}
-                          >
-                            {cargando ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Camera className="h-3.5 w-3.5" />
-                            )}
-                            <span className="ml-1.5">{hecho ? "Repetir foto" : "Hacer foto"}</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
+                            variant={!esTactil && !hecho ? "default" : "outline"}
                             size="sm"
                             disabled={pending}
                             onClick={() => inputsDoc.current[d.tipo]?.click()}
                           >
-                            <Upload className="h-3.5 w-3.5" />
-                            <span className="ml-1.5">Elegir archivo</span>
+                            {cargando && !esTactil ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Upload className="h-3.5 w-3.5" />
+                            )}
+                            <span className="ml-1.5">
+                              {esTactil ? "Elegir archivo" : hecho ? "Cambiar archivo" : "Subir archivo"}
+                            </span>
                           </Button>
                         </div>
                       </div>

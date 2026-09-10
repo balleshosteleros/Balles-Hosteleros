@@ -213,8 +213,24 @@ export async function subirYLeerDocumentoPropio(input: {
   //
   // La ventana se mide con la fecha del ARCHIVO en el almacén, no con nada que
   // mande el navegador: el cliente no puede alargarse el plazo.
-  const yaEntregado = fichas.some((f) => !!(f as Record<string, unknown>)[doc.columna]);
-  if (yaEntregado) {
+  // Fichas a las que les FALTA este documento. Aquí está la clave: quien trabaja
+  // en las dos sociedades puede tenerlo en una y no en la otra, y a ese hay que
+  // dejarle entregarlo.
+  //
+  // Mirarlo con `some` («¿lo tiene en alguna?») rompía el circuito entero: el
+  // asistente le pedía el DNI porque le faltaba en HABANA y la subida se lo
+  // rechazaba porque lo tenía en BACANAL. Le pedíamos un documento y acto
+  // seguido le decíamos que ya lo teníamos. Le pasó a Iván el 10-sep-2026 al
+  // probarlo, y le habría pasado a todo el que tenga ficha en las dos empresas.
+  const sinDoc = fichas.filter((f) => !(f as Record<string, unknown>)[doc.columna]);
+
+  // Solo se escribe donde falta. Las fichas que ya lo tienen no se tocan: esa es
+  // la norma de no pisar lo entregado.
+  let destino = sinDoc;
+
+  if (sinDoc.length === 0) {
+    // Ya consta en TODAS sus fichas. Aquí sí cabe únicamente la ventana de
+    // corrección, para poder rehacer una foto que salió mal.
     const ficha = fichas[0];
     const { data: objetos } = await admin.storage
       .from("empleados-docs")
@@ -231,11 +247,12 @@ export async function subirYLeerDocumentoPropio(input: {
         error: "Ese documento ya lo tenemos. Si necesitas cambiarlo, avisa a RRHH.",
       };
     }
+    destino = fichas;
   }
 
-  // Una copia en cada empresa donde trabaja, en la MISMA ruta que usa la subida
-  // manual de RRHH: `{empresa_id}/{empleado_id}/{tipo}.{ext}`.
-  for (const ficha of fichas) {
+  // Una copia en cada empresa que la necesite, en la MISMA ruta que usa la
+  // subida manual de RRHH: `{empresa_id}/{empleado_id}/{tipo}.{ext}`.
+  for (const ficha of destino) {
     const path = `${ficha.empresa_id}/${ficha.id}/${input.tipo}.${ext}`;
     const { error: errSubida } = await admin.storage
       .from("empleados-docs")
