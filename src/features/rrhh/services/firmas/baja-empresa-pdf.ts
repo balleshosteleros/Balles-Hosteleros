@@ -182,13 +182,23 @@ export async function generarCartaBajaEmpresaPDF(
       { t: ", conforme al artículo 49.1.c) del Estatuto de los Trabajadores." },
     ], LINE_HEIGHT * 2);
   } else if (tipo === "voluntaria") {
+    // OJO con el verbo. Esta modalidad se usa sobre todo cuando el trabajador
+    // desaparece y la empresa tramita su baja voluntaria en su nombre: dar por
+    // escrito que «usted comunicó» algo que quizá nunca comunicó por escrito es
+    // regalarle el argumento. La carta no afirma cómo llegó la comunicación —
+    // eso lo describe RRHH abajo, con lo que realmente pasó.
     drawParagraph([
-      { t: "Por medio de la presente se deja constancia de que usted ha comunicado a la empresa " },
+      { t: "Por medio de la presente, la empresa " },
       { t: input.empresaNombre, bold: true },
       { t: input.empresaCif ? ` (CIF ${input.empresaCif})` : "" },
-      { t: " su voluntad de " },
-      { t: "causar baja voluntaria", bold: true },
-      { t: ", por lo que la empresa procede a tramitar su baja en los términos que se indican." },
+      { t: " le comunica que procede a tramitar su " },
+      { t: "baja voluntaria", bold: true },
+      { t: "." },
+    ], LINE_HEIGHT * 2);
+    drawParagraph([
+      {
+        t: "Conforme a la política interna de la empresa, la baja voluntaria se comunica a través del sistema interno de gestión de personal, donde el trabajador la presenta y la firma. La manifestación de voluntad recibida en este caso, y la forma en que consta, se detallan a continuación.",
+      },
     ], LINE_HEIGHT * 2);
   } else {
     drawParagraph([
@@ -223,7 +233,7 @@ export async function generarCartaBajaEmpresaPDF(
           : tipo === "no_superado_periodo_prueba"
             ? "Valoración del periodo de prueba:"
             : tipo === "voluntaria"
-              ? "Constancia de la comunicación recibida:"
+              ? "Manifestación de voluntad recibida y forma en que consta:"
               : "Motivo de la baja:";
     asegurarEspacio(LINE_HEIGHT * 3);
     drawParagraph([{ t: tituloHechos, bold: true }], LINE_HEIGHT);

@@ -156,6 +156,12 @@ export async function generarCartaBajaVoluntariaPDF(
 
   drawParagraph([
     {
+      t: "Presento esta comunicación a través del sistema interno de gestión de personal de la empresa, que es el canal establecido por su política interna para las bajas voluntarias.",
+    },
+  ], LINE_HEIGHT * 2);
+
+  drawParagraph([
+    {
       t: "Agradezco sinceramente la oportunidad de haber formado parte del equipo y me despido deseando lo mejor para la empresa y sus futuros proyectos.",
     },
   ], LINE_HEIGHT * 2);

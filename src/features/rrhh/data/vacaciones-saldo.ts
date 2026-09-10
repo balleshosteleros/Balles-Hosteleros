@@ -67,6 +67,16 @@ export interface SaldoVacaciones {
   diasGastados: number;
   /** Lo que aún puede pedir. Nunca negativo. */
   diasRestantes: number;
+  /**
+   * Días cogidos POR ENCIMA de su cupo. 0 cuando no hay exceso.
+   *
+   * Existe porque `diasRestantes` se corta en cero para no dar por disponible un
+   * número negativo, y así el exceso quedaba invisible: alguien con 19 días de
+   * cupo y 28 disfrutados se veía igual que quien lo tenía justo. Con el
+   * prorrateo desde el primer día esto deja de ser raro — quien entra a mitad de
+   * año tiene menos días de los que parecía— y hay que poder verlo.
+   */
+  diasExcedidos: number;
 }
 
 /**
@@ -87,6 +97,53 @@ export function diasEnAnio(inicio: string, fin: string | null, anio: number): nu
       : new Date(yearEndExclusive.getTime() - 86400000);
   if (hi.getTime() < lo.getTime()) return 0;
   return Math.floor((hi.getTime() - lo.getTime()) / 86400000) + 1;
+}
+
+/**
+ * Días de vacaciones que le corresponden a un trabajador en un año, contando
+ * DESDE SU PRIMER DÍA DE CONTRATO.
+ *
+ * Quien entra en junio no tiene los mismos días que quien lleva todo el año: le
+ * corresponde la parte proporcional al tiempo que está en plantilla. Dárselos
+ * todos era regalar días en la nómina y, sobre todo, en el finiquito.
+ *
+ * `hastaIso` marca hasta dónde se cuenta:
+ *   · Sin indicar — hasta el 31 de diciembre. Es lo normal: mientras trabaja aquí
+ *     se le muestran los días de todo el año, no los devengados hasta hoy, para
+ *     que pueda planificar sus vacaciones de verano en enero.
+ *   · Con fecha — hasta ese día. Es lo que se usa al tramitar una baja: ahí lo
+ *     que hay que liquidar es lo devengado hasta su último día de contrato, ni un
+ *     día más. Si le cambian la fecha de la baja, el número cambia con ella.
+ *
+ * Se prorratea por días naturales y se redondea al día más cercano.
+ */
+export function diasVacacionesDevengados(
+  diasTotalesAnio: number,
+  anio: number,
+  fechaAltaIso: string | null | undefined,
+  hastaIso?: string | null,
+): number {
+  if (!diasTotalesAnio || diasTotalesAnio <= 0) return 0;
+
+  const inicioAnio = Date.UTC(anio, 0, 1);
+  const finAnio = Date.UTC(anio, 11, 31);
+  const diasDelAnio = Math.floor((finAnio - inicioAnio) / 86400000) + 1; // 365 o 366
+
+  const alta = fechaAltaIso ? Date.parse(`${fechaAltaIso}T00:00:00Z`) : NaN;
+  const hasta = hastaIso ? Date.parse(`${hastaIso}T00:00:00Z`) : NaN;
+
+  // Sin fecha de alta no se puede prorratear: se devuelven los días completos
+  // antes que un número inventado a la baja.
+  const desde = Number.isNaN(alta) ? inicioAnio : Math.max(alta, inicioAnio);
+  const tope = Number.isNaN(hasta) ? finAnio : Math.min(hasta, finAnio);
+
+  // Alta posterior al año mirado, o baja anterior a él: no devenga nada.
+  if (desde > finAnio || tope < inicioAnio || tope < desde) return 0;
+
+  const diasEnPlantilla = Math.floor((tope - desde) / 86400000) + 1;
+  if (diasEnPlantilla >= diasDelAnio) return diasTotalesAnio;
+
+  return Math.round((diasTotalesAnio * diasEnPlantilla) / diasDelAnio);
 }
 
 /**
@@ -132,5 +189,6 @@ export function calcularSaldoVacaciones(
     diasPendientesAprobacion,
     diasGastados,
     diasRestantes: Math.max(0, diasTotales - diasGastados),
+    diasExcedidos: Math.max(0, diasGastados - diasTotales),
   };
 }

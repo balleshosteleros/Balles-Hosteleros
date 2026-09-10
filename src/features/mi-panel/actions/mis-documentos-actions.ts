@@ -11,7 +11,10 @@ export type CategoriaDocumento =
   | "registros-jornada"
   | "entregas"
   | "sanciones"
-  | "bajas-medicas";
+  | "bajas-medicas"
+  // Cajón para lo que no encaja en ninguna de las anteriores. Sin él, esos
+  // documentos se quedaban fuera del expediente por no tener dónde ir.
+  | "otros";
 
 export interface DocumentoEmpleado {
   id: string;
@@ -32,6 +35,7 @@ export async function listMisDocumentos(): Promise<{ ok: boolean; data: Record<C
     entregas: [],
     sanciones: [],
     "bajas-medicas": [],
+    otros: [],
   };
   try {
     const { supabase, userId, empresaId } = await getAppContext();
@@ -57,6 +61,7 @@ export async function listMisDocumentos(): Promise<{ ok: boolean; data: Record<C
       entregas: [],
       sanciones: [],
       "bajas-medicas": [],
+      otros: [],
     };
     for (const row of data ?? []) {
       const r = row as {

@@ -36,6 +36,18 @@ export async function emitirNotifComunicado(comunicadoId: string): Promise<void>
       .eq("id", comunicadoId)
       .maybeSingle();
 
+    // El aviso sale con la marca de la empresa que firma el comunicado, igual
+    // que el correo. Sin isotipo se cae al logotipo, y sin ninguno, al icono.
+    const { data: marca } = await supabase
+      .from("empresas")
+      .select("isotipo_url, logo_url")
+      .eq("id", audiencia.empresaId)
+      .maybeSingle();
+    const isotipoUrl =
+      (marca?.isotipo_url as string | null) ||
+      (marca?.logo_url as string | null) ||
+      null;
+
     await emitirNotificacion({
       empresaId: audiencia.empresaId,
       system: true,
@@ -45,11 +57,14 @@ export async function emitirNotifComunicado(comunicadoId: string): Promise<void>
       segmento: { tipo: "usuarios", usuarioIds: audiencia.userIds },
       refTabla: "comunicados",
       refId: comunicadoId,
-      accionUrl: "/comunicados",
+      // La pantalla del trabajador, que es quien recibe el aviso. "/comunicados"
+      // a secas no existe: al pulsar el aviso salía un 404.
+      accionUrl: "/mi-panel/comunicados",
       dedupeKey: `comunicado:${comunicadoId}`,
       payload: {
         cuerpo: audiencia.cuerpo,
         adjuntos: normalizarAdjuntos((data as { adjuntos?: unknown } | null)?.adjuntos),
+        isotipoUrl,
       },
       // El comunicado ya dispara su propio push (comunicado_nuevo); evitamos duplicarlo.
       push: false,

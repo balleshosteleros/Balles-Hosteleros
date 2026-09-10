@@ -16,7 +16,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { PartyPopper } from "lucide-react";
+import { Banknote, PartyPopper } from "lucide-react";
 import {
   CalendarRangeToggle,
   CalendarRangeNav,
@@ -36,6 +36,32 @@ import {
 import type { AusenciaCalendario } from "@/features/rrhh/actions/calendario-ausencias-actions";
 import type { FestivoInfo } from "@/features/rrhh/hooks/useFestivos";
 import type { SolicitudSubtipoAusencia } from "@/features/mi-panel/types";
+
+/**
+ * Billete verde: ese día se liquidaron días de vacaciones en nómina. Se pinta en
+ * el último día de contrato o el 31 de diciembre, según qué los haya cerrado.
+ * No es un día de vacaciones disfrutado — es justo lo contrario, y por eso lleva
+ * un icono propio en vez de teñir la casilla.
+ */
+function MarcaLiquidacion({ dias, motivo, mini }: { dias: number; motivo: string; mini?: boolean }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-default text-emerald-600" aria-label={motivo}>
+            <Banknote className={mini ? "h-3 w-3" : "h-3.5 w-3.5"} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          <p className="text-xs font-medium">
+            {dias} {dias === 1 ? "día liquidado" : "días liquidados"} en nómina
+          </p>
+          <p className="text-xs text-muted-foreground">{motivo}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 const DIAS_SEMANA = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MESES = [
@@ -110,6 +136,12 @@ function indexLunes(d: Date): number {
 
 interface Props {
   ausencias: AusenciaCalendario[];
+  /**
+   * Días en los que se liquidaron vacaciones en nómina, por fecha ISO. Ese día
+   * lleva un billete verde: esos días no se disfrutaron, se cobraron. Ocurre al
+   * cerrar un contrato (su último día) y al cerrar el año (31 de diciembre).
+   */
+  liquidaciones?: Record<string, { dias: number; motivo: string }>;
   festivoEnFecha: (fechaISO: string) => FestivoInfo | null;
   /** Se llama al cambiar de año, para recargar los datos. */
   onAnioChange?: (anio: number) => void;
@@ -130,7 +162,7 @@ interface Props {
  * Antes había una pestaña por tipo, así que para saber quién faltaba un día
  * concreto había que ir mirándolas de una en una.
  */
-export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, cargando, slotControles }: Props) {
+export function CalendarioUnico({ ausencias, liquidaciones, festivoEnFecha, onAnioChange, cargando, slotControles }: Props) {
   const rango = useCalendarRange("MENSUAL");
 
   // Filtros: por tipo de ausencia y por estado. Todos activos de inicio.
@@ -225,6 +257,7 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
     const delDia = porFecha.get(fecha) ?? [];
     const festivo = festivosOn ? festivoEnFecha(fecha) : null;
     const esHoy = fecha === hoyISO;
+    const liquidacion = liquidaciones?.[fecha] ?? null;
     const esFestivo = festivo?.tipo === "festivo";
     const esVispera = festivo?.tipo === "vispera";
 
@@ -268,7 +301,16 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
           >
             {dia}
           </span>
-          {festivo && <MarcaFestivo info={festivo} mini={densidad === "mini"} />}
+          <span className="flex items-center gap-0.5">
+            {liquidacion && (
+              <MarcaLiquidacion
+                dias={liquidacion.dias}
+                motivo={liquidacion.motivo}
+                mini={densidad === "mini"}
+              />
+            )}
+            {festivo && <MarcaFestivo info={festivo} mini={densidad === "mini"} />}
+          </span>
         </div>
 
         {unicos.length > 0 && (

@@ -53,11 +53,14 @@ const CARPETAS: Carpeta[] = [
   { id: "contratos", nombre: "Contratos", icon: FileSignature, color: "text-emerald-600", bg: "bg-emerald-50" },
   { id: "justificantes", nombre: "Justificantes", icon: Receipt, color: "text-amber-600", bg: "bg-amber-50" },
   { id: "registros-jornada", nombre: "Registros de jornada", icon: Clock, color: "text-violet-600", bg: "bg-violet-50" },
-  { id: "entregas", nombre: "Entregas de material", icon: PackageCheck, color: "text-cyan-600", bg: "bg-cyan-50" },
-  { id: "sanciones", nombre: "Sanciones disciplinarias", icon: ShieldAlert, color: "text-red-600", bg: "bg-red-50" },
+  { id: "entregas", nombre: "Entregas", icon: PackageCheck, color: "text-cyan-600", bg: "bg-cyan-50" },
+  { id: "sanciones", nombre: "Sanciones", icon: ShieldAlert, color: "text-red-600", bg: "bg-red-50" },
   // El parte que trae del médico y el comprobante que devuelve la gestoría, los
   // dos nombrados por el primer día de la baja.
   { id: "bajas-medicas", nombre: "Bajas médicas", icon: HeartPulse, color: "text-rose-600", bg: "bg-rose-50" },
+  // Va la última a propósito: es el cajón de lo que no encaja en las anteriores,
+  // no una categoría más que competir con ellas.
+  { id: "otros", nombre: "Otros", icon: Folder, color: "text-slate-600", bg: "bg-slate-100" },
 ];
 
 function tamanoLegible(bytes: number | null): string {

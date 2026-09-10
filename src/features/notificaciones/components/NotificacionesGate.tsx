@@ -59,6 +59,9 @@ export function NotificacionesGate() {
     ? ((actual.payload.cuerpo as string | undefined) ?? actual.mensaje ?? "")
     : "";
   const adjuntos = esComunicado ? normalizarAdjuntos(actual.payload.adjuntos) : [];
+  const isotipoComunicado = esComunicado
+    ? ((actual.payload.isotipoUrl as string | null | undefined) ?? null)
+    : null;
   const siguiente = () => {
     setPasoTexto(false);
     setPend((prev) => prev.slice(1));
@@ -122,15 +125,25 @@ export function NotificacionesGate() {
       <AlertDialogContent className="max-w-sm">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-              {esLiquidacion ? (
-                <FileCheck2 className="h-5 w-5" />
-              ) : esComunicado ? (
-                <Megaphone className="h-5 w-5" />
-              ) : (
-                <BellRing className="h-5 w-5" />
-              )}
-            </span>
+            {/* Un comunicado sale con la marca de la empresa que lo firma; el
+                resto de avisos, con su icono. El disco claro hace visible un
+                isotipo de trazo fino. */}
+            {esComunicado && isotipoComunicado ? (
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-border/60">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={isotipoComunicado} alt="" className="h-6 w-6 object-contain" />
+              </span>
+            ) : (
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                {esLiquidacion ? (
+                  <FileCheck2 className="h-5 w-5" />
+                ) : esComunicado ? (
+                  <Megaphone className="h-5 w-5" />
+                ) : (
+                  <BellRing className="h-5 w-5" />
+                )}
+              </span>
+            )}
             {actual.titulo}
           </AlertDialogTitle>
           {actual.mensaje && !esLiquidacion && !esComunicado && (

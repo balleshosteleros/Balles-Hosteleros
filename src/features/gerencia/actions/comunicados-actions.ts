@@ -294,6 +294,122 @@ export async function createComunicado(
   }
 }
 
+/**
+ * Cambia SOLO el estado de un comunicado: publicarlo, archivarlo o devolverlo a
+ * borrador. Nada más se toca.
+ *
+ * Existe porque `updateComunicado` reescribe el comunicado ENTERO a partir de
+ * lo que haya en pantalla: usarlo para cambiar el estado desde el listado
+ * borraba los documentos adjuntos, los destinatarios y la fecha de envío, que
+ * ahí no se están viendo.
+ *
+ * Al publicar dispara los mismos avisos que al publicarlo desde su ficha: push
+ * al móvil, campana de la app y, si el comunicado lo pedía, correo con sus
+ * documentos. El correo sale UNA sola vez, aunque se publique de nuevo.
+ */
+export async function cambiarEstadoComunicado(
+  id: string,
+  estado: "borrador" | "programado" | "publicado" | "archivado",
+  /** Si se dice, se guarda antes de publicar: es la decisión del momento de mandarlo. */
+  enviarEmail?: boolean,
+): Promise<ResultadoGuardarComunicado> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data: anterior } = await supabase
+      .from("comunicados")
+      .select("estado, email_enviado_at, enviar_email, recurrencia, envio")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!anterior) return { ok: false, error: "El comunicado ya no existe" };
+
+    const cambios: Record<string, unknown> = {
+      estado,
+      updated_at: new Date().toISOString(),
+    };
+    if (enviarEmail !== undefined) cambios.enviar_email = enviarEmail;
+
+    // Al publicar se apunta CUÁNDO salió, que es lo que se enseña en la columna
+    // de envío. En los que se repiten no se toca: ahí `envio` es la fecha de la
+    // próxima vez y machacarla haría que el cron lo volviera a mandar.
+    if (estado === "publicado" && anterior.recurrencia === "sin_repeticion") {
+      cambios.envio = new Date().toISOString();
+    }
+
+    const { error } = await supabase
+      .from("comunicados")
+      .update(cambios)
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+
+    const quiereEmail = enviarEmail ?? anterior.enviar_email === true;
+    const eraBorrador = anterior.estado !== "publicado";
+    if (estado === "publicado" && eraBorrador) {
+      const yaSalioElCorreo = !!anterior.email_enviado_at;
+      const aviso = await avisarComunicadoPublicado(id, quiereEmail && !yaSalioElCorreo);
+      return { ok: true, ...aviso };
+    }
+
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[comunicados] cambiarEstadoComunicado:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Manda por correo un comunicado YA publicado.
+ *
+ * Hace falta porque el correo solo sale en el momento de publicar: si se
+ * publicó sin marcar el correo, o el envío falló, no había forma de mandarlo
+ * después salvo volver a crear el comunicado. Deja marcado el comunicado como
+ * «también por correo» para que quede constancia de que salió.
+ */
+export async function enviarCorreoComunicado(
+  id: string,
+): Promise<ResultadoGuardarComunicado> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data: fila } = await supabase
+      .from("comunicados")
+      .select("estado")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!fila) return { ok: false, error: "El comunicado ya no existe" };
+    if (fila.estado !== "publicado") {
+      return { ok: false, error: "Publica el comunicado antes de mandarlo por correo" };
+    }
+
+    await supabase
+      .from("comunicados")
+      .update({ enviar_email: true })
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+
+    const { enviarComunicadoPorEmail } = await import(
+      "@/features/gerencia/services/comunicado-email"
+    );
+    const res = await enviarComunicadoPorEmail(id);
+    return {
+      ok: res.ok,
+      error: res.ok ? undefined : res.error,
+      emailEnviados: res.enviados,
+      emailError: res.ok ? undefined : res.error,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[comunicados] enviarCorreoComunicado:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export async function updateComunicado(
   id: string,
   input: ComunicadoInput,

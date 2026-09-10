@@ -169,9 +169,32 @@ function ComunicadoDetalle({
         </div>
       </header>
 
+      {/* El comunicado lo firma la empresa: se abre con su marca, igual que
+          cuando llega por correo. El disco claro hace visible un isotipo de
+          trazo fino, que suelto se pierde. */}
+      <div className="flex flex-col items-center gap-2 border-b border-border/60 px-5 pb-5 pt-2">
+        {comunicado.isotipoUrl ? (
+          <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-border/60">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={comunicado.isotipoUrl}
+              alt=""
+              className="h-11 w-11 object-contain"
+            />
+          </span>
+        ) : (
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Megaphone className="h-7 w-7" />
+          </span>
+        )}
+        <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          Comunicado oficial
+        </span>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-5 py-5">
-        <h1 className="text-2xl font-semibold leading-tight">{comunicado.titulo}</h1>
-        <p className="mt-1 text-xs capitalize text-muted-foreground">
+        <h1 className="text-center text-2xl font-semibold leading-tight">{comunicado.titulo}</h1>
+        <p className="mt-1 text-center text-xs capitalize text-muted-foreground">
           {formatFull(comunicado.createdAt, comunicado.zonaHoraria)}
         </p>
         {comunicado.contenido && (

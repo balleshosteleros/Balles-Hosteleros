@@ -935,14 +935,22 @@ export async function enviarBajaGestoria(
     // que empresa y gestoría cuentan lo mismo. Si no se puede calcular se manda
     // vacío antes que un cero falso, que se liquidaría como "no le debemos nada".
     let vacacionesPendientes: string | null = null;
+    let vacacionesLiquidadas: number | null = null;
     try {
       const { getSaldoVacacionesEmpleado } = await import(
         "@/features/rrhh/actions/calendarios-vacaciones-actions"
       );
-      const saldo = await getSaldoVacacionesEmpleado(empleadoId);
+      // A fecha de su ÚLTIMO DÍA: es lo que hay que liquidarle, no los días de
+      // todo el año. Si RRHH cambia la fecha de la baja, este número cambia solo.
+      const saldo = await getSaldoVacacionesEmpleado(
+        empleadoId,
+        Number(baja.ultimoDiaIso.slice(0, 4)),
+        baja.ultimoDiaIso,
+      );
       if (saldo.ok && saldo.data) {
         const d = saldo.data.diasRestantes;
         vacacionesPendientes = `${d} ${d === 1 ? "día" : "días"}`;
+        vacacionesLiquidadas = d;
       }
     } catch (e) {
       console.error("[rrhh] enviarBajaGestoria → vacaciones pendientes:", e);
@@ -1107,6 +1115,9 @@ export async function enviarBajaGestoria(
           motivo: baja.motivo ?? null,
           ultimo_dia: baja.ultimoDiaIso,
           origen: baja.origen ?? "reclutamiento",
+          // Los días que se le liquidan en el finiquito: a partir de aquí ya no
+          // son días disponibles, están pagados.
+          vacaciones_liquidadas: vacacionesLiquidadas,
           email_estado: res.ok ? "enviado" : "fallido",
           email_to: dst.to,
           email_error: res.ok ? null : "No se pudo enviar el email (revisa el SMTP).",

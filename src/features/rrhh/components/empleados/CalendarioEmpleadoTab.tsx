@@ -7,7 +7,11 @@ import {
 } from "@/features/rrhh/actions/calendario-ausencias-actions";
 import { useFestivos } from "@/features/rrhh/hooks/useFestivos";
 import { CalendarioUnico } from "@/features/rrhh/components/calendarios/CalendarioUnico";
-import { getSaldoVacacionesEmpleado } from "@/features/rrhh/actions/calendarios-vacaciones-actions";
+import {
+  getMovimientosVacaciones,
+  getSaldoVacacionesEmpleado,
+  type MovimientoVacaciones,
+} from "@/features/rrhh/actions/calendarios-vacaciones-actions";
 import type { SaldoVacaciones } from "@/features/rrhh/data/calendarios-vacaciones";
 import { DesgloseVacaciones } from "@/features/rrhh/components/calendarios/DesgloseVacaciones";
 
@@ -31,6 +35,7 @@ export function CalendarioEmpleadoTab({ empleadoId, empresaId, userId }: Props) 
   const [ausencias, setAusencias] = useState<AusenciaCalendario[]>([]);
   const [cargando, setCargando] = useState(true);
   const [saldo, setSaldo] = useState<SaldoVacaciones | null>(null);
+  const [movimientos, setMovimientos] = useState<MovimientoVacaciones[]>([]);
 
   useEffect(() => {
     let activo = true;
@@ -45,16 +50,32 @@ export function CalendarioEmpleadoTab({ empleadoId, empresaId, userId }: Props) 
     };
   }, [empresaId, anio]);
 
+  // Saldo y movimientos van del año que se esté mirando, no siempre del actual:
+  // si el calendario retrocede a 2025, el cupo y su histórico son los de 2025.
   useEffect(() => {
     let activo = true;
-    getSaldoVacacionesEmpleado(empleadoId).then((res) => {
+    getSaldoVacacionesEmpleado(empleadoId, anio).then((res) => {
       if (!activo) return;
       setSaldo(res.ok ? res.data : null);
+    });
+    getMovimientosVacaciones(empleadoId, anio).then((res) => {
+      if (!activo) return;
+      setMovimientos(res.ok ? res.movimientos : []);
     });
     return () => {
       activo = false;
     };
-  }, [empleadoId]);
+  }, [empleadoId, anio]);
+
+  // Los días liquidados en nómina llevan billete verde en su casilla.
+  const liquidaciones = useMemo(() => {
+    const mapa: Record<string, { dias: number; motivo: string }> = {};
+    for (const m of movimientos) {
+      if (m.tipo !== "liquidadas") continue;
+      mapa[m.fecha] = { dias: m.dias, motivo: m.detalle };
+    }
+    return mapa;
+  }, [movimientos]);
 
   // Solo las suyas: el calendario de la ficha es de esta persona, no de la
   // plantilla entera.
@@ -65,7 +86,7 @@ export function CalendarioEmpleadoTab({ empleadoId, empresaId, userId }: Props) 
 
   return (
     <div className="p-6 space-y-6">
-      {saldo?.calendarioId && (
+      {saldo && (
         <div className="rounded-lg border bg-card p-4 md:p-5">
           <DesgloseVacaciones
             anio={saldo.anio}
@@ -74,6 +95,8 @@ export function CalendarioEmpleadoTab({ empleadoId, empresaId, userId }: Props) 
             diasAprobadosPendientes={saldo.diasAprobadosPendientes}
             diasPendientesAprobacion={saldo.diasPendientesAprobacion}
             diasRestantes={saldo.diasRestantes}
+            diasExcedidos={saldo.diasExcedidos}
+            movimientos={movimientos}
             tamano="md"
           />
         </div>
@@ -81,6 +104,7 @@ export function CalendarioEmpleadoTab({ empleadoId, empresaId, userId }: Props) 
 
       <CalendarioUnico
         ausencias={misAusencias}
+        liquidaciones={liquidaciones}
         festivoEnFecha={festivoEnFecha}
         onAnioChange={setAnio}
         cargando={cargando}

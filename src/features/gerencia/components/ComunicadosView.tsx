@@ -3,13 +3,21 @@
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { formatFechaHoraEnZona, ZONA_HORARIA_FALLBACK } from "@/features/empresa/lib/zona-horaria";
+import {
+  formatFechaHoraEnZona,
+  formatHoraEnZona,
+  claveDiaEnZona,
+  zonaLocalAUtcISO,
+  ZONA_HORARIA_FALLBACK,
+} from "@/features/empresa/lib/zona-horaria";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { type Comunicado, ESTADO_COMUNICADO_LABELS, RECURRENCIA_LABELS, type EstadoComunicado, type Recurrencia } from "@/features/rrhh/data/comunicados";
 import {
   listComunicados,
   createComunicado,
   updateComunicado,
+  cambiarEstadoComunicado,
+  enviarCorreoComunicado,
   deleteComunicado,
   listEmpleadosParaComunicado,
   crearUrlsSubidaComunicado,
@@ -42,11 +50,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   CalendarDays, MoreHorizontal, Eye, Clock, Archive,
-  Trash2, FileText, Users, ArrowLeft, Save, Upload, X, AlertTriangle, Bell, Mail, Paperclip,
+  Trash2, FileText, Users, ArrowLeft, Send, Upload, X, AlertTriangle, Bell, Mail, Paperclip,
   ChevronLeft, ChevronRight, Settings, ShieldAlert,
 } from "lucide-react";
 import {
@@ -93,6 +108,15 @@ function AlcanceCircle({ pct }: { pct: number }) {
   );
 }
 
+/**
+ * Qué se quiere hacer al guardar.
+ *
+ * Un comunicado se escribe para MANDARLO: el botón de la ficha publica. El
+ * borrador no es un botón, es la red de seguridad de irse de la pantalla sin
+ * haber publicado: lo escrito se queda guardado y no se pierde.
+ */
+type IntencionGuardado = "publicar" | "borrador";
+
 interface EditorForm {
   titulo: string;
   asunto: string;
@@ -126,15 +150,24 @@ const emptyForm: EditorForm = {
   archivosNuevos: [], enviarEmail: false, observaciones: "",
 };
 
-function formFromComunicado(c: Comunicado): EditorForm {
-  const [fecha, hora] = (c.envio || " ").split(" ");
+/**
+ * `envio` viene en UTC. La fecha y la hora que se enseñan son las de la EMPRESA:
+ * partir la cadena por un espacio no valía —un ISO no lleva espacios— y dejaba
+ * la casilla de fecha con un valor imposible.
+ *
+ * `programado` sale del estado, no de que haya fecha: desde que se apunta
+ * cuándo salió, TODO comunicado publicado tiene fecha de envío.
+ */
+function formFromComunicado(c: Comunicado, tz: string): EditorForm {
+  const fecha = claveDiaEnZona(c.envio, tz);
+  const hora = formatHoraEnZona(c.envio, tz);
   return {
     titulo: c.titulo, asunto: c.asunto, cuerpo: c.cuerpo, creadorId: c.creadorId,
     estado: c.estado, recurrencia: c.recurrencia, prioridad: c.prioridad,
     todaEmpresa: c.todaEmpresa, rolesDestinatarios: [...c.rolesDestinatarios],
     departamentosDestinatarios: [],
     empleadosDestinatarios: [],
-    programado: !!c.envio, envioFecha: fecha || "", envioHora: hora || "",
+    programado: c.estado === "programado", envioFecha: fecha, envioHora: hora,
     textoNotificacion: `Nuevo comunicado: ${c.titulo}`,
     adjuntos: [...c.adjuntos], archivosNuevos: [], enviarEmail: c.enviarEmail,
     observaciones: c.observaciones,
@@ -142,21 +175,24 @@ function formFromComunicado(c: Comunicado): EditorForm {
 }
 
 function ComunicadoEditor({
-  comunicado, onBack, onSave, empleadosReales, departamentosReales, empresaNombre, empresaColor,
+  comunicado, onBack, onSave, empleadosReales, departamentosReales, empresaNombre, empresaColor, tz,
 }: {
   comunicado: Comunicado | null;
   onBack: () => void;
-  onSave: (form: EditorForm) => void | Promise<void>;
+  /** `publicar` lo manda a la plantilla; `borrador` solo lo deja guardado. */
+  onSave: (form: EditorForm, intencion: IntencionGuardado) => void | Promise<void>;
   empleadosReales: EmpleadoSelector[];
   departamentosReales: { id: string; nombre: string }[];
   empresaNombre: string;
   /** Color de marca de la empresa (Ajustes → Imagen de marca). La cabecera del
    *  comunicado se monta sola con él, igual que el correo: nada que configurar. */
   empresaColor: string;
+  /** Zona horaria de la empresa: la fecha de envío se elige en SU hora. */
+  tz: string;
 }) {
   const isEdit = !!comunicado;
   const { user } = useAuth();
-  const [form, setForm] = useState<EditorForm>(comunicado ? formFromComunicado(comunicado) : emptyForm);
+  const [form, setForm] = useState<EditorForm>(comunicado ? formFromComunicado(comunicado, tz) : emptyForm);
   const [preview, setPreview] = useState(false);
   const [empleadoFilter, setEmpleadoFilter] = useState("");
   const inputArchivos = useRef<HTMLInputElement>(null);
@@ -199,6 +235,26 @@ function ComunicadoEditor({
     }
   }, [comunicado, user?.id, empleadosReales]);
 
+
+  /** ¿Hay algo escrito? Salir de una ficha en blanco no debe dejar borradores vacíos. */
+  const tieneContenido =
+    !!form.titulo.trim() ||
+    !!form.asunto.trim() ||
+    !!form.cuerpo.trim() ||
+    form.adjuntos.length > 0 ||
+    form.archivosNuevos.length > 0;
+
+  /**
+   * Salir de la ficha sin publicar. Lo escrito NO se pierde: se guarda como
+   * borrador y se puede publicar más tarde desde el listado.
+   */
+  const salir = async () => {
+    if (tieneContenido) await onSave(form, "borrador");
+    else onBack();
+  };
+
+  /** Con fecha de envío puesta, el botón programa; si no, publica ya. */
+  const vaProgramado = form.programado && !!form.envioFecha;
 
   const toggleDepartamento = (nombre: string) => {
     u({
@@ -261,14 +317,16 @@ function ComunicadoEditor({
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-6 py-3 border-b bg-card shrink-0">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="h-4 w-4 mr-1" />Volver</Button>
+          <Button variant="ghost" size="sm" onClick={salir}><ArrowLeft className="h-4 w-4 mr-1" />Volver</Button>
           <Separator orientation="vertical" className="h-5" />
           <h2 className="text-sm font-bold">{isEdit ? "Editar comunicado" : "Crear comunicado"}</h2>
           <EstadoBadge estado={form.estado} />
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setPreview(true)}><Eye className="h-4 w-4 mr-1" />Previsualizar</Button>
-          <Button size="sm" onClick={() => onSave(form)}><Save className="h-4 w-4 mr-1" />Guardar</Button>
+          <Button size="sm" onClick={() => onSave(form, "publicar")}>
+            <Send className="h-4 w-4 mr-1" />{vaProgramado ? "Programar" : "Publicar"}
+          </Button>
         </div>
       </div>
 
@@ -321,21 +379,6 @@ function ComunicadoEditor({
 
         <ScrollArea className="w-80 xl:w-96 border-l bg-muted/20 shrink-0">
           <div className="p-4 pb-28 space-y-5">
-            <div>
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estado</Label>
-              <Select value={form.estado} onValueChange={v => u({ estado: v as EstadoComunicado })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="borrador">Borrador</SelectItem>
-                  <SelectItem value="programado">Programado</SelectItem>
-                  <SelectItem value="publicado">Publicado</SelectItem>
-                  <SelectItem value="archivado">Archivado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Separator />
-
             <div>
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1"><Users className="h-3.5 w-3.5" />Destinatarios</Label>
               <div className="mt-2 space-y-3">
@@ -838,6 +881,10 @@ export function ComunicadosView() {
     pausado: !!editingComunicado,
   });
   const [faltantesComunicado, setFaltantesComunicado] = useState<string[]>([]);
+  /** Comunicado a punto de publicarse desde el listado, y si sale por correo. */
+  const [publicando, setPublicando] = useState<Comunicado | null>(null);
+  const [publicarConEmail, setPublicarConEmail] = useState(false);
+  const [publicandoBusy, setPublicandoBusy] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const { validar: validarComunicado } = useReglasSubmodulo("gerencia", "comunicados");
 
@@ -881,24 +928,73 @@ export function ComunicadosView() {
   const openCreate = () => { setEditingComunicado(null); setEditorMode("create"); };
   const closeEditor = () => { setEditorMode("list"); setEditingComunicado(null); };
 
-  /** Archiva el comunicado: deja de estar en circulación pero se conserva. */
+  /**
+   * Archiva el comunicado: deja de estar en circulación pero se conserva.
+   * Solo se toca el estado; sus documentos y destinatarios se quedan igual.
+   */
   const archivar = async (c: Comunicado) => {
-    const res = await updateComunicado(c.id, {
-      titulo: c.titulo,
-      asunto: c.asunto,
-      cuerpo: c.cuerpo,
-      estado: "archivado",
-      prioridad: c.prioridad,
-      recurrencia: c.recurrencia,
-      todaEmpresa: c.todaEmpresa,
-      rolesDestinatarios: c.rolesDestinatarios,
-      observaciones: c.observaciones,
-    });
+    const res = await cambiarEstadoComunicado(c.id, "archivado");
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo archivar");
       return;
     }
     toast.success("Comunicado archivado");
+    await loadComunicados();
+  };
+
+  /**
+   * Publicar desde el listado, sin entrar en la ficha: es lo normal cuando se
+   * dejó escrito en borrador y ya toca mandarlo.
+   *
+   * Se pregunta antes, y en esa misma pregunta se decide si sale además por
+   * correo. Antes esa decisión estaba escondida en un interruptor dentro de la
+   * ficha: se publicaba creyendo que el correo salía y no salía.
+   */
+  const pedirPublicar = (c: Comunicado) => {
+    setPublicando(c);
+    setPublicarConEmail(c.enviarEmail);
+  };
+
+  /** Avisa de cómo fue el correo. Un correo que no sale tiene que decirse. */
+  const contarCorreo = (res: { emailEnviados?: number; emailError?: string }) => {
+    const enviados = res.emailEnviados ?? 0;
+    if (enviados > 0) {
+      toast.success(`Correo enviado a ${enviados} ${enviados === 1 ? "persona" : "personas"}`);
+    } else if (res.emailError) {
+      toast.error(`El correo no salió: ${res.emailError}`);
+    }
+  };
+
+  const confirmarPublicar = async () => {
+    if (!publicando) return;
+    setPublicandoBusy(true);
+    const res = await cambiarEstadoComunicado(publicando.id, "publicado", publicarConEmail);
+    setPublicandoBusy(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo publicar");
+      return;
+    }
+    setPublicando(null);
+    toast.success("Comunicado publicado");
+    if (publicarConEmail) contarCorreo(res);
+    await loadComunicados();
+  };
+
+  /** Mandar por correo uno que ya está publicado (o reintentarlo si falló). */
+  const mandarPorCorreo = async (c: Comunicado) => {
+    const ok = await confirm({
+      title: "¿Mandarlo por correo?",
+      description: `«${c.titulo}» saldrá por correo a sus destinatarios, con sus documentos.`,
+      confirmLabel: "Mandar",
+      tono: "normal",
+    });
+    if (!ok) return;
+    const res = await enviarCorreoComunicado(c.id);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo mandar el correo");
+      return;
+    }
+    contarCorreo(res);
     await loadComunicados();
   };
 
@@ -918,15 +1014,32 @@ export function ComunicadosView() {
     await loadComunicados();
   };
 
-  const saveEditor = async (form: EditorForm) => {
-    // Solo validamos al CREAR (al editar dejamos pasar).
-    if (editorMode === "create") {
+  const saveEditor = async (form: EditorForm, intencion: IntencionGuardado) => {
+    /**
+     * El estado no se elige a mano: lo dice lo que se acaba de pulsar.
+     * · Publicar con fecha puesta → queda programado y sale solo ese día.
+     * · Publicar sin fecha → sale ahora.
+     * · Salir sin publicar → borrador, para no perder lo escrito. Un comunicado
+     *   ya publicado o archivado NO se degrada a borrador por irse de la ficha.
+     */
+    const estadoFinal: EstadoComunicado =
+      intencion === "publicar"
+        ? form.programado && form.envioFecha
+          ? "programado"
+          : "publicado"
+        : form.estado === "publicado" || form.estado === "archivado"
+          ? form.estado
+          : "borrador";
+
+    // Los campos obligatorios se exigen al publicar. Un borrador a medias es
+    // justo lo que se guarda al salir, así que ahí no se valida nada.
+    if (intencion === "publicar") {
       const { labelsFaltantes } = validarComunicado({
         titulo: form.titulo,
         asunto: form.asunto,
         cuerpo: form.cuerpo,
         prioridad: form.prioridad,
-        estado: form.estado,
+        estado: estadoFinal,
         envioFecha: form.envioFecha,
       });
       if (labelsFaltantes.length > 0) {
@@ -934,9 +1047,16 @@ export function ComunicadosView() {
         return;
       }
     }
+    // Con fecha puesta, `envio` es cuándo TIENE que salir. Al publicar ahora se
+    // apunta el momento del envío, que es lo que se lee en la columna «Envío»:
+    // un comunicado publicado sin fecha salía con un guion.
+    // En los que se repiten no se toca: ahí `envio` es la próxima vez y
+    // pisarla haría que el cron lo volviera a mandar.
     const envio = form.programado && form.envioFecha
-      ? `${form.envioFecha}${form.envioHora ? `T${form.envioHora}:00` : "T00:00:00"}`
-      : null;
+      ? zonaLocalAUtcISO(form.envioFecha, form.envioHora || "00:00", tz)
+      : estadoFinal === "publicado" && form.recurrencia === "sin_repeticion"
+        ? new Date().toISOString()
+        : null;
 
     // Los documentos suben DIRECTOS al almacén con una URL firmada. Si pasaran
     // por la acción de guardado, cualquier PDF de más de 4,5 MB fallaría.
@@ -976,7 +1096,7 @@ export function ComunicadosView() {
       titulo: form.titulo,
       asunto: form.asunto,
       cuerpo: form.cuerpo,
-      estado: form.estado,
+      estado: estadoFinal,
       prioridad: form.prioridad,
       recurrencia: form.recurrencia,
       todaEmpresa: form.todaEmpresa,
@@ -995,7 +1115,13 @@ export function ComunicadosView() {
         : { ok: false, error: "Sin contexto" };
 
     if (res.ok) {
-      toast.success("Comunicado guardado");
+      toast.success(
+        estadoFinal === "publicado"
+          ? "Comunicado publicado"
+          : estadoFinal === "programado"
+            ? "Comunicado programado"
+            : "Guardado como borrador",
+      );
       // El correo se dice aparte: que salga el comunicado y no salga el correo
       // es exactamente lo que nadie se entera de que ha pasado.
       const enviados = res.emailEnviados ?? 0;
@@ -1023,6 +1149,7 @@ export function ComunicadosView() {
           departamentosReales={departamentosReales}
           empresaNombre={empresaResuelta ? empresaActual?.nombre ?? "" : ""}
           empresaColor={empresaActual?.color ?? "hsl(var(--primary))"}
+          tz={tz}
         />
         <ValidacionFaltantesDialog
           open={faltantesComunicado.length > 0}
@@ -1171,16 +1298,28 @@ export function ComunicadosView() {
                     <TableCell><Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleSelect(c.id)} /></TableCell>
                     {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
                     <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Lo que estaba escrito y sin mandar se publica desde
+                            aquí, a la vista, sin tener que abrir la ficha. */}
+                        {c.estado !== "publicado" && (
+                          <Button variant="outline" size="sm" className="h-8" onClick={() => pedirPublicar(c)}>
+                            <Send className="h-3.5 w-3.5 mr-1" />Publicar
+                          </Button>
+                        )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => openEdit(c)}><Eye className="h-4 w-4 mr-2" />Ver / editar</DropdownMenuItem>
+                          {c.estado === "publicado" && (
+                            <DropdownMenuItem onClick={() => mandarPorCorreo(c)}><Mail className="h-4 w-4 mr-2" />Mandar por correo</DropdownMenuItem>
+                          )}
                           {c.estado !== "archivado" && (
                             <DropdownMenuItem onClick={() => archivar(c)}><Archive className="h-4 w-4 mr-2" />Archivar</DropdownMenuItem>
                           )}
                           <DropdownMenuItem className="text-destructive" onClick={() => eliminar(c)}><Trash2 className="h-4 w-4 mr-2" />Eliminar</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1207,6 +1346,38 @@ export function ComunicadosView() {
           <SancionDisciplinariaView />
         </TabsContent>
       </Tabs>
+      {publicando && (
+        <Dialog open onOpenChange={(abierto) => { if (!abierto) setPublicando(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>¿Publicar este comunicado?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              «{publicando.titulo}» se enviará{" "}
+              {publicando.todaEmpresa ? "a toda la plantilla" : "a sus destinatarios"}.
+            </p>
+            <div className="flex items-center gap-3 rounded-lg border p-3">
+              <Switch
+                id="pub-email"
+                checked={publicarConEmail}
+                onCheckedChange={setPublicarConEmail}
+              />
+              <Label htmlFor="pub-email" className="text-sm font-normal">
+                {publicarConEmail ? "También por correo" : "Solo aviso en la app"}
+              </Label>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPublicando(null)} disabled={publicandoBusy}>
+                Cancelar
+              </Button>
+              <Button onClick={confirmarPublicar} disabled={publicandoBusy}>
+                <Send className="h-4 w-4 mr-1" />
+                {publicandoBusy ? "Publicando…" : "Publicar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       {dialogoConfirmar}
     </div>
   );

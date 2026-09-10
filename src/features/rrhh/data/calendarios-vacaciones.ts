@@ -43,6 +43,8 @@ export interface SaldoVacaciones {
   diasGastados: number;
   /** diasTotales - diasGastados (nunca negativo). */
   diasRestantes: number;
+  /** Días cogidos por encima de su cupo. 0 cuando no hay exceso. */
+  diasExcedidos: number;
 }
 
 /**

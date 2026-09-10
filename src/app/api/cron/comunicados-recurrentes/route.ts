@@ -79,11 +79,13 @@ export async function GET(request: Request) {
   );
 
   const ahora = new Date().toISOString();
+  const CAMPOS =
+    "id, empresa_id, titulo, asunto, cuerpo, recurrencia, envio, enviar_email";
+
+  // 1) Los que se repiten: se publican cada vez que les toca y se reprograman.
   const { data, error } = await supabase
     .from("comunicados")
-    .select(
-      "id, empresa_id, titulo, asunto, cuerpo, recurrencia, envio, enviar_email",
-    )
+    .select(CAMPOS)
     .neq("recurrencia", "sin_repeticion")
     .not("envio", "is", null)
     .lte("envio", ahora);
@@ -93,7 +95,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const pendientes = (data ?? []) as Comunicado[];
+  // 2) Los programados de una sola vez. Van aparte porque el filtro es otro: se
+  //    reconocen por el estado `programado`, no por la recurrencia. Sin esto, un
+  //    comunicado con fecha y sin repetición se quedaba esperando para siempre:
+  //    nadie lo publicaba nunca. Salen UNA vez, porque al publicarse dejan de
+  //    estar en estado `programado`.
+  const { data: unaVez, error: errUnaVez } = await supabase
+    .from("comunicados")
+    .select(CAMPOS)
+    .eq("recurrencia", "sin_repeticion")
+    .eq("estado", "programado")
+    .not("envio", "is", null)
+    .lte("envio", ahora);
+
+  if (errUnaVez) {
+    console.error("[cron comunicados] consulta programados:", errUnaVez.message);
+    return NextResponse.json({ error: errUnaVez.message }, { status: 500 });
+  }
+
+  const pendientes = [...(data ?? []), ...(unaVez ?? [])] as Comunicado[];
   let publicados = 0;
   let correos = 0;
   const errores: string[] = [];

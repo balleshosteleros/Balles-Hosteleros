@@ -1778,6 +1778,8 @@ export interface ComunicadoVisible {
   zonaHoraria: string;
   /** Documentos que acompañan al comunicado. Vacío = ninguno. */
   adjuntos: ComunicadoAdjunto[];
+  /** Isotipo de la empresa: el comunicado se lee con la marca de quien lo firma. */
+  isotipoUrl: string | null;
 }
 
 /** El JSONB `adjuntos` puede venir de cualquier forma: solo pasan los completos. */
@@ -1824,6 +1826,18 @@ export async function listarComunicadosVisibles(): Promise<{
     if (!ficha) return { ok: true, data: [] };
 
     const zonaHoraria = await getZonaHorariaEmpresa(supabase, empresaId);
+
+    // El comunicado lo firma la empresa: se lee con su marca, igual que el
+    // correo. Si no tiene isotipo se cae al logotipo, y si tampoco, al icono.
+    const { data: marca } = await supabase
+      .from("empresas")
+      .select("isotipo_url, logo_url")
+      .eq("id", empresaId)
+      .maybeSingle();
+    const isotipoUrl =
+      ((marca?.isotipo_url as string | null) ||
+        (marca?.logo_url as string | null) ||
+        null);
 
     const { data, error } = await supabase
       .from("comunicados")
@@ -1879,6 +1893,7 @@ export async function listarComunicadosVisibles(): Promise<{
         createdAt: c.created_at as string,
         zonaHoraria,
         adjuntos: adjuntosDeComunicado(c.adjuntos),
+        isotipoUrl,
       })),
     };
   } catch (err: unknown) {

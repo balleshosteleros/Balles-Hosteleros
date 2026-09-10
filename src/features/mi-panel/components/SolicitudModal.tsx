@@ -1127,6 +1127,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                       diasDisfrutados={vacInfo.diasDisfrutados}
                       diasAprobadosPendientes={vacInfo.diasAprobadosPendientes}
                       diasPendientesAprobacion={vacInfo.diasPendientesAprobacion}
+                      diasExcedidos={vacInfo.diasExcedidos}
                       diasRestantes={vacInfo.diasRestantes}
                     />
 

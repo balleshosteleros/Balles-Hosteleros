@@ -23,6 +23,7 @@ import {
 } from "@/features/rrhh/utils/horario-empleado";
 import {
   calcularSaldoVacaciones,
+  diasVacacionesDevengados,
   ESTADOS_QUE_GASTAN,
   type SolicitudParaSaldo,
 } from "@/features/rrhh/data/vacaciones-saldo";
@@ -60,7 +61,17 @@ export async function getMisCondicionesContrato(): Promise<{
       .eq("empresa_id", empresaId)
       .maybeSingle();
 
-    const { dias: diasTotales } = await getDiasVacacionesAnio(empresaId);
+    const { dias: diasAnio } = await getDiasVacacionesAnio(empresaId);
+    // Sus días se cuentan desde su primer día de contrato (y, si ya tiene fecha
+    // de baja, hasta ella): quien entró en junio no tiene los mismos que quien
+    // lleva todo el año.
+    const anioActual = new Date().getUTCFullYear();
+    const diasTotales = diasVacacionesDevengados(
+      diasAnio,
+      anioActual,
+      (emp?.fecha_alta as string | null) ?? null,
+      (emp?.fecha_baja as string | null) ?? null,
+    );
 
     // Saldo real: mismo cálculo que usa RRHH, para que ambos vean lo mismo.
     const anio = new Date().getUTCFullYear();
