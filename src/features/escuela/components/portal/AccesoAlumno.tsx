@@ -71,14 +71,14 @@ export function AccesoAlumno() {
             {/* En móvil no hay panel de marca: el logotipo oficial va aquí
                 arriba, para que la pantalla no empiece en seco y el alumno vea
                 dónde está entrando. */}
-            <div className="relative mb-9 h-24 overflow-hidden rounded-xl lg:hidden">
+            <div className="mb-9 flex justify-center lg:hidden">
               <Image
-                src="/logo-master-mdh.webp"
-                alt="Máster en dirección hostelera"
-                fill
-                sizes="100vw"
+                src="/logo-master-blanco.webp"
+                alt="Máster en dirección y gestión hostelera"
+                width={260}
+                height={39}
                 priority
-                className="object-cover object-center"
+                className="h-auto w-[260px]"
               />
             </div>
 
@@ -196,25 +196,48 @@ export function AccesoAlumno() {
           <span className="text-center">
             © {TITULAR.anioFundacion} {TITULAR.nombreRegistrado}
           </span>
+          {/* La misma firma que cierra las webs del grupo: pequeña y en segundo
+              plano, porque esta pantalla es del máster, no del software. */}
+          <span className="text-center text-[11px] text-slate-600">
+            Tecnología por{" "}
+            <a
+              href="https://software.balleshosteleros.com"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="font-medium transition-colors hover:text-slate-400"
+            >
+              Software Balles Hosteleros
+            </a>
+          </span>
         </footer>
       </div>
 
-      {/* Derecha: el logotipo del máster. Solo en pantalla grande, igual que en
-          el acceso del software.
+      {/* Derecha: la marca, montada IGUAL que en el acceso del software —el
+          mismo fondo azul y el logotipo del mismo tamaño— porque es la misma
+          casa. Antes se servía el arte a sangre con `object-cover` y el
+          logotipo salía enorme, muy por encima de lo que ocupa el de Balles.
 
-          Es el arte OFICIAL tal cual salió del diseñador —con su degradado y sus
-          letras—, no una imitación montada con tipografía: cualquier parecido
-          aproximado se nota al lado del material del máster. Se sirve a pantalla
-          completa para que no haya costuras entre la imagen y el fondo. */}
-      <div className="relative hidden overflow-hidden bg-slate-950 lg:flex lg:w-1/2">
-        <Image
-          src="/logo-master-mdh.webp"
-          alt="Máster en dirección hostelera"
-          fill
-          sizes="50vw"
-          priority
-          className="animate-marca-desde-abajo object-cover object-center motion-reduce:animate-none"
+          El logotipo va en blanco sobre transparente y con medidas explícitas
+          (no `fill`) para que ocupe lo mismo antes y después de cargar. */}
+      <div className="relative hidden overflow-hidden lg:flex lg:w-1/2">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-950 to-slate-950" />
+        <div
+          className="absolute inset-0 opacity-20"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 20% 20%, rgba(59,130,246,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(147,197,253,0.2) 0%, transparent 50%)",
+          }}
         />
+        <div className="relative z-10 flex w-full flex-col items-center justify-center px-12">
+          <Image
+            src="/logo-master-blanco.webp"
+            alt="Máster en dirección y gestión hostelera"
+            width={400}
+            height={59}
+            priority
+            className="h-auto w-[400px] animate-marca-desde-abajo motion-reduce:animate-none"
+          />
+        </div>
       </div>
     </div>
   );
