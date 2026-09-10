@@ -2,6 +2,8 @@
  * Lectura admin de la carta — incluye items invisibles y descripción de empresa.
  */
 import { getAppContext } from "@/lib/supabase/get-context";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { diaNegocioHoy } from "@/features/sala/lib/dia-negocio";
 import type {
   CartaCategoria,
   CartaItem,
@@ -44,6 +46,7 @@ interface ItemRow {
   destacado: boolean;
   likes_count: number;
   likes_base: number | null;
+  agotado_dia: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +54,10 @@ interface ItemRow {
 export async function fetchCartaAdmin(): Promise<CartaAdminData> {
   const { supabase, empresaId } = await getAppContext();
   if (!empresaId) return { empresa: null, categorias: [], items: [] };
+
+  // "Agotado" caduca al cambiar el día de SERVICIO (corte 06:00), no a
+  // medianoche: a la 1 de la madrugada sigue siendo el servicio de anoche.
+  const diaServicio = diaNegocioHoy(await getZonaHorariaEmpresa(supabase, empresaId));
 
   const [empresaRes, catRes, itemsRes] = await Promise.all([
     supabase
@@ -111,6 +118,26 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
     hora_hasta: r.hora_hasta,
 }));
 
+  // Nombre real de los productos vinculados, en una sola consulta.
+  const productoIds = Array.from(
+    new Set(((itemsRes.data ?? []) as ItemRow[]).map((r) => r.producto_id).filter((v): v is string => !!v)),
+  );
+  const nombresProducto = new Map<string, string>();
+  // El agotado de un plato vinculado vive en su PRODUCTO (lo apaga cocina y
+  // así llega también al TPV); solo los platos escritos a mano lo llevan
+  // propio. El panel tiene que reflejar los dos.
+  const agotadosProducto = new Set<string>();
+  if (productoIds.length > 0) {
+    const { data: prods } = await supabase
+      .from("productos")
+      .select("id, nombre, agotado_dia")
+      .in("id", productoIds);
+    for (const pr of (prods ?? []) as Array<{ id: string; nombre: string; agotado_dia: string | null }>) {
+      nombresProducto.set(pr.id, pr.nombre);
+      if (pr.agotado_dia === diaServicio) agotadosProducto.add(pr.id);
+    }
+  }
+
   const items: CartaItem[] = ((itemsRes.data ?? []) as ItemRow[]).map((r) => ({
     id: r.id,
     empresa_id: r.empresa_id,
@@ -127,6 +154,10 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
     destacado: r.destacado,
     likes_count: r.likes_count,
     likes_base: r.likes_base ?? 0,
+    agotado:
+      (!!r.agotado_dia && r.agotado_dia === diaServicio) ||
+      (!!r.producto_id && agotadosProducto.has(r.producto_id)),
+    producto_nombre: r.producto_id ? nombresProducto.get(r.producto_id) ?? null : null,
     created_at: r.created_at,
     updated_at: r.updated_at,
   }));

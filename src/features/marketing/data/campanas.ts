@@ -198,80 +198,14 @@ export interface CampanaSms extends CamposComunesPRP046 {
   updatedAt: string;
 }
 
-// ─── Campaña Meta (Facebook + Instagram Ads) ────────────────────
-export type ObjetivoMeta =
-  | "AWARENESS"
-  | "TRAFFIC"
-  | "ENGAGEMENT"
-  | "LEADS"
-  | "APP_PROMOTION"
-  | "SALES";
+// El canal Meta ya NO vive aquí. La publicidad de Facebook e Instagram tiene
+// tres niveles (campaña → conjunto → anuncio) y no cabe en este modelo plano
+// de un solo bloque: se fue a `features/marketing/meta-ads` con su propio
+// espejo de la cuenta publicitaria (PRP-087).
 
-export const OBJETIVOS_META: { value: ObjetivoMeta; label: string; descripcion: string }[] = [
-  { value: "AWARENESS", label: "Notoriedad", descripcion: "Que más gente conozca tu marca" },
-  { value: "TRAFFIC", label: "Tráfico", descripcion: "Llevar visitas a tu web o carta" },
-  { value: "ENGAGEMENT", label: "Interacción", descripcion: "Más likes, comentarios y seguidores" },
-  { value: "LEADS", label: "Leads / Reservas", descripcion: "Captar clientes potenciales" },
-  { value: "SALES", label: "Ventas", descripcion: "Convertir anuncios en pedidos" },
-  { value: "APP_PROMOTION", label: "Promoción de app", descripcion: "Instalaciones de app móvil" },
-];
-
-export interface CampanaMeta extends CamposComunesPRP046 {
-  id: string;
-  canal: "meta";
-  empresaId: string;
-  nombre: string;
-  objetivo: ObjetivoMeta;
-  plataformas: ("facebook" | "instagram")[];
-  presupuestoDiario: number;
-  duracionDias: number;
-  publicoObjetivo: {
-    edadMin: number;
-    edadMax: number;
-    genero: "todos" | "hombre" | "mujer";
-    ubicaciones: string[];
-    intereses: string[];
-  };
-  creatividad: {
-    titular: string;
-    descripcion: string;
-    textoPrincipal: string;
-    imagenUrl: string;
-    cta: "RESERVAR" | "SABER_MAS" | "PEDIR_AHORA" | "LLAMAR" | "CONTACTAR";
-    urlDestino: string;
-  };
-  fechaInicio: string | null;
-  fechaFin: string | null;
-  estado: EstadoCampana;
-  metaCampaignId: string | null;
-  metaAdSetId: string | null;
-  metaAdId: string | null;
-  metaSyncedAt: string | null;
-  metaSyncError: string | null;
-  estadisticas: {
-    impresiones: number;
-    alcance: number;
-    clicks: number;
-    ctr: number;
-    cpc: number;
-    gasto: number;
-    conversiones: number;
-  };
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type Campana = CampanaEmail | CampanaWhatsApp | CampanaSms | CampanaMeta;
+export type Campana = CampanaEmail | CampanaWhatsApp | CampanaSms;
 
 // ─── Helpers ────────────────────────────────────────────────────
-
-export const CTA_META: { value: CampanaMeta["creatividad"]["cta"]; label: string }[] = [
-  { value: "RESERVAR", label: "Reservar ahora" },
-  { value: "SABER_MAS", label: "Saber más" },
-  { value: "PEDIR_AHORA", label: "Pedir ahora" },
-  { value: "LLAMAR", label: "Llamar" },
-  { value: "CONTACTAR", label: "Contactar" },
-];
 
 export function crearCampanaEmailVacia(empresaId: string): CampanaEmail {
   const now = new Date().toISOString();
@@ -336,51 +270,3 @@ export function crearCampanaSmsVacia(empresaId: string): CampanaSms {
   };
 }
 
-export function crearCampanaMetaVacia(empresaId: string): CampanaMeta {
-  const now = new Date().toISOString();
-  return {
-    id: `me-${Date.now()}`,
-    canal: "meta",
-    empresaId,
-    nombre: "",
-    objetivo: "LEADS",
-    plataformas: ["facebook", "instagram"],
-    presupuestoDiario: 10,
-    duracionDias: 7,
-    publicoObjetivo: {
-      edadMin: 25,
-      edadMax: 55,
-      genero: "todos",
-      ubicaciones: [],
-      intereses: [],
-    },
-    creatividad: {
-      titular: "",
-      descripcion: "",
-      textoPrincipal: "",
-      imagenUrl: "",
-      cta: "RESERVAR",
-      urlDestino: "",
-    },
-    fechaInicio: null,
-    fechaFin: null,
-    estado: "borrador",
-    metaCampaignId: null,
-    metaAdSetId: null,
-    metaAdId: null,
-    metaSyncedAt: null,
-    metaSyncError: null,
-    estadisticas: {
-      impresiones: 0,
-      alcance: 0,
-      clicks: 0,
-      ctr: 0,
-      cpc: 0,
-      gasto: 0,
-      conversiones: 0,
-    },
-    createdAt: now,
-    updatedAt: now,
-    ...camposComunesVacios(),
-  };
-}

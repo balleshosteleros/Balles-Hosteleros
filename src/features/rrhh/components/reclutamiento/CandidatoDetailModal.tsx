@@ -536,10 +536,17 @@ export function CandidatoDetailModal({
                 )}
 
               {/* BAJA CONTRATO (por parte de la empresa): solo para EMPLEADOS
-                  reales (tienen empleado vinculado) que están en la casilla
-                  «Empleado». Inicia el offboarding y avisa a la gestoría. La baja
-                  voluntaria la solicita el propio trabajador desde Mi Panel. */}
-              {candidato.empleadoId && candidato.fase === "empleado" && (
+                  reales (tienen empleado vinculado). Inicia el offboarding y avisa
+                  a la gestoría. La baja voluntaria la pide el propio trabajador
+                  desde Mi Panel.
+                  Disponible en PRUEBA (no supera el periodo y se le da de baja),
+                  en EMPLEADO y en PREAVISO — ahí porque si alguien movió antes la
+                  tarjeta, el botón tiene que seguir a mano: antes desaparecía y la
+                  baja no se podía tramitar sin devolverla a «Empleado». */}
+              {candidato.empleadoId &&
+                (candidato.fase === "empleado" ||
+                  candidato.fase === "prueba" ||
+                  candidato.fase === "preaviso") && (
                 <>
                   <Button
                     size="sm"

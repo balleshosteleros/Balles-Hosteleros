@@ -20,6 +20,12 @@ export interface VacanteInput {
   descripcion?: string | null;
   puesto_id?: string | null;
   departamento_id?: string | null;
+  /**
+   * Local (centro de trabajo) donde se dará de alta a quien ocupe la vacante.
+   * Se elige junto al puesto y se copia a `empleados.local_id` al contratar:
+   * de él salen la dirección y el CCC que viajan a la gestoría.
+   */
+  local_id?: string | null;
   categoria?: string | null;
   ubicacion?: string | null;
   tipo_jornada?: string | null;
@@ -107,6 +113,7 @@ export async function createVacante(input: VacanteInput) {
         titulo: input.titulo.trim(),
         descripcion: input.descripcion ?? null,
         puesto_id: input.puesto_id ?? null,
+        local_id: input.local_id ?? null,
         puesto_snapshot: puestoSnapshot,
         departamento_id: input.departamento_id ?? null,
         categoria: input.categoria ?? null,
@@ -240,7 +247,7 @@ export async function listDepartamentosCatalogo() {
   }
 }
 
-export async function createPuesto(input: { nombre: string; departamento_id?: string | null; descripcion?: string | null }) {
+export async function createPuesto(input: { nombre: string; departamento_id?: string | null }) {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
@@ -250,9 +257,6 @@ export async function createPuesto(input: { nombre: string; departamento_id?: st
     // empleados con datos incompletos, porque al contratar sus condiciones se
     // copian al empleado y de ahí viajan al contrato y a la gestoría.
     if (!input.departamento_id) return { ok: false, error: "El departamento es obligatorio" };
-    if (!String(input.descripcion ?? "").trim()) {
-      return { ok: false, error: "La descripción del puesto es obligatoria" };
-    }
 
     // Nombre único por empresa (ignorando mayúsculas/minúsculas y espacios).
     // Dos puestos deben diferenciarse al menos en una letra.
@@ -273,7 +277,6 @@ export async function createPuesto(input: { nombre: string; departamento_id?: st
         empresa_id: empresaId,
         nombre,
         departamento_id: input.departamento_id ?? null,
-        descripcion: input.descripcion ?? null,
       })
       .select()
       .single();
@@ -300,7 +303,6 @@ export async function createPuesto(input: { nombre: string; departamento_id?: st
 export async function updatePuesto(input: {
   id: string;
   nombre?: string;
-  descripcion?: string | null;
   departamento_id?: string;
   // Datos de gestoría (compartidos por el puesto)
   convenio_colectivo?: string | null;
@@ -330,15 +332,11 @@ export async function updatePuesto(input: {
       }
       patch.nombre = nombre;
     }
-    if (input.descripcion !== undefined) patch.descripcion = input.descripcion;
     if (input.departamento_id !== undefined) {
       if (!input.departamento_id) return { ok: false, error: "El departamento es obligatorio" };
       patch.departamento_id = input.departamento_id;
     }
     // Un puesto no se puede vaciar: sus datos se copian al empleado al contratar.
-    if (input.descripcion !== undefined && !String(input.descripcion ?? "").trim()) {
-      return { ok: false, error: "La descripción del puesto es obligatoria" };
-    }
     if (input.convenio_colectivo !== undefined) {
       const conv = String(input.convenio_colectivo ?? "").trim();
       if (!conv) return { ok: false, error: "El convenio colectivo es obligatorio" };

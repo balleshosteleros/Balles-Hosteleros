@@ -34,11 +34,13 @@ import {
   X,
   Eraser,
   Download,
+  MailOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   solicitarOTP,
   validarOTP,
+  acusarLectura,
   firmarDocumento,
   rechazarDocumento,
   getEstadoFirma,
@@ -79,6 +81,10 @@ export function FirmaPublicaView({
   const [firmando, setFirmando] = useState(false);
   const [descargaUrl, setDescargaUrl] = useState<string | null>(null);
   const [showRechazar, setShowRechazar] = useState(false);
+  // Acuse de lectura en curso (solo comunicación de baja).
+  const [acusando, setAcusando] = useState(false);
+  // Se cerró por acuse de lectura, no por firma: cambia lo que se le dice al final.
+  const [cerradoPorLectura, setCerradoPorLectura] = useState(false);
   const [motivoRechazo, setMotivoRechazo] = useState("");
   const [rechazando, setRechazando] = useState(false);
 
@@ -247,6 +253,24 @@ export function FirmaPublicaView({
     toast.success("Documento firmado correctamente");
   }
 
+  /**
+   * Acuse de lectura: cierra la comunicación de baja sin firmarla. Deja la misma
+   * constancia (hora, IP y navegador) en el acta, solo que sin el trazo.
+   */
+  async function darPorLeido() {
+    setAcusando(true);
+    const res = await acusarLectura({ token });
+    setAcusando(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setDescargaUrl(res.descargaUrl);
+    setCerradoPorLectura(true);
+    setEtapa("firmado");
+    toast.success("Queda constancia de que lo has leído");
+  }
+
   async function ejecutarRechazo() {
     setRechazando(true);
     const res = await rechazarDocumento(token, motivoRechazo);
@@ -392,14 +416,40 @@ export function FirmaPublicaView({
                 disabled={
                   (!acepto && !esComunicacionBaja) ||
                   enviandoOtp ||
-                  (esReconocimiento && !decision)
+                  (esReconocimiento && !decision) ||
+                  acusando
                 }
                 className="w-full"
                 variant="primary"
               >
                 <PenLine className="h-4 w-4 mr-1" />
-                {enviandoOtp ? "Enviando código…" : "Continuar a firmar"}
+                {enviandoOtp
+                  ? "Enviando código…"
+                  : esComunicacionBaja
+                    ? "Firmar y cerrar"
+                    : "Continuar a firmar"}
               </Button>
+              {/* La comunicación de baja NO obliga a firmar: basta con darse por
+                  enterado. Las dos salidas cierran el documento y dejan el mismo
+                  rastro (hora, IP y navegador) en el acta; la única diferencia es
+                  si además lleva su firma. */}
+              {esComunicacionBaja && (
+                <>
+                  <Button
+                    onClick={darPorLeido}
+                    disabled={acusando || enviandoOtp}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    <MailOpen className="h-4 w-4 mr-1" />
+                    {acusando ? "Guardando…" : "Leído y cerrar"}
+                  </Button>
+                  <p className="text-xs text-zinc-600">
+                    No estás obligado a firmarla. Con «Leído y cerrar» queda constancia
+                    de que la has recibido y leído, con la fecha y la hora.
+                  </p>
+                </>
+              )}
               {!esComunicacionBaja && (
                 <button
                   onClick={() => setShowRechazar(true)}
@@ -492,11 +542,14 @@ export function FirmaPublicaView({
             <Card className="p-5 space-y-3 border-emerald-200 bg-emerald-50">
               <div className="flex items-center gap-2 text-emerald-700">
                 <CheckCircle2 className="h-5 w-5" />
-                <h2 className="text-sm font-semibold">Documento firmado</h2>
+                <h2 className="text-sm font-semibold">
+                  {cerradoPorLectura ? "Documento leído" : "Documento firmado"}
+                </h2>
               </div>
               <p className="text-sm text-zinc-700">
-                Recibirás una copia firmada en tu email. También puedes
-                descargarla ahora:
+                {cerradoPorLectura
+                  ? "Queda constancia de que lo has recibido y leído, con la fecha y la hora. Recibirás una copia en tu email. También puedes descargarla ahora:"
+                  : "Recibirás una copia firmada en tu email. También puedes descargarla ahora:"}
               </p>
               {descargaUrl && (
                 <a
@@ -504,7 +557,8 @@ export function FirmaPublicaView({
                   download
                   className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-md text-sm font-medium"
                 >
-                  <Download className="h-4 w-4" /> Descargar copia firmada
+                  <Download className="h-4 w-4" />{" "}
+                  {cerradoPorLectura ? "Descargar copia" : "Descargar copia firmada"}
                 </a>
               )}
             </Card>

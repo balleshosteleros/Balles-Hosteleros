@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { CCC_LONGITUD, controlCccCorrecto } from "@/features/ajustes/lib/ccc";
 
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
@@ -66,7 +67,20 @@ const localSchema = z.object({
   nombre: z.string().min(1, "Nombre requerido").max(120),
   direccion: z.string().max(300).optional().nullable(),
   ciudad: z.string().max(120).optional().nullable(),
+  provincia: z.string().max(120).optional().nullable(),
   codigo_postal: z.string().max(12).optional().nullable(),
+  /**
+   * Cuenta de cotización del centro: viaja en el alta a la gestoría, así que
+   * un dígito de más o de menos da de alta al trabajador donde no toca. Se
+   * comprueba también aquí porque la validación del formulario se puede
+   * saltar llamando a la action directamente.
+   */
+  ccc: z
+    .string()
+    .regex(new RegExp(`^\\d{${CCC_LONGITUD}}$`), `El CCC son ${CCC_LONGITUD} dígitos`)
+    .refine(controlCccCorrecto, "Los dígitos de control del CCC no cuadran")
+    .optional()
+    .nullable(),
   pais: z.string().max(80).optional().nullable(),
   lat: z.number().min(-90).max(90).optional().nullable(),
   lng: z.number().min(-180).max(180).optional().nullable(),
@@ -74,6 +88,13 @@ const localSchema = z.object({
   color: z.string().max(40).optional().nullable(),
   notas: z.string().max(500).optional().nullable(),
   activo: z.boolean().optional(),
+  // Qué es el local y bajo qué convenio trabaja su plantilla. Van en el local
+  // y no en la empresa porque son del CENTRO: dos locales de la misma
+  // sociedad pueden tener tipo, clase y (si están en provincias distintas)
+  // convenio distintos. Valores en `features/ajustes/data/establecimiento.ts`.
+  tipo_establecimiento: z.string().max(60).optional().nullable(),
+  clase_restaurante: z.string().max(60).optional().nullable(),
+  convenio: z.string().max(120).optional().nullable(),
 });
 
 export type LocalInput = z.infer<typeof localSchema>;
@@ -93,7 +114,7 @@ export async function listLocales(empresaIdOverride?: string | null) {
     const { data, error } = await admin
       .from("locales")
       .select(
-        "id, empresa_id, nombre, direccion, ciudad, codigo_postal, pais, lat, lng, radio_metros, color, notas, activo, created_at, updated_at"
+        "id, empresa_id, nombre, direccion, ciudad, provincia, codigo_postal, ccc, pais, lat, lng, radio_metros, color, notas, activo, tipo_establecimiento, clase_restaurante, convenio, created_at, updated_at"
       )
       .eq("empresa_id", target)
       .order("nombre", { ascending: true });
@@ -142,7 +163,9 @@ export async function createLocal(
         nombre: parsed.nombre,
         direccion: parsed.direccion ?? null,
         ciudad: parsed.ciudad ?? null,
+        provincia: parsed.provincia ?? null,
         codigo_postal: parsed.codigo_postal ?? null,
+        ccc: parsed.ccc ?? null,
         pais: parsed.pais ?? "España",
         lat: parsed.lat ?? null,
         lng: parsed.lng ?? null,

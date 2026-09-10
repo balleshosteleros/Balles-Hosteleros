@@ -7,7 +7,7 @@ import {
   normalizarNombre,
   normalizarNombreOrNull,
 } from "@/shared/lib/normalizar-nombre";
-import type { FasePrincipal } from "@/features/rrhh/data/reclutamiento";
+import { ESTADOS_CONFIG, type FasePrincipal } from "@/features/rrhh/data/reclutamiento";
 import { etiquetaTipoBajaEmpresa, type TipoBajaContrato } from "@/features/rrhh/data/campos-gestoria";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
@@ -96,7 +96,7 @@ export async function listCandidatosReales() {
         genero, ubicacion, disponibilidad, experiencia_previa, carta_presentacion,
         como_nos_conocio,
         promovido_at, activo, created_at,
-        vacantes(id, titulo, departamento_id, puesto_id),
+        vacantes(id, titulo, departamento_id, puesto_id, local_id),
         candidato_resenas(puntuaciones)
       `)
       .eq("empresa_id", empresaId)
@@ -159,6 +159,137 @@ export async function createCandidato(input: {
   }
 }
 
+// ── Orden del pipeline ───────────────────────────────────────────────────────
+// El recorrido completo de una persona, de la candidatura a la salida. Se hace
+// en orden y sin atajos: cada casilla deja algo hecho que la siguiente da por
+// hecho —la entrevista valorada, la documentación entregada, el alta cursada,
+// la baja comunicada, el material recogido, el finiquito pagado—. Saltarse una
+// es cerrar el paso anterior a medias, y volver atrás es peor: la tarjeta diría
+// una cosa y la Seguridad Social otra.
+const ORDEN_PIPELINE = [
+  "nuevo",
+  "elegido",
+  "entrevista",
+  "documentacion",
+  "formacion",
+  "contratacion",
+  "prueba",
+  "empleado",
+  "preaviso",
+  "baja_contrato",
+  "entregas",
+  "finiquito",
+] as const;
+
+// Cada descarte tiene sus propias puertas de entrada, y no son las mismas:
+//   · PAPELERA — solo antes de pedirle la documentación. A partir de ahí ya hay
+//     un expediente suyo abierto y tirarlo a la papelera borraría ese rastro.
+//   · NO SE PRESENTA — también desde Documentación: plantarse a mitad del
+//     papeleo es justamente uno de los casos que hay que poder registrar.
+const ORIGENES_PAPELERA = ["nuevo", "elegido", "entrevista"];
+const ORIGENES_NO_SE_PRESENTA = ["nuevo", "elegido", "entrevista", "documentacion"];
+
+/** Descartes: fuera del recorrido, se entra en ellos por la puerta de al lado. */
+const ESTADOS_DESCARTE = ["papelera", "no_se_presenta", "descartado"];
+
+/** Posición en el recorrido (-1 si el estado no forma parte de él). */
+function pasoOffboarding(estado: string | null | undefined): number {
+  return ORDEN_PIPELINE.indexOf((estado ?? "") as (typeof ORDEN_PIPELINE)[number]);
+}
+
+/** Nombre de la casilla tal y como se lee en el tablero. */
+function etiquetaEstado(estado: string): string {
+  const cfg = (ESTADOS_CONFIG as Record<string, { label: string } | undefined>)[estado];
+  return cfg?.label ?? estado;
+}
+
+/**
+ * A dónde SÍ puede ir esta ficha desde donde está.
+ *
+ * Se le dice siempre que se rechaza un movimiento: un «no se puede» a secas deja
+ * a quien lo intenta probando casillas a ver cuál traga.
+ */
+function destinosPermitidos(origen: string): string[] {
+  const permitidos: string[] = [];
+  const desde = pasoOffboarding(origen);
+
+  // La siguiente casilla del recorrido.
+  if (desde >= 0 && desde + 1 < ORDEN_PIPELINE.length) permitidos.push(ORDEN_PIPELINE[desde + 1]);
+  // Finiquito es la última del recorrido: su continuación es el cierre.
+  if (origen === "finiquito") permitidos.push("ex_empleado");
+  // Atajos y vueltas atrás con nombre propio.
+  // Desde PRUEBA también se puede dar de baja: es justo donde se decide si
+  // alguien se queda, y no superar el periodo de prueba es una baja como otra.
+  if (origen === "empleado" || origen === "prueba") permitidos.push("baja_contrato");
+  if (origen === "preaviso") permitidos.push("empleado");
+  // Descartes, cada uno por su puerta.
+  if (ORIGENES_PAPELERA.includes(origen)) permitidos.push("papelera");
+  if (ORIGENES_NO_SE_PRESENTA.includes(origen)) permitidos.push("no_se_presenta");
+  if (origen === "formacion") permitidos.push("suspenso_formacion");
+  // Recuperar a alguien descartado le devuelve al principio.
+  if (ESTADOS_DESCARTE.includes(origen) || origen === "suspenso_formacion") permitidos.push("nuevo");
+
+  return [...new Set(permitidos)];
+}
+
+/**
+ * El aviso ENTERO cuando un movimiento no vale.
+ *
+ * Una sola frase, y solo con lo que SÍ se puede hacer. Explicar por qué no vale
+ * cada combinación no ayuda a nadie: quien arrastra una ficha quiere saber a
+ * dónde llevarla, no una clase sobre el proceso.
+ */
+function avisoDestinos(origen: string): string {
+  const opciones = destinosPermitidos(origen).map(etiquetaEstado);
+  const desde = etiquetaEstado(origen);
+  if (opciones.length === 0) return `«${desde}» es la última casilla: esta ficha ya no se mueve.`;
+  if (opciones.length === 1) return `Desde «${desde}» solo puedes moverla a «${opciones[0]}».`;
+  const ultima = opciones.pop() as string;
+  return `Desde «${desde}» puedes moverla a ${opciones.map((o) => `«${o}»`).join(", ")} o «${ultima}».`;
+}
+
+/**
+ * ¿Se puede mover de `origen` a `destino`?
+ *
+ * El recorrido va en orden y sin atajos, con cuatro salidas laterales:
+ *   · «Baja contrato» también se alcanza desde «Empleado» (la baja que causa la
+ *     empresa no tiene preaviso que respetar).
+ *   · «Preaviso» vuelve a «Empleado» si se le convence de que se quede. Es la
+ *     ÚNICA marcha atrás de todo el tablero.
+ *   · Papelera desde Nuevo, Elegido o Entrevista; «No se presenta» también desde
+ *     Documentación; «Suspenso formación» solo desde Formación.
+ *   · Recuperar a alguien descartado le devuelve a «Nuevo».
+ *
+ * DIRECCIÓN se salta todo esto (se lo permite el rol, no un permiso suelto).
+ */
+function revisarOrdenOffboarding(
+  origen: string | null | undefined,
+  destino: string,
+): { ok: true } | { ok: false; error: string } {
+  const org = (origen ?? "").trim();
+  const desde = pasoOffboarding(org);
+  const hasta = pasoOffboarding(destino);
+
+  if (org === destino) return { ok: true };
+
+  const permitido = destinosPermitidos(org).includes(destino);
+  if (permitido) return { ok: true };
+
+  // Estado antiguo que ya no existe en el tablero: no se le pone puerta, porque
+  // no sabríamos ni a dónde mandarle.
+  const conocido =
+    desde >= 0 ||
+    ESTADOS_DESCARTE.includes(org) ||
+    org === "suspenso_formacion" ||
+    org === "ex_empleado";
+  if (!conocido) return { ok: true };
+
+  // Avanzar a la casilla siguiente siempre vale; lo demás, no.
+  if (hasta === desde + 1 && desde >= 0) return { ok: true };
+
+  return { ok: false, error: avisoDestinos(org) };
+}
+
 export async function moverCandidatoFase(
   id: string,
   fase: FasePrincipal,
@@ -181,6 +312,159 @@ export async function moverCandidatoFase(
         error: "YA_EMPLEADO",
         empleadoId: cand.empleado_id,
       } as const;
+    }
+
+    // ORDEN DE LA SALIDA: ni saltos ni marcha atrás (salvo desde Preaviso).
+    // DIRECCIÓN es la excepción: se le permite corregir un movimiento mal dado,
+    // que si no obligaría a rehacer la ficha entera.
+    {
+      const orden = revisarOrdenOffboarding(cand?.estado as string | null, estado);
+      if (!orden.ok) {
+        const { getRolContext } = await import(
+          "@/features/auth/actions/permisos-actions"
+        );
+        const { esDirector } = await getRolContext();
+        if (!esDirector) {
+          return { ok: false, error: orden.error } as const;
+        }
+      }
+    }
+
+    // ENTREGAS → FINIQUITO: no se pasa mientras quede una sola entrega sin cerrar.
+    // El acta firmada es lo que acredita que el uniforme y las llaves han vuelto;
+    // pagar el finiquito antes es despedirse sin haber recogido. Quien no tenga
+    // nada a su nombre pasa de largo, sin trámite.
+    if (
+      cand?.estado === "entregas" &&
+      estado !== "entregas" &&
+      pasoOffboarding(estado) > pasoOffboarding("entregas") &&
+      cand?.empleado_id
+    ) {
+      // Lectura con cliente admin: si la RLS del usuario tapara alguna fila, la
+      // comprobación diría «no debe nada» y le dejaría pasar. La regla tiene que
+      // ver todas las entregas, las vea quien las vea.
+      const { createAdminClient: adminEntregas } = await import("@/lib/supabase/admin");
+      const { data: abiertas } = await adminEntregas()
+        .from("entregas_material")
+        .select("id, devolucion_estado, entregas_material_items!inner(requiere_devolucion)")
+        .eq("empresa_id", empresaId)
+        .eq("empleado_id", cand.empleado_id as string)
+        .eq("estado", "firmada")
+        .eq("entregas_material_items.requiere_devolucion", true)
+        .not("devolucion_estado", "in", '("devuelta","merma")');
+
+      const filas = (abiertas ?? []) as Array<{ id: string; devolucion_estado: string | null }>;
+      // Una entrega aparece una vez por pieza pendiente: se agrupa por entrega.
+      const porEntrega = new Map<string, string | null>();
+      for (const f of filas) porEntrega.set(f.id, f.devolucion_estado);
+
+      if (porEntrega.size > 0) {
+        const esperandoFirma = [...porEntrega.values()].filter(
+          (e) => e === "pendiente_firma" || e === "merma_pendiente_firma",
+        ).length;
+        const sinPedir = porEntrega.size - esperandoFirma;
+
+        // El motivo, dicho para que RRHH sepa qué le toca hacer: pedir la
+        // devolución de lo que aún no se ha pedido, o esperar/recordar la firma.
+        const partes: string[] = [];
+        if (sinPedir > 0) {
+          partes.push(
+            sinPedir === 1
+              ? "1 sin devolver todavía (pídesela desde Entregas)"
+              : `${sinPedir} sin devolver todavía (pídeselas desde Entregas)`,
+          );
+        }
+        if (esperandoFirma > 0) {
+          partes.push(
+            esperandoFirma === 1
+              ? "1 esperando su firma"
+              : `${esperandoFirma} esperando su firma`,
+          );
+        }
+
+        const { getRolContext } = await import(
+          "@/features/auth/actions/permisos-actions"
+        );
+        const { esDirector } = await getRolContext();
+        if (!esDirector) {
+          return {
+            ok: false,
+            error:
+              `Le ${porEntrega.size === 1 ? "queda 1 entrega" : `quedan ${porEntrega.size} entregas`} sin firmar ` +
+              `(${partes.join(" y ")}). Cuando estén todas firmadas, pasa a «Finiquito».`,
+          } as const;
+        }
+      }
+    }
+
+    // FINIQUITO → EX-EMPLEADOS: no se cierra a nadie a quien todavía se le debe
+    // dinero. Se mira el mes de su ÚLTIMO DÍA de contrato (el mes en el que se
+    // le liquida) y ese mes tiene que estar en Pagos y marcado como PAGADO por
+    // RRHH. Sin eso, cerrar la ficha sería dar por terminada una relación
+    // laboral con la última nómina sin abonar.
+    if (estado === "ex_empleado" && cand?.estado !== "ex_empleado" && cand?.empleado_id) {
+      const empleadoId = cand.empleado_id as string;
+
+      // Último día trabajado: el comunicado a la gestoría manda; si no consta,
+      // se deduce de la fecha de baja de la ficha (el día oficial es el siguiente).
+      // Con cliente admin por el mismo motivo, pero al revés: si la RLS tapara
+      // la línea de Pagos, la comprobación diría «no está pagado» y bloquearía
+      // un cierre correcto.
+      const { createAdminClient: adminPagos } = await import("@/lib/supabase/admin");
+      const admin = adminPagos();
+      const { data: bajaRow } = await admin
+        .from("gestoria_bajas")
+        .select("ultimo_dia")
+        .eq("empresa_id", empresaId)
+        .eq("empleado_id", empleadoId)
+        .order("ultimo_dia", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let ultimoDia = (bajaRow?.ultimo_dia as string | null) ?? null;
+      if (!ultimoDia) {
+        const { data: empRow } = await admin
+          .from("empleados")
+          .select("fecha_baja")
+          .eq("id", empleadoId)
+          .maybeSingle();
+        const fechaBaja = (empRow?.fecha_baja as string | null) ?? null;
+        if (fechaBaja) {
+          const t = new Date(`${fechaBaja}T00:00:00Z`);
+          if (!Number.isNaN(t.getTime())) {
+            t.setUTCDate(t.getUTCDate() - 1);
+            ultimoDia = t.toISOString().slice(0, 10);
+          }
+        }
+      }
+
+      if (ultimoDia) {
+        const periodo = ultimoDia.slice(0, 7); // YYYY-MM
+        const { data: pagos } = await admin
+          .from("rrhh_pagos")
+          .select("pagado")
+          .eq("empresa_id", empresaId)
+          .eq("empleado_id", empleadoId)
+          .eq("periodo", periodo);
+
+        const lineas = (pagos ?? []) as Array<{ pagado: boolean | null }>;
+        const sinPagar = lineas.filter((l) => !l.pagado).length;
+        const motivo =
+          lineas.length === 0
+            ? `Su último mes (${periodo}) todavía no está en Pagos. Ciérralo y márcalo como pagado, y ya podrás pasarle a «Ex-empleados».`
+            : sinPagar > 0
+              ? `Su último mes (${periodo}) sigue sin marcar como pagado en Pagos. Márcalo como pagado y ya podrás pasarle a «Ex-empleados».`
+              : null;
+
+        if (motivo) {
+          const { getRolContext } = await import(
+            "@/features/auth/actions/permisos-actions"
+          );
+          const { esDirector } = await getRolContext();
+          if (!esDirector) {
+            return { ok: false, error: motivo } as const;
+          }
+        }
+      }
     }
 
     // A EX-EMPLEADO solo pueden llegar quienes FUERON empleados reales (vienen de
@@ -239,6 +523,24 @@ export async function moverCandidatoFase(
       }
     }
 
+    // ENTREGAS: al entrar en la casilla se le avisa de lo que tiene a su nombre
+    // (correo + campana) y de que sin devolverlo no se cierra su finiquito. A
+    // quien no deba nada no se le escribe. Best-effort: no bloquea el movimiento.
+    if (estado === "entregas" && cand?.estado !== "entregas" && cand?.empleado_id) {
+      try {
+        const { createAdminClient } = await import("@/lib/supabase/admin");
+        const { avisarDevolucionSalida } = await import(
+          "@/features/rrhh/services/entregas/avisar-devolucion-salida"
+        );
+        await avisarDevolucionSalida(createAdminClient(), {
+          empresaId,
+          empleadoId: cand.empleado_id as string,
+        });
+      } catch (e) {
+        console.error("[candidatos] aviso de devolución al pasar a entregas:", e);
+      }
+    }
+
     // Offboarding cerrado: al pasar a EX-EMPLEADO, el empleado queda Inactivo HOY
     // (el día en que se le pasa a ex-empleado) y su usuario pierde el acceso (el
     // trigger empleados_sync_estado_acceso pone usuarios.estado_acceso = 'Inactivo'
@@ -248,11 +550,40 @@ export async function moverCandidatoFase(
     if (estado === "ex_empleado" && cand?.estado !== "ex_empleado" && cand?.empleado_id) {
       try {
         const empleadoId = cand.empleado_id as string;
-        const fechaBaja = ahora.slice(0, 10); // HOY
-        const { setEmpleadoEstado } = await import(
-          "@/features/rrhh/actions/empleados-actions"
-        );
-        await setEmpleadoEstado({ id: empleadoId, estado: "Inactivo", fechaBaja });
+        // Si el cron ya lo desactivó al llegar su día oficial, NO se vuelve a
+        // tocar: su `fecha_baja` es la PACTADA con la gestoría y machacarla con
+        // la de hoy dejaría a la empresa y a la gestoría contando días distintos.
+        const { data: empActual } = await supabase
+          .from("empleados")
+          .select("estado")
+          .eq("id", empleadoId)
+          .maybeSingle();
+        if ((empActual?.estado as string | null) === "Activo") {
+          const fechaBaja = ahora.slice(0, 10); // HOY
+          const { setEmpleadoEstado } = await import(
+            "@/features/rrhh/actions/empleados-actions"
+          );
+          await setEmpleadoEstado({ id: empleadoId, estado: "Inactivo", fechaBaja });
+        }
+
+        // CIERRE TOTAL del acceso. Desde su último día entraba en modo
+        // «Offboarding» (solo sus documentos, para poder firmar la devolución y el
+        // finiquito). Ex-empleados es el final del camino: ya no hay nada que
+        // firmar, así que se le cierra la puerta del todo. Solo se toca a quien
+        // NO siga activo en otra empresa del grupo.
+        const { data: empUser } = await supabase
+          .from("empleados")
+          .select("user_id")
+          .eq("id", empleadoId)
+          .maybeSingle();
+        const userIdEmpleado = (empUser?.user_id as string | null) ?? null;
+        if (userIdEmpleado) {
+          await supabase
+            .from("usuarios")
+            .update({ estado_acceso: "Inactivo" })
+            .eq("user_id", userIdEmpleado)
+            .eq("estado_acceso", "Offboarding");
+        }
       } catch (e) {
         console.error("[candidatos] baja al pasar a ex_empleado:", e);
       }
@@ -547,6 +878,333 @@ export async function eliminarCandidato(id: string) {
 }
 
 /**
+ * Guarda lo que RRHH decidió al cerrar el preaviso.
+ *
+ * Dos destinos distintos a propósito:
+ *   · «¿Nos interesa que se vaya?» va a una COLUMNA de la tarjeta, porque es lo
+ *     único que luego se cuenta (de los que se fueron, a cuántos queríamos
+ *     retener).
+ *   · Lo que se hizo y se habló va como NOTA de texto a su ficha: se lee, no se
+ *     cuenta, y encajonarlo en categorías solo lo empobrecería.
+ *
+ * Best-effort: no puede tumbar la baja ni la vuelta al equipo.
+ */
+async function guardarDecisionPreaviso(
+  supabase: Awaited<ReturnType<typeof getContext>>["supabase"],
+  args: {
+    candidatoId: string;
+    empresaId: string;
+    userId: string | null;
+    interesaQueSeVaya: boolean;
+    notas: string;
+    titulo: string;
+  },
+): Promise<void> {
+  try {
+    await supabase
+      .from("candidatos")
+      .update({
+        interesa_que_se_vaya: args.interesaQueSeVaya,
+        interesa_que_se_vaya_at: new Date().toISOString(),
+        interesa_que_se_vaya_por: args.userId,
+      })
+      .eq("id", args.candidatoId)
+      .eq("empresa_id", args.empresaId);
+  } catch (e) {
+    console.error("[rrhh] guardarDecisionPreaviso → columna:", e);
+  }
+
+  try {
+    const { addNotaCandidato } = await import(
+      "@/features/rrhh/actions/candidato-ficha-actions"
+    );
+    const interes = args.interesaQueSeVaya
+      ? "Nos conviene que se vaya."
+      : "Queríamos retenerle.";
+    await addNotaCandidato(args.candidatoId, `${args.titulo}\n${interes}\n${args.notas}`);
+  } catch (e) {
+    console.error("[rrhh] guardarDecisionPreaviso → nota:", e);
+  }
+}
+
+/**
+ * TRAMITA la baja del trabajador que ya está en PREAVISO, al pasarlo a la
+ * columna «Baja contrato».
+ *
+ * Aprobar la solicitud en Mi Panel no tramita nada: solo abre el preaviso, en el
+ * que todavía cabe convencerle de que se quede, y por eso hasta aquí no se le ha
+ * tocado ni un turno. Es ESTE paso el que hace la baja firme:
+ *
+ *   1. Comunica la baja a la gestoría con la ficha completa del trabajador.
+ *      BLOQUEANTE: si le faltan datos obligatorios no se mueve nada.
+ *   2. Recorta su horario a partir de su último día, para que el cuadrante deje
+ *      de contar con él (queda «sin horario asignado», que no es «libre»).
+ *   3. Mueve la tarjeta a «Baja contrato».
+ *
+ * Solo sirve para bajas que el trabajador pidió y RRHH aprobó. Si no hay
+ * solicitud aprobada, devuelve `SIN_SOLICITUD`: esa baja la causa la empresa y
+ * hay que tramitarla con el botón «Baja contrato» de su ficha, que pregunta el
+ * tipo de baja y los hechos.
+ */
+export async function tramitarBajaDesdePreaviso(
+  candidatoId: string,
+  decision: {
+    /** true = nos conviene que se vaya. Es el ÚNICO dato que se guarda como tal. */
+    interesaQueSeVaya: boolean;
+    /** Qué se hizo en el preaviso. Obligatorio, y va a su ficha como nota. */
+    notas: string;
+  },
+) {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
+    if (typeof decision?.interesaQueSeVaya !== "boolean") {
+      return { ok: false as const, error: "Indica si nos interesa que se vaya." };
+    }
+    const notas = (decision.notas ?? "").trim();
+    if (notas.length < 10) {
+      return {
+        ok: false as const,
+        error: "Cuenta en dos líneas qué ha pasado durante el preaviso.",
+      };
+    }
+
+    const { data: cand } = await supabase
+      .from("candidatos")
+      .select("empleado_id, fase, estado")
+      .eq("id", candidatoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!cand) return { ok: false as const, error: "Candidato no encontrado" };
+    if (!cand.empleado_id) {
+      return { ok: false as const, error: "SIN_EMPLEADO" };
+    }
+
+    // La solicitud de baja que el propio trabajador pidió y RRHH aprobó: de ahí
+    // salen su último día y el motivo que él escribió.
+    const { data: emp } = await supabase
+      .from("empleados")
+      .select("user_id")
+      .eq("id", cand.empleado_id as string)
+      .maybeSingle();
+    const userId = (emp?.user_id as string | null) ?? null;
+    if (!userId) return { ok: false as const, error: "SIN_SOLICITUD" };
+
+    const { data: sol } = await supabase
+      .from("solicitudes_personal")
+      .select("id, fecha_fin, motivo")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", userId)
+      .eq("subtipo", "baja_contrato")
+      .eq("estado", "aprobada")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const ultimoDiaIso = (sol?.fecha_fin as string | null) ?? null;
+    if (!sol || !ultimoDiaIso) return { ok: false as const, error: "SIN_SOLICITUD" };
+
+    // 0) La decisión de RRHH queda registrada ANTES de tramitar nada: si la
+    //    gestoría falla y hay que reintentar, lo que se decidió no se pierde.
+    await guardarDecisionPreaviso(supabase, {
+      candidatoId,
+      empresaId,
+      userId: user?.id ?? null,
+      interesaQueSeVaya: decision.interesaQueSeVaya,
+      notas,
+      titulo: "Cierre del preaviso · se le da de baja",
+    });
+
+    // 1) Gestoría. Bloqueante si faltan datos: no dejamos la baja a medias.
+    const { enviarBajaGestoria } = await import(
+      "@/features/rrhh/actions/gestoria-actions"
+    );
+    const aviso = await enviarBajaGestoria(cand.empleado_id as string, {
+      ultimoDiaIso,
+      tipoBaja: "voluntaria",
+      motivo: (sol.motivo as string | null) ?? null,
+      origen: "mi_panel",
+    });
+    if (!aviso.ok && aviso.datosIncompletos) {
+      return { ok: false as const, error: aviso.error ?? "Faltan datos para avisar a la gestoría." };
+    }
+
+    // 2) Horario: desde su último día deja de tener turnos asignados.
+    try {
+      const { recortarHorarioFuturoPorBaja } = await import(
+        "@/features/rrhh/services/baja-horario"
+      );
+      await recortarHorarioFuturoPorBaja(supabase, {
+        empleadoId: cand.empleado_id as string,
+        empresaId,
+        fechaBaja: ultimoDiaIso,
+      });
+    } catch (e) {
+      console.error("[rrhh] tramitarBajaDesdePreaviso → recorte horario:", e);
+    }
+
+    // 3) La tarjeta avanza a «Baja contrato».
+    const mov = await moverCandidatoFase(candidatoId, "offboarding", "baja_contrato");
+    if (!mov.ok) {
+      return {
+        ok: false as const,
+        error: ("error" in mov && mov.error) || "No se pudo mover a Baja contrato",
+      };
+    }
+
+    revalidatePath("/rrhh/reclutamiento");
+    revalidatePath("/rrhh/horarios");
+    return {
+      ok: true as const,
+      gestoriaAvisada: aviso.ok,
+      gestoriaDestino: aviso.ok ? aviso.destino ?? null : null,
+      gestoriaError: aviso.ok ? null : (aviso.error ?? "No se pudo avisar a la gestoría"),
+      ultimoDiaIso,
+    };
+  } catch (err: unknown) {
+    return { ok: false as const, error: mensajeError(err) };
+  }
+}
+
+/**
+ * VUELTA AL EQUIPO: se negoció durante el preaviso y el trabajador se queda.
+ *
+ * Se dispara al mover su tarjeta de «Preaviso» a «Empleado». Como en el preaviso
+ * no se le tocó nada (ni horario, ni gestoría, ni estado), no hay nada que
+ * deshacer: sigue exactamente igual. Lo único que hay que cerrar es el papel.
+ *
+ *   1. Su solicitud de baja aprobada queda ANULADA. Si no, seguiría contando
+ *      como una baja en curso: no podría volver a pedir otra, y al pasarlo un
+ *      día a «Baja contrato» se tramitaría la vieja con su fecha antigua.
+ *   2. Se le manda a firmar la ANULACIÓN DEL PREAVISO. Hasta que la firme no
+ *      puede fichar: sin ese papel, la empresa tiene a alguien trabajando con
+ *      una baja voluntaria suya en vigor.
+ *   3. La tarjeta vuelve a «Empleado».
+ */
+export async function recuperarDePreaviso(
+  candidatoId: string,
+  decision: {
+    /** true = nos conviene que se vaya (aunque al final se quede). */
+    interesaQueSeVaya: boolean;
+    /** Qué se negoció. Obligatorio, va a su ficha como nota. */
+    notas: string;
+  },
+) {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
+    if (typeof decision?.interesaQueSeVaya !== "boolean") {
+      return { ok: false as const, error: "Indica si nos interesa que se vaya." };
+    }
+    const notas = (decision.notas ?? "").trim();
+    if (notas.length < 10) {
+      return {
+        ok: false as const,
+        error: "Cuenta en dos líneas qué se ha negociado con él.",
+      };
+    }
+
+    const { data: cand } = await supabase
+      .from("candidatos")
+      .select("empleado_id")
+      .eq("id", candidatoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!cand) return { ok: false as const, error: "Candidato no encontrado" };
+    if (!cand.empleado_id) return { ok: false as const, error: "SIN_EMPLEADO" };
+
+    await guardarDecisionPreaviso(supabase, {
+      candidatoId,
+      empresaId,
+      userId: user?.id ?? null,
+      interesaQueSeVaya: decision.interesaQueSeVaya,
+      notas,
+      titulo: "Cierre del preaviso · se queda en el equipo",
+    });
+
+    // Su solicitud de baja aprobada: la que hay que anular.
+    const { data: emp } = await supabase
+      .from("empleados")
+      .select("user_id")
+      .eq("id", cand.empleado_id as string)
+      .maybeSingle();
+    const userIdEmpleado = (emp?.user_id as string | null) ?? null;
+
+    let bajaPrevistaIso: string | null = null;
+    let fechaSolicitudIso: string | null = null;
+    if (userIdEmpleado) {
+      const { data: sol } = await supabase
+        .from("solicitudes_personal")
+        .select("id, fecha_inicio, fecha_fin")
+        .eq("empresa_id", empresaId)
+        .eq("user_id", userIdEmpleado)
+        .eq("subtipo", "baja_contrato")
+        .eq("estado", "aprobada")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (sol?.id) {
+        bajaPrevistaIso = (sol.fecha_fin as string | null) ?? null;
+        fechaSolicitudIso = (sol.fecha_inicio as string | null) ?? null;
+        const { error: anulErr } = await supabase
+          .from("solicitudes_personal")
+          .update({
+            estado: "anulada",
+            revisado_por: user?.id ?? null,
+            revisado_at: new Date().toISOString(),
+            notas_revision: `Preaviso anulado: continúa en la empresa. ${notas}`,
+          })
+          .eq("id", sol.id as string);
+        if (anulErr) console.error("[rrhh] recuperarDePreaviso → anular solicitud:", anulErr.message);
+      }
+    }
+
+    // Documento a firmar. Sin la fecha que figuraba en el preaviso no se puede
+    // redactar (diría «tu baja del —»), así que en ese caso se avisa y no se
+    // manda: la tarjeta vuelve igual, pero RRHH sabe que falta el papel.
+    let firmaEnviada = false;
+    let firmaError: string | null = null;
+    if (bajaPrevistaIso) {
+      try {
+        const { data: quien } = user
+          ? await supabase.from("usuarios").select("full_name").eq("user_id", user.id).maybeSingle()
+          : { data: null };
+        const { enviarAnulacionPreaviso } = await import(
+          "@/features/rrhh/services/firmas/enviar-anulacion-preaviso"
+        );
+        const res = await enviarAnulacionPreaviso({
+          empresaId,
+          empleadoId: cand.empleado_id as string,
+          bajaPrevistaIso,
+          fechaSolicitudIso,
+          enviadoPorUserId: user?.id ?? "",
+          enviadoPorNombre: (quien?.full_name as string | null) ?? "Recursos Humanos",
+        });
+        firmaEnviada = res.ok;
+        if (!res.ok) firmaError = res.error;
+      } catch (e) {
+        firmaError = e instanceof Error ? e.message : "No se pudo enviar el documento";
+        console.error("[rrhh] recuperarDePreaviso → firma:", firmaError);
+      }
+    } else {
+      firmaError = "No consta la fecha de su baja: no se ha podido generar la anulación.";
+    }
+
+    const mov = await moverCandidatoFase(candidatoId, "onboarding", "empleado");
+    if (!mov.ok) {
+      return {
+        ok: false as const,
+        error: ("error" in mov && mov.error) || "No se pudo devolverle a Empleado",
+      };
+    }
+
+    revalidatePath("/rrhh/reclutamiento");
+    return { ok: true as const, firmaEnviada, firmaError };
+  } catch (err: unknown) {
+    return { ok: false as const, error: mensajeError(err) };
+  }
+}
+
+/**
  * BAJA DE CONTRATO iniciada POR LA EMPRESA (no por el trabajador). Se dispara
  * desde la ficha del empleado en el reclutamiento (botón «BAJA CONTRATO»). A
  * diferencia de la baja voluntaria (que solicita el propio empleado desde Mi
@@ -577,6 +1235,16 @@ export async function darBajaContratoEmpresa(
 
     if (!input.ultimoDiaIso || !/^\d{4}-\d{2}-\d{2}$/.test(input.ultimoDiaIso)) {
       return { ok: false, error: "Indica el último día de trabajo." };
+    }
+    // La carta que recibe el trabajador NO puede salir sin la descripción de la
+    // situación: sea cual sea el tipo de baja, es lo primero que se mira si esto
+    // acaba discutiéndose, y una comunicación sin motivo se defiende sola... en
+    // contra de la empresa.
+    if ((input.hechos ?? "").trim().length < 15) {
+      return {
+        ok: false,
+        error: "Describe la situación por la que se le da de baja: va en la carta que recibe.",
+      };
     }
 
     const { data: cand } = await supabase
@@ -611,14 +1279,30 @@ export async function darBajaContratoEmpresa(
       return { ok: false, error: avisoGestoria.error ?? "Faltan datos para avisar a la gestoría." };
     }
 
-    // 2) Mueve el candidato a la fase de offboarding «Baja contrato». Reutiliza
+    // 2) Horario: desde su último día deja de tener turnos asignados, para que
+    //    el cuadrante no siga contando con alguien que ya no viene. No bloquea la
+    //    baja si falla: la comunicación a la gestoría ya salió.
+    try {
+      const { recortarHorarioFuturoPorBaja } = await import(
+        "@/features/rrhh/services/baja-horario"
+      );
+      await recortarHorarioFuturoPorBaja(supabase, {
+        empleadoId: cand.empleado_id as string,
+        empresaId,
+        fechaBaja: input.ultimoDiaIso,
+      });
+    } catch (e) {
+      console.error("[rrhh] darBajaContratoEmpresa → recorte horario:", e);
+    }
+
+    // 3) Mueve el candidato a la fase de offboarding «Baja contrato». Reutiliza
     //    moverCandidatoFase para que registre la actividad igual que un arrastre.
     const mov = await moverCandidatoFase(candidatoId, "offboarding", "baja_contrato");
     if (!mov.ok) {
       return { ok: false, error: ("error" in mov && mov.error) || "No se pudo mover a Baja contrato" };
     }
 
-    // 3) Carta de comunicación al TRABAJADOR, a firmar como acuse de recibo.
+    // 4) Carta de comunicación al TRABAJADOR, a firmar como acuse de recibo.
     //    NO BLOQUEANTE: la baja ya está tramitada. Si el trabajador no firma —o
     //    ni siquiera abre el enlace— la baja sigue siendo válida; lo que queda
     //    en el acta eIDAS es la constancia de si lo leyó y cuándo.
@@ -640,6 +1324,7 @@ export async function darBajaContratoEmpresa(
         empleadoId: cand.empleado_id as string,
         ultimoDiaIso: input.ultimoDiaIso,
         tipoBajaLabel: etiquetaTipoBajaEmpresa(input.tipoBaja),
+        tipoBaja: input.tipoBaja,
         hechos: input.hechos?.trim() || null,
         enviadoPorUserId: user?.id ?? "",
         enviadoPorNombre: (quien?.full_name as string | null) ?? "Recursos Humanos",
@@ -652,6 +1337,7 @@ export async function darBajaContratoEmpresa(
     }
 
     revalidatePath("/rrhh/reclutamiento");
+    revalidatePath("/rrhh/horarios");
     // Un fallo de ENVÍO (no de datos) no bloquea la baja: la baja se registró
     // igual y se informa para que RRHH pueda reenviarlo.
     return {

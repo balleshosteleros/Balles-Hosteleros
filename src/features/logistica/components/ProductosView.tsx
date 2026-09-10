@@ -38,6 +38,7 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   ShoppingCart, Store, Settings,
   ArrowLeft, Trash2, AlertTriangle, FlaskConical, Star, Eye, EyeOff, Check,
+  Monitor, MonitorOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
@@ -194,11 +195,10 @@ function ProductoDetalle({
   const [textoComanda, setTextoComanda] = useState(producto?.textoComanda ?? "");
   const [estiloColor, setEstiloColor] = useState<string | null>(producto?.estiloColor ?? null);
   const [estiloImagenUrl, setEstiloImagenUrl] = useState<string | null>(producto?.estiloImagenUrl ?? null);
-  const [cartaNombre, setCartaNombre] = useState<string>(producto?.cartaNombre ?? "");
-  const [cartaTexto, setCartaTexto] = useState<string>(producto?.cartaTexto ?? "");
   const [cartaDestacado, setCartaDestacado] = useState<boolean>(producto?.cartaDestacado ?? false);
   // Interruptor maestro de la carta digital (ver ficha del producto de venta).
   const [visibleCarta, setVisibleCarta] = useState<boolean>(producto?.visibleCarta ?? false);
+  const [visibleTerminal, setVisibleTerminal] = useState<boolean>(producto?.visibleTerminal ?? true);
   const [alergenos, setAlergenos] = useState<string[]>(producto?.alergenos ?? []);
   // Cómo se declaran los alérgenos. Los de COMPRA son siempre manuales: son la
   // raíz de la cascada y no tienen escandallo del que derivar.
@@ -351,10 +351,9 @@ function ProductoDetalle({
       textoComanda: esVenta ? (textoComanda || null) : null,
       estiloColor: esVenta ? estiloColor : null,
       estiloImagenUrl: esVenta ? estiloImagenUrl : null,
-      cartaNombre: esVenta ? (cartaNombre.trim() || null) : null,
-      cartaTexto: esVenta ? (cartaTexto.trim() || null) : null,
       cartaDestacado: esVenta ? cartaDestacado : false,
       visibleCarta: esVenta ? visibleCarta : false,
+      visibleTerminal: esVenta ? visibleTerminal : true,
       // En modo AUTOMÁTICO los alérgenos no se guardan: se derivan del
       // escandallo cada vez que se leen, así que persistirlos solo crearía una
       // copia que se queda vieja en cuanto cambie un ingrediente.
@@ -979,27 +978,11 @@ function ProductoDetalle({
             <CardTitle className="text-base">Carta Digital</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-[120px_1fr] gap-y-3 gap-x-4 items-center text-sm">
-              <Label className="text-xs text-muted-foreground">Nombre:</Label>
-              <Input
-                value={cartaNombre}
-                onChange={(e) => setCartaNombre(e.target.value)}
-                placeholder="Utilizar el nombre del producto"
-              />
-              <Label className="text-xs text-muted-foreground self-start pt-2">Texto:</Label>
-              <textarea
-                value={cartaTexto}
-                onChange={(e) => setCartaTexto(e.target.value)}
-                rows={3}
-                maxLength={500}
-                placeholder="Utilizar la descripción de la ficha de producto"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
-            </div>
-            <p className="mt-3 text-[11px] text-muted-foreground italic">
-              Si dejas estos campos vacíos, la carta digital usará el nombre y la descripción del producto.
-            </p>
-
+            {/* El nombre que lee el comensal y el texto que va debajo se
+                escriben en Marketing → Carta digital, no aquí: esto es la
+                ficha del producto, y lo que se enseña en la carta no es tarea
+                de ventas. Aquí solo se decide si el producto EXISTE en la
+                carta para poder gestionarlo allí. */}
             {/* Interruptor maestro. Va ANTES que "destacar" porque manda sobre
                 él: sin esto encendido, el producto no llega siquiera a la carta. */}
             <label className="mt-4 flex items-center gap-3 rounded-lg border p-3 cursor-pointer select-none hover:bg-muted/40 transition-colors">
@@ -1012,8 +995,9 @@ function ProductoDetalle({
               <div>
                 <div className="text-sm font-medium">Visible en carta digital</div>
                 <div className="text-[11px] text-muted-foreground">
-                  Si está apagado, este producto no aparece en la carta ni se puede añadir desde
-                  ella. Para quitarlo solo una temporada, ocúltalo desde la carta.
+                  Enciéndelo para que el producto EXISTA en la carta digital y se pueda gestionar
+                  desde Marketing. Lo que ve el cliente —el nombre, el texto y si sale agotado o
+                  no— se decide allí, en Marketing → Carta digital.
                 </div>
               </div>
             </label>
@@ -1032,6 +1016,25 @@ function ProductoDetalle({
               <div>
                 <div className="text-sm font-medium">Destacar en la carta</div>
                 <div className="text-[11px] text-muted-foreground">Muestra una estrella dorada en este plato dentro de la carta digital.</div>
+              </div>
+            </label>
+
+            {/* Independiente de la carta: hay platos que se enseñan aquí pero se
+                comandan y se cobran en otro local, y en este terminal estorban. */}
+            <label className="mt-2 flex items-center gap-3 rounded-lg border p-3 cursor-pointer select-none hover:bg-muted/40 transition-colors">
+              <Checkbox checked={visibleTerminal} onCheckedChange={(v) => setVisibleTerminal(v === true)} />
+              {visibleTerminal ? (
+                <Monitor className="h-5 w-5 text-emerald-600" strokeWidth={1.75} />
+              ) : (
+                <MonitorOff className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
+              )}
+              <div>
+                <div className="text-sm font-medium">Visible en terminal</div>
+                <div className="text-[11px] text-muted-foreground">
+                  Si está apagado, este producto no sale en el terminal de ventas. Úsalo para
+                  el plato que se enseña en la carta de este local pero se comanda y se cobra
+                  en otro.
+                </div>
               </div>
             </label>
           </CardContent>

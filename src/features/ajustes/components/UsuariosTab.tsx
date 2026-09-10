@@ -48,6 +48,8 @@ const EMPTY_SET: Set<string> = new Set();
 const ESTADO_STYLES: Partial<Record<EstadoAcceso, string>> = {
   Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
   Inactivo: "bg-muted text-muted-foreground border-muted-foreground/30",
+  // Ya no trabaja aquí, pero entra a firmar lo que le queda de la salida.
+  Offboarding: "bg-amber-500/10 text-amber-600 border-amber-500/30",
 };
 
 function EstadoBadge({ estado }: { estado: EstadoAcceso }) {
@@ -114,7 +116,12 @@ function profileToAcceso(p: SupabaseProfile, empresa: { id: string; nombre: stri
   // El estado de acceso solo puede ser Activo/Inactivo. Cualquier valor legado
   // distinto de "Inactivo" (incluido "Pendiente") se normaliza a "Activo": el
   // acceso se gobierna desde RRHH → Empleados, donde por defecto está activo.
-  const estadoAcceso: EstadoAcceso = p.estado_acceso === "Inactivo" ? "Inactivo" : "Activo";
+  const estadoAcceso: EstadoAcceso =
+    p.estado_acceso === "Inactivo"
+      ? "Inactivo"
+      : p.estado_acceso === "Offboarding"
+        ? "Offboarding"
+        : "Activo";
   return {
     id: `sup-${p.id}`,
     empleadoId: p.id,

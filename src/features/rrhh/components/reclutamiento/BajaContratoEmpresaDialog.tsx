@@ -239,7 +239,9 @@ export function BajaContratoEmpresaDialog({
           {/* Hechos: van en la CARTA que firma el trabajador. */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="hechosBaja">Hechos que motivan la baja</Label>
+              <Label htmlFor="hechosBaja">
+                Hechos que motivan la baja <span className="text-destructive">*</span>
+              </Label>
               <div className="flex items-center gap-1">
                 {hechosPrevios != null && !mejorando && (
                   <Button
@@ -276,8 +278,10 @@ export function BajaContratoEmpresaDialog({
               rows={6}
             />
             <p className="text-xs text-muted-foreground">
-              Este texto aparece en la carta que se envía al trabajador para que la firme. La IA
-              solo reescribe lo que pongas: si falta un dato lo deja marcado{" "}
+              Obligatorio. Es la descripción de la situación que aparece en la carta que recibe el
+              trabajador, y lo primero que se mira si esta baja acaba discutiéndose. Escribe lo que
+              haga falta: si ocupa dos hojas, la carta las tendrá. La IA solo reescribe lo que
+              pongas: si falta un dato lo deja marcado{" "}
               <span className="font-mono">[entre corchetes]</span> para que lo completes.
             </p>
           </div>
@@ -299,7 +303,11 @@ export function BajaContratoEmpresaDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={guardando}>
             Cancelar
           </Button>
-          <Button variant="destructive" onClick={confirmar} disabled={guardando || !ultimoDia}>
+          <Button
+            variant="destructive"
+            onClick={confirmar}
+            disabled={guardando || !ultimoDia || hechos.trim().length < 15}
+          >
             {guardando ? "Dando de baja…" : "Dar de baja y avisar a gestoría"}
           </Button>
         </DialogFooter>

@@ -6,13 +6,25 @@ import { CartaPublicaShell } from "@/features/marketing/carta-digital/components
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
+/**
+ * `?web=1` = se ha llegado desde la página del restaurante, no desde el QR de
+ * la mesa. Solo lo añade la web; los QR impresos apuntan al enlace pelado y no
+ * hay que reimprimir ninguno.
+ *
+ * Cambia una cosa: las categorías con horario (el menú del día) se enseñan
+ * siempre, con su horario escrito. Sentado en la mesa, en cambio, la carta
+ * solo enseña lo que la cocina sirve en ese momento.
+ */
 export default async function CartaPublicaPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ web?: string }>;
 }) {
   const { slug } = await params;
-  const carta = await fetchCartaPorSlug(slug);
+  const { web } = await searchParams;
+  const carta = await fetchCartaPorSlug(slug, web === "1" ? "web" : "local");
   if (!carta) notFound();
   return <CartaPublicaShell carta={carta} />;
 }

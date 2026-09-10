@@ -14,6 +14,13 @@ import { Input } from "@/shared/components/ui/input";
 import { Label } from "@/shared/components/ui/label";
 import { Switch } from "@/shared/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -40,13 +47,23 @@ import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { MapPicker } from "@/features/ajustes/components/locales/MapPicker";
 import { AsignacionEmpleadosLocalDialog } from "@/features/ajustes/components/locales/AsignacionEmpleadosLocalDialog";
+import {
+  PROVINCIAS,
+  TIPOS_ESTABLECIMIENTO,
+  CLASES_RESTAURANTE,
+  CONVENIOS_HOSTELERIA,
+  convenioDeProvincia,
+} from "@/features/ajustes/data/establecimiento";
+import { CCC_LONGITUD, normalizarCcc, errorCcc } from "@/features/ajustes/lib/ccc";
 
 interface Local {
   id: string;
   nombre: string;
   direccion: string | null;
   ciudad: string | null;
+  provincia: string | null;
   codigo_postal: string | null;
+  ccc: string | null;
   pais: string;
   lat: number | null;
   lng: number | null;
@@ -54,6 +71,9 @@ interface Local {
   color: string;
   notas: string | null;
   activo: boolean;
+  tipo_establecimiento: string | null;
+  clase_restaurante: string | null;
+  convenio: string | null;
   empleados_count: number;
 }
 
@@ -61,7 +81,9 @@ const DRAFT_INICIAL: LocalInput = {
   nombre: "",
   direccion: "",
   ciudad: "",
+  provincia: "",
   codigo_postal: "",
+  ccc: "",
   pais: "España",
   lat: null,
   lng: null,
@@ -69,6 +91,9 @@ const DRAFT_INICIAL: LocalInput = {
   color: "bg-violet-500",
   notas: "",
   activo: true,
+  tipo_establecimiento: "",
+  clase_restaurante: "",
+  convenio: "",
 };
 
 interface LocalesEmpresaTabProps {
@@ -81,6 +106,9 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
   const [dialogAbierto, setDialogAbierto] = useState(false);
   const [editando, setEditando] = useState<Local | null>(null);
   const [draft, setDraft] = useState<LocalInput>(DRAFT_INICIAL);
+  // Qué le pasa al CCC, si es que le pasa algo. Se usa dos veces: para
+  // pintarlo en rojo debajo del campo y para no dejar guardar a medias.
+  const fallaCcc = errorCcc(draft.ccc ?? "");
   const [guardando, setGuardando] = useState(false);
   const [asignacionLocal, setAsignacionLocal] = useState<Local | null>(null);
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
@@ -111,7 +139,9 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
       nombre: c.nombre,
       direccion: c.direccion ?? "",
       ciudad: c.ciudad ?? "",
+      provincia: c.provincia ?? "",
       codigo_postal: c.codigo_postal ?? "",
+      ccc: c.ccc ?? "",
       pais: c.pais ?? "España",
       lat: c.lat,
       lng: c.lng,
@@ -119,6 +149,9 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
       color: c.color,
       notas: c.notas ?? "",
       activo: c.activo,
+      tipo_establecimiento: c.tipo_establecimiento ?? "",
+      clase_restaurante: c.clase_restaurante ?? "",
+      convenio: c.convenio ?? "",
     });
     setDialogAbierto(true);
   }
@@ -126,6 +159,10 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
   async function guardar() {
     if (!draft.nombre.trim()) {
       toast.error("El nombre es obligatorio");
+      return;
+    }
+    if (fallaCcc) {
+      toast.error(`CCC incorrecto. ${fallaCcc}`);
       return;
     }
     if (draft.lat == null || draft.lng == null) {
@@ -139,8 +176,13 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
         nombre: draft.nombre.trim(),
         direccion: draft.direccion?.trim() || null,
         ciudad: draft.ciudad?.trim() || null,
+        provincia: draft.provincia?.trim() || null,
         codigo_postal: draft.codigo_postal?.trim() || null,
+        ccc: draft.ccc?.trim() || null,
         notas: draft.notas?.trim() || null,
+        tipo_establecimiento: draft.tipo_establecimiento || null,
+        clase_restaurante: draft.clase_restaurante || null,
+        convenio: draft.convenio || null,
       };
       const res = editando
         ? await updateLocal(editando.id, payload)
@@ -342,12 +384,116 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
                 />
               </div>
               <div className="space-y-1.5">
+                <Label>Provincia</Label>
+                <Select
+                  value={draft.provincia || undefined}
+                  onValueChange={(v) =>
+                    setDraft((d) => ({
+                      ...d,
+                      provincia: v,
+                      // El convenio de hostelería es provincial, así que al
+                      // elegir provincia se propone el suyo. Solo si estaba
+                      // vacío: si alguien ya puso otro, manda el suyo.
+                      convenio: d.convenio || convenioDeProvincia(v) || "",
+                    }))
+                  }
+                >
+                  <SelectTrigger><SelectValue placeholder="Sin definir" /></SelectTrigger>
+                  <SelectContent>
+                    {PROVINCIAS.map((p) => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
                 <Label>País</Label>
                 <Input
                   value={draft.pais ?? ""}
                   onChange={(e) => setDraft({ ...draft, pais: e.target.value })}
                 />
               </div>
+              {/* Dato del CENTRO, no de la empresa: cada local puede cotizar en
+                  una cuenta distinta, y el alta va contra la del centro. */}
+              <div className="space-y-1.5">
+                <Label>CCC aplicable</Label>
+                <Input
+                  value={draft.ccc ?? ""}
+                  onChange={(e) => setDraft({ ...draft, ccc: normalizarCcc(e.target.value) })}
+                  inputMode="numeric"
+                  maxLength={CCC_LONGITUD}
+                  placeholder="28255627528"
+                  aria-invalid={fallaCcc ? true : undefined}
+                />
+                <p
+                  className={`text-[11px] leading-snug ${fallaCcc ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  {fallaCcc ??
+                    `${CCC_LONGITUD} dígitos: provincia, número y control. Va en cada alta a la gestoría.`}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label>Tipo de establecimiento</Label>
+                <Select
+                  value={draft.tipo_establecimiento || undefined}
+                  onValueChange={(v) => setDraft((d) => ({ ...d, tipo_establecimiento: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Sin definir" /></SelectTrigger>
+                  <SelectContent>
+                    {TIPOS_ESTABLECIMIENTO.map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  Lo que es el local a efectos de licencia.
+                </p>
+              </div>
+              {/* Los tenedores solo existen en restaurantes: un bar o una
+                  coctelería se quedan en "No aplica". */}
+              <div className="space-y-1.5">
+                <Label>Clase del restaurante</Label>
+                <Select
+                  value={draft.clase_restaurante || undefined}
+                  onValueChange={(v) => setDraft((d) => ({ ...d, clase_restaurante: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Sin definir" /></SelectTrigger>
+                  <SelectContent>
+                    {CLASES_RESTAURANTE.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  La categoría que consta en la licencia.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Convenio aplicable</Label>
+              <Select
+                value={draft.convenio || undefined}
+                onValueChange={(v) => setDraft((d) => ({ ...d, convenio: v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Sin definir" /></SelectTrigger>
+                <SelectContent>
+                  {CONVENIOS_HOSTELERIA.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                {draft.provincia && draft.convenio && draft.convenio !== convenioDeProvincia(draft.provincia)
+                  ? `Ojo: en ${draft.provincia} lo habitual es ${convenioDeProvincia(draft.provincia)}.`
+                  : "El convenio de hostelería es provincial: lo marca dónde está el local."}
+              </p>
             </div>
 
             <div className="border rounded-lg p-3 space-y-3 bg-muted/30">

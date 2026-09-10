@@ -39,6 +39,8 @@ export type TipoNotificacion =
   | "prueba_cierre"
   // Solicitudes de personal: aviso al validador (responsable directo)
   | "solicitud_pendiente"
+  // Solicitudes de personal: aviso al trabajador de que la suya ya está resuelta
+  | "solicitud_resuelta"
   // Cambio del correo de acceso (login) del empleado
   | "cambio_email_acceso"
   // Documentación identificativa pendiente: el empleado la sube por su enlace propio
@@ -233,6 +235,14 @@ export const TIPOS_NOTIFICACION: Record<TipoNotificacion, TipoMeta> = {
     badge: "bg-amber-100 text-amber-700",
     accionLabel: "Revisar",
     requiereAccion: true,
+  },
+  solicitud_resuelta: {
+    label: "Solicitud resuelta",
+    icono: "solicitud",
+    color: "text-sky-600",
+    badge: "bg-sky-100 text-sky-700",
+    accionLabel: "Visto",
+    requiereAccion: false,
   },
   cambio_email_acceso: {
     label: "Correo de acceso",

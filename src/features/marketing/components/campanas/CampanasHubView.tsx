@@ -7,19 +7,19 @@ import { cn } from "@/lib/utils";
 import { ProximamenteDialog } from "./ProximamenteDialog";
 
 type CanalBoton =
-  | { id: "email" | "whatsapp" | "sms"; label: string; href: string; icon: React.ElementType }
-  | { id: "meta" | "google"; label: string; placeholder: "meta" | "google"; icon: React.ElementType };
+  | { id: "email" | "whatsapp" | "sms" | "meta"; label: string; href: string; icon: React.ElementType }
+  | { id: "google"; label: string; placeholder: "google"; icon: React.ElementType };
 
 const CANALES: CanalBoton[] = [
   { id: "email", label: "Email", href: "/marketing/campanas/email", icon: Mail },
   { id: "whatsapp", label: "WhatsApp", href: "/marketing/campanas/whatsapp", icon: MessageCircle },
   { id: "sms", label: "SMS", href: "/marketing/campanas/sms", icon: Smartphone },
-  { id: "meta", label: "Meta", placeholder: "meta", icon: Megaphone },
+  { id: "meta", label: "Meta", href: "/marketing/campanas/meta", icon: Megaphone },
   { id: "google", label: "Google", placeholder: "google", icon: Globe },
 ];
 
 export function CampanasHubView() {
-  const [proximamente, setProximamente] = useState<"meta" | "google" | null>(null);
+  const [proximamente, setProximamente] = useState<"google" | null>(null);
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -54,8 +54,8 @@ export function CampanasHubView() {
         </div>
       </div>
 
-      {/* Tarjetas resumen por canal (Email / WhatsApp / SMS) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Tarjetas resumen por canal (Email / WhatsApp / SMS / Meta) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {CANALES.filter((c): c is Extract<CanalBoton, { href: string }> => "href" in c).map((c) => {
           const Icon = c.icon;
           return (
@@ -81,7 +81,7 @@ export function CampanasHubView() {
       <ProximamenteDialog
         open={proximamente !== null}
         onOpenChange={(open) => !open && setProximamente(null)}
-        canal={proximamente ?? "meta"}
+        canal={proximamente ?? "google"}
       />
     </div>
   );

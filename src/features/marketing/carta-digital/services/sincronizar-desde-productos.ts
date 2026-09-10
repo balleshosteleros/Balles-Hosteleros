@@ -8,9 +8,9 @@
  * obligaría a tocarlo en dos sitios y acabarían diciendo cosas distintas — el
  * mismo problema que ya resolvimos con los textos legales.
  *
- * Aquí PRODUCTOS MANDA: el precio, el nombre base y los alérgenos vienen de
- * allí y se refrescan en cada sincronización. Lo que es propio de la carta
- * —foto, descripción de venta, orden, destacado, visible— NO se pisa nunca:
+ * Aquí PRODUCTOS MANDA en precio, alérgenos y categoría: vienen de allí y se
+ * refrescan en cada sincronización. Lo que es propio de la carta —el nombre que
+ * lee el comensal, el texto, la foto, el orden y el estado— NO se pisa nunca:
  * es trabajo editorial que no debe perderse al resincronizar.
  *
  * QUÉ ENTRA EN LA CARTA lo decide `productos.visible_carta`, el interruptor de
@@ -28,8 +28,6 @@ export interface ProductoVenta {
   nombre: string;
   categoria: string | null;
   precio_venta: string | null;
-  carta_nombre: string | null;
-  carta_texto: string | null;
   carta_destacado: boolean | null;
   alergenos: string[] | null;
   /** auto = derivados del escandallo; manual = los de la propia lista. */
@@ -131,10 +129,12 @@ export function prepararItemsDesdeProductos(
     items.push({
       producto_id: p.id,
       categoria,
-      // `carta_nombre` permite un nombre comercial distinto al de inventario
-      // ("Bao-cadillo de oreja…" puede llamarse simplemente "Bao de oreja").
-      nombre: (p.carta_nombre?.trim() || p.nombre).trim(),
-      descripcion: p.carta_texto?.trim() || null,
+      // Nombre de ARRANQUE para un plato nuevo. El nombre comercial que lee
+      // el comensal ("Bao de oreja" en vez de "Bao-cadillo de oreja con…") se
+      // escribe luego en la carta digital y ya no vuelve a pisarse desde aquí.
+      nombre: p.nombre.trim(),
+      // El texto de venta nace vacío: lo escribe Marketing en la carta.
+      descripcion: null,
       precio,
       // En AUTOMÁTICO los alérgenos no viven en el producto: se derivan del
       // escandallo. `derivados` los trae ya resueltos desde la BD; si el

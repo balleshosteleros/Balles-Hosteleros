@@ -75,6 +75,12 @@ export const NOTIFICACIONES_AUTOMATICAS: GrupoNotif[] = [
         destinatario: "Su validador",
       },
       {
+        tipo: "solicitud_resuelta",
+        label: "Solicitud aprobada o denegada",
+        cuando: "Su validador resuelve cualquier solicitud suya",
+        destinatario: "El empleado",
+      },
+      {
         tipo: "cambio_email_acceso",
         label: "Cambio del correo de acceso",
         cuando: "Se le cambia el correo con el que entra",

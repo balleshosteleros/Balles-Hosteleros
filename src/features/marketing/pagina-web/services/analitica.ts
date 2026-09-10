@@ -74,7 +74,7 @@ export function clasificarOrigen(
  */
 export function nombrarDestino(destino: string): string {
   if (destino.startsWith("/reservar/")) return "Reservar";
-  if (destino.startsWith("/carta/")) return "Ver la carta";
+  if (destino.startsWith("/carta")) return "Ver la carta";
   if (destino.startsWith("/empleo/")) return "Trabaja con nosotros";
   if (destino.startsWith("tel:")) return "Llamar";
   if (destino.startsWith("mailto:")) return "Escribir un correo";

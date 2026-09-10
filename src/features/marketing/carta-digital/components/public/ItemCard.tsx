@@ -41,12 +41,18 @@ export function ItemCard({
   // que el precio del menú lo diga el título de la categoría.
   const precio = item.precio > 0 ? `${item.precio.toFixed(2).replace(".", ",")}€` : null;
   const conFoto = !!item.foto_url;
+  // Agotado hoy: la tarjeta se apaga (gris y velada) pero NO desaparece. Que
+  // siga ahí es lo que evita que el comensal lo pida y el camarero tenga que
+  // decir que no; borrarlo solo genera la pregunta "¿y el de la foto?".
+  const agotado = item.agotado;
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="group relative flex w-full flex-col overflow-hidden rounded-2xl text-left transition-all duration-500 ease-out hover:-translate-y-1 active:scale-[0.99]"
+      className={`group relative flex w-full flex-col overflow-hidden rounded-2xl text-left transition-all duration-500 ease-out ${
+        agotado ? "grayscale-[0.85] opacity-60" : "hover:-translate-y-1 active:scale-[0.99]"
+      }`}
       style={{
         backgroundColor: "var(--carta-superficie)",
         // Los más vendidos llevan filete del color de marca: en una rejilla de
@@ -111,7 +117,17 @@ export function ItemCard({
         </span>
         ) : null}
 
-        {item.destacado ? (
+        {agotado ? (
+          // Banda sobre la foto: el gris solo puede leerse como "foto mala".
+          // El rótulo dice qué pasa, y "hoy" avisa de que mañana vuelve.
+          <span className="absolute inset-0 flex items-center justify-center bg-black/45 backdrop-blur-[1px]">
+            <span className="rounded-full bg-white/95 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-800 shadow-sm">
+              Agotado hoy
+            </span>
+          </span>
+        ) : null}
+
+        {item.destacado && !agotado ? (
           // Estrella + rótulo: la estrella sola no dice por qué está ahí.
           <span
             // En móvil la etiqueta llegaba a tocar el contador de la esquina

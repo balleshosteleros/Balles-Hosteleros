@@ -81,9 +81,7 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
    * Cuándo sale la campaña, leído de lo guardado. El usuario no ve un cron:
    * elige "cada año" y una fecha, y de ahí se compone.
    */
-  // Meta no tiene fecha de envío: sus anuncios corren entre dos fechas, no
-  // salen un día a una hora.
-  const fechaEnvioDraft = draft.canal === "meta" ? null : draft.fechaEnvio;
+  const fechaEnvioDraft = draft.fechaEnvio;
   const programacion = useMemo(
     () => camposAProgramacion(draft.recurrenciaCron, fechaEnvioDraft ?? null),
     [draft.recurrenciaCron, fechaEnvioDraft],

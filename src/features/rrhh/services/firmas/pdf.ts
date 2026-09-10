@@ -11,6 +11,7 @@ const TIPO_LABEL: Record<TipoEventoFirma, string> = {
   otp_fallido: "Intento de OTP fallido",
   otp_bloqueado: "OTP bloqueado por intentos",
   firmado: "Documento firmado",
+  leido: "Leído por el destinatario",
   rechazado: "Documento rechazado",
   expirado: "Plazo expirado",
 };
@@ -63,6 +64,15 @@ export type DatosActa = {
   userAgent: string | null;
   sha256Original: string;
   trazoFirmaPng?: Uint8Array | null;
+  /**
+   * Cómo se cerró el documento:
+   *   · "firma"   — lo firmó (por defecto).
+   *   · "lectura" — lo dio por leído sin firmarlo, en un documento que no obliga
+   *     a firmar (la comunicación de baja). El acta cambia de título y añade la
+   *     declaración expresa de entrega y lectura, para que acredite lo mismo
+   *     ante un tercero: que se le notificó, cuándo lo abrió y cuándo lo leyó.
+   */
+  cierre?: "firma" | "lectura";
 };
 
 export async function generarActa(
@@ -88,7 +98,9 @@ export async function generarActa(
   let page = pdf.addPage([pageWidth, pageHeight]);
   let y = pageHeight - margin;
 
-  page.drawText("ACTA DE FIRMA ELECTRÓNICA", {
+  const porLectura = datos.cierre === "lectura";
+
+  page.drawText(porLectura ? "ACTA DE ENTREGA Y LECTURA" : "ACTA DE FIRMA ELECTRÓNICA", {
     x: margin,
     y,
     size: 18,
@@ -97,7 +109,9 @@ export async function generarActa(
   });
   y -= 22;
   page.drawText(
-    `Reglamento (UE) 910/2014 (eIDAS) — Firma ${datos.validez.replace("eidas_", "").replace("_", " ")}`,
+    porLectura
+      ? "Reglamento (UE) 910/2014 (eIDAS) — Registro electrónico de entrega y lectura"
+      : `Reglamento (UE) 910/2014 (eIDAS) — Firma ${datos.validez.replace("eidas_", "").replace("_", " ")}`,
     { x: margin, y, size: 10, font, color: colorMuted },
   );
   y -= 26;
@@ -146,14 +160,22 @@ export async function generarActa(
   drawField("Tipo", datos.tipo);
   drawField("Empresa requirente", datos.empresaNombre);
   drawField(
-    "Firmante",
+    porLectura ? "Destinatario" : "Firmante",
     `${datos.empleadoNombre}${datos.empleadoDni ? ` · DNI/NIE ${datos.empleadoDni}` : ""}${datos.empleadoEmail ? ` · ${datos.empleadoEmail}` : ""}`,
   );
   drawField("Enviado por", `${datos.enviadoPor} · ${fmtFecha(datos.enviadoEn, datos.zonaHoraria)}`);
-  drawField("Firmado el", fmtFecha(datos.firmadoEn, datos.zonaHoraria));
-  drawField("Modalidad de firma", datos.modalidad);
   drawField(
-    "Datos del firmante en el momento de la firma",
+    porLectura ? "Declarado leído el" : "Firmado el",
+    fmtFecha(datos.firmadoEn, datos.zonaHoraria),
+  );
+  drawField(
+    porLectura ? "Modalidad de cierre" : "Modalidad de firma",
+    porLectura ? "Acuse de lectura (sin firma)" : datos.modalidad,
+  );
+  drawField(
+    porLectura
+      ? "Datos del destinatario en el momento de la lectura"
+      : "Datos del firmante en el momento de la firma",
     `IP: ${datos.ipFirma ?? "—"} · User-Agent: ${datos.userAgent ?? "—"}`,
   );
   drawFieldMono(
@@ -239,6 +261,53 @@ export async function generarActa(
       color: colorMuted,
     });
     y -= 12;
+  }
+
+  // ── Declaración final ──────────────────────────────────────────────────────
+  // Lo que convierte esta hoja en prueba y no en un listado: dice, con palabras,
+  // qué acredita cada registro. La versión de LECTURA es la que sostiene un
+  // documento sin firmar — deja escrito que se le entregó, cuándo lo abrió y
+  // cuándo declaró haberlo leído, y que no firmarlo no le resta valor como
+  // notificación.
+  {
+    const declaracion = porLectura
+      ? "El presente registro acredita que el documento identificado fue puesto a disposición del " +
+        "destinatario por medios electrónicos, que este accedió a su contenido y que declaró haberlo " +
+        "leído en la fecha y hora indicadas. El destinatario no lo firmó, circunstancia que no afecta " +
+        "a la validez de la notificación ni a la constancia de su recepción y lectura. Cada asiento " +
+        "recoge fecha y hora, dirección IP y navegador, y queda encadenado por hash al asiento " +
+        "anterior, de modo que cualquier alteración posterior resultaría detectable."
+      : "El presente registro acredita que el documento identificado fue puesto a disposición del " +
+        "firmante por medios electrónicos, que este accedió a su contenido y que lo firmó " +
+        "electrónicamente en la fecha y hora indicadas, previa verificación de su identidad. Cada " +
+        "asiento recoge fecha y hora, dirección IP y navegador, y queda encadenado por hash al " +
+        "asiento anterior, de modo que cualquier alteración posterior resultaría detectable.";
+
+    const lineas = wrap(declaracion, font, 8.5, contentWidth);
+    if (y - lineas.length * 11 - 30 < margin) {
+      page = pdf.addPage([pageWidth, pageHeight]);
+      y = pageHeight - margin;
+    }
+    y -= 8;
+    page.drawLine({
+      start: { x: margin, y },
+      end: { x: pageWidth - margin, y },
+      thickness: 0.5,
+      color: colorRule,
+    });
+    y -= 14;
+    page.drawText("QUÉ ACREDITA ESTE REGISTRO", {
+      x: margin,
+      y,
+      size: 8,
+      font: fontBold,
+      color: colorLabel,
+    });
+    y -= 13;
+    for (const ln of lineas) {
+      page.drawText(ln, { x: margin, y, size: 8.5, font, color: colorTexto });
+      y -= 11;
+    }
   }
 
   return pdf.save();

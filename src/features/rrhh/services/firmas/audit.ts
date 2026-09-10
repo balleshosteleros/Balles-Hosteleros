@@ -11,6 +11,8 @@ export type TipoEventoFirma =
   | "otp_fallido"
   | "otp_bloqueado"
   | "firmado"
+  // Acuse de LECTURA: lo abrió y lo dio por leído sin firmarlo.
+  | "leido"
   | "rechazado"
   | "expirado";
 

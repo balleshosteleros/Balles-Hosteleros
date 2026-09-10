@@ -3,10 +3,16 @@
 /**
  * Sincronización de la carta digital desde Logística → Productos (tipo venta).
  *
- * PRODUCTOS MANDA en precio, nombre base y alérgenos: se refrescan en cada
- * sincronización. Lo editorial de la carta —foto, descripción de venta, orden,
- * destacado, visible— NO se pisa: es trabajo que costó hacer y que no puede
+ * REPARTO (Iván, 10-09-2026): ventas define lo que el producto ES; marketing,
+ * lo que el cliente VE.
+ *
+ * PRODUCTOS MANDA en precio, alérgenos y categoría: se refrescan en cada
+ * sincronización. Lo de la carta —nombre que lee el comensal, texto, foto,
+ * orden, estado— NO se pisa nunca: es trabajo que costó hacer y que no puede
  * perderse porque alguien cambie un precio en Logística.
+ *
+ * Al CREAR un plato nuevo, el nombre arranca copiando el del producto; a partir
+ * de ahí vive por su cuenta en la carta.
  *
  * Protocolo MEMORY.md: try/catch + logs en toda escritura.
  */
@@ -78,7 +84,7 @@ export async function previsualizarSincronizacion(): Promise<
     const { data, error } = await supabase
       .from("productos")
       .select(
-        "id, nombre, categoria, precio_venta, carta_nombre, carta_texto, carta_destacado, alergenos, alergenos_modo, estilo_imagen_url, estado, visible_carta",
+        "id, nombre, categoria, precio_venta, carta_destacado, alergenos, alergenos_modo, estilo_imagen_url, estado, visible_carta",
       )
       .eq("empresa_id", empresaId)
       .eq("tipo", "venta");
@@ -126,7 +132,7 @@ export async function sincronizarCartaDesdeProductos(): Promise<
     const { data: productos, error: errProd } = await supabase
       .from("productos")
       .select(
-        "id, nombre, categoria, precio_venta, carta_nombre, carta_texto, carta_destacado, alergenos, alergenos_modo, estilo_imagen_url, estado, visible_carta",
+        "id, nombre, categoria, precio_venta, carta_destacado, alergenos, alergenos_modo, estilo_imagen_url, estado, visible_carta",
       )
       .eq("empresa_id", empresaId)
       .eq("tipo", "venta");
@@ -218,12 +224,16 @@ export async function sincronizarCartaDesdeProductos(): Promise<
       const existenteId = porProducto.get(item.producto_id);
 
       if (existenteId) {
-        // Solo lo que manda Productos. La descripción, la foto, el orden y el
-        // destacado son de la carta y se respetan.
+        // Solo lo que manda Productos: precio, alérgenos y categoría.
+        //
+        // El NOMBRE ya no se pisa. Es lo que lee el comensal y lo escribe
+        // Marketing en la propia carta; refrescarlo desde el inventario
+        // borraba en cada sincronización el nombre comercial ("Bao de oreja"
+        // volvía a ser "Bao-cadillo de oreja con…"). La descripción, la foto
+        // y el orden tampoco se tocan, por lo mismo.
         const { error } = await supabase
           .from("carta_items")
           .update({
-            nombre: item.nombre,
             precio: item.precio,
             alergenos: item.alergenos,
             categoria_id: categoriaId,

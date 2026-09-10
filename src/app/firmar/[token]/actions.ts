@@ -438,6 +438,15 @@ export type FirmarResult =
   | { ok: true; descargaUrl: string }
   | { ok: false; error: string };
 
+/**
+ * Documentos que se pueden cerrar con un simple «leído», sin firmar.
+ *
+ * Solo las comunicaciones que la empresa notifica y el trabajador no tiene por
+ * qué aceptar. Todo lo demás —contratos, anulaciones, actas de material— exige
+ * firma: ahí la firma no es un acuse, es el consentimiento.
+ */
+const DOCS_ACUSE_LECTURA = ["baja_empresa"];
+
 export async function firmarDocumento(input: FirmarDocumentoInput): Promise<FirmarResult> {
   try {
     const res = await resolverToken(input.token);
@@ -778,6 +787,22 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       }
     }
 
+    // Comunicación de baja: se archiva en su carpeta «Contratos», junto al
+    // contrato que ahora se extingue. Es el documento que acredita cómo y cuándo
+    // terminó la relación laboral; dejarlo solo en el bucket de firmas era
+    // perderlo de vista justo cuando más falta puede hacer.
+    if ((doc.tipo as string) === "baja_empresa") {
+      await archivarEnCarpetaEmpleado(admin, {
+        empresaId: doc.empresa_id as string,
+        empleadoId: doc.empleado_id as string,
+        documentoId,
+        titulo: doc.titulo as string,
+        bytes: firmadoBytes,
+        creadoPor: (emp?.user_id as string) ?? null,
+        sufijo: "firmada",
+      });
+    }
+
     // Documento firmado: el aviso in-app de "documento para firmar" queda leído.
     // Corre con service role porque la firma ocurre por enlace público, sin sesión
     // del empleado. Complementario: si falla, no debe tumbar la firma ya completada.
@@ -1016,6 +1041,215 @@ export async function getEstadoFirma(
     return { estado: doc.estado as "pendiente" | "firmado" | "rechazado" | "expirado", descargaUrl };
   } catch {
     return { estado: null };
+  }
+}
+
+/**
+ * Archiva una copia del documento cerrado en la carpeta «Contratos» del
+ * trabajador, para que le quede de forma permanente aunque caduque el enlace de
+ * descarga. Best-effort: nunca puede tumbar el cierre del documento.
+ */
+async function archivarEnCarpetaEmpleado(
+  admin: ReturnType<typeof createAdminClient>,
+  args: {
+    empresaId: string;
+    empleadoId: string;
+    documentoId: string;
+    titulo: string;
+    bytes: Uint8Array;
+    creadoPor: string | null;
+    sufijo: string;
+  },
+): Promise<void> {
+  try {
+    const destPath = `${args.empresaId}/${args.empleadoId}/baja-${args.documentoId}.pdf`;
+    const copia = await admin.storage
+      .from("empleados-docs")
+      .upload(destPath, args.bytes, { upsert: true, contentType: "application/pdf" });
+    if (copia.error) {
+      console.error("[firmar] archivar baja:", copia.error.message);
+      return;
+    }
+    await admin.from("documentos_empleado").insert({
+      empresa_id: args.empresaId,
+      empleado_id: args.empleadoId,
+      categoria: "contratos",
+      nombre: `${args.titulo} (${args.sufijo}).pdf`,
+      storage_path: destPath,
+      tipo_mime: "application/pdf",
+      tamano_bytes: args.bytes.length,
+      created_by: args.creadoPor,
+    });
+  } catch (e) {
+    console.error("[firmar] archivar baja en documentos del empleado:", e);
+  }
+}
+
+/**
+ * ACUSE DE LECTURA: cierra el documento sin firmarlo.
+ *
+ * Para los documentos que NO es obligatorio firmar —la comunicación de baja que
+ * causa la empresa es el caso—: el trabajador puede negarse a firmar su despido
+ * y esa negativa no lo invalida. Lo que la empresa sí tiene que poder acreditar
+ * es que se le informó y que lo leyó.
+ *
+ * Deja exactamente el mismo rastro que una firma, menos el trazo: evento con su
+ * hora, IP y navegador, encadenado por hash al resto; acta de auditoría con TODO
+ * el recorrido (cuándo se le envió, cuándo lo abrió, cuándo lo dio por leído);
+ * el acta pegada al documento; y copia al trabajador por correo.
+ *
+ * No pide OTP: firmar es asumir el contenido y por eso lleva doble factor; darse
+ * por enterado es otra cosa, y exigirle un código para poder cerrar la ventana
+ * solo conseguiría que no lo cerrara nunca.
+ */
+export async function acusarLectura(
+  input: { token: string },
+): Promise<{ ok: true; descargaUrl: string } | { ok: false; error: string }> {
+  try {
+    const res = await resolverToken(input.token);
+    if (!res.ok) return { ok: false, error: "Enlace no válido o caducado" };
+
+    const admin = createAdminClient();
+    const documentoId = res.tokenRow.documento_id as string;
+    const meta = await getMeta();
+
+    const { data: doc } = await admin
+      .from("firmas_documentos")
+      .select(
+        "id, empresa_id, empleado_id, titulo, tipo, modalidad, validez, estado, sha256_original, pdf_original_path, enviado_por, enviado_en",
+      )
+      .eq("id", documentoId)
+      .maybeSingle();
+    if (!doc) return { ok: false, error: "Documento no encontrado" };
+    if (doc.estado !== "pendiente") return { ok: false, error: "Documento ya cerrado" };
+    if (!DOCS_ACUSE_LECTURA.includes(doc.tipo as string)) {
+      return { ok: false, error: "Este documento hay que firmarlo, no vale con darlo por leído." };
+    }
+
+    const [{ data: emp }, { data: empresa }, { data: enviadoPorUser }] = await Promise.all([
+      admin
+        .from("empleados")
+        .select("nombre, apellidos, dni_nie, email_empresa, email_personal, user_id")
+        .eq("id", doc.empleado_id)
+        .maybeSingle(),
+      admin
+        .from("empresas")
+        .select("nombre, logo_url, isotipo_url, config_operativa")
+        .eq("id", doc.empresa_id)
+        .maybeSingle(),
+      admin.from("usuarios").select("full_name, email").eq("id", doc.enviado_por).maybeSingle(),
+    ]);
+
+    const leidoEnIso = new Date().toISOString();
+    await registrarEvento({
+      documentoId,
+      tipo: "leido",
+      actorUserId: (emp?.user_id as string) ?? null,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      metadata: { acuse: "recibido", leidoEn: leidoEnIso },
+    });
+
+    const eventos = await listarEventos(documentoId);
+    const empleadoEmail =
+      (emp?.email_empresa as string | null) || (emp?.email_personal as string | null);
+
+    const datos: DatosActa = {
+      documentoId,
+      titulo: doc.titulo as string,
+      tipo: doc.tipo as string,
+      modalidad: doc.modalidad as string,
+      validez: doc.validez as string,
+      empresaNombre: (empresa?.nombre as string) ?? "—",
+      zonaHoraria:
+        ((empresa?.config_operativa as Record<string, unknown> | null)?.zonaHoraria as string | undefined)?.trim() ||
+        "Europe/Madrid",
+      empleadoNombre: `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "—",
+      empleadoDni: (emp?.dni_nie as string | null) ?? null,
+      empleadoEmail,
+      enviadoPor: resolverEnviadoPor(doc.tipo as string | null, empresa?.nombre as string | null, enviadoPorUser),
+      enviadoEn: doc.enviado_en as string,
+      // El acta habla de «cierre»: aquí lo que se sella es la lectura.
+      firmadoEn: leidoEnIso,
+      ipFirma: meta.ip,
+      userAgent: meta.userAgent,
+      sha256Original: doc.sha256_original as string,
+      trazoFirmaPng: null,
+      cierre: "lectura",
+    };
+
+    const actaBytes = await generarActa(datos, eventos);
+    const { data: originalDl, error: dlErr } = await admin.storage
+      .from(BUCKET)
+      .download(doc.pdf_original_path as string);
+    if (dlErr || !originalDl) return { ok: false, error: "No se pudo cargar el PDF original" };
+    const originalBytes = new Uint8Array(await originalDl.arrayBuffer());
+
+    // Sin trazo ni posición: el acta se pega detrás del documento tal cual.
+    const finalBytes = await aplicarFirmaYConcatenar(originalBytes, actaBytes, null, null);
+    const sha256Acta = sha256(Buffer.from(finalBytes));
+
+    const finalPath = `${doc.empresa_id}/${documentoId}/leido.pdf`;
+    const { error: upErr } = await admin.storage
+      .from(BUCKET)
+      .upload(finalPath, finalBytes, { upsert: true, contentType: "application/pdf" });
+    if (upErr) return { ok: false, error: `No se pudo guardar el documento: ${upErr.message}` };
+
+    await admin
+      .from("firmas_documentos")
+      .update({
+        estado: "leido",
+        firmado_en: leidoEnIso,
+        ip_firma: meta.ip,
+        user_agent: meta.userAgent,
+        metodo_firma: "acuse_lectura",
+        pdf_firmado_path: finalPath,
+        sha256_acta: sha256Acta,
+      })
+      .eq("id", documentoId);
+
+    // El enlace queda consumido: ya cumplió su función.
+    await admin
+      .from("firmas_tokens")
+      .update({ consumido_en: new Date().toISOString() })
+      .eq("id", res.tokenRow.id)
+      .is("consumido_en", null);
+
+    // Su carpeta: la comunicación se archiva igual, firmada o solo leída.
+    await archivarEnCarpetaEmpleado(admin, {
+      empresaId: doc.empresa_id as string,
+      empleadoId: doc.empleado_id as string,
+      documentoId,
+      titulo: doc.titulo as string,
+      bytes: finalBytes,
+      creadoPor: (emp?.user_id as string) ?? null,
+      sufijo: "leída",
+    });
+
+    const signed = await admin.storage
+      .from(BUCKET)
+      .createSignedUrl(finalPath, COPIA_TTL_SECONDS, { download: "documento-leido.pdf" });
+    const descargaUrl = signed.data?.signedUrl ?? "";
+
+    if (empleadoEmail && descargaUrl) {
+      await enviarCopiaFirmada({
+        to: empleadoEmail,
+        empresaId: doc.empresa_id as string,
+        empresaNombre: (empresa?.nombre as string) ?? "Empresa",
+        empresaLogoUrl: (empresa?.logo_url as string | null) ?? null,
+        empleadoNombre: datos.empleadoNombre,
+        tituloDocumento: doc.titulo as string,
+        firmadoEn: new Date(leidoEnIso),
+        signedUrl: descargaUrl,
+        pdfFirmado: finalBytes,
+      });
+    }
+
+    return { ok: true, descargaUrl };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[firmar/acusarLectura]", msg);
+    return { ok: false, error: msg };
   }
 }
 

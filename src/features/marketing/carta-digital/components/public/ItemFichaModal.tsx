@@ -88,7 +88,16 @@ export function ItemFichaModal({
             </div>
           )}
 
-          {item.destacado ? (
+          {item.agotado ? (
+            // Misma señal que en la rejilla: foto apagada y el motivo escrito.
+            <span className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-[1px]">
+              <span className="rounded-full bg-white/95 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-800 shadow-sm">
+                Agotado hoy
+              </span>
+            </span>
+          ) : null}
+
+          {item.destacado && !item.agotado ? (
             <span
               className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 shadow-[0_2px_8px_rgba(180,83,9,0.45)] ring-1 ring-amber-200/80 backdrop-blur"
             >

@@ -2,12 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { getMarketingContext } from "@/features/marketing/lib/supabase-context";
-import {
-  syncCampanaToMeta,
-  updateCampanaMetaStatus,
-  fetchCampanaMetaInsights,
-  isMetaConfigured,
-} from "@/features/marketing/services/meta-ads-service";
 import { sendEmailCampana, isResendConfigured } from "@/features/marketing/services/resend-service";
 import { abrirEdicion } from "@/features/marketing/services/concurso";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -15,7 +9,6 @@ import { sendWhatsAppCampana, isWhatsAppConfigured } from "@/features/marketing/
 import type {
   Campana,
   CampanaEmail,
-  CampanaMeta,
   CampanaSms,
   CampanaWhatsApp,
   SegmentoJson,
@@ -89,29 +82,16 @@ function rowToCampana(row: Row): Campana {
       fechaEnvio: (row.fecha_envio as string | null) ?? null,
     } as CampanaSms;
   }
-  // meta (canal === "meta" || "google" → "google" se mapea a meta hasta que se implemente)
+  // Cualquier otro canal guardado (incluido "meta" de antes de PRP-087) se lee
+  // como SMS para no reventar la lista. La publicidad de Meta ya no vive en
+  // esta tabla: tiene su propio espejo en `features/marketing/meta-ads`.
   return {
     ...base,
-    canal: "meta",
-    objetivo: (payload.objetivo as CampanaMeta["objetivo"]) ?? "LEADS",
-    plataformas: (payload.plataformas as CampanaMeta["plataformas"]) ?? ["facebook", "instagram"],
-    presupuestoDiario: Number(payload.presupuestoDiario ?? 10),
-    duracionDias: Number(payload.duracionDias ?? 7),
-    publicoObjetivo: (payload.publicoObjetivo as CampanaMeta["publicoObjetivo"]) ?? {
-      edadMin: 25, edadMax: 55, genero: "todos", ubicaciones: [], intereses: [],
-    },
-    creatividad: (payload.creatividad as CampanaMeta["creatividad"]) ?? {
-      titular: "", descripcion: "", textoPrincipal: "", imagenUrl: "",
-      cta: "RESERVAR", urlDestino: "",
-    },
-    fechaInicio: (row.fecha_inicio as string | null) ?? null,
-    fechaFin: (row.fecha_fin as string | null) ?? null,
-    metaCampaignId: (row.meta_campaign_id as string | null) ?? null,
-    metaAdSetId: (row.meta_adset_id as string | null) ?? null,
-    metaAdId: (row.meta_ad_id as string | null) ?? null,
-    metaSyncedAt: (row.meta_synced_at as string | null) ?? null,
-    metaSyncError: (row.meta_sync_error as string | null) ?? null,
-  } as CampanaMeta;
+    canal: "sms",
+    cuerpo: (payload.cuerpo as string) ?? "",
+    remitente: (payload.remitente as string) ?? "",
+    fechaEnvio: (row.fecha_envio as string | null) ?? null,
+  } as CampanaSms;
 }
 
 function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
@@ -177,26 +157,8 @@ function campanaToRow(c: Campana, empresaId: string): Record<string, unknown> {
       },
     };
   }
-  // meta
-  return {
-    ...base,
-    fecha_inicio: c.fechaInicio,
-    fecha_fin: c.fechaFin,
-    meta_campaign_id: c.metaCampaignId,
-    meta_adset_id: c.metaAdSetId,
-    meta_ad_id: c.metaAdId,
-    meta_synced_at: c.metaSyncedAt,
-    meta_sync_error: c.metaSyncError,
-    payload: {
-      ...selloSeed,
-      objetivo: c.objetivo,
-      plataformas: c.plataformas,
-      presupuestoDiario: c.presupuestoDiario,
-      duracionDias: c.duracionDias,
-      publicoObjetivo: c.publicoObjetivo,
-      creatividad: c.creatividad,
-    },
-  };
+  // Aquí no llega ningún canal más: los tres se han devuelto arriba.
+  throw new Error(`Canal de campaña no soportado: ${(c as { canal: string }).canal}`);
 }
 
 // ─── CRUD ────────────────────────────────────────────────────────
@@ -276,7 +238,8 @@ export async function eliminarCampanaAction(id: string) {
 
 export async function verificarIntegracionesAction() {
   return {
-    meta: isMetaConfigured(),
+    // Meta ya no está aquí: se conecta por empresa en Ajustes → Integraciones
+    // y su estado lo da `getMetaEstadoAction` (PRP-087).
     resend: isResendConfigured(),
     whatsapp: isWhatsAppConfigured(),
   };
@@ -352,23 +315,4 @@ export async function enviarWhatsAppAction(campana: CampanaWhatsApp) {
   const result = await sendWhatsAppCampana(campana);
   if (result.success) revalidatePath("/marketing/campanas");
   return result;
-}
-
-export async function sincronizarCampanaMetaAction(campana: CampanaMeta) {
-  const result = await syncCampanaToMeta(campana);
-  if (result.success) revalidatePath("/marketing/campanas");
-  return result;
-}
-
-export async function cambiarEstadoMetaAction(
-  metaCampaignId: string,
-  status: "ACTIVE" | "PAUSED" | "DELETED",
-) {
-  const result = await updateCampanaMetaStatus(metaCampaignId, status);
-  if (result.success) revalidatePath("/marketing/campanas");
-  return result;
-}
-
-export async function traerInsightsMetaAction(metaCampaignId: string) {
-  return fetchCampanaMetaInsights(metaCampaignId);
 }

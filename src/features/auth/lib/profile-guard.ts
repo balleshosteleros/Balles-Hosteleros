@@ -41,8 +41,12 @@ export async function checkProfileGuard(
   // saltaba entera y el usuario colaba sin que nadie le hubiera dado el alta.
   // Sin estado NO se entra — sin estado no hay permiso, y la ausencia de dato
   // nunca puede valer como permiso concedido.
+  //
+  // 'Offboarding' TAMBIÉN entra: es el trabajador que ya ha pasado su último día
+  // pero aún tiene que firmar la devolución del material y su finiquito. Entra
+  // solo a sus documentos; de eso se encarga el proxy, que restringe por ruta.
   const estado = (profile.estado_acceso as string | null)?.trim() || null
-  if (estado !== 'Activo') {
+  if (estado !== 'Activo' && estado !== 'Offboarding') {
     return { ok: false, code: 'cuenta_inactiva' }
   }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Campana, CampanaEmail, CampanaWhatsApp, CampanaMeta } from "@/features/marketing/data/campanas";
+import type { Campana, CampanaEmail, CampanaWhatsApp } from "@/features/marketing/data/campanas";
 import {
   listCampanasAction,
   guardarCampanaAction,
@@ -94,7 +94,8 @@ export function useCampanas(empresaId: string) {
 
   const emails = campanas.filter((c): c is CampanaEmail => c.canal === "email");
   const whatsapps = campanas.filter((c): c is CampanaWhatsApp => c.canal === "whatsapp");
-  const metas = campanas.filter((c): c is CampanaMeta => c.canal === "meta");
+  // Meta ya no sale de aquí: su publicidad tiene tres niveles y vive en
+  // `features/marketing/meta-ads`, contra la cuenta real (PRP-087).
 
-  return { campanas, emails, whatsapps, metas, guardar, eliminar, loaded, modoLocal, recargar };
+  return { campanas, emails, whatsapps, guardar, eliminar, loaded, modoLocal, recargar };
 }

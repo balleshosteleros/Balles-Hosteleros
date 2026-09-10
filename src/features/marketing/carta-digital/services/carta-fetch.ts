@@ -4,6 +4,8 @@
  * RLS exige `carta_publicada=true` y `visible=true`.
  */
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { diaNegocioHoy } from "@/features/sala/lib/dia-negocio";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import type {
   CartaPublica,
   CartaCategoria,
@@ -84,6 +86,10 @@ interface ItemRow {
   destacado: boolean;
   likes_count: number;
   likes_base: number | null;
+  oculto: boolean | null;
+  oculto_desde: string | null;
+  oculto_hasta: string | null;
+  agotado_dia: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -144,7 +150,44 @@ function categoriaEnHorario(c: CartaCategoria, zona: string): boolean {
   return true;
 }
 
-function rowToItem(r: ItemRow): CartaItem {
+const DIAS_NOMBRE = ["", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+
+/**
+ * El horario de la categoría, escrito para que lo lea un cliente.
+ *
+ * Solo se usa en la carta abierta desde la WEB: si el menú del día se enseña
+ * un domingo, tiene que quedar claro cuándo se sirve. Sin esta frase, enseñar
+ * la categoría fuera de su horario sería exactamente la promesa falsa que la
+ * ventana horaria venía a evitar.
+ */
+function textoHorario(c: CartaCategoria): string | null {
+  const dias = c.dias_semana?.length ? [...c.dias_semana].sort((a, b) => a - b) : null;
+  let parteDias: string | null = null;
+
+  if (dias && dias.length < 7) {
+    const consecutivos = dias.every((d, i) => i === 0 || d === dias[i - 1] + 1);
+    if (dias.length === 1) {
+      parteDias = `los ${DIAS_NOMBRE[dias[0]]}`;
+    } else if (consecutivos) {
+      parteDias = `de ${DIAS_NOMBRE[dias[0]]} a ${DIAS_NOMBRE[dias[dias.length - 1]]}`;
+    } else {
+      const nombres = dias.map((d) => DIAS_NOMBRE[d]);
+      parteDias = `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+    }
+  }
+
+  const hhmm = (h: string) => h.slice(0, 5);
+  let parteHoras: string | null = null;
+  if (c.hora_desde && c.hora_hasta) parteHoras = `de ${hhmm(c.hora_desde)} a ${hhmm(c.hora_hasta)}`;
+  else if (c.hora_desde) parteHoras = `a partir de las ${hhmm(c.hora_desde)}`;
+  else if (c.hora_hasta) parteHoras = `hasta las ${hhmm(c.hora_hasta)}`;
+
+  if (!parteDias && !parteHoras) return null;
+  const frase = [parteDias, parteHoras].filter(Boolean).join(", ");
+  return `Se sirve ${frase}`;
+}
+
+function rowToItem(r: ItemRow, diaServicio: string): CartaItem {
   return {
     id: r.id,
     empresa_id: r.empresa_id,
@@ -161,12 +204,33 @@ function rowToItem(r: ItemRow): CartaItem {
     destacado: r.destacado,
     likes_count: r.likes_count,
     likes_base: r.likes_base ?? 0,
+    // Agotado es "de hoy": la marca caduca sola al cambiar el día de servicio.
+    agotado: !!r.agotado_dia && r.agotado_dia === diaServicio,
     created_at: r.created_at,
     updated_at: r.updated_at,
   };
 }
 
-export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | null> {
+/**
+ * Dónde se está leyendo la carta.
+ *
+ *  · `local` (por defecto) — el QR de la mesa. Solo se enseña lo que la cocina
+ *    sirve AHORA: un menú del día en la carta de un sábado por la noche es
+ *    prometer algo que no existe, y el camarero acaba dando explicaciones.
+ *  · `web` — el enlace desde la página del restaurante. Aquí manda lo
+ *    contrario: quien mira la web un domingo por la tarde está decidiendo si
+ *    viene el martes a comer, y el menú del día es justo lo que busca. Se
+ *    enseña entero, con su horario escrito al lado.
+ *
+ * No hace falta reimprimir ningún QR: los de mesa ya apuntan al enlace pelado,
+ * que es el modo `local`; es la web la que añade la marca.
+ */
+export type ModoLectura = "local" | "web";
+
+export async function fetchCartaPorSlug(
+  slug: string,
+  modo: ModoLectura = "local",
+): Promise<CartaPublica | null> {
   try {
     // Carga inicial con service role (server-side, no llega al navegador).
     // Las RLS actuales de carta_categorias/carta_items hacen un join a empresas
@@ -238,43 +302,85 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
     const categoriasRows = (categoriasRes.data ?? []) as CategoriaRow[];
     const itemsRows = (itemsRes.data ?? []) as ItemRow[];
 
-    // Override de nombre/descripción desde productos.carta_nombre / carta_texto cuando aplique.
+    // Del producto solo se leen las decisiones que son SUYAS: si es de carta,
+    // si lleva estrella y si hoy está agotado. El nombre y el texto que ve el
+    // comensal los escribe Marketing en la propia carta y no se pisan aquí.
     const productoIds = Array.from(
       new Set(itemsRows.map((i) => i.producto_id).filter((v): v is string => !!v)),
     );
-    const productosOverride = new Map<string, { carta_nombre: string | null; carta_texto: string | null; carta_destacado: boolean }>();
+    const productosOverride = new Map<
+      string,
+      { carta_destacado: boolean; visible_carta: boolean; agotado_dia: string | null }
+    >();
     if (productoIds.length > 0) {
       const { data: prodRows } = await supabase
         .from("productos")
-        .select("id, carta_nombre, carta_texto, carta_destacado")
+        .select("id, carta_destacado, visible_carta, agotado_dia")
         .in("id", productoIds);
-      for (const p of (prodRows ?? []) as { id: string; carta_nombre: string | null; carta_texto: string | null; carta_destacado: boolean | null }[]) {
-        productosOverride.set(p.id, { carta_nombre: p.carta_nombre, carta_texto: p.carta_texto, carta_destacado: p.carta_destacado ?? false });
+      for (const p of (prodRows ?? []) as {
+        id: string;
+        carta_destacado: boolean | null;
+        visible_carta: boolean | null;
+        agotado_dia: string | null;
+      }[]) {
+        productosOverride.set(p.id, {
+          carta_destacado: p.carta_destacado ?? false,
+          visible_carta: p.visible_carta ?? false,
+          agotado_dia: p.agotado_dia,
+        });
       }
     }
 
-    const items = itemsRows.map((row) => {
-      const item = rowToItem(row);
+    // Zona del restaurante, no la del móvil de quien mira la carta.
+    const zona = (empresa.config_operativa?.zonaHoraria || "").trim() || "Europe/Madrid";
+    // Día de SERVICIO (corte a las 06:00): lo que cocina marcó agotado esta
+    // noche sigue agotado a la 1 de la madrugada, que es el mismo servicio.
+    const diaServicio = diaNegocioHoy(zona);
+    const hoy = hoyEnZona(zona);
+
+    const items = itemsRows
+      // Un plato en pausa editorial ("en agosto no lo hacemos") no llega al
+      // comensal. La regla de seguridad de la tabla ya lo dice, pero esta
+      // carga usa la llave de servicio para poder leer la empresa, y esa llave
+      // se salta las reglas: sin este filtro, un plato retirado seguía saliendo.
+      .filter((row) => {
+        if (!row.oculto) return true;
+        if (row.oculto_desde && hoy < row.oculto_desde) return true;
+        if (row.oculto_hasta && hoy > row.oculto_hasta) return true;
+        return false;
+      })
+      // El interruptor maestro de la ficha del producto manda sobre todo: si
+      // ahí se dijo que no es de carta, no es de carta.
+      .filter((row) => !row.producto_id || productosOverride.get(row.producto_id)?.visible_carta !== false)
+      .map((row) => {
+      const item = rowToItem(row, diaServicio);
       if (row.producto_id) {
         const ov = productosOverride.get(row.producto_id);
-        if (ov?.carta_nombre && ov.carta_nombre.trim()) item.nombre = ov.carta_nombre;
-        if (ov?.carta_texto && ov.carta_texto.trim()) item.descripcion = ov.carta_texto;
         // La estrella destacada se gobierna desde la ficha del producto de venta.
         if (ov) item.destacado = ov.carta_destacado;
+        // Cocina apaga el PRODUCTO, no el plato de la carta: así el mismo
+        // toque vale para la carta, para la tecla del TPV y para la comanda
+        // del camarero. El plato solo lleva marca propia cuando no tiene
+        // producto detrás (los escritos a mano aquí).
+        if (ov?.agotado_dia && ov.agotado_dia === diaServicio) item.agotado = true;
       }
       return item;
     });
-    // Zona del restaurante, no la del móvil de quien mira la carta.
-    const zona =
-      (empresa.config_operativa?.zonaHoraria || "").trim() || "Europe/Madrid";
 
     const categorias = categoriasRows
       .map(rowToCategoria)
-      .filter((c) => categoriaEnHorario(c, zona))
-      .map((c) => ({
-        ...c,
-        items: items.filter((i) => i.categoria_id === c.id),
-      }));
+      // En la mesa solo se enseña lo que se sirve ahora. Desde la web se
+      // enseña todo, y lo que ahora no toca lleva su horario escrito.
+      .filter((c) => modo === "web" || categoriaEnHorario(c, zona))
+      .map((c) => {
+        const fuera = modo === "web" && !categoriaEnHorario(c, zona);
+        return {
+          ...c,
+          fuera_de_horario: fuera,
+          horario_texto: textoHorario(c),
+          items: items.filter((i) => i.categoria_id === c.id),
+        };
+      });
     const destacados = items.filter((i) => i.destacado);
 
     const familias: CartaFamilia[] =

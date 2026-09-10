@@ -379,23 +379,22 @@ export async function enviarPeticionDocsBaja(
     const subject = vencido
       ? `⚠️ Urgente: faltan los documentos de la baja de ${nombre} · ${empresaNombre}`
       : `Documentos de la baja de ${nombre} (${fechaES}) · ${empresaNombre}`;
+    // Correo CORTO a propósito: quien lo abre solo necesita saber de quién es la
+    // baja, qué día, y qué dos papeles tiene que subir. Nada más.
+    const quien = `<b>${nombre}</b>${emp?.dni_nie ? ` (${emp.dni_nie})` : ""}`;
     const html = `
       <p>${
         vencido
-          ? `Nos falta el <b>justificante de baja de la Seguridad Social</b> de <b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""}.`
+          ? `Falta el justificante de baja de ${quien}. Su baja fue el <b>${fechaES}</b>.`
           : futura
-            ? `<b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""} causa baja en la empresa.`
-            : `Hoy es el último día de trabajo de <b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""}.`
+            ? `${quien} causa baja el <b>${fechaES}</b>.`
+            : `Hoy es el último día de ${quien}. Baja efectiva el <b>${fechaES}</b>.`
       }</p>
-      <p${vencido ? ' style="color:#b91c1c"' : ""}>
-        ${
-          vencido
-            ? `Su baja tenía fecha del <b>${fechaES}</b> y esa fecha <b>ya ha pasado</b>. Sin el justificante no podemos acreditar la baja ni su causa. Te agradeceríamos que nos lo envíes cuanto antes.`
-            : futura
-              ? `Su último día de trabajo será el <b>${fechaES}</b>. En cuanto tramites la baja, adjúntanos por favor el <b>justificante de baja de la Seguridad Social</b> y el <b>certificado de empresa</b> desde el botón de abajo. El enlace queda guardado y puedes usarlo cuando tengas los documentos.`
-              : `Su baja es efectiva el <b>${fechaES}</b>. Al tramitarla, adjúntanos por favor el <b>justificante de baja de la Seguridad Social</b> y el <b>certificado de empresa</b>.`
-        }
-      </p>
+      <p${vencido ? ' style="color:#b91c1c"' : ""}>${
+        vencido
+          ? "Súbelo cuanto antes, por favor:"
+          : "Al tramitarla, súbenos aquí el <b>justificante de baja (Seguridad Social)</b> y el <b>certificado de empresa</b>:"
+      }</p>
       ${botonHtml}
       <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
     const text =

@@ -47,10 +47,9 @@ const productoInputSchema = z.object({
   estiloImagenUrl: z.string().nullable().optional(),
   textoTicket: z.string().nullable().optional(),
   textoComanda: z.string().nullable().optional(),
-  cartaNombre: z.string().nullable().optional(),
-  cartaTexto: z.string().nullable().optional(),
   cartaDestacado: z.boolean().optional(),
   visibleCarta: z.boolean().optional(),
+  visibleTerminal: z.boolean().optional(),
   alergenos: z.array(z.string()).optional(),
   alergenosModo: z.enum(["auto", "manual"]).optional(),
 });
@@ -82,10 +81,9 @@ type ProductoRow = {
   estilo_imagen_url: string | null;
   texto_ticket: string | null;
   texto_comanda: string | null;
-  carta_nombre: string | null;
-  carta_texto: string | null;
   carta_destacado: boolean | null;
   visible_carta: boolean | null;
+  visible_terminal: boolean | null;
   alergenos: string[] | null;
   alergenos_modo: string | null;
   created_at: string;
@@ -116,10 +114,10 @@ function rowToProducto(r: ProductoRow): Producto {
     estiloImagenUrl: r.estilo_imagen_url ?? null,
     textoTicket: r.texto_ticket ?? undefined,
     textoComanda: r.texto_comanda ?? undefined,
-    cartaNombre: r.carta_nombre ?? null,
-    cartaTexto: r.carta_texto ?? null,
     cartaDestacado: r.carta_destacado ?? false,
     visibleCarta: r.visible_carta ?? false,
+    // Por defecto SÍ sale en el terminal: es lo que pasaba antes de existir la columna.
+    visibleTerminal: r.visible_terminal ?? true,
     alergenos: Array.isArray(r.alergenos) ? r.alergenos : [],
     alergenosModo: (r.alergenos_modo === "manual" ? "manual" : "auto"),
     createdAt: r.created_at ?? undefined,
@@ -313,10 +311,9 @@ export async function createProducto(
         estilo_imagen_url: parsed.data.estiloImagenUrl ?? null,
         texto_ticket: parsed.data.textoTicket ?? null,
         texto_comanda: parsed.data.textoComanda ?? null,
-        carta_nombre: parsed.data.cartaNombre ?? null,
-        carta_texto: parsed.data.cartaTexto ?? null,
         carta_destacado: parsed.data.cartaDestacado ?? false,
         visible_carta: parsed.data.visibleCarta ?? false,
+        visible_terminal: parsed.data.visibleTerminal ?? true,
         alergenos: parsed.data.alergenos ?? [],
         alergenos_modo: parsed.data.alergenosModo ?? (parsed.data.tipo === "compra" ? "manual" : "auto"),
         created_by: user.id,
@@ -435,10 +432,9 @@ export async function bulkImportProductos(
       estilo_imagen_url: p.estiloImagenUrl ?? null,
       texto_ticket: p.textoTicket ?? null,
       texto_comanda: p.textoComanda ?? null,
-      carta_nombre: p.cartaNombre ?? null,
-      carta_texto: p.cartaTexto ?? null,
       carta_destacado: p.cartaDestacado ?? false,
       visible_carta: p.visibleCarta ?? false,
+      visible_terminal: p.visibleTerminal ?? true,
       alergenos: p.alergenos ?? [],
       alergenos_modo: p.tipo === "compra" ? "manual" : (p.alergenosModo ?? "auto"),
       created_by: user.id,
@@ -513,10 +509,9 @@ export async function updateProducto(
     if (input.estiloImagenUrl !== undefined) updates.estilo_imagen_url = input.estiloImagenUrl;
     if (input.textoTicket !== undefined) updates.texto_ticket = input.textoTicket;
     if (input.textoComanda !== undefined) updates.texto_comanda = input.textoComanda;
-    if (input.cartaNombre !== undefined) updates.carta_nombre = input.cartaNombre;
-    if (input.cartaTexto !== undefined) updates.carta_texto = input.cartaTexto;
     if (input.cartaDestacado !== undefined) updates.carta_destacado = input.cartaDestacado;
     if (input.visibleCarta !== undefined) updates.visible_carta = input.visibleCarta;
+    if (input.visibleTerminal !== undefined) updates.visible_terminal = input.visibleTerminal;
     if (input.alergenos !== undefined) updates.alergenos = input.alergenos ?? [];
     if (input.alergenosModo !== undefined) updates.alergenos_modo = input.alergenosModo;
 

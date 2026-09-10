@@ -16,6 +16,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 import { generarCartaBajaEmpresaPDF } from "./baja-empresa-pdf";
 import { crearFirmaInterno } from "./crear-firma";
+import type { TipoBajaContrato } from "@/features/rrhh/data/campos-gestoria";
 
 export type EnviarCartaBajaResult =
   | { ok: true; documentoId: string; emailEnviado: boolean }
@@ -42,6 +43,8 @@ export async function enviarCartaBajaEmpresa(input: {
   ultimoDiaIso: string;
   /** Etiqueta del tipo de baja (Disciplinaria, Fin de contrato…). */
   tipoBajaLabel: string;
+  /** Tipo de baja: decide el texto entero de la carta. */
+  tipoBaja?: TipoBajaContrato;
   /** Hechos que motivan la baja, ya redactados por RRHH. */
   hechos: string | null;
   /** Quién tramita la baja (para `enviado_por` y el correo). */
@@ -108,6 +111,7 @@ export async function enviarCartaBajaEmpresa(input: {
       ultimoDia: fmtEs(input.ultimoDiaIso),
       diaOficial: fmtEs(diaSiguienteIso(input.ultimoDiaIso)),
       tipoBajaLabel: input.tipoBajaLabel,
+      tipoBaja: input.tipoBaja,
       hechos: input.hechos,
       marca: await getMarcaEmpresa(input.empresaId),
     });

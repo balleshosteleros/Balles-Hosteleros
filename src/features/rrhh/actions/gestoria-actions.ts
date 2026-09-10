@@ -31,6 +31,59 @@ import {
   type TipoBajaContrato,
 } from "@/features/rrhh/data/campos-gestoria";
 import {
+  camposFiscalesEmpresa,
+  camposCentroTrabajo,
+  type CampoGestoria,
+  type LocalParaGestoria,
+} from "@/features/rrhh/services/datos-empresa-gestoria";
+import type { DatosGenerales } from "@/features/ajustes/data/ajustes";
+
+// ── Ficha del correo a la gestoría (alta, cambio de puesto y baja) ─────────
+// Cada dato es una fila: etiqueta gris a la izquierda, valor en negrita a la
+// derecha, con separadores suaves (se aprecia como tarjeta).
+const fila = (k: string, v: string | null | undefined) =>
+  `<tr>
+        <td style="padding:10px 16px;color:#64748b;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;">${escapeHtml(k)}</td>
+        <td style="padding:10px 16px;color:#0f172a;font-weight:600;font-size:14px;border-bottom:1px solid #eef2f7;text-align:right;">${escapeHtml(v) || "—"}</td>
+      </tr>`;
+
+/**
+ * Las dos fichas que acompañan a cualquier aviso: la SOCIEDAD que contrata y el
+ * CENTRO donde trabaja la persona. El centro sale del local del empleado, no de
+ * la empresa: dos locales de la misma sociedad pueden cotizar en cuentas
+ * distintas y el alta va contra la del centro.
+ */
+function fichasGestoria(
+  empresaRow: { nombre?: string | null; datos_generales?: unknown } | null,
+  local: LocalParaGestoria | null,
+) {
+  const fiscales = camposFiscalesEmpresa(
+    (empresaRow?.datos_generales ?? null) as Partial<DatosGenerales> | null,
+    empresaRow?.nombre ?? undefined,
+  );
+  const centro = camposCentroTrabajo(local);
+  const aFilas = (c: CampoGestoria[]) => c.map((x) => fila(x.label, x.value)).join("");
+  const aTexto = (c: CampoGestoria[]) => c.map((x) => `${x.label}: ${x.value}`).join("\n");
+  return {
+    html: `${tarjeta("Datos fiscales", aFilas(fiscales))}${tarjeta("Centro de trabajo", aFilas(centro))}`,
+    texto: `DATOS FISCALES\n${aTexto(fiscales)}\n\nCENTRO DE TRABAJO\n${aTexto(centro)}`,
+  };
+}
+
+/** El local del empleado tal como lo devuelve el embed (objeto o lista). */
+function localDe(emp: { locales?: unknown } | null): LocalParaGestoria | null {
+  const l = emp?.locales;
+  if (!l) return null;
+  return (Array.isArray(l) ? l[0] : l) as LocalParaGestoria;
+}
+
+/** Tarjeta con título y sus filas. */
+const tarjeta = (titulo: string, filas: string) => `
+      <table role="presentation" width="100%" style="border-collapse:separate;border-spacing:0;margin:18px 0;max-width:480px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+        <tr><td colspan="2" style="background:#ffffff;padding:12px 16px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">${escapeHtml(titulo)}</td></tr>
+        ${filas}
+      </table>`;
+import {
   INCORPORACION_TITULO_DEFAULT,
   INCORPORACION_MENSAJE_DEFAULT,
 } from "@/features/rrhh/actions/gestoria-config-server";
@@ -424,7 +477,7 @@ export async function enviarAltaGestoria(
 
     const { data: emp } = await supabase
       .from("empleados")
-      .select("nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta")
+      .select("nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta, locales(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
       .eq("id", empleadoId)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -451,8 +504,15 @@ export async function enviarAltaGestoria(
       convenio = p?.convenio_colectivo ?? "";
     }
 
-    const empresaNombre = await supabase.from("empresas").select("nombre").eq("id", empresaId).maybeSingle()
-      .then((r) => r.data?.nombre ?? "la empresa");
+    // Nombre + datos generales en una sola consulta: los segundos son los que la
+    // gestoría necesita del CENTRO (CCC, convenio, tipo de local) para el alta.
+    const { data: empresaRow } = await supabase
+      .from("empresas")
+      .select("nombre, datos_generales")
+      .eq("id", empresaId)
+      .maybeSingle();
+    const empresaNombre = empresaRow?.nombre ?? "la empresa";
+    const fichas = fichasGestoria(empresaRow, localDe(emp));
 
     const nombre = `${emp.nombre} ${emp.apellidos ?? ""}`.trim();
     const emailTrabajador = emp.email_personal || emp.email_empresa;
@@ -502,13 +562,6 @@ export async function enviarAltaGestoria(
       convenio: { label: "Convenio", value: convenio },
     };
 
-    // Cada dato como una fila de FICHA: etiqueta gris a la izquierda, valor en
-    // negrita a la derecha, con separadores suaves (se aprecia como tarjeta).
-    const fila = (k: string, v: string | null | undefined) =>
-      `<tr>
-        <td style="padding:10px 16px;color:#64748b;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;">${escapeHtml(k)}</td>
-        <td style="padding:10px 16px;color:#0f172a;font-weight:600;font-size:14px;border-bottom:1px solid #eef2f7;text-align:right;">${escapeHtml(v) || "—"}</td>
-      </tr>`;
 
     const filasHtml = GESTORIA_CAMPOS
       .map(({ key }) => fila(valores[key].label, valores[key].value))
@@ -535,12 +588,8 @@ export async function enviarAltaGestoria(
     const botonHtml = tk.ok ? botonSubidaContratoHtml(tk.token) : "";
     const enlaceText = tk.ok ? `\n\nSubir el contrato firmado: ${urlSubidaContrato(tk.token)}` : "";
 
-    // Ficha de datos del trabajador (tarjeta), se inyecta donde el cuerpo ponga {{gestoria_datos}}.
-    const tablaHtml = `
-      <table role="presentation" width="100%" style="border-collapse:separate;border-spacing:0;margin:18px 0;max-width:480px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-        <tr><td colspan="2" style="background:#ffffff;padding:12px 16px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Datos del trabajador</td></tr>
-        ${filasHtml}
-      </table>`;
+    // Ficha completa, se inyecta donde el cuerpo ponga {{gestoria_datos}}.
+    const tablaHtml = `${fichas.html}${tarjeta("Datos del trabajador", filasHtml)}`;
 
     // Plantilla editable del alta a la gestoría (UI «Plantillas de email»).
     const { resolverPlantillaOnboarding, resolverDestinatario, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } =
@@ -579,7 +628,7 @@ export async function enviarAltaGestoria(
         ? partes.map((p) => cuerpoOnboardingAHtml(p)).join(tablaHtml)
         : `${cuerpoOnboardingAHtml(tpl.cuerpo)}${tablaHtml}`;
       html = `${cuerpoHtml}${botonHtml}`;
-      text = `${tpl.cuerpo.replace("{{gestoria_datos}}", `\n${filasText}`)}${enlaceText}`;
+      text = `${tpl.cuerpo.replace("{{gestoria_datos}}", `\n${fichas.texto}\n\nDATOS DEL TRABAJADOR\n${filasText}`)}${enlaceText}`;
     } else {
       subject = `Alta de contrato · ${nombre} · ${empresaNombre}`;
       html = `
@@ -587,7 +636,7 @@ export async function enviarAltaGestoria(
       ${tablaHtml}
       ${botonHtml}
       <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-      text = `Alta de contrato\n${filasText}${enlaceText}`;
+      text = `Alta de contrato\n\n${fichas.texto}\n\nDATOS DEL TRABAJADOR\n${filasText}${enlaceText}`;
     }
 
     const res = await sendEmail({ to, subject, html, text, empresaId });
@@ -661,7 +710,7 @@ export async function enviarCambioPuestoGestoria(
     // Empresa del empleado (service role: sin sesión garantizada en el flujo).
     const { data: emp } = await admin
       .from("empleados")
-      .select("empresa_id, nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta")
+      .select("empresa_id, nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta, locales(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
       .eq("id", empleadoId)
       .maybeSingle();
     if (!emp) return { ok: false, error: "Empleado no encontrado" };
@@ -686,8 +735,14 @@ export async function enviarCambioPuestoGestoria(
       convenio = p?.convenio_colectivo ?? "";
     }
 
-    const empresaNombre = await admin.from("empresas").select("nombre").eq("id", empresaId).maybeSingle()
-      .then((r) => r.data?.nombre ?? "la empresa");
+    // Nombre + datos del centro (CCC, convenio, tipo de local) en una consulta.
+    const { data: empresaRow } = await admin
+      .from("empresas")
+      .select("nombre, datos_generales")
+      .eq("id", empresaId)
+      .maybeSingle();
+    const empresaNombre = empresaRow?.nombre ?? "la empresa";
+    const fichas = fichasGestoria(empresaRow, localDe(emp));
     const nombre = `${emp.nombre} ${emp.apellidos ?? ""}`.trim();
 
     const valores: Record<GestoriaCampoKey, { label: string; value: string | null | undefined }> = {
@@ -704,11 +759,6 @@ export async function enviarCambioPuestoGestoria(
       convenio: { label: "Convenio", value: convenio },
     };
 
-    const fila = (k: string, v: string | null | undefined) =>
-      `<tr>
-        <td style="padding:10px 16px;color:#64748b;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;">${escapeHtml(k)}</td>
-        <td style="padding:10px 16px;color:#0f172a;font-weight:600;font-size:14px;border-bottom:1px solid #eef2f7;text-align:right;">${escapeHtml(v) || "—"}</td>
-      </tr>`;
     // La fila «Puesto anterior» se antepone para que el cambio quede explícito.
     const filaAnterior = cambio.puestoAnterior
       ? fila("Puesto anterior", cambio.puestoAnterior)
@@ -721,11 +771,7 @@ export async function enviarCambioPuestoGestoria(
         .map(({ key }) => `${valores[key].label}: ${valores[key].value || "—"}`)
         .join("\n");
 
-    const tablaHtml = `
-      <table role="presentation" width="100%" style="border-collapse:separate;border-spacing:0;margin:18px 0;max-width:480px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-        <tr><td colspan="2" style="background:#ffffff;padding:12px 16px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Datos del trabajador</td></tr>
-        ${filasHtml}
-      </table>`;
+    const tablaHtml = `${fichas.html}${tarjeta("Datos del trabajador", filasHtml)}`;
 
     const { resolverPlantillaOnboarding, resolverDestinatario, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } =
       await import("@/features/rrhh/services/email-plantillas/resolver");
@@ -756,14 +802,14 @@ export async function enviarCambioPuestoGestoria(
         ? partes.map((p) => cuerpoOnboardingAHtml(p)).join(tablaHtml)
         : `${cuerpoOnboardingAHtml(tpl.cuerpo)}${tablaHtml}`;
       html = cuerpoHtml;
-      text = tpl.cuerpo.replace("{{gestoria_datos}}", `\n${filasText}`);
+      text = tpl.cuerpo.replace("{{gestoria_datos}}", `\n${fichas.texto}\n\nDATOS DEL TRABAJADOR\n${filasText}`);
     } else {
       subject = `Cambio de puesto · ${nombre} · ${empresaNombre}`;
       html = `
       <p>El siguiente trabajador cambia de puesto dentro de la empresa (promoción interna):</p>
       ${tablaHtml}
       <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-      text = `Cambio de puesto\n${filasText}`;
+      text = `Cambio de puesto\n\n${fichas.texto}\n\nDATOS DEL TRABAJADOR\n${filasText}`;
     }
 
     const res = await sendEmail({ to, subject, html, text, empresaId });
@@ -839,34 +885,77 @@ export async function enviarBajaGestoria(
 
     const { data: emp } = await admin
       .from("empleados")
-      .select("empresa_id, nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta")
+      .select("empresa_id, nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta, locales(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
       .eq("id", empleadoId)
       .maybeSingle();
     if (!emp) return { ok: false, error: "Empleado no encontrado" };
     const empresaId = emp.empresa_id as string;
 
-    // Condiciones VIGENTES del trabajador (histórico: vigente_hasta IS NULL). Solo
-    // se necesitan el tipo de contrato y el puesto (para el convenio).
+    // Condiciones VIGENTES del trabajador (histórico: vigente_hasta IS NULL). La
+    // baja las manda enteras: la gestoría necesita la misma foto que en el alta
+    // para liquidar (contrato, jornada, horas y salario), no solo el nombre.
     const { data: condRows } = await admin
       .from("empleado_condiciones")
-      .select("tipo_contrato, puesto_id, vigente_hasta, vigente_desde")
+      .select("tipo_contrato, puesto_id, vigente_hasta, vigente_desde, nivel, primer_dia, jornada_contrato, horas_semanales, salario_bruto")
       .eq("empleado_id", empleadoId)
       .order("vigente_desde", { ascending: false, nullsFirst: false })
       .limit(20);
     const cond = (condRows ?? []).find((r) => r.vigente_hasta == null) ?? condRows?.[0] ?? null;
 
+    // CONVENIO y TIPO DE CONTRATO: son del PUESTO, no algo que se negocie con
+    // cada persona. Lo normal es llegar a ellos por `empleado_condiciones`, pero
+    // los empleados que entraron antes de existir las condiciones (altas
+    // manuales, seed) no tienen fila: sin este rescate su baja se bloqueaba por
+    // "faltan datos" aunque el dato exista en su puesto de siempre. Se resuelve
+    // el puesto por NOMBRE dentro de su empresa. El SALARIO no se rescata así
+    // jamás: ese sí es de la persona y el del puesto es solo una plantilla.
     let convenio = "";
-    if (cond?.puesto_id) {
-      const { data: p } = await admin
-        .from("puestos")
-        .select("convenio_colectivo")
-        .eq("id", cond.puesto_id)
-        .maybeSingle();
-      convenio = p?.convenio_colectivo ?? "";
+    let tipoContrato = (cond?.tipo_contrato as string | null) ?? null;
+    {
+      const { data: p } = cond?.puesto_id
+        ? await admin
+            .from("puestos")
+            .select("convenio_colectivo, tipo_contrato_defecto")
+            .eq("id", cond.puesto_id)
+            .maybeSingle()
+        : emp.puesto
+          ? await admin
+              .from("puestos")
+              .select("convenio_colectivo, tipo_contrato_defecto")
+              .eq("empresa_id", empresaId)
+              .eq("nombre", emp.puesto as string)
+              .maybeSingle()
+          : { data: null };
+      convenio = (p?.convenio_colectivo as string | null) ?? "";
+      if (!tipoContrato) tipoContrato = (p?.tipo_contrato_defecto as string | null) ?? null;
     }
 
-    const empresaNombre = await admin.from("empresas").select("nombre").eq("id", empresaId).maybeSingle()
-      .then((r) => r.data?.nombre ?? "la empresa");
+    // VACACIONES PENDIENTES DE DISFRUTAR: el número que la gestoría necesita
+    // para el finiquito. Sale del mismo saldo que ve RRHH en su calendario, así
+    // que empresa y gestoría cuentan lo mismo. Si no se puede calcular se manda
+    // vacío antes que un cero falso, que se liquidaría como "no le debemos nada".
+    let vacacionesPendientes: string | null = null;
+    try {
+      const { getSaldoVacacionesEmpleado } = await import(
+        "@/features/rrhh/actions/calendarios-vacaciones-actions"
+      );
+      const saldo = await getSaldoVacacionesEmpleado(empleadoId);
+      if (saldo.ok && saldo.data) {
+        const d = saldo.data.diasRestantes;
+        vacacionesPendientes = `${d} ${d === 1 ? "día" : "días"}`;
+      }
+    } catch (e) {
+      console.error("[rrhh] enviarBajaGestoria → vacaciones pendientes:", e);
+    }
+
+    // Nombre + datos del centro (CCC, convenio, tipo de local) en una consulta.
+    const { data: empresaRow } = await admin
+      .from("empresas")
+      .select("nombre, datos_generales")
+      .eq("id", empresaId)
+      .maybeSingle();
+    const empresaNombre = empresaRow?.nombre ?? "la empresa";
+    const fichas = fichasGestoria(empresaRow, localDe(emp));
     const nombre = `${emp.nombre} ${emp.apellidos ?? ""}`.trim();
     const emailTrabajador = emp.email_personal || emp.email_empresa;
 
@@ -882,7 +971,7 @@ export async function enviarBajaGestoria(
       telefono: emp.telefono,
       email: emailTrabajador,
       puesto: emp.puesto,
-      tipo_contrato: cond?.tipo_contrato,
+      tipo_contrato: tipoContrato,
       convenio,
     });
     if (faltan.length > 0) {
@@ -895,36 +984,49 @@ export async function enviarBajaGestoria(
       };
     }
 
-    const fila = (k: string, v: string | null | undefined) =>
-      `<tr>
-        <td style="padding:10px 16px;color:#64748b;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;">${escapeHtml(k)}</td>
-        <td style="padding:10px 16px;color:#0f172a;font-weight:600;font-size:14px;border-bottom:1px solid #eef2f7;text-align:right;">${escapeHtml(v) || "—"}</td>
-      </tr>`;
 
-    // Ficha PROPIA de la baja: fechas de la baja arriba (dato clave para la
-    // gestoría) y luego los datos identificativos. Sin nivel/primer día/jornada/
-    // horas/salario (no se envían en la baja).
+    // Ficha de la baja: EL MISMO CUADRO QUE EL ALTA, pero al revés. Arriba las
+    // fechas de la salida (lo que la gestoría necesita para el sistema RED) y
+    // debajo la foto completa del trabajador —la misma que se mandó al
+    // contratarlo—, más los días de vacaciones que le quedan sin disfrutar, que
+    // es lo que hace falta para el finiquito.
     const camposBaja: Array<{ label: string; value: string | null | undefined }> = [
       { label: "Tipo de baja", value: tipoBajaLabel },
       { label: "Último día de trabajo", value: ultimoDiaTrabajo },
       { label: "Día oficial de la baja", value: diaOficialBaja },
+      { label: "Vacaciones pendientes de disfrutar", value: vacacionesPendientes },
       ...(baja.motivo ? [{ label: "Motivo", value: baja.motivo }] : []),
       { label: "Nombre", value: nombre },
       { label: "DNI/NIE", value: emp.dni_nie },
       { label: "Teléfono", value: emp.telefono },
       { label: "Email", value: emailTrabajador },
-      { label: "Puesto", value: emp.puesto },
-      { label: "Tipo de contrato", value: cond?.tipo_contrato },
+      {
+        label: "Puesto",
+        value: `${emp.puesto ?? "—"}${cond?.nivel ? ` · Nivel ${cond.nivel}` : ""}`,
+      },
+      {
+        label: "Primer día",
+        value: (() => {
+          const iso = (cond?.primer_dia as string | null) ?? (emp.fecha_alta as string | null);
+          return iso ? fmt(iso) : null;
+        })(),
+      },
+      { label: "Tipo de contrato", value: tipoContrato },
+      { label: "Jornada", value: (cond?.jornada_contrato as string | null) ?? null },
+      {
+        label: "Horas/semana",
+        value: cond?.horas_semanales ? `${cond.horas_semanales}h` : null,
+      },
+      {
+        label: "Salario bruto",
+        value: cond?.salario_bruto != null ? eur(Number(cond.salario_bruto)) : null,
+      },
       { label: "Convenio", value: convenio },
     ];
     const filasHtml = camposBaja.map((c) => fila(c.label, c.value)).join("");
     const filasText = camposBaja.map((c) => `${c.label}: ${c.value || "—"}`).join("\n");
 
-    const tablaHtml = `
-      <table role="presentation" width="100%" style="border-collapse:separate;border-spacing:0;margin:18px 0;max-width:480px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-        <tr><td colspan="2" style="background:#ffffff;padding:12px 16px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Datos de la baja</td></tr>
-        ${filasHtml}
-      </table>`;
+    const tablaHtml = `${fichas.html}${tarjeta("Datos de la baja", filasHtml)}`;
 
     const { resolverPlantillaOnboarding, resolverDestinatario, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } =
       await import("@/features/rrhh/services/email-plantillas/resolver");
@@ -974,14 +1076,14 @@ export async function enviarBajaGestoria(
         ? partes.map((p) => cuerpoOnboardingAHtml(p)).join(tablaHtml)
         : `${cuerpoOnboardingAHtml(tpl.cuerpo)}${tablaHtml}`;
       html = cuerpoHtml;
-      text = tpl.cuerpo.replace("{{gestoria_datos}}", `\n${filasText}`);
+      text = tpl.cuerpo.replace("{{gestoria_datos}}", `\n${fichas.texto}\n\nDATOS DE LA BAJA\n${filasText}`);
     } else {
       subject = `Baja de trabajador · ${nombre} · ${empresaNombre}`;
       html = `
       <p>El siguiente trabajador causa baja (${escapeHtml(tipoBajaLabel)}) en la empresa. Su último día efectivo de trabajo será el ${escapeHtml(ultimoDiaTrabajo)} y la baja será oficial el ${escapeHtml(diaOficialBaja)}:</p>
       ${tablaHtml}
       <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-      text = `Baja de trabajador\n${filasText}`;
+      text = `Baja de trabajador\n\n${fichas.texto}\n\nDATOS DE LA BAJA\n${filasText}`;
     }
 
     const res = await sendEmail({ to, subject, html, text, empresaId });

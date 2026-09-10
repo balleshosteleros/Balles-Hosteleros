@@ -145,8 +145,6 @@ export interface Producto {
   estiloImagenUrl?: string | null;
   textoTicket?: string;
   textoComanda?: string;
-  cartaNombre?: string | null;
-  cartaTexto?: string | null;
   /** Estrella dorada en la carta digital. Se configura desde la ficha del producto de venta. */
   cartaDestacado?: boolean;
   /**
@@ -156,6 +154,12 @@ export interface Producto {
    * propia carta, no aquí.
    */
   visibleCarta?: boolean;
+  /**
+   * Interruptor del terminal de ventas. Si está apagado, el producto no sale en
+   * el TPV. Es independiente de la carta: sirve para el plato que se enseña en
+   * la carta de un local pero se comanda y se cobra en otro.
+   */
+  visibleTerminal?: boolean;
   alergenos: string[];
   /** auto = derivados del escandallo; manual = marcados a mano. Compra: siempre manual. */
   alergenosModo?: AlergenosModo;

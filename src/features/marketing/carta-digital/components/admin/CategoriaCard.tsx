@@ -175,9 +175,15 @@ export function CategoriaCard({
                         Destacado
                       </span>
                     ) : null}
+                    {/* Los tres estados, con el mismo nombre que en el editor:
+                        agotado NO es una forma de invisible. */}
                     {!item.visible ? (
                       <span className="rounded-full bg-stone-200 px-2 text-xs text-stone-700">
-                        Oculto
+                        Invisible
+                      </span>
+                    ) : item.agotado ? (
+                      <span className="rounded-full bg-amber-100 px-2 text-xs text-amber-800">
+                        Agotado
                       </span>
                     ) : null}
                   </div>

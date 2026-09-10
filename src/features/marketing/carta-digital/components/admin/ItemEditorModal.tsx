@@ -11,7 +11,6 @@ import {
 import { Input } from "@/shared/components/ui/input";
 import { Label } from "@/shared/components/ui/label";
 import { Button } from "@/shared/components/ui/button";
-import { Checkbox } from "@/shared/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -21,9 +20,41 @@ import {
 } from "@/shared/components/ui/select";
 import { ALERGENOS_UE, type CartaCategoria, type CartaItem, type Alergeno } from "../../types";
 import { crearItem, actualizarItem, borrarItem, moverItemAPosicion } from "../../actions/carta-admin-actions";
+import { cambiarEstadoItem, type EstadoCartaItem } from "../../actions/estado-item-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { FotoUploader } from "./FotoUploader";
 
+
+/**
+ * Los tres estados que puede tener un plato en la carta. Son excluyentes a
+ * propósito: "agotado" no es una variante de invisible, es lo contrario —el
+ * plato sigue a la vista para que nadie lo pida y para que se sepa que existe.
+ */
+const ESTADOS: Array<{
+  valor: EstadoCartaItem;
+  titulo: string;
+  pie: string;
+  claseActiva: string;
+}> = [
+  {
+    valor: "VISIBLE",
+    titulo: "Visible",
+    pie: "Se ve y se puede pedir.",
+    claseActiva: "border-emerald-400 bg-emerald-50",
+  },
+  {
+    valor: "AGOTADO",
+    titulo: "Agotado",
+    pie: "Se ve en gris, con la etiqueta. Vuelve solo mañana.",
+    claseActiva: "border-amber-400 bg-amber-50",
+  },
+  {
+    valor: "INVISIBLE",
+    titulo: "Invisible",
+    pie: "Desaparece de la carta.",
+    claseActiva: "border-stone-400 bg-stone-100",
+  },
+];
 
 export function ItemEditorModal({
   open,
@@ -45,14 +76,20 @@ export function ItemEditorModal({
   const [precio, setPrecio] = useState("0");
   const [categoriaId, setCategoriaId] = useState<string>("");
   const [alergenos, setAlergenos] = useState<Set<Alergeno>>(new Set());
-  const [destacado, setDestacado] = useState(false);
   const [ordenVisual, setOrdenVisual] = useState("");
   const [likesBase, setLikesBase] = useState("");
-  const [visible, setVisible] = useState(true);
+  const [estado, setEstado] = useState<EstadoCartaItem>("VISIBLE");
   const [fotoUrl, setFotoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
+
+  /**
+   * ¿El plato viene de un producto de venta? Entonces el precio y los
+   * alérgenos son SUYOS y aquí solo se enseñan: cambiarlos desde marketing
+   * dejaría la carta diciendo un precio y la caja cobrando otro.
+   */
+  const vinculado = !!item?.producto_id;
 
   useEffect(() => {
     if (item) {
@@ -61,10 +98,9 @@ export function ItemEditorModal({
       setPrecio(String(item.precio ?? 0));
       setCategoriaId(item.categoria_id);
       setAlergenos(new Set(item.alergenos));
-      setDestacado(item.destacado);
       setOrdenVisual(String(item.orden ?? ""));
       setLikesBase(String(item.likes_base ?? ""));
-      setVisible(item.visible);
+      setEstado(!item.visible ? "INVISIBLE" : item.agotado ? "AGOTADO" : "VISIBLE");
       setFotoUrl(item.foto_url);
     } else {
       setNombre("");
@@ -72,8 +108,7 @@ export function ItemEditorModal({
       setPrecio("0");
       setCategoriaId(defaultCategoriaId ?? categorias[0]?.id ?? "");
       setAlergenos(new Set());
-      setDestacado(false);
-      setVisible(true);
+      setEstado("VISIBLE");
       setFotoUrl(null);
     }
     setError(null);
@@ -93,26 +128,55 @@ export function ItemEditorModal({
     const precioNum = parseFloat(precio.replace(",", "."));
     if (!nombre.trim()) return setError("El nombre es obligatorio.");
     if (!categoriaId) return setError("Selecciona una categoría.");
-    if (Number.isNaN(precioNum) || precioNum < 0) return setError("Precio inválido.");
+    // El precio solo se escribe aquí en los platos SIN producto detrás; en los
+    // demás viene de la ficha de venta y este campo ni se enseña.
+    if (!vinculado && (Number.isNaN(precioNum) || precioNum < 0))
+      return setError("Precio inválido.");
 
     startTransition(async () => {
-      const payload = {
-        nombre,
-        descripcion,
-        precio: precioNum,
-        alergenos: Array.from(alergenos),
-        destacado,
-      };
+      // Lo que se puede tocar desde Marketing: el nombre que lee el comensal,
+      // el texto y el estado. El precio y los alérgenos solo viajan cuando el
+      // plato no tiene producto de venta detrás.
+      const payload = vinculado
+        ? { nombre, descripcion }
+        : {
+            nombre,
+            descripcion,
+            precio: precioNum,
+            alergenos: Array.from(alergenos),
+          };
       const base = parseInt(likesBase, 10);
       const res = item
         ? await actualizarItem({
             id: item.id,
             categoriaId,
-            visible,
             likesBase: Number.isFinite(base) && base >= 0 ? base : 0,
             ...payload,
           })
-        : await crearItem({ categoriaId, ...payload });
+        : await crearItem({
+            categoriaId,
+            nombre,
+            descripcion,
+            precio: precioNum,
+            alergenos: Array.from(alergenos),
+          });
+
+      // El estado se guarda aparte: cuando el plato está vinculado, "agotado"
+      // tiene que llegar también al producto para que el TPV se entere.
+      if (res.ok && item) {
+        const estadoActual: EstadoCartaItem = !item.visible
+          ? "INVISIBLE"
+          : item.agotado
+            ? "AGOTADO"
+            : "VISIBLE";
+        if (estado !== estadoActual) {
+          const resEstado = await cambiarEstadoItem(item.id, estado);
+          if (!resEstado.ok) {
+            setError(resEstado.error);
+            return;
+          }
+        }
+      }
 
       // El orden se aplica aparte: mover uno recoloca a los demás, así que no
       // puede viajar en el mismo parche que el resto de campos.
@@ -190,13 +254,38 @@ export function ItemEditorModal({
               </Select>
             </div>
 
+            {vinculado ? (
+              // Referencia de dónde sale el plato: en la carta puede llamarse
+              // de otra forma, y hay que poder ver de qué producto se trata.
+              <div className="rounded-lg border bg-muted/40 px-3 py-2">
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Producto de venta
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="text-sm font-medium">{item?.producto_nombre ?? "—"}</span>
+                  <span className="text-sm tabular-nums text-muted-foreground">
+                    {(item?.precio ?? 0).toFixed(2).replace(".", ",")} €
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  El precio, los alérgenos y la estrella se cambian en su ficha, en Logística →
+                  Productos.
+                </p>
+              </div>
+            ) : null}
+
             <div>
-              <Label htmlFor="nom">Nombre</Label>
+              <Label htmlFor="nom">Nombre en la carta</Label>
               <Input id="nom" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={120} />
+              {vinculado ? (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Es lo que lee el cliente. Empieza siendo el del producto y puedes cambiarlo.
+                </p>
+              ) : null}
             </div>
 
             <div>
-              <Label htmlFor="desc">Descripción</Label>
+              <Label htmlFor="desc">Texto</Label>
               <textarea
                 id="desc"
                 value={descripcion}
@@ -204,6 +293,7 @@ export function ItemEditorModal({
                 rows={3}
                 maxLength={500}
                 className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                placeholder="Lo que va debajo del nombre en la carta"
               />
             </div>
 
@@ -242,8 +332,10 @@ export function ItemEditorModal({
               </div>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
+            {/* Solo los platos escritos a mano en la carta llevan su precio
+                aquí. Los que vienen de un producto lo heredan de su ficha. */}
+            {!vinculado ? (
+              <div className="w-40">
                 <Label htmlFor="precio">Precio (€)</Label>
                 <Input
                   id="precio"
@@ -255,28 +347,37 @@ export function ItemEditorModal({
                   onChange={(e) => setPrecio(e.target.value)}
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="flex items-center gap-2 pt-6 text-sm">
-                  <Checkbox
-                    checked={destacado}
-                    onCheckedChange={(v) => setDestacado(v === true)}
-                  />
-                  Destacado
-                </label>
-                {item ? (
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={visible}
-                      onCheckedChange={(v) => setVisible(v === true)}
-                    />
-                    Visible
-                  </label>
-                ) : null}
+            ) : null}
+
+            {item ? (
+              <div>
+                <Label className="mb-1.5 block">Cómo se ve en la carta</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {ESTADOS.map((op) => (
+                    <button
+                      key={op.valor}
+                      type="button"
+                      onClick={() => setEstado(op.valor)}
+                      aria-pressed={estado === op.valor}
+                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                        estado === op.valor
+                          ? op.claseActiva
+                          : "bg-background hover:bg-muted"
+                      }`}
+                    >
+                      <div className="text-sm font-medium">{op.titulo}</div>
+                      <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                        {op.pie}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
           </div>
         </div>
 
+        {!vinculado ? (
         <div>
           <Label className="mb-2 block">Alérgenos</Label>
           <div className="flex flex-wrap gap-2">
@@ -296,6 +397,7 @@ export function ItemEditorModal({
             ))}
           </div>
         </div>
+        ) : null}
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

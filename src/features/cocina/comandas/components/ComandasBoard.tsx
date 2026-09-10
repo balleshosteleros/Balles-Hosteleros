@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Sun, Moon, PowerOff } from "lucide-react";
 import {
   updateEstadoCocinaLinea,
   updateEstadoCocinaTicket,
@@ -21,6 +22,13 @@ import { ColumnaEstado } from "./ColumnaEstado";
 import { FiltrosBar } from "./FiltrosBar";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
+import { Button } from "@/shared/components/ui/button";
+import { cn } from "@/lib/utils";
+// El mismo conmutador claro/oscuro que usa Reservas, y a propósito el mismo:
+// quien trabaja de noche lo pone en oscuro una vez y lo encuentra igual en las
+// dos pantallas que mira durante el servicio.
+import { useSalaTema } from "@/features/sala/hooks/useSalaTema";
+import { ApagadosPanel } from "@/features/cocina/apagados/components/ApagadosPanel";
 
 // ─── Tabla de siguiente/anterior estado ───────────────────────
 const SIGUIENTE: Record<ColumnaKDS, LineaEstadoCocina | null> = {
@@ -52,6 +60,8 @@ function ComandasBoardInner() {
     partidaId: null,
   });
   const [busqueda, setBusqueda] = useState("");
+  const { esOscuro, alternarTema } = useSalaTema();
+  const [apagadosAbierto, setApagadosAbierto] = useState(false);
   const comandasFiltradas = useMemo(() => {
     const base = aplicarFiltros(comandas, filtros);
     const q = busqueda.trim().toLowerCase();
@@ -190,8 +200,14 @@ function ComandasBoardInner() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col">
-      {/* Barra superior: status de conexión y contador */}
+    <div
+      className={cn(
+        "sala-tema flex h-[calc(100vh-3.5rem)] flex-col",
+        esOscuro && "sala-oscuro",
+      )}
+    >
+      {/* Barra superior: status de conexión, contador y los dos botones de
+          servicio (vista oscura y apagar productos). */}
       <div className="flex items-center justify-between border-b bg-background px-4 py-2">
         <div className="flex items-center gap-2">
           <span
@@ -201,10 +217,35 @@ function ComandasBoardInner() {
             {connected ? "En vivo" : "Reconectando…"}
           </span>
         </div>
-        <span className="text-xs text-muted-foreground">
-          {comandasFiltradas.length} {comandasFiltradas.length === 1 ? "comanda" : "comandas"} visibles
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {comandasFiltradas.length} {comandasFiltradas.length === 1 ? "comanda" : "comandas"} visibles
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => setApagadosAbierto(true)}
+            title="Marcar lo que se ha acabado"
+          >
+            <PowerOff className="h-4 w-4" />
+            <span className="hidden sm:inline">Apagar productos</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={alternarTema}
+            title={esOscuro ? "Cambiar a vista clara" : "Cambiar a vista oscura"}
+            aria-label={esOscuro ? "Cambiar a vista clara" : "Cambiar a vista oscura"}
+            aria-pressed={esOscuro}
+          >
+            {esOscuro ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
+
+      <ApagadosPanel abierto={apagadosAbierto} onCerrar={() => setApagadosAbierto(false)} />
 
       {/* Toolbar estándar (BARRA HORIZONTAL 1) */}
       <div className="px-2 pt-2 space-y-2">

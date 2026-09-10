@@ -28,6 +28,20 @@ import {
   Send,
 } from "lucide-react";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  camposFiscalesEmpresa,
+  camposCentroTrabajo,
+  type CampoGestoria,
+  type LocalParaGestoria,
+} from "@/features/rrhh/services/datos-empresa-gestoria";
+import { listLocales } from "@/features/ajustes/actions/locales-actions";
+import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
   aplicarOrdenToolbar,
@@ -117,6 +131,128 @@ function EstadoBadge({ row }: { row: ContratacionRow }) {
  * Es el único reintento posible cuando el correo del alta no llegó a salir —
  * recontratar está cerrado una vez el candidato tiene ficha de empleado.
  */
+/** Ficha de solo lectura: etiqueta a la izquierda, valor a la derecha. */
+function FichaDatos({ campos }: { campos: CampoGestoria[] }) {
+  return (
+    <dl className="divide-y rounded-md border">
+      {campos.map((c) => (
+        <div key={c.label} className="flex items-baseline justify-between gap-4 px-3 py-2">
+          <dt className="text-xs text-muted-foreground">{c.label}</dt>
+          <dd className={`text-sm text-right ${c.value === "—" ? "text-muted-foreground" : "font-semibold"}`}>
+            {c.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Cuántos campos quedan por rellenar, dicho en una línea. */
+function AvisoHuecos({ campos, donde }: { campos: CampoGestoria[]; donde: string }) {
+  const faltan = campos.filter((c) => c.value === "—").length;
+  if (faltan === 0) return null;
+  return (
+    <p className="text-xs text-muted-foreground">
+      {faltan === 1 ? "Falta 1 dato" : `Faltan ${faltan} datos`} por rellenar en {donde}.
+    </p>
+  );
+}
+
+/**
+ * Datos FISCALES de la sociedad que contrata. Son los mismos que viajan en el
+ * correo (misma fuente: `camposFiscalesEmpresa`), así que aquí se ve exactamente
+ * lo que recibe la gestoría.
+ */
+function DatosFiscalesDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const { ajustes, empresaActual } = useEmpresa();
+  const campos = camposFiscalesEmpresa(ajustes?.datosGenerales, empresaActual?.nombre);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Datos fiscales</DialogTitle>
+          <DialogDescription>
+            La sociedad que firma el contrato. Van en todos los avisos a la gestoría. Se editan
+            en Ajustes → Empresa.
+          </DialogDescription>
+        </DialogHeader>
+        <FichaDatos campos={campos} />
+        <AvisoHuecos campos={campos} donde="Ajustes → Empresa" />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Datos del CENTRO DE TRABAJO: cada local con su ubicación y su cuenta de
+ * cotización. En el alta viaja el local de la persona; aquí se listan todos los
+ * de la empresa para poder revisarlos de un vistazo.
+ */
+function DatosCentroDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const [locales, setLocales] = useState<LocalParaGestoria[] | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let vivo = true;
+    listLocales()
+      .then((res) => {
+        if (!vivo) return;
+        setLocales(res.ok ? (res.data as LocalParaGestoria[]) : []);
+      })
+      .catch(() => vivo && setLocales([]));
+    return () => {
+      vivo = false;
+    };
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Centro de trabajo</DialogTitle>
+          <DialogDescription>
+            Dónde trabaja la persona, qué es ese local, en qué cuenta cotiza y bajo qué
+            convenio. En cada alta viaja el local de esa persona. Se editan en Ajustes →
+            Locales.
+          </DialogDescription>
+        </DialogHeader>
+        {locales === null ? (
+          <p className="text-sm text-muted-foreground">Cargando…</p>
+        ) : locales.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Esta empresa no tiene locales dados de alta. Créalos en Ajustes → Locales.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {locales.map((l, i) => {
+              const campos = camposCentroTrabajo(l);
+              return (
+                <div key={l.nombre ?? i} className="space-y-2">
+                  <FichaDatos campos={campos} />
+                  <AvisoHuecos campos={campos} donde="Ajustes → Locales" />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ReenviarAltaButton({ row, onHecho }: { row: ContratacionRow; onHecho: () => void }) {
   const { puedeEditar, permisosLoaded } = useAuth();
   const [enviando, setEnviando] = useState(false);
@@ -215,6 +351,8 @@ export function ContratacionesView() {
   useGlobalLoadingSync(loading);
   const [tipoActivo, setTipoActivo] = useState<TipoContratacion>("alta");
   const [search, setSearch] = useState("");
+  const [verFiscales, setVerFiscales] = useState(false);
+  const [verCentro, setVerCentro] = useState(false);
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
@@ -460,6 +598,29 @@ export function ContratacionesView() {
           </Button>
         }
       />
+
+      {/* Lo que acompaña a cada aviso además de los datos de la persona. Se
+          consulta de vez en cuando, así que va discreto: dos enlaces, no dos
+          botones que compitan con la barra. */}
+      <div className="flex justify-end gap-4 -mt-1">
+        <button
+          type="button"
+          onClick={() => setVerFiscales(true)}
+          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          Datos fiscales
+        </button>
+        <button
+          type="button"
+          onClick={() => setVerCentro(true)}
+          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          Centro de trabajo
+        </button>
+      </div>
+
+      <DatosFiscalesDialog open={verFiscales} onOpenChange={setVerFiscales} />
+      <DatosCentroDialog open={verCentro} onOpenChange={setVerCentro} />
 
       <ResizableColumnsProvider storageKey={`gestoria-contrataciones-${tipoActivo}`}>
         <div className="bg-card rounded-lg border overflow-x-auto">

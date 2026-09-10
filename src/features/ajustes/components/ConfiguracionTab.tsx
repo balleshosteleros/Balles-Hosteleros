@@ -78,7 +78,8 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
         <CardHeader className="px-4 pt-3 pb-2"><CardTitle className="text-base">Información de la empresa</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-3 pt-0">
           <Field label="Nombre comercial"   value={d.nombreComercial}   onChange={(v) => setD("nombreComercial", v)} />
-          <Field label="Razón social"        value={d.razonSocial}        onChange={(v) => setD("razonSocial", v)} />
+          <Field label="Empresa titular"     value={d.razonSocial}        onChange={(v) => setD("razonSocial", v)}
+                 ayuda="Razón social de la sociedad que explota el establecimiento." />
           <Field label="CIF"                 value={d.cif}                onChange={(v) => setD("cif", v)} />
           <Field label="Dirección"           value={d.direccionFiscal}    onChange={(v) => setD("direccionFiscal", v)} />
           <Field label="Ciudad"              value={d.ciudad}             onChange={(v) => setD("ciudad", v)} />

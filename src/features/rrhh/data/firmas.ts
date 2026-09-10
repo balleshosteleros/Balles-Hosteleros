@@ -23,6 +23,8 @@ export type TipoDocumento =
   // Cartas de fin de relación laboral: la pide el trabajador o la causa la empresa.
   | "baja_voluntaria"
   | "baja_empresa"
+  // Vuelta atrás: el trabajador que había pedido la baja se queda.
+  | "anulacion_preaviso"
   // Actas del ciclo del material: recibirlo, devolverlo o darlo de baja.
   | "entrega_material"
   | "devolucion_material"
@@ -33,6 +35,10 @@ export type TipoDocumento =
 export type EstadoFirma =
   | "pendiente"
   | "firmado"
+  // Cerrado por ACUSE DE LECTURA: lo abrió y lo dio por leído sin firmarlo.
+  // Vale para los documentos que no es obligatorio firmar (la comunicación de
+  // baja): acredita que se le informó y que lo leyó, con su hora.
+  | "leido"
   | "rechazado"
   | "expirado"
   | "borrador";
@@ -86,6 +92,7 @@ export const TIPO_LABEL: Record<TipoDocumento, string> = {
   sancion_disciplinaria: "Sanción disciplinaria",
   baja_voluntaria: "Carta de baja voluntaria",
   baja_empresa: "Comunicación de baja de contrato",
+  anulacion_preaviso: "Anulación del preaviso de baja",
   entrega_material: "Entrega de material",
   devolucion_material: "Devolución de material",
   merma_material: "Baja de material por deterioro",
@@ -107,6 +114,7 @@ export const VALIDEZ_LABEL: Record<ValidezLegal, string> = {
 export const ESTADO_LABEL: Record<EstadoFirma, string> = {
   pendiente: "Pendiente",
   firmado: "Firmado",
+  leido: "Leído",
   rechazado: "Rechazado",
   expirado: "Expirado",
   borrador: "Borrador",
@@ -115,6 +123,7 @@ export const ESTADO_LABEL: Record<EstadoFirma, string> = {
 export const ESTADO_COLOR: Record<EstadoFirma, string> = {
   pendiente: "border-amber-300 bg-amber-50 text-amber-700",
   firmado: "border-emerald-300 bg-emerald-50 text-emerald-700",
+  leido: "border-sky-300 bg-sky-50 text-sky-700",
   rechazado: "border-rose-300 bg-rose-50 text-rose-700",
   expirado: "border-zinc-300 bg-zinc-50 text-zinc-600",
   borrador: "border-sky-300 bg-sky-50 text-sky-700",

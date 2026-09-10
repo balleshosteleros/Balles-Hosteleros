@@ -50,6 +50,29 @@ function esRutaPublicaTokenizada(pathname: string): boolean {
   return RUTAS_PUBLICAS_TOKENIZADAS.some((p) => pathname.startsWith(p))
 }
 
+// ── Modo OFFBOARDING ────────────────────────────────────────────────────────────
+// El trabajador que ya ha pasado su último día pero cuya salida no está cerrada.
+// No se le echa: todavía tiene que firmar la devolución del material y su
+// finiquito, y si le cerramos la puerta no puede hacerlo. Entra, pero solo a sus
+// avisos y a los documentos que tenga pendientes de firmar; el resto del sistema
+// (fichar, calendario, solicitudes, equipo…) deja de existir para él.
+//
+// Se le devuelve el acceso completo si le reactivan, y se le cierra del todo al
+// pasarlo a «Ex-empleados», que es cuando la salida termina de verdad.
+const RUTAS_OFFBOARDING = [
+  '/mi-panel/documentos', // sus documentos y lo que tiene que firmar
+  '/m/documentos', // lo mismo en el móvil
+  '/firmar', // la pantalla de firma (enlace del correo o desde la app)
+  '/documentos', // enlace propio de subida de documentos
+]
+
+/** Donde aterriza alguien en offboarding: sus documentos. */
+const DESTINO_OFFBOARDING = '/mi-panel/documentos'
+
+function offboardingPuedePasar(pathname: string): boolean {
+  return RUTAS_OFFBOARDING.some((p) => pathname === p || pathname.startsWith(p + '/'))
+}
+
 function moduloRequerido(pathname: string): string | null {
   // Las rutas públicas tokenizadas nunca exigen módulo/login.
   if (esRutaPublicaTokenizada(pathname)) return null
@@ -234,6 +257,19 @@ async function proxyInterno(request: NextRequest) {
       : !empresaId
         ? 'sin_empresa'
         : null
+
+  // OFFBOARDING: pasa, pero solo por sus dos puertas. Cualquier otra ruta le
+  // devuelve a sus documentos en vez de expulsarle, para que no se quede
+  // rebotando contra una pantalla de error sin saber qué hacer.
+  if (!motivoBloqueo && estadoAcceso === 'Offboarding') {
+    if (!offboardingPuedePasar(pathname)) {
+      // Las peticiones internas de Next no redirigen (ver `esPeticionInterna`):
+      // pintarían media pantalla y saltarían después.
+      if (esPeticionInterna(request)) return sessionResponse
+      return NextResponse.redirect(new URL(DESTINO_OFFBOARDING, request.url))
+    }
+    return sessionResponse
+  }
 
   if (motivoBloqueo) {
     // Solo este navegador. La puerta se comprueba en CADA petición de cada

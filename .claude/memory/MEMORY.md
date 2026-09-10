@@ -28,6 +28,7 @@
 - [Presentaciones (Gemini)](project/presentaciones_gemini.md) — submódulo Dirección operativo desde 2026-04-18; motor Gemini free, branding por empresa con snapshot
 - [Carta Digital en Marketing](project/carta_digital.md) — feature movida de sala/ a marketing/; rutas /marketing/carta-digital y /carta/[slug]
 - [Carta: agotados y menú del día](project/carta_agotados_y_menu_del_dia.md) — el QR de la mesa oculta el menú del día fuera de horario y la web (`?web=1`) lo enseña con su franja; "agotado" vive en `productos.agotado_dia` (día de servicio, vuelve solo) y sale en gris, no desaparece. Pendiente: apagar la tecla de Ágora con `SaleableAsMain`
+- [Carta: ventas manda, marketing presenta](project/carta_ventas_manda_marketing_presenta.md) — REGLA LITERAL: marketing NUNCA escribe en la ficha del producto; en la carta digital solo se cambian nombre de carta, texto y el estado (visible/agotado/invisible). `visible_carta` solo sirve para que el producto exista en la carta
 - [Cocina NUEVAS RECETAS](project/cocina_recetas.md) — pipeline kanban con fases editables (PRP-031, 2026-04-18); receta = ficha técnica borrador hasta publicar oficial
 - [Tipos reales BD Supabase](feedback/supabase_tipos_reales.md) — profiles.empresa_id es uuid, profiles.user_id sin UNIQUE; usar 035/038 como modelo, no 008
 - [RLS join anon](feedback/rls_join_anon.md) — `using (... exists(select from otra_tabla ...))` falla silencioso si el rol no puede leer otra_tabla; alternativas: policy explícita, RPC security definer, denormalizar, o service-role en server component

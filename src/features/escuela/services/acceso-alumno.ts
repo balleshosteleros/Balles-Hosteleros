@@ -40,6 +40,28 @@ function filtroPorCualquierCorreo(email: string): string {
   return `email.ilike.${e},email_personal.ilike.${e},email_empresa.ilike.${e}`;
 }
 
+/**
+ * El alumno que tiene ese correo en cualquiera de sus huecos, esté como esté.
+ *
+ * Lo usa la entrada con Google: allí el correo ya viene probado por Google, así
+ * que no hace falta código ni disimulo, solo saber de quién es.
+ */
+export async function alumnoIdPorCualquierCorreo(
+  email: string,
+): Promise<{ id: string; activo: boolean } | null> {
+  const marca = await getMarcaEscuela();
+  if (!marca) return null;
+  const { data } = await db()
+    .from("escuela_alumnos")
+    .select("id, estado")
+    .eq("empresa_id", marca.empresaId)
+    .or(filtroPorCualquierCorreo(email))
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  return { id: data.id as string, activo: data.estado === "ACTIVO" };
+}
+
 async function buscarAlumnoPorEmail(email: string) {
   const marca = await getMarcaEscuela();
   if (!marca) return null;

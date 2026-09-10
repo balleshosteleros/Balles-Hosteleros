@@ -44,6 +44,10 @@ import { CandidatoDetailModal } from "@/features/rrhh/components/reclutamiento/C
 import { ContratarDialog } from "@/features/rrhh/components/reclutamiento/ContratarDialog";
 import { moverCandidatoAVacante } from "@/features/rrhh/actions/candidatos-actions";
 import {
+  DecisionPreavisoDialog,
+  type ModoDecisionPreaviso,
+} from "@/features/rrhh/components/reclutamiento/DecisionPreavisoDialog";
+import {
   getReclutamientoConfigGeneral,
   type ReclutamientoConfigGeneral,
 } from "@/features/rrhh/actions/gestoria-actions";
@@ -688,6 +692,12 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
   // Confirmación al pasar a EX-EMPLEADO: avisa de que el empleado quedará Inactivo
   // hoy y su usuario dejará de funcionar. Sin aceptar aquí, NO se mueve.
   const [exEmpleadoConfirm, setExEmpleadoConfirm] = useState<Candidato | null>(null);
+  // Cierre del preaviso: se abre al sacar la tarjeta de esa columna, tanto si se
+  // va (baja) como si se queda (vuelta al equipo).
+  const [decisionPreaviso, setDecisionPreaviso] = useState<{
+    candidato: Candidato;
+    modo: ModoDecisionPreaviso;
+  } | null>(null);
 
   const handleDragStart = useCallback((_e: React.DragEvent, c: Candidato) => {
     draggedCandidato.current = c;
@@ -788,6 +798,33 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     // Prueba y Empleado comparten la misma fase «onboarding».
     if (estadoDestino === "contratacion" && c.fase !== "contratacion") {
       setIniciarContratacionCand(c);
+      return;
+    }
+    // Entrada en «Baja contrato»: tampoco es un simple move. Es EL momento en que
+    // la baja se vuelve firme —se comunica a la gestoría y se le recorta el
+    // horario—, así que primero se cierra el preaviso: qué se hizo y si nos
+    // interesaba retenerle. Antes arrastrar aquí solo movía la tarjeta: la
+    // columna decía «baja tramitada» y la gestoría no se había enterado de nada,
+    // con el trabajador todavía de alta en la Seguridad Social.
+    if (estadoDestino === "baja_contrato" && c.fase !== "baja_contrato") {
+      if (!c.empleadoId) {
+        toast.error(
+          `${c.nombre} ${c.apellidos} no es un empleado`,
+          { description: "Solo se puede dar de baja a quien llegó a ser empleado." },
+        );
+        return;
+      }
+      setDecisionPreaviso({ candidato: c, modo: "baja" });
+      return;
+    }
+    // Vuelta de «Preaviso» a «Empleado»: se negoció y se queda. Tampoco es un
+    // simple move: hay que anular su baja y mandarle la anulación a firmar.
+    if (estadoDestino === "empleado" && c.fase === "preaviso") {
+      if (!c.empleadoId) {
+        toast.error(`${c.nombre} ${c.apellidos} no es un empleado`);
+        return;
+      }
+      setDecisionPreaviso({ candidato: c, modo: "vuelta" });
       return;
     }
     // Entrada en «Ex-empleados»: SOLO para quienes fueron empleados reales (tienen
@@ -909,6 +946,7 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
           apellidos: contratarCand.apellidos,
           email: contratarCand.email,
           vacantePuestoId: vacante.puestoId ?? null,
+          vacanteLocalId: vacante.localId ?? null,
         } : null}
         onDone={() => {
           // Tras contratar (paso 1) el candidato queda promovido: refresca desde
@@ -930,6 +968,7 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
           apellidos: iniciarContratacionCand.apellidos,
           email: iniciarContratacionCand.email,
           vacantePuestoId: vacante.puestoId ?? null,
+          vacanteLocalId: vacante.localId ?? null,
         } : null}
         onDone={() => onMoved?.()}
       />
@@ -941,6 +980,35 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
         estadoNuevo={emailConfirm?.estadoNuevo ?? null}
         onConfirm={handleConfirmMove}
       />
+
+      {/* Cierre del preaviso: se va o se queda. */}
+      {decisionPreaviso && (
+        <DecisionPreavisoDialog
+          open
+          onOpenChange={(o) => !o && setDecisionPreaviso(null)}
+          modo={decisionPreaviso.modo}
+          candidatoId={decisionPreaviso.candidato.id}
+          nombre={`${decisionPreaviso.candidato.nombre} ${decisionPreaviso.candidato.apellidos ?? ""}`.trim()}
+          onHecho={() => {
+            // El email de fase al trabajador («estamos tramitando tu baja») solo
+            // en la baja, y solo si la empresa no los ha apagado.
+            if (
+              decisionPreaviso.modo === "baja" &&
+              !(config && config.emails_auto_cambio_fase === false)
+            ) {
+              void enviarReclutamientoFaseEmail(decisionPreaviso.candidato.id, "baja_contrato");
+            }
+            setDecisionPreaviso(null);
+            onMoved?.();
+          }}
+          onSinSolicitud={() =>
+            toast.error("Esta baja la causa la empresa", {
+              description:
+                "Abre su ficha y pulsa «Baja contrato» para indicar el tipo de baja y los hechos. Así se comunica completa a la gestoría.",
+            })
+          }
+        />
+      )}
 
       {/* Confirmación al pasar a EX-EMPLEADOS: es la baja definitiva. */}
       <Dialog open={!!exEmpleadoConfirm} onOpenChange={(o) => !o && setExEmpleadoConfirm(null)}>
@@ -956,12 +1024,38 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            <p>Al aceptar, este empleado:</p>
+            <p>
+              Este es el <strong>final del proceso de salida</strong>. Al aceptar:
+            </p>
             <ul className="mt-1.5 list-disc pl-5 space-y-1">
-              <li>Quedará marcado como <strong>Inactivo hoy</strong> (con fecha de baja de hoy).</li>
-              <li>Su <strong>usuario dejará de funcionar</strong>: no podrá volver a iniciar sesión.</li>
+              <li>
+                <strong>Dejará de tener acceso al sistema.</strong> Hasta ahora entraba solo a sus
+                documentos para poder firmar; a partir de aquí no podrá entrar a nada.
+              </li>
+              <li>Quedará marcado como <strong>Inactivo</strong> (si no lo estaba ya al llegar su fecha de baja).</li>
+              <li>Su offboarding queda <strong>cerrado</strong>.</li>
             </ul>
+            <p className="mt-2">
+              Si todavía le queda algo por firmar, cancela: se queda en «Finiquito» hasta que esté
+              todo.
+            </p>
           </div>
+          {/* Material sin devolver: cerrar la salida con cosas de la empresa en su
+              casa es el error que más caro sale. No se bloquea (a veces se pierde
+              y hay que poder cerrar igual), pero se dice claramente. */}
+          {exEmpleadoConfirm?.empleadoId &&
+            (pendientesDevolucion[exEmpleadoConfirm.empleadoId] ?? 0) > 0 && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                Le quedan{" "}
+                <strong>
+                  {pendientesDevolucion[exEmpleadoConfirm.empleadoId]}
+                </strong>{" "}
+                {pendientesDevolucion[exEmpleadoConfirm.empleadoId] === 1
+                  ? "cosa sin devolver"
+                  : "cosas sin devolver"}
+                . Recógelas antes de cerrar su salida.
+              </div>
+            )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setExEmpleadoConfirm(null)}>
               Cancelar

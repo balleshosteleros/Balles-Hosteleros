@@ -9,10 +9,14 @@
  *
  * Cómo funciona: cada día busca las bajas comunicadas a la gestoría
  * (`gestoria_bajas.ultimo_dia`) cuyo día oficial —el siguiente al último
- * trabajado— ya ha llegado, y mueve la tarjeta a «Ex-empleados». Ese movimiento
- * es el que marca `empleados.estado = 'Inactivo'`, y el trigger de BD propaga a
- * `usuarios.estado_acceso`, que el proxy consulta en cada petición para cortar
- * la sesión.
+ * trabajado— ya ha llegado, marca `empleados.estado = 'Inactivo'` (el trigger de
+ * BD propaga a `usuarios.estado_acceso`, que el proxy consulta en cada petición
+ * para cortar la sesión) y avanza su tarjeta a «Entregas».
+ *
+ * A «Entregas», no a «Ex-empleados»: perder el acceso no es haber cerrado la
+ * salida. Todavía hay que recoger su material y pagarle el finiquito, y esos dos
+ * pasos tienen que seguir viéndose en el tablero. El salto a Ex-empleados lo da
+ * RRHH cuando de verdad está todo cerrado.
  *
  * A LAS 6:00 DE LA MAÑANA, hora de cada empresa (no UTC): un turno de noche
  * puede empezar el último día y terminar de madrugada del siguiente. Cortando a
@@ -119,16 +123,23 @@ export async function GET(request: Request) {
       // ¿Sigue activo? Si ya está Inactivo no hay nada que hacer (idempotencia).
       const { data: emp } = await supabase
         .from("empleados")
-        .select("id, estado")
+        .select("id, estado, user_id")
         .eq("id", empleadoId)
         .eq("empresa_id", empresaId)
         .maybeSingle();
       if (!emp || emp.estado !== "Activo") continue;
+      const userIdEmpleado = (emp.user_id as string | null) ?? null;
 
-      // El Kanban debe quedar coherente: si el trabajador tiene tarjeta, pasa a
-      // «Ex-empleados». Se escribe directamente y no con `moverCandidatoFase`
-      // porque esa action resuelve la empresa desde la SESIÓN del usuario, y en
-      // un cron no hay sesión: devolvería «No autenticado» siempre.
+      // El Kanban avanza a «ENTREGAS», no a «Ex-empleados». Cortar el acceso y
+      // cerrar la salida son dos cosas distintas: cuando llega su último día hay
+      // que quitarle el acceso (eso lo hace el UPDATE de abajo), pero todavía
+      // queda por recoger su material y pagarle el finiquito. Saltando a
+      // Ex-empleados esos dos pasos desaparecían del tablero y nadie los cerraba.
+      // Ex-empleados sigue siendo el último paso, y lo da RRHH a mano.
+      //
+      // Se escribe directamente y no con `moverCandidatoFase` porque esa action
+      // resuelve la empresa desde la SESIÓN del usuario, y en un cron no hay
+      // sesión: devolvería «No autenticado» siempre.
       const { data: cand } = await supabase
         .from("candidatos")
         .select("id, estado")
@@ -136,20 +147,23 @@ export async function GET(request: Request) {
         .eq("empleado_id", empleadoId)
         .maybeSingle();
 
+      // Solo empuja a quien aún no ha llegado a Entregas. A quien ya está en
+      // Entregas, Finiquito o Ex-empleados no se le hace retroceder.
+      const YA_AVANZADO = ["entregas", "finiquito", "ex_empleado"];
       let viaKanban = false;
-      if (cand?.id && cand.estado !== "ex_empleado") {
+      if (cand?.id && !YA_AVANZADO.includes(cand.estado as string)) {
         const { error: candErr } = await supabase
           .from("candidatos")
           .update({
-            fase: "descartado",
-            estado: "ex_empleado",
+            fase: "offboarding",
+            estado: "entregas",
             fase_actualizada_at: new Date().toISOString(),
           })
           .eq("id", cand.id as string)
           .eq("empresa_id", empresaId);
         if (candErr) {
           console.error(
-            "[cron/bajas-efectivas] mover a ex_empleado falló:",
+            "[cron/bajas-efectivas] mover a entregas falló:",
             empleadoId,
             candErr.message,
           );
@@ -179,6 +193,26 @@ export async function GET(request: Request) {
         incidencias.push({ empleadoId, empresaId, motivo: upErr.message });
         console.error("[cron/bajas-efectivas] desactivar falló:", empleadoId, upErr.message);
         continue;
+      }
+
+      // ACCESO EN MODO OFFBOARDING: sigue entrando, pero solo a sus documentos.
+      // El trigger de BD acaba de ponerle `estado_acceso = 'Inactivo'` al
+      // desactivar la ficha, y eso le dejaría fuera justo cuando aún tiene que
+      // firmar la devolución del material y el finiquito. Se corrige aquí, a
+      // continuación: el cierre total llega al pasarlo a «Ex-empleados».
+      if (userIdEmpleado) {
+        const { error: accErr } = await supabase
+          .from("usuarios")
+          .update({ estado_acceso: "Offboarding" })
+          .eq("user_id", userIdEmpleado)
+          .neq("estado_acceso", "Activo"); // sigue activo en otra empresa: no tocar
+        if (accErr) {
+          console.error(
+            "[cron/bajas-efectivas] acceso offboarding:",
+            empleadoId,
+            accErr.message,
+          );
+        }
       }
 
       // Rastro del movimiento, igual que una baja hecha a mano desde la ficha.
@@ -212,6 +246,24 @@ export async function GET(request: Request) {
           empleadoId,
           e instanceof Error ? e.message : e,
         );
+      }
+
+      // Aviso de devolución: entra en Entregas hoy, así que se le dice qué tiene
+      // a su nombre y que sin devolverlo no se cierra su finiquito. Solo si la
+      // tarjeta llegó de verdad a esa casilla (si no, ya estaba más adelante).
+      if (viaKanban) {
+        try {
+          const { avisarDevolucionSalida } = await import(
+            "@/features/rrhh/services/entregas/avisar-devolucion-salida"
+          );
+          await avisarDevolucionSalida(supabase, { empresaId, empleadoId });
+        } catch (e) {
+          console.error(
+            "[cron/bajas-efectivas] aviso de devolución:",
+            empleadoId,
+            e instanceof Error ? e.message : e,
+          );
+        }
       }
 
       desactivados++;

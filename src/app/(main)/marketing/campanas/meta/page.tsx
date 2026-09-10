@@ -1,5 +1,5 @@
-import { CampanasMetaView } from "@/features/marketing/components/campanas/CampanasMetaView";
+import { MetaAdsView } from "@/features/marketing/meta-ads/components/MetaAdsView";
 
 export default function CampanasMetaPage() {
-  return <CampanasMetaView />;
+  return <MetaAdsView />;
 }

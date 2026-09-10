@@ -44,6 +44,15 @@ export type CartaCategoria = {
   dias_semana: number[] | null;
   hora_desde: string | null;
   hora_hasta: string | null;
+  /**
+   * Solo en la carta abierta DESDE LA WEB: la categoría se enseña aunque
+   * ahora mismo no se sirva. Quien mira la web un domingo quiere saber qué
+   * lleva el menú del día; quien escanea el QR sentado en la mesa, no, porque
+   * ahí solo puede pedir lo que la cocina está sirviendo.
+   */
+  fuera_de_horario?: boolean;
+  /** "De lunes a viernes, de 12:30 a 16:30" — se pinta bajo el título. */
+  horario_texto?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -68,6 +77,19 @@ export type CartaItem = {
    * estadísticas se calculan solo sobre los "me gusta" reales.
    */
   likes_base: number;
+  /**
+   * Se ha acabado HOY. Lo marca cocina durante el servicio y se quita solo
+   * cuando arranca el día siguiente. El plato no desaparece: sale en gris y
+   * con el rótulo "Agotado", para que el comensal no lo pida.
+   */
+  agotado: boolean;
+  /**
+   * Nombre REAL del producto de venta al que está vinculado, solo para
+   * enseñarlo de referencia en el panel: el plato puede llamarse en la carta
+   * de otra forma, y hay que poder ver de qué producto se trata. No se guarda
+   * aquí; vive en la ficha del producto. Solo lo rellena la lectura admin.
+   */
+  producto_nombre?: string | null;
   created_at: string;
   updated_at: string;
 };

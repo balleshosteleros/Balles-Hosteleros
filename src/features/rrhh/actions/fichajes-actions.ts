@@ -308,6 +308,23 @@ export async function ficharEntrada(geo: GeoInput) {
       };
     }
 
+    // Anulación del preaviso sin firmar: no ficha. Mismo corte que en Mi Panel,
+    // porque se puede fichar desde las dos pantallas y de nada serviría cerrar
+    // una sola puerta.
+    {
+      const { tieneAnulacionPreavisoPendiente, MENSAJE_ANULACION_PENDIENTE } = await import(
+        "@/features/rrhh/services/firmas/anulacion-preaviso-pendiente"
+      );
+      if (
+        await tieneAnulacionPreavisoPendiente(
+          supabase as unknown as import("@supabase/supabase-js").SupabaseClient,
+          { empresaId, empleadoId: empleado.id as string },
+        )
+      ) {
+        return { ok: false, error: MENSAJE_ANULACION_PENDIENTE };
+      }
+    }
+
     const modoTeletrabajo = empleado.permite_teletrabajo;
     if (!modoTeletrabajo) {
       if (!geo) {

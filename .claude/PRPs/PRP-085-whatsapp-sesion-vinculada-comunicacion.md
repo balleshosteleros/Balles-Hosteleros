@@ -40,7 +40,7 @@ se vende a los 100 clientes sin coste marginal por mensaje.
 
 ### Criterios de Éxito
 
-- [ ] Un restaurante conecta su número **sin ayuda**: entra en Ajustes → Sala → WhatsApp, escanea el QR con su móvil y en menos de 2 minutos el estado pasa a **Conectado**, sin que nadie toque código ni variables de entorno.
+- [ ] Un restaurante conecta su número **sin ayuda**: entra en Ajustes → Integraciones → WhatsApp, escanea el QR con su móvil y en menos de 2 minutos el estado pasa a **Conectado**, sin que nadie toque código ni variables de entorno.
 - [ ] Un mensaje que un cliente envía al WhatsApp del restaurante aparece en Comunicación en **menos de 5 segundos**, y la respuesta escrita desde Comunicación llega al móvil del cliente.
 - [ ] Los adjuntos funcionan en los dos sentidos (imagen, audio, documento) reutilizando el bucket `chat-archivos` que ya existe.
 - [ ] **Aislamiento**: la empresa A nunca ve ni un mensaje ni un contacto de la empresa B. Verificado con las dos empresas reales (BACANAL y HABANA) conectadas a la vez.
@@ -53,8 +53,9 @@ se vende a los 100 clientes sin coste marginal por mensaje.
 
 ### Comportamiento Esperado
 
-**Conectar (autoservicio).** El gerente entra en Ajustes → Departamentos → Sala → WhatsApp.
-Ve una tarjeta con el estado (**Sin conectar**). Pulsa "Conectar". El software pide al
+**Conectar (autoservicio).** El gerente entra en Ajustes → **Integraciones**, donde WhatsApp
+aparece como una tarjeta más junto a Google, Ágora POS y Revolut, con el logo de WhatsApp
+y el mismo distintivo de estado (**Sin conectar** / **Conectado**). Pulsa "Conectar". El software pide al
 servidor de sesiones que arranque una sesión para esa empresa; el servidor devuelve un QR
 que se pinta en pantalla y se refresca solo mientras no se escanee. El gerente abre
 WhatsApp en el móvil del restaurante → Dispositivos vinculados → Vincular dispositivo →
@@ -112,7 +113,8 @@ campañas siguen saliendo por la vía oficial de Meta (PRP-083) — este canal n
 | Notificaciones | `src/features/notificaciones/actions/notificaciones-actions.ts` (`emitirNotificacion`) | El aviso de caída de sesión |
 | Correo saliente | remitente único de notificaciones, `getSiteUrl()` | El correo de caída |
 | Ficha de cliente y teléfono | `public.clientes_sala.telefono` (campo único con prefijo, `20260904130000`) | La vinculación conversación ↔ cliente |
-| Tarjetas de integración en Ajustes | `src/features/ajustes/components/IntegracionesTab.tsx` + `AgoraPanel` / `RevolutPanel` | El patrón visual de la tarjeta de conexión |
+| Tarjetas de integración en Ajustes | `src/features/ajustes/components/IntegracionesTab.tsx` + `AgoraPanel` / `RevolutPanel` | El patrón exacto a replicar: `INTEGRACIONES[]`, estado por `cargarEstados()`, panel en diálogo |
+| Logos de integración | `src/features/ajustes/components/IntegracionLogo.tsx` | Añadir `whatsapp` a `IntegracionLogoKey` (SVG inline, como Google y Revolut) |
 
 **Externas:**
 - Baileys (WhatsApp Web multi-dispositivo, `@whiskeysockets/baileys`) — librería del servidor de sesiones.
@@ -309,8 +311,10 @@ guarda las credenciales cifradas en Supabase y las recupera al arrancar.
 sesión vuelve sola sin escanear; se cambia el `nodo_id` y la sesión migra igual.
 
 ### Fase 3: Conectar desde Ajustes (autoservicio)
-**Objetivo**: tarjeta en Ajustes → Sala → WhatsApp con estado, QR que se refresca solo,
-pasos numerados y número conectado. Cero configuración cableada.
+**Objetivo**: cuarta tarjeta en `IntegracionesTab.tsx` (`key: "whatsapp"`, `logo: "whatsapp"`,
+resumen de una línea), su `WhatsAppPanel` siguiendo el patrón de `AgoraPanel`/`RevolutPanel`,
+logo en `IntegracionLogo.tsx` y estado alimentando `cargarEstados()`. Dentro del panel: QR
+que se refresca solo, pasos numerados y número conectado. Cero configuración cableada.
 **Validación**: una empresa se conecta de principio a fin **sin tocar código ni variables
 de entorno**, con Playwright confirmando la pantalla.
 
