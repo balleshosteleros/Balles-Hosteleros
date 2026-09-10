@@ -496,6 +496,13 @@ export interface OportunidadDeCliente {
   estado: OportunidadEstado;
   valor: number;
   faseAt: string;
+  /**
+   * En Go High Level la nota no era del trato, era de la PERSONA: la misma
+   * aparecía en todas sus tarjetas. Viaja hasta aquí para que la ficha del
+   * cliente pueda enseñarla, que es donde se busca ("¿qué sabemos de este?")
+   * y no dentro de cada tablero uno por uno.
+   */
+  notas: string | null;
 }
 
 export async function listOportunidadesDeCliente(
@@ -508,7 +515,7 @@ export async function listOportunidadesDeCliente(
     const { data, error } = await supabase
       .from("pipeline_oportunidades")
       .select(
-        "id, estado, valor, fase_at, pipeline:pipelines(id, nombre, orden), fase:pipeline_fases(nombre, icono)",
+        "id, estado, valor, fase_at, notas, pipeline:pipelines(id, nombre, orden), fase:pipeline_fases(nombre, icono)",
       )
       .eq("empresa_id", empresaId)
       .eq("cliente_id", clienteId);
@@ -523,6 +530,7 @@ export async function listOportunidadesDeCliente(
       estado: OportunidadEstado;
       valor: number | string | null;
       fase_at: string;
+      notas: string | null;
       pipeline: { id: string; nombre: string; orden: number } | null;
       fase: { nombre: string; icono: string | null } | null;
     };
@@ -544,6 +552,7 @@ export async function listOportunidadesDeCliente(
           estado: f.estado,
           valor: Number(f.valor ?? 0),
           faseAt: f.fase_at,
+          notas: f.notas,
         })),
     };
   } catch (err) {

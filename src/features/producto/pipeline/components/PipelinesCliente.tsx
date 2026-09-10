@@ -13,8 +13,8 @@
  * software, no algo de un restaurante. En una empresa cliente ni se pinta ni se
  * pregunta a la base de datos, aunque la ficha de cliente sea la misma vista.
  */
-import { useEffect, useState } from "react";
-import { GitBranch } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { GitBranch, StickyNote } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -48,6 +48,25 @@ export function PipelinesCliente({ clienteId }: { clienteId: string }) {
   }, [clienteId, esMatriz]);
 
   const filas = cargado?.clienteId === clienteId ? cargado.filas : [];
+
+  /**
+   * Las notas de la persona, sin repetir.
+   *
+   * En Go High Level la nota colgaba del CONTACTO, no del trato: quien tenía
+   * Cover Manager, Joombo y Sesame arrastraba la misma frase en las tres
+   * tarjetas. Pintarla tres veces sería ruido, así que se agrupa por texto y se
+   * dice de qué tableros viene solo cuando hay más de una nota distinta.
+   */
+  const notas = useMemo(() => {
+    const porTexto = new Map<string, string[]>();
+    for (const o of filas) {
+      const texto = (o.notas ?? "").trim();
+      if (!texto) continue;
+      porTexto.set(texto, [...(porTexto.get(texto) ?? []), o.pipelineNombre]);
+    }
+    return [...porTexto].map(([texto, pipelines]) => ({ texto, pipelines }));
+  }, [filas]);
+
   if (filas.length === 0) return null;
 
   return (
@@ -86,6 +105,33 @@ export function PipelinesCliente({ clienteId }: { clienteId: string }) {
           </li>
         ))}
       </ul>
+
+      {notas.length > 0 && (
+        <div className="space-y-1.5 pt-1">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <StickyNote className="h-3.5 w-3.5 shrink-0" />
+            <span>{notas.length === 1 ? "Nota" : "Notas"}</span>
+          </div>
+          {notas.map((n) => (
+            <div
+              key={n.texto}
+              className="rounded-md border border-border/60 bg-muted/30 px-2.5 py-2 text-xs"
+            >
+              {notas.length > 1 && (
+                <p className="mb-1 font-medium text-muted-foreground">
+                  {n.pipelines.join(" · ")}
+                </p>
+              )}
+              {/* Vienen con saltos de línea de años de seguimiento: se respetan,
+                  y si son muy largas se hace scroll dentro en vez de estirar la
+                  ficha entera. */}
+              <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-foreground/90">
+                {n.texto}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
