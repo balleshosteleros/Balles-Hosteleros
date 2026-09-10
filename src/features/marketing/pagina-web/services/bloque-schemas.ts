@@ -259,6 +259,9 @@ export const datosSchemaPorTipo = {
   premios: premiosDatosSchema,
   historia: historiaDatosSchema,
   instagram: instagramDatosSchema,
+  // El bloque "imagen" estaba en la lista de tipos y en la unión de abajo, pero
+  // se quedó sin entrada aquí: `validarBloque("imagen", …)` no compilaba y el
+  // build de producción no pasaba de la comprobación de tipos.
   imagen: imagenDatosSchema,
 } as const;
 
