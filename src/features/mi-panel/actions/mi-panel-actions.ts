@@ -44,6 +44,7 @@ import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
 import {
   calcularSaldoVacaciones,
+  diasVacacionesDevengados,
   ESTADOS_QUE_GASTAN,
   type SolicitudParaSaldo,
 } from "@/features/rrhh/data/vacaciones-saldo";
@@ -2211,6 +2212,8 @@ export interface MiVacacionesInfo {
   diasPendientesAprobacion: number;
   diasGastados: number;
   diasRestantes: number;
+  /** Días cogidos por encima de su cupo. 0 cuando no hay exceso. */
+  diasExcedidos: number;
   bloqueos: { fechaInicio: string; fechaFin: string; motivo: string | null }[];
   /** Reglas de la empresa: día obligatorio de inicio y mín/máx de días. */
   reglas: VacacionesReglas;
@@ -2319,6 +2322,7 @@ export async function getMiVacacionesInfo(): Promise<{
       diasAprobadosPendientes: 0,
       diasPendientesAprobacion: 0,
       diasGastados: 0,
+      diasExcedidos: 0,
       diasRestantes: 0,
       bloqueos: [],
       reglas,
@@ -2338,11 +2342,27 @@ export async function getMiVacacionesInfo(): Promise<{
     // (Calendario → Días de vacaciones). Antes se leía `limite_dias` del tipo de
     // ausencia, que era un número distinto del que veía RRHH en la ficha: el
     // empleado y RRHH podían ver saldos diferentes para el mismo año.
-    const { dias: diasTotales } = await getDiasVacacionesAnio(empresaId);
-    if (!diasTotales) return { ok: true, data: vacio };
+    const { dias: diasAnio } = await getDiasVacacionesAnio(empresaId);
+    if (!diasAnio) return { ok: true, data: vacio };
 
     const esPredeterminado = true;
     const anio = new Date().getUTCFullYear();
+
+    // Sus días se cuentan DESDE SU PRIMER DÍA de contrato (y hasta su fecha de
+    // baja, si ya la tiene): quien entra en junio no tiene los mismos días que
+    // quien lleva todo el año. Misma regla que ve RRHH y que va a la gestoría.
+    const { data: miFicha } = await supabase
+      .from("empleados")
+      .select("fecha_alta, fecha_baja")
+      .eq("user_id", user.id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const diasTotales = diasVacacionesDevengados(
+      diasAnio,
+      anio,
+      (miFicha?.fecha_alta as string | null) ?? null,
+      (miFicha?.fecha_baja as string | null) ?? null,
+    );
     const inicioAnio = `${anio}-01-01`;
     const inicioAnioSig = `${anio + 1}-01-01`;
     const { data: existentes } = await supabase
@@ -3281,6 +3301,24 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
           .from("puestos").select("convenio_colectivo").eq("id", cond.puesto_id as string).maybeSingle();
         convenioPre = (p?.convenio_colectivo as string | null) ?? "";
       }
+      // Sin fila de condiciones (altas manuales, seed), el convenio y el tipo de
+      // contrato se rescatan de SU PUESTO por nombre — igual que hace la
+      // tramitación. Sin esto, este aviso bloqueaba a casi toda la plantilla por
+      // unos datos que su puesto sí tiene.
+      let tipoContratoPre = (cond?.tipo_contrato as string | null) ?? null;
+      if (!convenioPre || !tipoContratoPre) {
+        const { data: pNom } = empPre.puesto
+          ? await supabase
+              .from("puestos")
+              .select("convenio_colectivo, tipo_contrato_defecto")
+              .eq("empresa_id", solicitud.empresa_id as string)
+              .eq("nombre", empPre.puesto as string)
+              .maybeSingle()
+          : { data: null };
+        if (!convenioPre) convenioPre = (pNom?.convenio_colectivo as string | null) ?? "";
+        if (!tipoContratoPre) tipoContratoPre = (pNom?.tipo_contrato_defecto as string | null) ?? null;
+      }
+
       const { faltantesBajaGestoria } = await import("@/features/rrhh/data/campos-gestoria");
       const faltan = faltantesBajaGestoria({
         ultimo_dia_iso: ultimoDiaPre,
@@ -3289,7 +3327,7 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
         telefono: empPre.telefono as string | null,
         email: (empPre.email_personal as string | null) || (empPre.email_empresa as string | null),
         puesto: empPre.puesto as string | null,
-        tipo_contrato: cond?.tipo_contrato as string | null,
+        tipo_contrato: tipoContratoPre,
         convenio: convenioPre,
       });
       if (faltan.length > 0) {
@@ -3301,6 +3339,7 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
         };
       }
     }
+
 
     // Solicitud de TRABAJO (día trabajado / horas extras): al aprobar se crea el
     // fichaje con el tramo indicado (NOR/EXT). Si el tramo se solapa con otro
