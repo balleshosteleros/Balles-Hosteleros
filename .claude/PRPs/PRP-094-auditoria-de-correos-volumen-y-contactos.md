@@ -1,6 +1,6 @@
 # PRP-094: Auditoría de correos — volumen por buzón y con quién (regla 80/20)
 
-> **Estado**: PENDIENTE
+> **Estado**: IMPLEMENTADO (fases 1-3) — 10-09-2026
 > **Fecha**: 2026-09-10
 > **Proyecto**: Balles-Hosteleros
 
@@ -309,7 +309,30 @@ un buzón sin conectar no muestra ceros.
 
 ## 🧠 Aprendizajes (Self-Annealing / Neural Network)
 
-> Se rellena durante la implementación.
+### 2026-09-10: la conexión no puede colgar de una persona
+- **Error**: el diseño inicial reutilizaba el roster personal `google_cuentas_usuario`. Lo detectó Iván antes de escribir código: «si yo me lo quito pero lo conecta el empleado en su ordenador, debe leerlo igual».
+- **Fix**: el permiso se guarda a nombre del BUZÓN, en `correo_buzones_tokens`, y `vincular-callback` engancha cualquier cuenta que coincida con un buzón auditado. `/api/google/disconnect` no toca esa tabla.
+- **Aplicar en**: cualquier integración externa que tenga que seguir funcionando sin que nadie esté dentro. Si el token vive en el roster de un usuario, la función muere cuando esa persona cambia de cuenta o se va.
+
+### 2026-09-10: el puntero incremental de Gmail deja el buzón mudo
+- **Error**: el plan usaba `history.list` para pedir solo lo nuevo. Ese `historyId` caduca y Google responde 404; a partir de ahí el buzón deja de sincronizar SIN ningún síntoma visible.
+- **Fix**: pedir «lo de los últimos dos días» por fecha y dejar que la clave única descarte lo repetido. Se borró la columna `last_history_id` en vez de dejarla sin uso.
+- **Aplicar en**: cualquier sincronización con estado incremental. Si el estado puede caducar y el fallo es silencioso, casi siempre sale más a cuenta pedir una ventana de días y deduplicar.
+
+### 2026-09-10: doce meses no caben en una ejecución
+- **Error**: el volcado inicial de 12 meses son decenas de miles de llamadas; ninguna función aguanta eso.
+- **Fix**: el volcado va por tramos de 30 días, apuntando `backfill_hasta`; cada pasada horaria retrocede un trozo más. Nada se queda a medias en silencio.
+- **Aplicar en**: toda importación masiva desde una API externa.
+
+### 2026-09-10: `no_reply` con guion bajo se colaba como persona
+- **Error**: la detección de automáticos solo cubría `noreply@` y `no-reply@`. `testflight_no_reply@email.apple.com` entraba en el ranking como si fuera alguien con quien se trabaja.
+- **Fix**: aceptar guion, guion bajo y punto como separador; migración para arreglar lo ya guardado sin volver a pedir nada a Gmail.
+- **Aplicar en**: cualquier regla que reconozca direcciones por su forma. Hay que probarla contra datos reales antes de fiarse.
+
+### 2026-09-10: un contador que sale de una lista limitada miente
+- **Error**: «contactos distintos» se calculaba con `ranking.length`, y el ranking se corta en 100 filas. Justo en los buzones con más correo el número habría sido falso.
+- **Fix**: función aparte en la base que cuenta los distintos de verdad.
+- **Aplicar en**: cualquier KPI derivado de una lista paginada o limitada.
 
 ---
 
@@ -368,4 +391,23 @@ un buzón sin conectar no muestra ceros.
 
 ---
 
-*PRP pendiente de aprobación. No se ha modificado código.*
+## Estado de la implementación
+
+| Fase | Estado |
+|------|--------|
+| 1. Registro de buzones y conexión desde Ajustes | ✅ hecha (commit `8c587e46`) |
+| 2. Ingesta de cabeceras desde Gmail | ✅ hecha (commit `6f279d07`) |
+| 3. Panel Dirección › Auditorías › Correo | ✅ hecha (commit `88e5389e`) |
+| 4. Validación final | ⏳ falta mirarlo en pantalla con sesión real |
+
+**Comprobado con datos reales (10-09-2026)**
+- 19 buzones dados de alta solos desde la ficha de las empresas; 7 conectados sin pedir permiso a nadie (aprovechando los que ya estaban vinculados).
+- El permiso no se ve desde el navegador (probado con la clave pública: devuelve vacío).
+- Repetir la siembra no duplica ni desconecta nada.
+- Una pasada del cron: 7 buzones, 2.699 correos indexados, 266 s.
+- Agosto cuadra por tres caminos distintos (serie, ranking y conteo en bruto): 1.114 correos; el acumulado del ranking cierra en 100 %.
+
+**Pendiente**
+- El volcado de los 12 meses se completa solo con las pasadas horarias.
+- Quedan 12 buzones sin conectar (un clic por buzón, con la contraseña de Google de cada uno).
+- `contabilidad.grupohostelero@gmail.com` está vinculado pero no figura en la ficha de ninguna empresa: si es de la casa, se añade a mano desde Ajustes.
