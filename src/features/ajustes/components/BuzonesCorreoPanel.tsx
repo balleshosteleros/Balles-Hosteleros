@@ -56,11 +56,42 @@ export function BuzonesCorreoPanel() {
     cargar();
   }, [cargar, empresaActual?.id]);
 
+  // Al volver de Google se dice qué ha pasado. Sobre todo el caso malo: haberse
+  // equivocado de cuenta en la pantalla de Google. Ahí no se guarda nada, y hay
+  // que decirlo, porque si no la persona se queda pensando que ya está hecho.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const resultado = params.get("google");
+    if (!resultado) return;
+
+    if (resultado === "buzon_conectado") {
+      toast.success("Buzón conectado. Su correo empieza a contarse.");
+    } else if (resultado === "buzon_desconocido") {
+      toast.error(
+        "Esa cuenta no es ninguno de los buzones de la empresa: no se ha conectado nada.",
+      );
+    }
+
+    // Se limpia la dirección para que al recargar no vuelva a salir el aviso.
+    params.delete("google");
+    const limpia =
+      window.location.pathname + (params.toString() ? `?${params}` : "");
+    window.history.replaceState({}, "", limpia);
+  }, []);
+
   const conectar = (email: string) => {
-    // `switch=1` hace que Google enseñe el selector de cuentas, y `hint` deja ya
-    // marcada la del buzón: así no se conecta la equivocada por inercia.
+    /*
+      `proposito=auditoria`: se conecta el buzón SOLO para contar su correo. No
+      entra en el selector de correo de quien lo conecta ni se convierte en su
+      cuenta activa — nadie tiene por qué acabar con doce bandejas ajenas encima
+      por haber conectado los buzones de la empresa.
+
+      `switch=1` hace que Google enseñe el selector de cuentas y `hint` deja ya
+      marcada la del buzón: así no se conecta la equivocada por inercia.
+    */
     const url =
-      `/api/google/connect?switch=1&hint=${encodeURIComponent(email)}` +
+      `/api/google/connect?proposito=auditoria&switch=1` +
+      `&hint=${encodeURIComponent(email)}` +
       `&next=${encodeURIComponent(VUELTA)}`;
     window.location.href = url;
   };
@@ -125,8 +156,13 @@ export function BuzonesCorreoPanel() {
       <p className="text-xs text-muted-foreground">
         Los correos de la empresa se cuentan para saber cuánto trabajo mueve cada
         área y con quién. La conexión es de la empresa: la haga quien la haga y
-        desde donde la haga, el buzón queda conectado para todos. Quitarse la
-        cuenta del selector personal no deja de contar.
+        desde donde la haga, el buzón queda conectado para todos, y sigue
+        contando aunque esa persona cierre sesión o deje la empresa.
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Conectar un buzón aquí <strong>no lo añade a tu correo</strong>: no verás
+        su bandeja ni sus mensajes, solo se cuentan. Y solo se pueden contar
+        buzones de la empresa, nunca el correo personal de nadie.
       </p>
 
       <div className="text-xs font-medium text-muted-foreground">

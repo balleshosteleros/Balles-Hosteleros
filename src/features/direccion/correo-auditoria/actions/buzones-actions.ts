@@ -11,6 +11,7 @@
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getEmpresaActivaForUser,
   getZonaHorariaEmpresa,
@@ -146,6 +147,26 @@ export async function anadirBuzonAction(
     return { ok: false, error: "Ese correo no es válido" };
   }
 
+  /*
+    CANDADO: nunca un correo personal (PRP-094).
+
+    Los buzones que salen de la ficha de la empresa son de la casa por
+    definición. El riesgo está aquí, en el añadido a mano: alguien podría poner
+    el Gmail personal de un empleado y ponerse a contar su correo privado.
+
+    Eso no se hace. Se comprueba contra los correos personales que constan en
+    las fichas de empleados y usuarios, y se rechaza. El correo de EMPRESA de un
+    empleado sí puede auditarse: ese es de la empresa y para eso está.
+  */
+  const esPersonal = await correoPersonalDeAlguien(correo);
+  if (esPersonal) {
+    return {
+      ok: false,
+      error:
+        "Ese es el correo personal de alguien del equipo. Solo se pueden contar buzones de la empresa.",
+    };
+  }
+
   const { error } = await supabase.from("correo_buzones").insert({
     empresa_id: empresaId,
     email: correo,
@@ -200,4 +221,30 @@ export async function sincronizarBuzonAction(
     quedaHistorico: res.quedaHistorico,
     error: res.error,
   };
+}
+
+/**
+ * ¿Ese correo consta como PERSONAL de algún empleado o usuario?
+ *
+ * Se mira en todas las empresas, no solo en la activa: el correo personal de
+ * una persona lo es en todas, y auditarlo desde otra empresa del grupo sería el
+ * mismo abuso. Se usa el cliente admin porque la comprobación tiene que ver
+ * fichas que quien pregunta quizá no puede leer — y solo devuelve sí o no,
+ * nunca de quién es.
+ */
+async function correoPersonalDeAlguien(correo: string): Promise<boolean> {
+  const admin = createAdminClient();
+
+  const [empleados, usuarios] = await Promise.all([
+    admin
+      .from("empleados")
+      .select("id", { count: "exact", head: true })
+      .ilike("email_personal", correo),
+    admin
+      .from("usuarios")
+      .select("id", { count: "exact", head: true })
+      .ilike("email_personal", correo),
+  ]);
+
+  return (empleados.count ?? 0) > 0 || (usuarios.count ?? 0) > 0;
 }

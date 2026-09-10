@@ -69,6 +69,20 @@ export async function GET(request: Request) {
     entonces la auditoría contaría el correo de otra persona.
   */
   const hint = url.searchParams.get("hint")?.trim() || "";
+  /*
+    Para qué se vincula esta cuenta (PRP-094).
+
+    Por defecto ("bandeja") es lo de siempre: la cuenta pasa a estar disponible
+    en el selector de correo de quien la vincula, para leer y escribir desde el
+    software.
+
+    Con `proposito=auditoria` NO. Se conecta el buzón para que la empresa pueda
+    CONTAR su correo, y punto: no entra en el selector de nadie ni cambia la
+    cuenta activa. Regla de Iván: «no quiero tener conectados en mi sesión los
+    correos del resto del equipo, son muchos correos y me agobiarían ahí».
+  */
+  const proposito =
+    url.searchParams.get("proposito") === "auditoria" ? "auditoria" : "bandeja";
 
   // Vincular es una acción del usuario que ya está dentro. Sin sesión no hay
   // a quién asociar la cuenta, así que al login.
@@ -118,5 +132,6 @@ export async function GET(request: Request) {
   const response = NextResponse.redirect(authUrl.toString());
   response.cookies.set("g_vincular_next", nextPath, TEMP_OPTS);
   response.cookies.set("g_vincular_state", state, TEMP_OPTS);
+  response.cookies.set("g_vincular_proposito", proposito, TEMP_OPTS);
   return response;
 }

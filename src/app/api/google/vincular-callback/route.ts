@@ -60,6 +60,8 @@ export async function GET(request: Request) {
 
   const c = await cookies();
   const next = c.get("g_vincular_next")?.value || "/";
+  // "auditoria" = se conecta el buzón solo para contar su correo. Ver más abajo.
+  const proposito = c.get("g_vincular_proposito")?.value || "bandeja";
   const stateEsperado = c.get("g_vincular_state")?.value;
   const state = url.searchParams.get("state");
 
@@ -146,6 +148,41 @@ export async function GET(request: Request) {
   if (!email) return fallo("sin_email");
 
   const sep = next.includes("?") ? "&" : "?";
+
+  /*
+    ── Conectar un buzón SOLO para auditarlo (PRP-094) ──────────────────────
+
+    Aquí la cuenta NO entra en el selector de correo de quien la conecta ni pasa
+    a ser su cuenta activa. Se guarda el permiso a nombre del buzón y ya está.
+
+    El motivo es de uso real: los buzones de la empresa son muchos y quien los
+    conecta (dirección) no quiere doce bandejas ajenas encima para poder contar
+    su correo. Regla de Iván: «no quiero tener conectados en mi sesión los
+    correos del resto del equipo, son muchos correos y me agobiarían ahí».
+
+    Y hay un segundo motivo, más importante: contar cuánto correo mueve un área
+    y poder leer ese correo son dos cosas distintas, y no tienen por qué ir
+    juntas. Quien audita no necesita abrir los correos de nadie.
+  */
+  if (proposito === "auditoria") {
+    const { buzones } = await registrarBuzonDesdeVinculacion(
+      email,
+      tokens.refresh_token,
+      user.id,
+    );
+
+    // La cuenta elegida no es ninguno de los buzones de la empresa. No se
+    // guarda NADA y se dice: es la barrera que impide auditar por error un
+    // correo personal por haberse equivocado de cuenta en la pantalla de Google.
+    const resultado = buzones > 0 ? "buzon_conectado" : "buzon_desconocido";
+
+    const respuesta = NextResponse.redirect(
+      `${origin}${next}${sep}google=${resultado}`,
+    );
+    limpiarTemporales(respuesta);
+    return respuesta;
+  }
+
   const response = NextResponse.redirect(
     `${origin}${next}${sep}google=vinculada`,
   );
@@ -169,8 +206,9 @@ export async function GET(request: Request) {
   await writeAccountsTo(response.cookies, actualizadas, user.id);
 
   /*
-    Auditoría de correos (PRP-094): si el correo que se acaba de vincular es un
-    buzón de la empresa, el permiso se guarda TAMBIÉN a nombre del buzón.
+    Auditoría de correos (PRP-094): si el correo que se acaba de vincular para
+    la bandeja resulta ser además un buzón de la empresa, el permiso se guarda
+    TAMBIÉN a nombre del buzón.
 
     Es lo que hace que la conexión la sostenga la empresa y no la persona: lo
     vincule quien lo vincule vale, y cuando alguien se quite luego la cuenta de
@@ -191,4 +229,5 @@ export async function GET(request: Request) {
 function limpiarTemporales(response: NextResponse) {
   response.cookies.set("g_vincular_next", "", TEMP_CLEAR);
   response.cookies.set("g_vincular_state", "", TEMP_CLEAR);
+  response.cookies.set("g_vincular_proposito", "", TEMP_CLEAR);
 }
