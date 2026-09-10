@@ -257,7 +257,7 @@ export function ResenaForm({
                 ¿Nos dejas tu reseña?
               </p>
               <p className="text-sm leading-relaxed text-gray-600">
-                Es lo que hace que otros nos descubran.
+                Es lo que hace que otros nos encuentren.
               </p>
               <a
                 href={urlResena}
@@ -470,39 +470,39 @@ function mensajeSegunNota(
     return {
       titulo: `¡Gracias${con}!`,
       texto:
-        "Ya habías valorado esta visita, así que tu opinión está registrada. Esperamos verte pronto.",
+        "Ya habías valorado esta visita. Esperamos verte pronto.",
     };
   }
   if (nota === null) {
     return {
       titulo: `¡Gracias${con}!`,
-      texto: "Tu opinión es muy importante para nosotros. Esperamos verte pronto.",
+      texto: "Gracias por tu opinión. Esperamos verte pronto.",
     };
   }
   if (nota >= 5) {
     return {
       titulo: `¡Gracias${con}!`,
       texto:
-        "Nos has alegrado el día. Saber que lo hicimos bien es lo que nos motiva a seguir cuidando cada detalle.",
+        "Nos has alegrado el día. Esto es lo que nos motiva.",
     };
   }
   if (nota >= 4) {
     return {
       titulo: `¡Gracias${con}!`,
       texto:
-        "Nos alegra que lo hayas pasado bien. Vamos a trabajar para que la próxima visita sea aún mejor.",
+        "Nos alegra. Trabajamos para que la próxima sea aún mejor.",
     };
   }
   if (nota >= 3) {
     return {
       titulo: `Gracias por la sinceridad${con}`,
       texto:
-        "Sabemos que podíamos haberlo hecho mejor. Vamos a trabajar en ello para que la próxima visita sea mucho mejor.",
+        "Podíamos hacerlo mejor. Vamos a por ello.",
     };
   }
   return {
     titulo: `Lo sentimos${con}`,
     texto:
-      "Esta no es la experiencia que queremos dar, y te pedimos disculpas. Nuestro departamento de Calidad se pondrá en contacto contigo para escucharte y buscar una solución.",
+      "Te pedimos disculpas. Calidad te llamará para ponerle solución.",
   };
 }
