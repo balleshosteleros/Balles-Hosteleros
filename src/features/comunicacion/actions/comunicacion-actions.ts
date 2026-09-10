@@ -48,6 +48,7 @@ function normalizar(s: string): string {
 const MODULOS_NO_DEPARTAMENTO = new Set([
   "AJUSTES",
   "CAMARAS",
+  "HERR_AGENDA",
   "HERR_APLICACIONES",
   "HERR_ACCESOS",
 ]);
@@ -187,6 +188,37 @@ export async function listCanales(_empresaSlug: string) {
   } catch (err) {
     console.error("[comunicacion] listCanales:", err);
     return { ok: false, data: [], esAdmin: false };
+  }
+}
+
+/**
+ * Departamentos ACTIVOS de la empresa activa — la lista de la que sale un grupo
+ * de chat por departamento.
+ *
+ * Fuente única: la tabla `departamentos` (Ajustes → Departamentos). Antes esta
+ * lista se derivaba de los nodos administrativos del organigrama, y por eso
+ * departamentos reales que no son nodos —ARTISTAS, MANTENIMIENTO— se quedaban
+ * sin grupo y su gente entraba al chat y no veía NADA. Todo el mundo tiene, como
+ * mínimo, el grupo de su departamento.
+ */
+export async function listDepartamentosParaChat(): Promise<{ ok: boolean; data: string[] }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, data: [] };
+    const { data, error } = await supabase
+      .from("departamentos")
+      .select("nombre, estado")
+      .eq("empresa_id", empresaId)
+      .order("nombre");
+    if (error) throw error;
+    const nombres = (data ?? [])
+      .filter((d) => ((d.estado as string | null) ?? "Activo") === "Activo")
+      .map((d) => String(d.nombre ?? "").trim().toUpperCase())
+      .filter((n) => n.length > 0);
+    return { ok: true, data: Array.from(new Set(nombres)) };
+  } catch (err) {
+    console.error("[comunicacion] listDepartamentosParaChat:", err);
+    return { ok: false, data: [] };
   }
 }
 

@@ -885,6 +885,54 @@ export async function ensureReservasConfigEmpresa(
  * Debe llamarse DESPUÉS de sembrar los departamentos. El dueño puede cambiarlo
  * todo en Ajustes → RRHH → Solicitudes.
  */
+/**
+ * Un GRUPO DE CHAT por cada departamento ACTIVO de la empresa.
+ *
+ * Regla: todo el mundo tiene, como mínimo, el grupo de su departamento. La
+ * pertenencia no es una lista de miembros —se deriva del rol y del departamento
+ * del empleado—, así que basta con que el canal exista. Aditivo e idempotente:
+ * no toca los grupos manuales ni los que ya están.
+ */
+export async function syncCanalesDepartamentoAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ canalesCreados: number }> {
+  const { data: departamentos } = await admin
+    .from("departamentos")
+    .select("nombre, estado")
+    .eq("empresa_id", empresaId);
+
+  const nombres = (departamentos ?? [])
+    .filter((d) => ((d.estado as string | null) ?? "Activo") === "Activo")
+    .map((d) => String(d.nombre ?? "").trim().toUpperCase())
+    .filter((n) => n.length > 0);
+  if (nombres.length === 0) return { canalesCreados: 0 };
+
+  const { data: canales } = await admin
+    .from("canales")
+    .select("nombre")
+    .eq("empresa_id", empresaId)
+    .eq("tipo", "departamento");
+  const existentes = new Set(
+    (canales ?? []).map((c) => String(c.nombre ?? "").trim().toUpperCase()),
+  );
+
+  const aCrear = Array.from(new Set(nombres))
+    .filter((n) => !existentes.has(n))
+    .map((nombre) => ({
+      empresa_id: empresaId,
+      nombre,
+      tipo: "departamento",
+      miembros_user_ids: [],
+      departamentos: [],
+    }));
+  if (aCrear.length === 0) return { canalesCreados: 0 };
+
+  const { error } = await admin.from("canales").insert(aCrear);
+  if (error) return { canalesCreados: 0 };
+  return { canalesCreados: aCrear.length };
+}
+
 export async function ensureRrhhConfigEmpresa(
   admin: Admin,
   empresaId: string,
@@ -1159,6 +1207,8 @@ export async function seedEmpresaDefaults(
   await syncCatalogosLogisticaAEmpresa(admin, empresaId);
   await ensureReservasConfigEmpresa(admin, empresaId);
   await ensureRrhhConfigEmpresa(admin, empresaId);
+  // Un grupo de chat por departamento: nadie entra al chat y se lo encuentra vacío.
+  await syncCanalesDepartamentoAEmpresa(admin, empresaId);
   await syncReservaEmailPlantillasAEmpresa(admin, empresaId);
   await syncReclutamientoEmailPlantillasAEmpresa(admin, empresaId);
   await syncReclutamientoPlantillaEstadoAEmpresa(admin, empresaId);

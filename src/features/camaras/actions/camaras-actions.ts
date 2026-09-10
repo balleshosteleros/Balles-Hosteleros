@@ -1,6 +1,6 @@
 "use server";
 
-import { getCamarasContext } from "@/features/camaras/lib/supabase-context";
+import { getCamarasContext, SIN_PERMISO_CAMARAS } from "@/features/camaras/lib/supabase-context";
 
 export type CamaraRow = {
   id: string;
@@ -24,7 +24,8 @@ export type CamaraRow = {
 
 export async function listCamaras() {
   try {
-    const { supabase, empresaId } = await getCamarasContext();
+    const { supabase, empresaId, puedeCamaras } = await getCamarasContext();
+    if (!puedeCamaras) return { ok: false as const, data: [] as CamaraRow[], error: SIN_PERMISO_CAMARAS };
     if (!empresaId) return { ok: false as const, data: [] as CamaraRow[], error: "Sin empresa activa" };
     const { data, error } = await supabase
       .from("camaras")
@@ -48,7 +49,8 @@ export async function createCamara(input: {
   canal?: number | null;
 }) {
   try {
-    const { supabase, empresaId, userId } = await getCamarasContext();
+    const { supabase, empresaId, userId, puedeCamaras } = await getCamarasContext();
+    if (!puedeCamaras) return { ok: false as const, error: SIN_PERMISO_CAMARAS };
     if (!userId || !empresaId) return { ok: false as const, error: "No autenticado" };
     const nombre = input.nombre.trim();
     if (!nombre) return { ok: false as const, error: "El nombre es obligatorio" };
@@ -97,7 +99,8 @@ export async function updateCamara(
   }>,
 ) {
   try {
-    const { supabase, empresaId } = await getCamarasContext();
+    const { supabase, empresaId, puedeCamaras } = await getCamarasContext();
+    if (!puedeCamaras) return { ok: false as const, error: SIN_PERMISO_CAMARAS };
     if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
 
     const updates: Record<string, unknown> = {};
@@ -146,7 +149,8 @@ export async function listGrabaciones(input: {
   limit?: number;
 }) {
   try {
-    const { supabase, empresaId } = await getCamarasContext();
+    const { supabase, empresaId, puedeCamaras } = await getCamarasContext();
+    if (!puedeCamaras) return { ok: false as const, data: [] as CamaraGrabacionRow[], error: SIN_PERMISO_CAMARAS };
     if (!empresaId) return { ok: false as const, data: [] as CamaraGrabacionRow[], error: "Sin empresa activa" };
 
     let query = supabase
@@ -176,7 +180,8 @@ export async function listGrabaciones(input: {
  */
 export async function getCoberturaGrabacion(camaraId: string) {
   try {
-    const { supabase, empresaId } = await getCamarasContext();
+    const { supabase, empresaId, puedeCamaras } = await getCamarasContext();
+    if (!puedeCamaras) return { ok: false as const, error: SIN_PERMISO_CAMARAS };
     if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
 
     const base = supabase
@@ -212,7 +217,8 @@ export async function getCoberturaGrabacion(camaraId: string) {
 
 export async function deleteCamara(id: string) {
   try {
-    const { supabase, empresaId } = await getCamarasContext();
+    const { supabase, empresaId, puedeCamaras } = await getCamarasContext();
+    if (!puedeCamaras) return { ok: false as const, error: SIN_PERMISO_CAMARAS };
     if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
     const { error } = await supabase
       .from("camaras")

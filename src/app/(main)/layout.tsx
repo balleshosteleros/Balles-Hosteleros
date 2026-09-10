@@ -7,6 +7,7 @@ import { AuthServerSeed, type AppRole, type AuthProfile } from "@/features/auth/
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser, getCatalogoEmpresa } from "@/features/empresa/lib/empresa-server";
 import { CatalogoEmpresaProvider } from "@/features/empresa/contexts/catalogo-empresa-context";
+import { EmpresaActivaSeed } from "@/features/empresa/components/EmpresaActivaSeed";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,11 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     >
       <AppLayout>
         {seed}
+        {/* Con qué empresa ha respondido el servidor. Mientras no coincida con
+            la que se acaba de elegir, el logotipo de arriba no cambia y la
+            pantalla sigue tapada: así el menú y el logotipo nunca se ven de dos
+            empresas distintas a la vez. */}
+        <EmpresaActivaSeed empresaActivaId={empresaActivaKey} />
         {/* key = empresa activa → remonta la página al cambiar de empresa, para
             que los client components recarguen sus datos con la nueva empresa. */}
         <div key={empresaActivaKey ?? "sin-empresa"} className="contents">

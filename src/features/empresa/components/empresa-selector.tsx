@@ -40,7 +40,13 @@ function EmpresaAvatar({ empresa, logoUrl, size = "md" }: { empresa: Empresa; lo
 
 export function EmpresaSelector() {
   // Avatar pequeño = ISOTIPO (icono sin texto). Si no hay isotipo, iniciales (nunca el logo con texto).
-  const { empresas, empresaActual, setEmpresaId, getIsotipoUrl } = useEmpresa();
+  //
+  // OJO: el isotipo se pinta con `empresaVisible`, NO con `empresaActual`. La
+  // empresa "actual" cambia en cuanto se pulsa, pero la pantalla (menú de
+  // módulos y contenido) sigue siendo de la anterior hasta que responde el
+  // servidor. Pintando aquí la elegida, durante ese rato el logotipo decía
+  // BALLES mientras el menú seguía enseñando los módulos de HABANA o BACANAL.
+  const { empresas, empresaVisible, setEmpresaId, getIsotipoUrl } = useEmpresa();
   const { puedeVer, permisosLoaded } = useAuth();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -93,9 +99,9 @@ export function EmpresaSelector() {
           type="button"
           onMouseEnter={() => setOpen(true)}
           className="flex items-center justify-center rounded-lg p-0.5 hover:bg-sidebar-accent/50 transition-colors focus:outline-none"
-          title={empresaActual.nombre}
+          title={empresaVisible.nombre}
         >
-          <EmpresaAvatar empresa={empresaActual} logoUrl={getIsotipoUrl(empresaActual.id)} />
+          <EmpresaAvatar empresa={empresaVisible} logoUrl={getIsotipoUrl(empresaVisible.id)} />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -115,7 +121,7 @@ export function EmpresaSelector() {
           >
             <EmpresaAvatar empresa={e} logoUrl={getIsotipoUrl(e.id)} size="sm" />
             <span className="text-sm font-medium flex-1 truncate">{e.nombre}</span>
-            {e.id === empresaActual.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+            {e.id === empresaVisible.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

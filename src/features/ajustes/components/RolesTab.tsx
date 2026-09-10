@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronDown, ChevronRight, Settings, Users, Cctv, Rocket, Lock } from "lucide-react";
+import { ChevronDown, ChevronRight, Settings, Users, Cctv, Notebook, Rocket, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { saveRolesToSupabase, loadRolesFromSupabase } from "@/features/ajustes/actions/roles-actions";
 import { getEmployees } from "@/actions/admin";
@@ -31,9 +31,13 @@ type UsuarioRol = {
 const MODULOS_NAV: string[] = [...MODULOS_DEPARTAMENTO];
 const MODULO_AJUSTES = "AJUSTES";
 const MODULO_CAMARAS = "CÁMARAS";
-// Dos permisos independientes en la barra de herramientas:
+// Permisos independientes de la barra de herramientas:
+//  · AGENDA (libreta)     → contactos de la empresa, con los teléfonos y correos
+//    personales de los empleados dentro. Es dato sensible: sin este permiso no
+//    se ve la libreta, ni en la barra ni en el móvil ni en /agenda.
 //  · APLICACIONES (cohete) → enlaces/accesos directos a apps externas.
 //  · CONTRASEÑAS (candado) → bóveda de contraseñas, PINs y claves.
+const MODULO_AGENDA = "HERR_AGENDA";
 const MODULO_APLICACIONES = "HERR_APLICACIONES";
 const MODULO_ACCESOS = "HERR_ACCESOS";
 
@@ -44,6 +48,7 @@ function buildPermisosCompletos(
   nav: Rol["permisos"];
   ajustes: Rol["permisos"][0];
   camaras: Rol["permisos"][0];
+  agenda: Rol["permisos"][0];
   aplicaciones: Rol["permisos"][0];
   accesos: Rol["permisos"][0];
 } {
@@ -51,9 +56,10 @@ function buildPermisosCompletos(
   const nav = modulosNav.map((m) => find(m) ?? { modulo: m, ver: false, editar: false });
   const ajustes = find(MODULO_AJUSTES) ?? { modulo: MODULO_AJUSTES, ver: false, editar: false };
   const camaras = find(MODULO_CAMARAS) ?? { modulo: MODULO_CAMARAS, ver: false, editar: false };
+  const agenda = find(MODULO_AGENDA) ?? { modulo: MODULO_AGENDA, ver: false, editar: false };
   const aplicaciones = find(MODULO_APLICACIONES) ?? { modulo: MODULO_APLICACIONES, ver: false, editar: false };
   const accesos = find(MODULO_ACCESOS) ?? { modulo: MODULO_ACCESOS, ver: false, editar: false };
-  return { nav, ajustes, camaras, aplicaciones, accesos };
+  return { nav, ajustes, camaras, agenda, aplicaciones, accesos };
 }
 
 export function RolesTab() {
@@ -167,9 +173,9 @@ export function RolesTab() {
     <div className="space-y-2">
       {ajustes.roles.map((rol) => {
         const isOpen = expandedRol === rol.id;
-        const { nav: permisosNav, ajustes: permisoAjustes, camaras: permisoCamaras, aplicaciones: permisoAplicaciones, accesos: permisoAccesos } = buildPermisosCompletos(rol.permisos, modulosNav);
-        const TOTAL_MODULOS = modulosNav.length + 4; // nav de la empresa + AJUSTES + CÁMARAS + APLICACIONES + ACCESOS
-        const accesosCount = [...permisosNav, permisoAjustes, permisoCamaras, permisoAplicaciones, permisoAccesos].filter((p) => p.ver).length;
+        const { nav: permisosNav, ajustes: permisoAjustes, camaras: permisoCamaras, agenda: permisoAgenda, aplicaciones: permisoAplicaciones, accesos: permisoAccesos } = buildPermisosCompletos(rol.permisos, modulosNav);
+        const TOTAL_MODULOS = modulosNav.length + 5; // nav de la empresa + AJUSTES + CÁMARAS + AGENDA + APLICACIONES + ACCESOS
+        const accesosCount = [...permisosNav, permisoAjustes, permisoCamaras, permisoAgenda, permisoAplicaciones, permisoAccesos].filter((p) => p.ver).length;
         const usuariosConRol = usuariosSupabase.filter(
           (u) => u.rolLabel.toLowerCase() === rol.nombre.trim().toLowerCase()
         );
@@ -291,6 +297,7 @@ export function RolesTab() {
                   {[
                     { modulo: MODULO_AJUSTES, label: "Ajustes", Icon: Settings, permiso: permisoAjustes },
                     { modulo: MODULO_CAMARAS, label: "Videovigilancia", Icon: Cctv, permiso: permisoCamaras },
+                    { modulo: MODULO_AGENDA, label: "Agenda", Icon: Notebook, permiso: permisoAgenda },
                     { modulo: MODULO_APLICACIONES, label: "Aplicaciones", Icon: Rocket, permiso: permisoAplicaciones },
                     { modulo: MODULO_ACCESOS, label: "Contraseñas", Icon: Lock, permiso: permisoAccesos },
                   ].map(({ modulo, label, Icon, permiso }) => (

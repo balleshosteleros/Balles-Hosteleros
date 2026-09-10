@@ -61,6 +61,16 @@ const EMPRESA_ACTIVA_SLUG_KEY = "bh_empresa_activa_slug";
  */
 const REARMADO_COOKIE_KEY = "bh_empresa_rearmada";
 
+/**
+ * Tope de espera del cambio de empresa.
+ *
+ * El recuadro de "Cargando…" se quita cuando el SERVIDOR confirma que ya está
+ * sirviendo la empresa nueva. Si esa confirmación no llegara nunca (un fallo de
+ * red, la pestaña en segundo plano), la pantalla se quedaría tapada para
+ * siempre: a los 15 s se destapa igual.
+ */
+const MAX_ESPERA_CAMBIO_MS = 15_000;
+
 // Roles legados que detectamos en localStorage para descartar el snapshot
 // y volver a sembrar desde defaults / Supabase.
 //
@@ -145,6 +155,28 @@ interface EmpresaContextValue {
   empresas: Empresa[];
   empresaActual: Empresa;
   /**
+   * LA EMPRESA QUE SE ENSEÑA ARRIBA (isotipo del selector, nombre en el aviso).
+   *
+   * No es lo mismo que `empresaActual`. `empresaActual` es la empresa ELEGIDA:
+   * cambia en el instante en que se pulsa en el selector, porque a partir de
+   * ese momento las consultas ya deben pedir los datos de la nueva. Pero la
+   * pantalla —el menú de módulos, el contenido— sigue siendo de la ANTERIOR
+   * hasta que el servidor vuelve con la empresa nueva.
+   *
+   * `empresaVisible` es la que el SERVIDOR confirma que está sirviendo. Cambiar
+   * el logotipo de arriba con ella y no con la elegida es lo que evita el
+   * momento que confundía: el isotipo ya decía BALLES mientras el menú seguía
+   * enseñando los módulos de HABANA o BACANAL.
+   */
+  empresaVisible: Empresa;
+  /** Cambio de empresa en curso: lo que hay en pantalla aún es de la anterior. */
+  cambiandoEmpresa: boolean;
+  /**
+   * El servidor declara qué empresa está sirviendo (cookie ya aplicada). Lo
+   * llama el sembrado del layout de (main), que se re-ejecuta en cada refresco.
+   */
+  confirmarEmpresaServidor: (dbId: string | null) => void;
+  /**
    * ¿`empresaActual` es ya la empresa REAL del usuario (cookie/localStorage
    * resueltos), o todavía el valor por defecto del primer render?
    *
@@ -187,6 +219,21 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   // Esta bandera distingue "todavía es el default" de "ya es la real", para que
   // los consumidores no lancen consultas por empresa contra el slug equivocado.
   const [empresaResuelta, setEmpresaResuelta] = useState(false);
+  // Empresa que el SERVIDOR está sirviendo ahora mismo (la de la cookie ya
+  // aplicada). La siembra el layout de (main) en cada render suyo.
+  const [empresaConfirmadaDbId, setEmpresaConfirmadaDbId] = useState<string | null>(null);
+  // Cambio de empresa en marcha, mientras el servidor no conteste. Se guarda
+  // también la empresa de la que se venía: si el servidor acaba sirviendo una
+  // tercera (p. ej. cae a la empresa de la ficha del usuario), la pantalla ya
+  // está asentada y no tiene sentido seguir tapándola.
+  const [cambioPendiente, setCambioPendiente] = useState<
+    { destino: string; anterior: string | null } | null
+  >(null);
+  const temporizadorCambio = useRef<number | null>(null);
+  // Cuántos bloqueos de pantalla hemos pedido nosotros y no hemos soltado. Se
+  // lleva la cuenta para que dos pulsaciones seguidas en el selector no dejen
+  // el recuadro de carga puesto para siempre (cada `show` necesita su `hide`).
+  const retencionesCambio = useRef(0);
   const [allData, setAllData] = useState<Record<string, Incidencia[]>>(buildInitialData);
   const [allAjustes, setAllAjustes] = useState<Record<string, AjustesEmpresa>>(buildInitialAjustes);
   // Logo URLs cargadas desde Supabase Storage (fuente de verdad)
@@ -408,7 +455,69 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [allAjustes]);
 
+  /**
+   * Quita el recuadro de carga del cambio de empresa, pase lo que pase.
+   * Suelta TODAS las retenciones pendientes: si alguien pulsó dos veces
+   * seguidas en el selector, quedarían dos bloqueos pedidos y un solo aviso de
+   * "ya está" — y la pantalla se quedaba tapada.
+   */
+  const soltarBloqueoCambio = useCallback(() => {
+    if (temporizadorCambio.current !== null) {
+      window.clearTimeout(temporizadorCambio.current);
+      temporizadorCambio.current = null;
+    }
+    while (retencionesCambio.current > 0) {
+      retencionesCambio.current -= 1;
+      hideLoading();
+    }
+  }, [hideLoading]);
+
+  /**
+   * El layout del software (que se pinta en el servidor) dice con qué empresa
+   * ha respondido. Es la señal de "ya está: el menú, el logotipo y el contenido
+   * de la pantalla son de esta empresa".
+   */
+  const confirmarEmpresaServidor = useCallback((dbId: string | null) => {
+    setEmpresaConfirmadaDbId(dbId);
+  }, []);
+
+  // Llegó la confirmación de la empresa a la que estábamos cambiando: se quita
+  // el recuadro de carga. Antes se quitaba con un temporizador fijo de 900 ms
+  // sin mirar si el servidor había vuelto ya, y por eso durante un instante el
+  // logotipo de arriba era el de la empresa nueva y el menú aún el de la vieja.
+  useEffect(() => {
+    if (!cambioPendiente) return;
+    const llegoLaNueva = empresaConfirmadaDbId === cambioPendiente.destino;
+    const yaNoEsLaVieja =
+      empresaConfirmadaDbId !== null &&
+      empresaConfirmadaDbId !== cambioPendiente.anterior;
+    if (!llegoLaNueva && !yaNoEsLaVieja) return;
+    setCambioPendiente(null);
+    soltarBloqueoCambio();
+  }, [cambioPendiente, empresaConfirmadaDbId, soltarBloqueoCambio]);
+
+  // Salir de la app a media carga no puede dejar el recuadro puesto.
+  useEffect(() => {
+    return () => {
+      if (temporizadorCambio.current !== null) {
+        window.clearTimeout(temporizadorCambio.current);
+        temporizadorCambio.current = null;
+      }
+      while (retencionesCambio.current > 0) {
+        retencionesCambio.current -= 1;
+        hideLoading();
+      }
+    };
+  }, [hideLoading]);
+
   const empresaActual = empresasList.find((e) => e.id === empresaId) ?? empresasList[0];
+  // Identidad que se enseña arriba: la que el servidor confirma. Mientras no
+  // haya confirmación (arranque en frío) se enseña la elegida, que es lo único
+  // que hay.
+  const empresaVisible =
+    (empresaConfirmadaDbId
+      ? empresasList.find((e) => e.dbId === empresaConfirmadaDbId)
+      : null) ?? empresaActual;
   const datos = allData[empresaId] ?? [];
   const ajustes = allAjustes[empresaId]
     ? mergeWithDefaults(allAjustes[empresaId], empresaActual.nombre)
@@ -515,6 +624,7 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     // solo invita a repetir algo que no puede funcionar. En ese caso el aviso
     // se queda en pantalla con la salida real: volver a entrar.
     const revertir = (motivo?: ErrorEmpresaActiva) => {
+      setCambioPendiente(null);
       setEmpresaId(idAnterior);
       if (typeof window !== "undefined") {
         try {
@@ -559,9 +669,16 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     if (!isHydrated.current) return;
     const empresa = empresasList.find((e) => e.id === id);
     if (!empresa?.dbId) return;
+    const destinoDbId = empresa.dbId;
     // Antes de navegar: el cliente Supabase debe mandar YA la empresa nueva,
     // o las primeras consultas saldrían pidiendo la anterior.
     setEmpresaActivaCliente(empresa.dbId);
+    // Si ya había un cambio en marcha (dos pulsaciones seguidas), se suelta su
+    // bloqueo antes de pedir el nuestro: si no, quedarían dos recuadros pedidos
+    // y solo se soltaría uno.
+    soltarBloqueoCambio();
+    setCambioPendiente(null);
+    retencionesCambio.current += 1;
     showLoading("Cambiando de empresa…");
     // Aviso a las vistas lentas (Sala/Reservas): lo que hay en pantalla es de
     // la empresa anterior. Quien sepa recargarse mantendrá el recuadro de carga
@@ -570,10 +687,20 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     setEmpresaActiva(empresa.dbId)
       .then((res) => {
         if (!res.ok) {
-          hideLoading();
+          soltarBloqueoCambio();
           revertir(res.motivo);
           return;
         }
+        // A partir de aquí la pantalla se queda TAPADA hasta que el servidor
+        // conteste con la empresa nueva. Es lo que impide que el logotipo de
+        // arriba y el menú de módulos se vean por separado, cada uno de una
+        // empresa distinta.
+        setCambioPendiente({ destino: destinoDbId, anterior: empresaConfirmadaDbId });
+        temporizadorCambio.current = window.setTimeout(() => {
+          temporizadorCambio.current = null;
+          setCambioPendiente(null);
+          soltarBloqueoCambio();
+        }, MAX_ESPERA_CAMBIO_MS);
         startTransition(() => {
           // Navegación cliente (rápida, conserva el contexto de empresa y sus
           // logos ya cacheados). Tanto push como refresh re-ejecutan el Server
@@ -588,19 +715,19 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
             router.refresh();
           }
         });
-        // El remontaje no es awaitable; damos un margen y apagamos el overlay.
-        window.setTimeout(() => hideLoading(), 900);
+        // El recuadro NO se quita aquí: lo quita `confirmarEmpresaServidor`
+        // cuando el layout vuelve ya pintado con la empresa nueva.
       })
       .catch((err) => {
         console.error("[empresa-context] setEmpresaActiva:", err);
-        hideLoading();
+        soltarBloqueoCambio();
         revertir();
       });
-  }, [empresaId, empresasList, router, showLoading, hideLoading, marcarCambioEmpresa]);
+  }, [empresaId, empresasList, empresaConfirmadaDbId, router, showLoading, soltarBloqueoCambio, marcarCambioEmpresa]);
 
   return (
     <EmpresaContext.Provider
-      value={{ empresas: empresasList, empresaActual, empresaResuelta, setEmpresaId: handleSetEmpresaId, datos, setDatos, ajustes, setAjustes, getLogoUrl, getIsotipoUrl, setLogoUrl, setIsotipoUrl, addEmpresa, updateEmpresa, deleteEmpresa }}
+      value={{ empresas: empresasList, empresaActual, empresaVisible, cambiandoEmpresa: cambioPendiente !== null, confirmarEmpresaServidor, empresaResuelta, setEmpresaId: handleSetEmpresaId, datos, setDatos, ajustes, setAjustes, getLogoUrl, getIsotipoUrl, setLogoUrl, setIsotipoUrl, addEmpresa, updateEmpresa, deleteEmpresa }}
     >
       {children}
     </EmpresaContext.Provider>

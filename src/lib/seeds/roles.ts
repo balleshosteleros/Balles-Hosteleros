@@ -46,11 +46,14 @@ export const ROLES_SEED: RolSeed[] = [
       // CÁMARAS es herramienta de barra: se activa manualmente en Ajustes→Roles
       // (obedece el toggle también para dirección). Por defecto, apagada.
       { modulo: "CÁMARAS", ver: false, editar: false },
+      // AGENDA guarda teléfonos y correos personales: es dato sensible, no una
+      // herramienta más. Solo DIRECCIÓN y GERENCIA la traen encendida de fábrica.
+      { modulo: "HERR_AGENDA", ver: true, editar: true },
       { modulo: "HERR_APLICACIONES", ver: true, editar: true },
       { modulo: "HERR_ACCESOS", ver: true, editar: true },
     ],
   },
-  { nombre: "GERENCIA", descripcion: "Supervisión general y cuadros de mando", departamento: null, protected: false, permisos: [{ modulo: "GERENCIA", ver: true, editar: true }] },
+  { nombre: "GERENCIA", descripcion: "Supervisión general y cuadros de mando", departamento: null, protected: false, permisos: [{ modulo: "GERENCIA", ver: true, editar: true }, { modulo: "HERR_AGENDA", ver: true, editar: true }] },
   { nombre: "RECURSOS HUMANOS", descripcion: "Gestión de personal y nóminas", departamento: null, protected: false, permisos: [{ modulo: "RECURSOS HUMANOS", ver: true, editar: true }] },
   { nombre: "CALIDAD", descripcion: "Control de calidad y APPCC", departamento: null, protected: false, permisos: [{ modulo: "CALIDAD", ver: true, editar: true }] },
   { nombre: "CONTABILIDAD", descripcion: "Facturas, operaciones y tesorería", departamento: null, protected: false, permisos: [{ modulo: "CONTABILIDAD", ver: true, editar: true }] },

@@ -71,7 +71,7 @@ export function puedeVerModulo(
 }
 
 /**
- * Herramientas de la BARRA (CÁMARAS, cohete, candado). A diferencia de los
+ * Herramientas de la BARRA (CÁMARAS, agenda, cohete, candado). A diferencia de los
  * módulos-departamento, NO se rigen por el bypass de `es_admin_plataforma`:
  * cada una tiene su propio toggle en Ajustes → Roles y ese toggle manda para
  * TODOS los roles, dirección incluida. Si dirección apaga CÁMARAS, deja de ver
@@ -79,6 +79,7 @@ export function puedeVerModulo(
  */
 export const HERRAMIENTAS_BARRA = [
   "CÁMARAS",
+  "HERR_AGENDA",
   "HERR_APLICACIONES",
   "HERR_ACCESOS",
 ] as const;

@@ -438,7 +438,10 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                         </ToolTooltip>
                       </TelefonoDrawer>
 
-                      {/* Agenda */}
+                      {/* Agenda — solo si el rol tiene AGENDA activado. Dentro
+                          están los teléfonos y correos personales de los
+                          empleados: es dato sensible, no una herramienta más. */}
+                      {puedeVer("HERR_AGENDA") && (
                       <AgendaDrawer>
                         <ToolTooltip label="Agenda">
                           <Button
@@ -450,6 +453,7 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                           </Button>
                         </ToolTooltip>
                       </AgendaDrawer>
+                      )}
 
                       {/* Videovigilancia — solo si el rol tiene CÁMARAS activado. */}
                       {puedeVer("CÁMARAS") && (

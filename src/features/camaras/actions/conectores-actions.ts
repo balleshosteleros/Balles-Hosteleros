@@ -1,6 +1,6 @@
 "use server";
 
-import { getCamarasContext } from "@/features/camaras/lib/supabase-context";
+import { getCamarasContext, SIN_PERMISO_CAMARAS } from "@/features/camaras/lib/supabase-context";
 import {
   generarPairingCode,
   PAIRING_TTL_MIN,
@@ -16,7 +16,9 @@ function toPublic(row: Record<string, unknown>): ConectorPublic {
 
 export async function listConectores() {
   try {
-    const { supabase, empresaId } = await getCamarasContext();
+    const { supabase, empresaId, puedeCamaras } = await getCamarasContext();
+    if (!puedeCamaras)
+      return { ok: false as const, data: [] as ConectorPublic[], error: SIN_PERMISO_CAMARAS };
     if (!empresaId)
       return { ok: false as const, data: [] as ConectorPublic[], error: "Sin empresa activa" };
     const { data, error } = await supabase
@@ -35,7 +37,8 @@ export async function listConectores() {
 
 export async function getConector(id: string) {
   try {
-    const { supabase, empresaId } = await getCamarasContext();
+    const { supabase, empresaId, puedeCamaras } = await getCamarasContext();
+    if (!puedeCamaras) return { ok: false as const, error: SIN_PERMISO_CAMARAS };
     if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
     const { data, error } = await supabase
       .from("conectores")
@@ -75,7 +78,8 @@ async function insertConParingUnico(
 
 export async function createConector(input: { nombre: string; localId?: string | null }) {
   try {
-    const { supabase, empresaId, userId } = await getCamarasContext();
+    const { supabase, empresaId, userId, puedeCamaras } = await getCamarasContext();
+    if (!puedeCamaras) return { ok: false as const, error: SIN_PERMISO_CAMARAS };
     if (!userId || !empresaId) return { ok: false as const, error: "No autenticado" };
     const nombre = input.nombre.trim();
     if (!nombre) return { ok: false as const, error: "El nombre es obligatorio" };
@@ -97,7 +101,8 @@ export async function createConector(input: { nombre: string; localId?: string |
 /** Regenera el código de emparejamiento (solo mientras no esté ya emparejado). */
 export async function regenerarPairing(id: string) {
   try {
-    const { supabase, empresaId } = await getCamarasContext();
+    const { supabase, empresaId, puedeCamaras } = await getCamarasContext();
+    if (!puedeCamaras) return { ok: false as const, error: SIN_PERMISO_CAMARAS };
     if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
 
     const { data: actual, error: e0 } = await supabase
@@ -134,7 +139,8 @@ export async function regenerarPairing(id: string) {
 
 export async function deleteConector(id: string) {
   try {
-    const { supabase, empresaId } = await getCamarasContext();
+    const { supabase, empresaId, puedeCamaras } = await getCamarasContext();
+    if (!puedeCamaras) return { ok: false as const, error: SIN_PERMISO_CAMARAS };
     if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
     const { error } = await supabase
       .from("conectores")

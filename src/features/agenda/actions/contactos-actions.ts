@@ -2,7 +2,20 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { tieneHerramienta } from "@/features/auth/lib/herramienta-guard";
 import type { Contacto, ContactoInput } from "@/features/agenda/types";
+
+/**
+ * La agenda guarda los teléfonos y correos PERSONALES de empleados, proveedores
+ * y contactos de la empresa. Es dato sensible: TODA acción de este archivo
+ * empieza comprobando el permiso AGENDA del rol (Ajustes → Roles). Ocultar el
+ * icono no basta; la acción se puede llamar desde fuera de la pantalla.
+ */
+const MODULO_AGENDA = "HERR_AGENDA";
+
+async function puedeAgenda(): Promise<boolean> {
+  return tieneHerramienta(MODULO_AGENDA);
+}
 
 async function getEmpresaId(): Promise<string | null> {
   const supabase = await createClient();
@@ -15,6 +28,7 @@ async function getEmpresaId(): Promise<string | null> {
 
 export async function listContactos(): Promise<Contacto[]> {
   try {
+    if (!(await puedeAgenda())) return [];
     const supabase = await createClient();
     const empresaId = await getEmpresaId();
     const query = supabase
@@ -41,6 +55,7 @@ export async function listContactos(): Promise<Contacto[]> {
  */
 export async function contarContactosNuevos(dias = 7): Promise<number> {
   try {
+    if (!(await puedeAgenda())) return 0;
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     const empresaId = await getEmpresaId();
@@ -91,6 +106,7 @@ export async function getContactosVistosAt(dias = 7): Promise<string> {
     Date.now() - ventana * 24 * 60 * 60 * 1000,
   ).toISOString();
   try {
+    if (!(await puedeAgenda())) return ventanaCutoff;
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     const empresaId = await getEmpresaId();
@@ -116,6 +132,7 @@ export async function getContactosVistosAt(dias = 7): Promise<string> {
  */
 export async function marcarContactosVistos(): Promise<{ ok: boolean }> {
   try {
+    if (!(await puedeAgenda())) return { ok: false };
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     const empresaId = await getEmpresaId();
@@ -136,6 +153,7 @@ export async function marcarContactosVistos(): Promise<{ ok: boolean }> {
 
 export async function createContacto(input: ContactoInput): Promise<{ ok: boolean; error?: string }> {
   try {
+    if (!(await puedeAgenda())) return { ok: false, error: "Tu rol no tiene acceso a la agenda." };
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     const empresaId = await getEmpresaId();
@@ -155,6 +173,7 @@ export async function createContacto(input: ContactoInput): Promise<{ ok: boolea
 
 export async function updateContacto(id: string, input: ContactoInput): Promise<{ ok: boolean; error?: string }> {
   try {
+    if (!(await puedeAgenda())) return { ok: false, error: "Tu rol no tiene acceso a la agenda." };
     const supabase = await createClient();
     // Los contactos automáticos (emergencias, empleados, proveedores) no se
     // editan aquí: sus datos se gestionan en su ficha original.
@@ -184,6 +203,7 @@ export async function updateContacto(id: string, input: ContactoInput): Promise<
 
 export async function deleteContacto(id: string): Promise<{ ok: boolean; error?: string }> {
   try {
+    if (!(await puedeAgenda())) return { ok: false, error: "Tu rol no tiene acceso a la agenda." };
     const supabase = await createClient();
     // Los contactos protegidos (emergencias por defecto y los sincronizados desde
     // empleados/proveedores) no se pueden borrar a mano: se gestionan en su origen.

@@ -47,6 +47,7 @@ import {
   marcarCanalLeido,
   marcarCanalNoLeido,
   listResumenCanales,
+  listDepartamentosParaChat,
   marcarMensajesLeidos,
   getLecturasCanal,
   getLectoresMensaje,
@@ -61,9 +62,7 @@ import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona, formatHoraEnZona, claveDiaEnZona, etiquetaDiaChat } from "@/features/empresa/lib/zona-horaria";
-import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
-import { orgChartsPorEmpresa } from "@/features/direccion/data/direccion";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
@@ -108,16 +107,15 @@ type Mensaje = {
 type PrefCanal = { silenciado: boolean; fijado: boolean };
 const PREF_DEFAULT: PrefCanal = { silenciado: false, fijado: false };
 
-// Departamentos operativos siempre presentes (no aparecen como nodos
-// administrativos en el organigrama, pero son departamentos reales del negocio).
-const DEPARTAMENTOS_OPERATIVOS_BASE = ["SALA", "COCINA"];
-
-// Nodos del organigrama que son externos al organigrama interno y no deben
-// generar grupo (p. ej. socios/inversores).
-const NODOS_EXCLUIDOS = new Set(["SOCIOS"]);
-
-// Departamentos garantizados (fallback si el organigrama no existe ni en BD ni local).
-// Debe coincidir con las secciones de la sidebar (app-sidebar.tsx).
+// Grupos por departamento: la lista sale de los DEPARTAMENTOS de la empresa
+// (Ajustes → Departamentos), que es donde se dan de alta de verdad. Antes se
+// derivaba de los nodos administrativos del organigrama y los departamentos que
+// no son nodos —ARTISTAS, MANTENIMIENTO— se quedaban sin grupo: su gente abría
+// el chat y no veía nada. Ahora todo el mundo tiene, como mínimo, el grupo de
+// su departamento.
+//
+// Fallback (solo si la empresa aún no tiene departamentos dados de alta): las
+// secciones del índice lateral.
 const DEPARTAMENTOS_FALLBACK = [
   "DIRECCIÓN",
   "SALA",
@@ -132,24 +130,9 @@ const DEPARTAMENTOS_FALLBACK = [
   "JURÍDICO",
 ];
 
-// Los grupos por defecto se derivan de los nodos administrativos del organigrama
-// + los departamentos operativos base (SALA, COCINA), que en el organigrama no
-// son nodos sino áreas que contienen puestos (camareros, cocineros, hostess…).
-// Los nodos externos (SOCIOS) se excluyen explícitamente.
-async function getDepartamentosDelOrganigrama(empresaId: string): Promise<string[]> {
-  let chart = await getOrganigrama(empresaId);
-  if (!chart || chart.nodes.length === 0) {
-    chart = orgChartsPorEmpresa[empresaId] ?? orgChartsPorEmpresa.habana ?? null;
-  }
-  const adminLabels = chart
-    ? chart.nodes
-        .filter((n) => n.area === "administrativa")
-        .map((n) => n.label.trim().toUpperCase())
-        .filter((l) => l.length > 0 && !NODOS_EXCLUIDOS.has(l))
-    : [];
-  const todos = [...DEPARTAMENTOS_OPERATIVOS_BASE, ...adminLabels];
-  const dedup = Array.from(new Set(todos));
-  return dedup.length > 0 ? dedup : DEPARTAMENTOS_FALLBACK;
+async function getDepartamentosConGrupo(): Promise<string[]> {
+  const res = await listDepartamentosParaChat();
+  return res.ok && res.data.length > 0 ? res.data : DEPARTAMENTOS_FALLBACK;
 }
 
 function mapDbCanal(r: Record<string, unknown>): Canal {
@@ -446,7 +429,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       //    (purgan obsoletos y crean los que falten). Un usuario normal ve la
       //    lista ya filtrada y no debe recrear departamentos que no ve.
       if (res.esAdmin) {
-        const departamentos = await getDepartamentosDelOrganigrama(empresaSlug);
+        const departamentos = await getDepartamentosConGrupo();
         await purgeCanalesObsoletos(departamentos, empresaSlug);
 
         const existentes = new Set(
