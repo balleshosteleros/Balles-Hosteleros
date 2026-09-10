@@ -195,6 +195,29 @@ export interface ComunicadoInput {
   adjuntos?: ComunicadoAdjunto[];
   /** Además del aviso en la app, mandarlo por correo al publicarlo. */
   enviarEmail?: boolean;
+  /** Dirección que se abre desde el aviso y desde el comunicado. */
+  enlace?: string;
+  /** Lo que se lee en el botón del enlace. */
+  enlaceTexto?: string;
+}
+
+/**
+ * Deja la dirección lista para pinchar, o vacía si no vale.
+ *
+ * Se acepta escribirla a medias ("www.algo.com"): se le pone el "https://"
+ * delante. Lo que no sea una dirección de web se descarta, para que el botón
+ * del comunicado no lleve a ningún sitio raro.
+ */
+function normalizarEnlace(raw: string | undefined): string | null {
+  const v = (raw ?? "").trim();
+  if (!v) return null;
+  const conEsquema = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+  try {
+    const u = new URL(conEsquema);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function toRow(input: ComunicadoInput) {
@@ -213,6 +236,8 @@ function toRow(input: ComunicadoInput) {
     observaciones: input.observaciones ?? null,
     adjuntos: input.adjuntos ?? [],
     enviar_email: input.enviarEmail ?? false,
+    enlace: normalizarEnlace(input.enlace),
+    enlace_texto: (input.enlaceTexto ?? "").trim() || null,
   };
 }
 

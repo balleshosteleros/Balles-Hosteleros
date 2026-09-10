@@ -10,7 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FileCheck2, BellRing, Loader2, Megaphone, Paperclip } from "lucide-react";
+import { FileCheck2, BellRing, Loader2, Megaphone, Paperclip, Link as LinkIcon } from "lucide-react";
 import {
   listNotificacionesPendientes,
   marcarNotificacionVista,
@@ -61,6 +61,13 @@ export function NotificacionesGate() {
   const adjuntos = esComunicado ? normalizarAdjuntos(actual.payload.adjuntos) : [];
   const isotipoComunicado = esComunicado
     ? ((actual.payload.isotipoUrl as string | null | undefined) ?? null)
+    : null;
+  // El enlace del comunicado se pulsa aquí mismo, sin salir del aviso.
+  const enlaceComunicado = esComunicado
+    ? ((actual.payload.enlace as string | null | undefined) ?? null)
+    : null;
+  const enlaceTextoComunicado = esComunicado
+    ? ((actual.payload.enlaceTexto as string | null | undefined) ?? null)
     : null;
   const siguiente = () => {
     setPasoTexto(false);
@@ -157,6 +164,17 @@ export function NotificacionesGate() {
               <div className="max-h-64 overflow-y-auto whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
                 {cuerpoComunicado}
               </div>
+            )}
+            {enlaceComunicado && (
+              <a
+                href={enlaceComunicado}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                <LinkIcon className="h-4 w-4" />
+                {(enlaceTextoComunicado ?? "").trim() || "Abrir enlace"}
+              </a>
             )}
             {adjuntos.length > 0 && (
               <div className="space-y-1.5 border-t pt-3">

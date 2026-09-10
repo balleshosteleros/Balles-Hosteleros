@@ -32,7 +32,7 @@ export async function emitirNotifComunicado(comunicadoId: string): Promise<void>
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("comunicados")
-      .select("adjuntos")
+      .select("adjuntos, enlace, enlace_texto")
       .eq("id", comunicadoId)
       .maybeSingle();
 
@@ -65,6 +65,8 @@ export async function emitirNotifComunicado(comunicadoId: string): Promise<void>
         cuerpo: audiencia.cuerpo,
         adjuntos: normalizarAdjuntos((data as { adjuntos?: unknown } | null)?.adjuntos),
         isotipoUrl,
+        enlace: (data as { enlace?: string | null } | null)?.enlace ?? null,
+        enlaceTexto: (data as { enlace_texto?: string | null } | null)?.enlace_texto ?? null,
       },
       // El comunicado ya dispara su propio push (comunicado_nuevo); evitamos duplicarlo.
       push: false,

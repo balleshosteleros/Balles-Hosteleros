@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, ChevronRight, X, Megaphone, Paperclip } from "lucide-react";
+import { Loader2, ChevronRight, X, Megaphone, Paperclip, Link as LinkIcon } from "lucide-react";
 import {
   listarComunicadosVisibles,
   type ComunicadoVisible,
@@ -201,6 +201,17 @@ function ComunicadoDetalle({
           <article className="mt-5 whitespace-pre-line text-base leading-relaxed text-foreground">
             {comunicado.contenido}
           </article>
+        )}
+        {comunicado.enlace && (
+          <a
+            href={comunicado.enlace}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-primary-foreground active:opacity-80"
+          >
+            <LinkIcon className="h-4 w-4" />
+            {(comunicado.enlaceTexto ?? "").trim() || "Abrir enlace"}
+          </a>
         )}
         {comunicado.adjuntos.length > 0 && (
           <div className="mt-6 space-y-2 border-t border-border/60 pt-4">

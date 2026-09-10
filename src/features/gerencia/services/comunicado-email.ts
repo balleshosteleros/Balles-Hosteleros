@@ -56,6 +56,8 @@ interface ComunicadoFila {
   cuerpo: string | null;
   estado: string;
   adjuntos: unknown;
+  enlace: string | null;
+  enlace_texto: string | null;
 }
 
 export interface ResultadoEnvioComunicado {
@@ -97,6 +99,20 @@ function cuerpoPlanoAHtml(texto: string): string {
     .join("");
 }
 
+/**
+ * Botón del enlace del comunicado.
+ *
+ * Va como botón y no como dirección pegada en el texto: una dirección larga
+ * dentro del mensaje se lee fatal y en el móvil ni se pulsa entera.
+ */
+function bloqueEnlaceHtml(enlace: string | null, texto: string | null, color: string): string {
+  if (!enlace) return "";
+  const etiqueta = escapeHtml((texto ?? "").trim() || "Abrir enlace");
+  return `<div style="margin-top:26px;text-align:center;">
+    <a href="${escapeHtml(enlace)}" style="display:inline-block;background-color:${color};color:#FFFFFF;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;text-decoration:none;padding:13px 28px;border-radius:8px;">${etiqueta}</a>
+  </div>`;
+}
+
 /** Bloque HTML con los documentos: enlace al software para cada uno. */
 function bloqueAdjuntosHtml(adjuntos: ComunicadoAdjunto[], color: string): string {
   if (adjuntos.length === 0) return "";
@@ -130,7 +146,7 @@ export async function enviarComunicadoPorEmail(
 
     const { data, error } = await supabase
       .from("comunicados")
-      .select("id, empresa_id, titulo, asunto, cuerpo, estado, adjuntos")
+      .select("id, empresa_id, titulo, asunto, cuerpo, estado, adjuntos, enlace, enlace_texto")
       .eq("id", comunicadoId)
       .maybeSingle();
     if (error) throw error;
@@ -171,7 +187,7 @@ export async function enviarComunicadoPorEmail(
 
     const cuerpo = cuerpoPlanoAHtml(c.cuerpo ?? "");
     const colorEnlace = marca?.color || "#111827";
-    const cuerpoConAdjuntos = `${cuerpo}${bloqueAdjuntosHtml(adjuntos, colorEnlace)}`;
+    const cuerpoConAdjuntos = `${cuerpo}${bloqueEnlaceHtml(c.enlace, c.enlace_texto, colorEnlace)}${bloqueAdjuntosHtml(adjuntos, colorEnlace)}`;
 
     let html: string;
     const attachments = [...ficheros];

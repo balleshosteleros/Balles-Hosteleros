@@ -62,7 +62,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   CalendarDays, MoreHorizontal, Eye, Clock, Archive,
   Trash2, FileText, Users, ArrowLeft, Send, Upload, X, AlertTriangle, Bell, Mail, Paperclip,
-  ChevronLeft, ChevronRight, Settings, ShieldAlert,
+  ChevronLeft, ChevronRight, Settings, ShieldAlert, Link as LinkIcon,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -139,6 +139,10 @@ interface EditorForm {
   archivosNuevos: File[];
   /** Mandarlo también por correo, además del aviso dentro de la app. */
   enviarEmail: boolean;
+  /** Dirección que se abre con un botón desde el aviso y desde el comunicado. */
+  enlace: string;
+  /** Lo que se lee en ese botón. Vacío = "Abrir enlace". */
+  enlaceTexto: string;
   observaciones: string;
 }
 
@@ -148,6 +152,7 @@ const emptyForm: EditorForm = {
   rolesDestinatarios: [], departamentosDestinatarios: [], empleadosDestinatarios: [], programado: false,
   envioFecha: "", envioHora: "", textoNotificacion: "", adjuntos: [],
   archivosNuevos: [], enviarEmail: false, observaciones: "",
+  enlace: "", enlaceTexto: "",
 };
 
 /**
@@ -170,6 +175,7 @@ function formFromComunicado(c: Comunicado, tz: string): EditorForm {
     programado: c.estado === "programado", envioFecha: fecha, envioHora: hora,
     textoNotificacion: `Nuevo comunicado: ${c.titulo}`,
     adjuntos: [...c.adjuntos], archivosNuevos: [], enviarEmail: c.enviarEmail,
+    enlace: c.enlace, enlaceTexto: c.enlaceTexto,
     observaciones: c.observaciones,
   };
 }
@@ -297,6 +303,18 @@ function ComunicadoEditor({
           <CardContent className="p-6 space-y-4">
             {form.asunto && <p className="text-sm text-muted-foreground">Asunto: {form.asunto}</p>}
             <div className="whitespace-pre-wrap text-sm leading-relaxed">{form.cuerpo || "Sin contenido"}</div>
+            {form.enlace.trim() && (
+              <a
+                href={form.enlace.trim()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white"
+                style={{ background: empresaColor }}
+              >
+                <LinkIcon className="h-4 w-4" />
+                {form.enlaceTexto.trim() || "Abrir enlace"}
+              </a>
+            )}
             {(form.adjuntos.length > 0 || form.archivosNuevos.length > 0) && (
               <div className="pt-2 border-t">
                 <p className="text-xs text-muted-foreground mb-1">Adjuntos:</p>
@@ -368,6 +386,40 @@ function ComunicadoEditor({
                 </div>
               </CardContent>
             </Card>
+
+            {/* Un enlace no se pega dentro del texto: ahí no se puede pulsar
+                desde el aviso y se pierde entre el mensaje. Puesto aquí, sale
+                como un botón en el aviso, en el comunicado y en el correo. */}
+            <div className="space-y-3 rounded-xl border p-4">
+              <div className="flex items-center gap-2">
+                <LinkIcon className="h-4 w-4 text-muted-foreground" />
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Enlace
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground/70">
+                Sale como un botón al final del comunicado. Se abre en otra pestaña.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Dirección</Label>
+                  <Input
+                    value={form.enlace}
+                    onChange={e => u({ enlace: e.target.value })}
+                    placeholder="www.ejemplo.com/carta"
+                    inputMode="url"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Texto del botón</Label>
+                  <Input
+                    value={form.enlaceTexto}
+                    onChange={e => u({ enlaceTexto: e.target.value })}
+                    placeholder="Abrir enlace"
+                  />
+                </div>
+              </div>
+            </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">Notas internas</Label>
@@ -797,6 +849,8 @@ function filaAComunicado(fila: Record<string, unknown>): Comunicado {
     observaciones: texto(fila.observaciones),
     adjuntos: normalizarAdjuntosFila(fila.adjuntos),
     enviarEmail: fila.enviar_email === true,
+    enlace: texto(fila.enlace),
+    enlaceTexto: texto(fila.enlace_texto),
   };
 }
 
@@ -1107,6 +1161,8 @@ export function ComunicadosView() {
       observaciones: form.observaciones,
       adjuntos,
       enviarEmail: form.enviarEmail,
+      enlace: form.enlace,
+      enlaceTexto: form.enlaceTexto,
     };
     const res = editorMode === "create"
       ? await createComunicado(payload)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Inbox, Paperclip } from "lucide-react";
+import { Loader2, Inbox, Paperclip, Link as LinkIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -75,6 +75,17 @@ export function MisComunicadosView() {
                   <p className="text-sm text-muted-foreground mt-3 whitespace-pre-line">
                     {c.contenido}
                   </p>
+                )}
+                {c.enlace && (
+                  <a
+                    href={c.enlace}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                  >
+                    <LinkIcon className="h-4 w-4" />
+                    {(c.enlaceTexto ?? "").trim() || "Abrir enlace"}
+                  </a>
                 )}
                 {c.adjuntos.length > 0 && (
                   <div className="mt-4 pt-3 border-t space-y-1.5">

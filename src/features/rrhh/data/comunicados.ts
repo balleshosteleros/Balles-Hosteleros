@@ -44,4 +44,8 @@ export interface Comunicado {
   adjuntos: ComunicadoAdjunto[];
   /** Si al publicarlo sale además por correo a los destinatarios. */
   enviarEmail: boolean;
+  /** Dirección que se abre con un botón desde el aviso y desde el comunicado. */
+  enlace: string;
+  /** Lo que se lee en ese botón. Vacío = "Abrir enlace". */
+  enlaceTexto: string;
 }

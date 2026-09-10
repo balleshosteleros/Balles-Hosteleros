@@ -1780,6 +1780,10 @@ export interface ComunicadoVisible {
   adjuntos: ComunicadoAdjunto[];
   /** Isotipo de la empresa: el comunicado se lee con la marca de quien lo firma. */
   isotipoUrl: string | null;
+  /** Dirección que se abre con un botón. Vacía = el comunicado no lleva enlace. */
+  enlace: string | null;
+  /** Lo que se lee en ese botón. Vacío = "Abrir enlace". */
+  enlaceTexto: string | null;
 }
 
 /** El JSONB `adjuntos` puede venir de cualquier forma: solo pasan los completos. */
@@ -1842,7 +1846,7 @@ export async function listarComunicadosVisibles(): Promise<{
     const { data, error } = await supabase
       .from("comunicados")
       .select(
-        "id, titulo, cuerpo, prioridad, created_at, estado, toda_empresa, roles_destinatarios, empleados_destinatarios, departamentos_destinatarios, adjuntos",
+        "id, titulo, cuerpo, prioridad, created_at, estado, toda_empresa, roles_destinatarios, empleados_destinatarios, departamentos_destinatarios, adjuntos, enlace, enlace_texto",
       )
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false })
@@ -1894,6 +1898,8 @@ export async function listarComunicadosVisibles(): Promise<{
         zonaHoraria,
         adjuntos: adjuntosDeComunicado(c.adjuntos),
         isotipoUrl,
+        enlace: (c.enlace as string | null) ?? null,
+        enlaceTexto: (c.enlace_texto as string | null) ?? null,
       })),
     };
   } catch (err: unknown) {
