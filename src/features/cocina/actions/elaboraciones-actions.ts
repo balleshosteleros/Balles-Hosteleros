@@ -181,9 +181,28 @@ export async function revertirElaboracion(id: string) {
   }
 }
 
+/**
+ * Borra una elaboración. Solo en borrador: si está confirmada tiene movimientos de
+ * almacén detrás, y borrar la ficha los dejaría huérfanos apuntando a algo que ya no
+ * existe. Primero se vuelve a borrador (que los deshace) y luego se borra.
+ */
 export async function deleteElaboracion(id: string) {
   try {
     const { supabase } = await getAppContext();
+
+    const { data: elab } = await supabase
+      .from("elaboraciones")
+      .select("estado")
+      .eq("id", id)
+      .maybeSingle();
+    if (elab?.estado === "confirmado") {
+      return {
+        ok: false,
+        error:
+          "Esta elaboración ya está confirmada y ha movido el almacén. Vuélvela a borrador primero y así se deshace lo que descontó.",
+      };
+    }
+
     const { error } = await supabase
       .from("elaboraciones")
       .delete()

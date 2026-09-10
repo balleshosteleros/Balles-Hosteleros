@@ -529,16 +529,19 @@ export async function updateAlbaranEstado(id: string, estado: string) {
       return { ok: true, preciosRegistrados: r.precios ?? 0 };
     }
 
+    // Deshacer la recepción va PRIMERO: si el stock no se puede devolver (almacén
+    // cerrado), el albarán tiene que seguir figurando como recibido. Al revés
+    // quedaría "Pendiente" con la mercancía todavía sumada.
+    if (!recibido(estado) && recibido(estadoAnterior)) {
+      const rev = await revertirEntradasAlbaran(id);
+      if (!rev.ok) return { ok: false, error: rev.error };
+    }
+
     const { error } = await supabase
       .from("albaranes")
       .update({ estado, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) throw error;
-
-    if (!recibido(estado) && recibido(estadoAnterior)) {
-      // Se deshace la recepción (vuelve a Pendiente) → devolver el stock.
-      await revertirEntradasAlbaran(id);
-    }
 
     return { ok: true };
   } catch (err: unknown) {
@@ -567,9 +570,12 @@ export async function deleteAlbaran(id: string) {
       return { ok: false, error: "Este albarán tiene factura. Borra antes la factura." };
     }
 
-    // Devolver el stock recepcionado antes de borrar.
+    // Devolver el stock recepcionado antes de borrar. Si no se puede (almacén
+    // cerrado), el albarán se queda: borrarlo dejaría la mercancía sumada sin
+    // documento que la explique.
     if (alb.estado === "Entregado") {
-      await revertirEntradasAlbaran(id);
+      const rev = await revertirEntradasAlbaran(id);
+      if (!rev.ok) return { ok: false, error: rev.error };
     }
 
     const { error } = await supabase.from("albaranes").delete().eq("id", id);

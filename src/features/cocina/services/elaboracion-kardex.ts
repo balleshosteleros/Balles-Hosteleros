@@ -5,6 +5,10 @@ import {
   registrarMovimiento,
   revertirMovimientosPorDocumento,
 } from "@/features/logistica/services/kardex";
+import {
+  AlmacenCerradoError,
+  comprobarAlmacenAbierto,
+} from "@/features/logistica/services/cierre-almacen";
 
 /**
  * Confirmar / revertir una ELABORACIÓN por el kardex.
@@ -195,6 +199,12 @@ export async function confirmarElaboracionKardex(
   const createdBy = (elab.responsable as string | null) ?? null;
   const referencia = (elab.nombre as string | null) ?? "Elaboración";
 
+  // El período tiene que estar abierto ANTES de la primera salida: una elaboración
+  // son N salidas + 1 entrada sin transacción que las envuelva, así que si la guarda
+  // parase a mitad quedarían los ingredientes descontados y el elaborado sin dar de alta.
+  const abierto = await comprobarAlmacenAbierto(admin, empresaId, fechaISO);
+  if (!abierto.abierto) return { ok: false, error: abierto.error };
+
   // 1) SALIDAS: los ingredientes que se han gastado.
   //    `origenLineaId` = (elaboración, producto) por el índice único del kardex, que da
   //    idempotencia gratis: confirmar dos veces no duplica movimientos.
@@ -277,10 +287,16 @@ export async function revertirElaboracionKardex(
     return { ok: false, error: "Solo se puede volver a borrador una elaboración confirmada." };
   }
 
-  const { revertidos } = await revertirMovimientosPorDocumento(
-    { empresaId: String(elab.empresa_id), documentoTipo: "elaboracion", documentoId: elabId },
-    admin,
-  );
+  let revertidos = 0;
+  try {
+    ({ revertidos } = await revertirMovimientosPorDocumento(
+      { empresaId: String(elab.empresa_id), documentoTipo: "elaboracion", documentoId: elabId },
+      admin,
+    ));
+  } catch (err) {
+    if (err instanceof AlmacenCerradoError) return { ok: false, error: err.message };
+    throw err;
+  }
   await admin
     .from("elaboraciones")
     .update({ estado: "borrador", updated_at: new Date().toISOString() })

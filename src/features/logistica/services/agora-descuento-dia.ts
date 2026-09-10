@@ -3,6 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { descontarStockPorTicket } from "@/features/sala/pos/services/descontar-stock-por-ventas";
 import { revertirMovimientosPorDocumento } from "@/features/logistica/services/kardex";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCierreVigente } from "@/features/logistica/services/cierre-almacen";
 
 /**
  * Descuento de stock de un business-day de Ágora, por el KARDEX.
@@ -29,7 +31,15 @@ export async function descontarDiaSiCorte(
   supabase: SupabaseClient<any, "public", any>,
   empresaId: string,
   businessDay: string,
-): Promise<{ aplicado: boolean; tickets: number; movimientos: number; corte: string | null }> {
+): Promise<{
+  aplicado: boolean;
+  tickets: number;
+  movimientos: number;
+  corte: string | null;
+  motivo?: string;
+  cierre?: string;
+  ticketsSinDescontar?: number;
+}> {
   const { data: emp } = await supabase
     .from("empresas")
     .select("stock_descuento_desde")
@@ -50,6 +60,26 @@ export async function descontarDiaSiCorte(
     .eq("origen", "agora")
     .gte("cerrado_at", `${businessDay}T00:00:00`)
     .lte("cerrado_at", `${businessDay}T23:59:59`);
+
+  // ALMACÉN CERRADO (PRP-080 F2): si ese día ya está cerrado, no se toca **nada** —
+  // ni se revierte ni se descuenta— y se deja constancia de cuántos tickets se quedan
+  // sin descontar, para que se vea en pantalla en vez de perderse en silencio.
+  //
+  // Con la regla de "solo se cierran días terminados" esto no debería pasar en el
+  // día a día: es la red por si alguien cierra hacia atrás. La diferencia que dejen
+  // esos tickets se arregla en el inventario siguiente.
+  const cierre = await getCierreVigente(createAdminClient(), empresaId);
+  if (cierre && new Date(`${businessDay}T12:00:00Z`).getTime() < new Date(cierre).getTime()) {
+    return {
+      aplicado: false,
+      tickets: (tks ?? []).length,
+      movimientos: 0,
+      corte,
+      motivo: "almacen_cerrado",
+      cierre,
+      ticketsSinDescontar: (tks ?? []).length,
+    };
+  }
 
   let movimientos = 0;
   for (const t of tks ?? []) {

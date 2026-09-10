@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { capitalizeText } from "@/shared/lib/utils";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
+import { esErrorAlmacenCerrado } from "@/features/logistica/services/cierre-almacen";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
@@ -464,6 +465,11 @@ export async function bulkImportProductos(
   }
 }
 
+/**
+ * Borra un producto. Se lleva por delante su histórico de almacén (la clave foránea
+ * está en cascada), así que si alguno de sus movimientos cae en un período cerrado la
+ * base de datos lo impide: en un almacén cerrado el histórico no se toca (PRP-080 F2).
+ */
 export async function deleteProducto(
   id: string
 ): Promise<{ error?: string; success?: boolean }> {
@@ -472,7 +478,14 @@ export async function deleteProducto(
     const { supabase } = await getLogisticaContext();
     const { error } = await supabase.from("productos").delete().eq("id", id);
 
-    if (error) return { error: error.message };
+    if (error) {
+      if (esErrorAlmacenCerrado(error)) {
+        return {
+          error: `No se puede borrar: este producto tiene movimientos en un período de almacén ya cerrado. ${error.message}`,
+        };
+      }
+      return { error: error.message };
+    }
 
     revalidatePath("/logistica/productos");
     return { success: true };

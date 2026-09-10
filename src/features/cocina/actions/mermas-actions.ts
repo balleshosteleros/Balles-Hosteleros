@@ -9,6 +9,7 @@ import {
   registrarMovimiento,
   revertirMovimientosPorDocumento,
 } from "@/features/logistica/services/kardex";
+import { esErrorAlmacenCerrado } from "@/features/logistica/services/cierre-almacen";
 
 export interface MermaRow {
   id: string;
@@ -132,6 +133,13 @@ export async function createMerma(
     // comprobación de arriba y este punto: se retira la merma recién apuntada
     // para no dejarla sin su movimiento (una merma que no descuenta engaña más
     // que no tenerla).
+    // Almacén cerrado a esa fecha: igual que arriba, la merma se retira para no
+    // dejarla sin movimiento.
+    if (mov.rechazadoPorCierre) {
+      await admin.from("mermas").delete().eq("id", merma.id as string);
+      return { ok: false, error: mov.mensaje };
+    }
+
     if (mov.rechazado) {
       await admin.from("mermas").delete().eq("id", merma.id as string);
       return {
@@ -162,6 +170,10 @@ export async function createMerma(
  * El orden importa: primero se revierte el kardex (que devuelve el saldo y borra el
  * movimiento) y solo después se borra la fila. Si se hiciera al revés y fallara la
  * reversión, quedaría un movimiento huérfano apuntando a una merma que ya no existe.
+ *
+ * Con el almacén CERRADO (PRP-080 F2) esto deja de poderse hacer con las mermas
+ * anteriores al corte, y es la intención: en un período cerrado el histórico no se
+ * toca, la diferencia se arregla en el inventario siguiente.
  */
 export async function deleteMerma(id: string): Promise<{ ok: boolean; error?: string }> {
   try {
@@ -178,10 +190,15 @@ export async function deleteMerma(id: string): Promise<{ ok: boolean; error?: st
       .maybeSingle();
     if (!merma) return { ok: false, error: "Esa merma no existe o no es de esta empresa" };
 
-    await revertirMovimientosPorDocumento(
-      { empresaId, documentoTipo: "merma", documentoId: id },
-      admin,
-    );
+    try {
+      await revertirMovimientosPorDocumento(
+        { empresaId, documentoTipo: "merma", documentoId: id },
+        admin,
+      );
+    } catch (err) {
+      if (esErrorAlmacenCerrado(err)) return { ok: false, error: (err as Error).message };
+      throw err;
+    }
 
     const { error } = await admin.from("mermas").delete().eq("id", id).eq("empresa_id", empresaId);
     if (error) throw error;

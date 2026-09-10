@@ -31,6 +31,8 @@ import {
   registrarMovimiento,
   revertirMovimientosPorDocumento,
 } from "@/features/logistica/services/kardex";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { comprobarAlmacenAbierto } from "@/features/logistica/services/cierre-almacen";
 
 // ─── TIPOS PÚBLICOS ──────────────────────────────────────────────────────────
 
@@ -81,6 +83,20 @@ export async function descontarStockPorTicket(
 
   if (errTicket || !ticket) {
     return vacio([`Ticket ${ticketId} no encontrado: ${errTicket?.message ?? ""}`]);
+  }
+
+  // ─── Almacén cerrado: ni descontar ni revertir ───────────────────────────
+  // Un ticket son N movimientos sin transacción que los envuelva: si la guarda del
+  // cierre parase a mitad, quedaría medio ticket descontado. Se comprueba antes
+  // (PRP-080 F2). La venta no se pierde: el ticket queda con `stock_descontado`
+  // como estaba y la diferencia se arregla en el inventario siguiente.
+  const cierreTicket = await comprobarAlmacenAbierto(
+    createAdminClient(),
+    String(ticket.empresa_id),
+    (ticket.cerrado_at as string | null) ?? new Date().toISOString(),
+  );
+  if (!cierreTicket.abierto) {
+    return vacio([cierreTicket.error ?? "El almacén está cerrado a la fecha de este ticket."]);
   }
 
   // ─── Reversión: deshacer TODOS los movimientos del ticket ────────────────
