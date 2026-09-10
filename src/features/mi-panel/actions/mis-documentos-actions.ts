@@ -10,7 +10,8 @@ export type CategoriaDocumento =
   | "justificantes"
   | "registros-jornada"
   | "entregas"
-  | "sanciones";
+  | "sanciones"
+  | "bajas-medicas";
 
 export interface DocumentoEmpleado {
   id: string;
@@ -30,6 +31,7 @@ export async function listMisDocumentos(): Promise<{ ok: boolean; data: Record<C
     "registros-jornada": [],
     entregas: [],
     sanciones: [],
+    "bajas-medicas": [],
   };
   try {
     const { supabase, userId, empresaId } = await getAppContext();
@@ -54,6 +56,7 @@ export async function listMisDocumentos(): Promise<{ ok: boolean; data: Record<C
       "registros-jornada": [],
       entregas: [],
       sanciones: [],
+      "bajas-medicas": [],
     };
     for (const row of data ?? []) {
       const r = row as {

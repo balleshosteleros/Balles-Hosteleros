@@ -16,6 +16,7 @@ import {
   Loader2,
   ShieldAlert,
   PackageCheck,
+  HeartPulse,
   type LucideIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -54,6 +55,9 @@ const CARPETAS: Carpeta[] = [
   { id: "registros-jornada", nombre: "Registros de jornada", icon: Clock, color: "text-violet-600", bg: "bg-violet-50" },
   { id: "entregas", nombre: "Entregas de material", icon: PackageCheck, color: "text-cyan-600", bg: "bg-cyan-50" },
   { id: "sanciones", nombre: "Sanciones disciplinarias", icon: ShieldAlert, color: "text-red-600", bg: "bg-red-50" },
+  // El parte que trae del médico y el comprobante que devuelve la gestoría, los
+  // dos nombrados por el primer día de la baja.
+  { id: "bajas-medicas", nombre: "Bajas médicas", icon: HeartPulse, color: "text-rose-600", bg: "bg-rose-50" },
 ];
 
 function tamanoLegible(bytes: number | null): string {
