@@ -49,14 +49,14 @@ function FichaDocumento({ a }: { a: ComunicadoAdjunto }) {
       href={urlAdjuntoComunicado(a.path)}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex flex-col items-center gap-2 rounded-2xl border bg-card p-4 text-center transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+      className="group flex flex-col items-center gap-1.5 rounded-xl border bg-card p-2.5 text-center transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
     >
-      <span className={`flex h-12 w-12 items-center justify-center rounded-xl ${fondo}`}>
-        <Icono className={`h-6 w-6 ${color}`} strokeWidth={1.75} />
+      <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${fondo}`}>
+        <Icono className={`h-[18px] w-[18px] ${color}`} strokeWidth={1.75} />
       </span>
-      <span className="line-clamp-2 text-xs font-medium leading-snug break-all">{a.name}</span>
+      <span className="line-clamp-2 text-[11px] font-medium leading-tight break-all">{a.name}</span>
       {a.size > 0 && (
-        <span className="text-[11px] text-muted-foreground">{tamanoLegible(a.size)}</span>
+        <span className="text-[10px] text-muted-foreground">{tamanoLegible(a.size)}</span>
       )}
     </a>
   );
@@ -138,7 +138,7 @@ function TarjetaComunicado({ c }: { c: ComunicadoVisible }) {
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {c.adjuntos.length === 1 ? "Documento adjunto" : "Documentos adjuntos"}
           </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
             {c.adjuntos.map((a) => (
               <FichaDocumento key={a.path} a={a} />
             ))}
