@@ -15,6 +15,10 @@
  * gestoría. Los importes son la referencia de partida: cada empresa los ajusta
  * desde RRHH → Puestos.
  *
+ * NORMA DE NOMBRE: el puesto va SIEMPRE en SINGULAR. Nombra el trabajo de UNA
+ * persona («Javier · CAMARERO»), no al grupo, y el mismo nombre viaja a la
+ * vacante, al contrato y a la gestoría.
+ *
  * NO añadir aquí puestos específicos de un cliente — esos los crea el cliente
  * desde RRHH → Puestos / Ajustes y NO se replican a otras empresas.
  */
@@ -117,7 +121,7 @@ export const PUESTOS_SEED: PuestoSeed[] = [
     observaciones: "Turno partido según servicio de comidas y cenas.",
   },
   {
-    departamento: "SALA", nombre: "CAMAREROS",
+    departamento: "SALA", nombre: "CAMARERO",
     descripcion: "Atiende a los clientes en sala: toma comandas, sirve, cobra y mantiene su rango.",
     salarioBruto: 1400, jornada: "Completa", horasSemanales: 40, diasLibres: 2,
     observaciones: "Turnos rotativos, incluidos fines de semana y festivos.",

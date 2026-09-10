@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/sheet";
 import { DriveExplorador } from "./DriveExplorador";
 import { DriveLogo } from "./DriveIcon";
+import { GoogleAccountButton } from "./GoogleAccountButton";
 
 export function DriveDrawer({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -43,6 +44,10 @@ export function DriveDrawer({ children }: { children: ReactNode }) {
               <DriveLogo className="h-9 w-auto" />
             </div>
             <div className="ml-auto flex items-center gap-1">
+              {/* La cuenta de Google se cambia desde aquí, igual que en Correo,
+                  Calendario y Reuniones: es la MISMA cuenta activa para las
+                  cuatro herramientas, así que cambiarla aquí la cambia en todas. */}
+              <GoogleAccountButton />
               <SheetMaximizeButton className="text-[#5f6368]" />
               <SheetClose asChild>
                 <button

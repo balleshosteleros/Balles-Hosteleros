@@ -477,8 +477,8 @@ export async function asegurarVacantesPorPuesto(empresaSlug?: string | null) {
 
     // Los puestos numerados (JEFE DE SALA 1 · 2 · 3) son PLAZAS del mismo puesto,
     // no puestos distintos: comparten una sola oferta, la del nombre sin número.
-    // Un candidato no puede elegir entre «CAMAREROS 1» y «CAMAREROS 2»: ve
-    // «CAMAREROS» y, al contratarlo, RRHH decide en qué plaza entra.
+    // Un candidato no puede elegir entre «CAMARERO 1» y «CAMARERO 2»: ve
+    // «CAMARERO» y, al contratarlo, RRHH decide en qué plaza entra.
     const nombreBase = (s: string) => s.replace(/\s+\d+\s*$/, "").trim();
     const norm = (s: string) => nombreBase(s).toLowerCase();
     const puestoIdConVacante = new Set(

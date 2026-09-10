@@ -224,7 +224,10 @@ function Acciones({
 }
 
 export function DriveExplorador({ abierto }: { abierto: boolean }) {
-  const { connected } = useGoogleConnection();
+  // `cuentaGoogle` entra en las dependencias de la carga: al cambiar de cuenta
+  // desde la cabecera, el explorador vuelve a pedir las carpetas de la cuenta
+  // nueva en lugar de quedarse enseñando las de la anterior.
+  const { connected, email: cuentaGoogle } = useGoogleConnection();
 
   const [secciones, setSecciones] = useState<Seccion[]>(SECCIONES_BASE);
   const [raiz, setRaiz] = useState<Raiz>("mi-unidad");
@@ -340,7 +343,7 @@ export function DriveExplorador({ abierto }: { abierto: boolean }) {
     return () => {
       vivo = false;
     };
-  }, [abierto, connected]);
+  }, [abierto, connected, cuentaGoogle]);
 
   // Al abrir el panel, cargamos la raíz activa.
   useEffect(() => {
@@ -348,7 +351,7 @@ export function DriveExplorador({ abierto }: { abierto: boolean }) {
     setRuta([]);
     setBusqueda("");
     void cargar({ id: null, nombre: "", raiz });
-  }, [abierto, connected, raiz, cargar]);
+  }, [abierto, connected, cuentaGoogle, raiz, cargar]);
 
   const entrarEnCarpeta = (item: DriveItem) => {
     const paso: Paso = { id: item.id, nombre: item.nombre, raiz };
