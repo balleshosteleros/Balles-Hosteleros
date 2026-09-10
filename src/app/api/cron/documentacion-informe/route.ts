@@ -8,8 +8,12 @@
  * **quién ha entrado en la app y aun así no lo ha hecho**, que es la lista que
  * de verdad hace falta para poder reclamar.
  *
- * «Ha entrado» sale de `usuarios.ultima_actividad`: si esa fecha es posterior al
- * arranque de la repesca, esa persona ha visto el aviso y ha seguido a lo suyo.
+ * «Ha entrado» sale del ÚLTIMO INICIO DE SESIÓN que guarda el propio Supabase
+ * (`auth.users.last_sign_in_at`), no de `usuarios.ultima_actividad`: ese campo
+ * está VACÍO en casi todo el mundo —lo mantiene la app y apenas se escribe—, y
+ * apoyarse en él dejaba la lista de «han entrado y no lo han subido» siempre a
+ * cero, que es justo la que sirve para reclamar. `last_sign_in_at` lo escribe
+ * Supabase en cada login y está relleno para todos.
  *
  * Se apaga solo: cuando no queda nadie pendiente manda un último correo diciendo
  * que está cerrado y deja de escribir. No hay que acordarse de quitarlo.
@@ -27,8 +31,12 @@ export const runtime = "nodejs";
 /** A quién se le manda el parte. */
 const DESTINO = "balleshosteleros@gmail.com";
 
-/** Día en que se activó la repesca: antes de esto nadie pudo ver el aviso. */
-const REPESCA_DESDE = "2026-09-09T00:00:00Z";
+/**
+ * Día en que el aviso llegó DE VERDAD a producción (no en el que se escribió el
+ * código). Quien entró antes de esta fecha no pudo verlo, y marcarlo como «ha
+ * entrado y ha pasado del aviso» sería acusarle de ignorar algo que no existía.
+ */
+const REPESCA_DESDE = "2026-09-10T00:00:00Z";
 
 interface FilaEmpleado {
   nombre: string;
@@ -107,19 +115,12 @@ export async function GET(request: Request) {
     };
   });
 
-  // Última vez que cada persona estuvo en la app.
-  const userIds = [...new Set(empleados.map((e) => e.user_id).filter(Boolean))] as string[];
-  const { data: usuarios } = await supabase
-    .from("usuarios")
-    .select("id, ultima_actividad")
-    .in("id", userIds.length > 0 ? userIds : ["00000000-0000-0000-0000-000000000000"]);
-
-  const actividad = new Map<string, string | null>(
-    (usuarios ?? []).map((u) => [
-      String((u as Record<string, unknown>).id),
-      ((u as Record<string, unknown>).ultima_actividad as string | null) ?? null,
-    ]),
-  );
+  // Última vez que cada persona inició sesión, según el propio Supabase.
+  const actividad = new Map<string, string | null>();
+  const { data: cuentas } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  for (const u of cuentas?.users ?? []) {
+    actividad.set(u.id, u.last_sign_in_at ?? null);
+  }
 
   const completos: string[] = [];
   const vistoSinHacer: string[] = [];
