@@ -135,6 +135,14 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
   const puedeVer = auth?.puedeVer ?? (() => false);
   const signOut = auth?.signOut ?? (() => {});
 
+  // Herramientas de la barra que dependen del rol. Una herramienta no permitida
+  // NO se pinta apagada ni en otro color: desaparece. Y con ella su separador,
+  // para que la píldora se ajuste y no queden huecos ni rayas sueltas al final.
+  const verAgenda = puedeVer("HERR_AGENDA");
+  const verCamaras = puedeVer("CÁMARAS");
+  const verAplicaciones = puedeVer("HERR_APLICACIONES");
+  const verAccesos = puedeVer("HERR_ACCESOS");
+
   const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
   // `mounted` es false en SSR Y en el primer render del cliente, así que ambos
   // pintan el MISMO HTML (sin barra) → sin mismatch de hidratación (React #418).
@@ -443,7 +451,7 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                       {/* Agenda — solo si el rol tiene AGENDA activado. Dentro
                           están los teléfonos y correos personales de los
                           empleados: es dato sensible, no una herramienta más. */}
-                      {puedeVer("HERR_AGENDA") && (
+                      {verAgenda && (
                       <AgendaDrawer>
                         <ToolTooltip label="Agenda">
                           <Button
@@ -458,7 +466,7 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                       )}
 
                       {/* Videovigilancia — solo si el rol tiene CÁMARAS activado. */}
-                      {puedeVer("CÁMARAS") && (
+                      {verCamaras && (
                         <CamarasDrawer>
                           <ToolTooltip label="Videovigilancia">
                             <Button
@@ -470,14 +478,19 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                           </ToolTooltip>
                         </CamarasDrawer>
                       )}
-                      {/* Separador visual */}
-                      <span className="w-px h-5 bg-border mx-0.5" />
+
+                      {/* Separador visual — solo si detrás viene algo. Sin apps
+                          ni contraseñas permitidas, la barra termina en el icono
+                          anterior, sin raya colgando. */}
+                      {(verAplicaciones || verAccesos) && (
+                        <span className="w-px h-5 bg-border mx-0.5" />
+                      )}
 
                       {/* Apps externas — dos permisos independientes:
                            · Aplicaciones (cohete): enlaces + usuario, sin secretos → HERR_APLICACIONES.
                            · Contraseñas (candado): bóveda segura con
                              revelado bajo verificación de identidad → HERR_ACCESOS. */}
-                      {puedeVer("HERR_APLICACIONES") && (
+                      {verAplicaciones && (
                         <AplicacionesDrawer empresaSlug={empresaActual.id}>
                           <ToolTooltip label="Aplicaciones">
                             <Button
@@ -489,7 +502,7 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                           </ToolTooltip>
                         </AplicacionesDrawer>
                       )}
-                      {puedeVer("HERR_ACCESOS") && (
+                      {verAccesos && (
                         <AccesosDrawer empresaSlug={empresaActual.id}>
                           <ToolTooltip label="Contraseñas">
                             <Button

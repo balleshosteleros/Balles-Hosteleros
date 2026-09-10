@@ -23,16 +23,8 @@ import {
   SheetTrigger,
 } from "@/shared/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/shared/components/ui/tooltip";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { toast } from "sonner";
-import { cloneElement, isValidElement } from "react";
-import type { ReactElement } from "react";
 import {
   listAccesosApps,
   revelarAccesoApp,
@@ -41,7 +33,6 @@ import {
   VerificacionAccesosProvider,
   useVerificacionAccesos,
 } from "@/features/rrhh/components/useVerificacionAccesos";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
 import { faviconDesdeUrl } from "@/features/rrhh/data/accesos-apps";
 import { useAuth } from "@/features/auth/contexts/auth-context";
@@ -309,73 +300,6 @@ function Buscador({
   );
 }
 
-/**
- * Carga, UNA vez al montar, cuántas apps visibles tiene el usuario en su empresa
- * (ya filtradas por departamento del rol en el servidor). Sirve para decidir si el
- * botón del cohete/candado se muestra activo o gris+deshabilitado.
- * `tieneDatos = null` mientras carga (el botón se deja activo para no parpadear).
- */
-function useTieneAccesos(empresaSlug: string) {
-  const { empresaResuelta } = useEmpresa();
-  const [tieneDatos, setTieneDatos] = useState<boolean | null>(null);
-  useEffect(() => {
-    // Hasta que la empresa activa NO está resuelta, `empresaSlug` es el default
-    // del primer render, no la empresa del usuario. Preguntar con él devolvía
-    // cero accesos y apagaba el botón en gris hasta que la cookie resolvía: el
-    // cohete salía gris al entrar y "aparecía al rato". Esperamos al slug real.
-    if (!empresaSlug || !empresaResuelta) return;
-    let alive = true;
-    listAccesosApps(empresaSlug)
-      .then((rows) => {
-        if (alive) setTieneDatos(rows.some((a) => a.estado === "Activo"));
-      })
-      .catch(() => {
-        if (alive) setTieneDatos(true); // ante error, no bloquear el botón
-      });
-    return () => {
-      alive = false;
-    };
-  }, [empresaSlug, empresaResuelta]);
-  return tieneDatos;
-}
-
-/**
- * Trigger gris + deshabilitado + tooltip cuando el usuario no tiene NINGÚN
- * acceso asignado. Reutiliza el mismo botón (`children`) pero lo apaga y le pone
- * un tooltip explicativo; al pulsarlo NO abre nada. Si hay datos, devuelve el
- * botón tal cual (envuelto en SheetTrigger por el llamador).
- */
-function TriggerDeshabilitado({
-  children,
-  mensaje,
-}: {
-  children: ReactNode;
-  mensaje: string;
-}) {
-  // Apaga el botón: gris, sin hover, cursor no-permitido y sin acción.
-  const apagado = isValidElement(children)
-    ? cloneElement(children as ReactElement<Record<string, unknown>>, {
-        disabled: true,
-        title: undefined,
-        className: `${(children as ReactElement<{ className?: string }>).props.className ?? ""} opacity-40 grayscale pointer-events-none`,
-        onClick: undefined,
-      })
-    : children;
-  return (
-    <TooltipProvider delayDuration={150}>
-      <Tooltip>
-        {/* span: el botón está deshabilitado y no dispararía el tooltip por sí solo */}
-        <TooltipTrigger asChild>
-          <span className="inline-flex cursor-not-allowed" tabIndex={0}>
-            {apagado}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{mensaje}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
 // ════════════════════════════════════════════════════════════════════════
 // 1) APLICACIONES — solo enlaces + usuario (sin secretos)
 // ════════════════════════════════════════════════════════════════════════
@@ -387,19 +311,11 @@ export function AplicacionesDrawer({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const tieneDatos = useTieneAccesos(empresaSlug);
   // soloConEnlace: el lanzador muestra únicamente apps con URL web real.
   const { appsFiltradas, loading, busqueda, setBusqueda, q } = useAccesosApps(empresaSlug, open, true);
 
-  // Sin ningún acceso asignado → botón gris, deshabilitado, con tooltip. No abre.
-  if (tieneDatos === false) {
-    return (
-      <TriggerDeshabilitado mensaje="No tienes aplicaciones asignadas">
-        {children}
-      </TriggerDeshabilitado>
-    );
-  }
-
+  // El botón va SIEMPRE en color y abre siempre. Que no haya nada dado de alta
+  // no es un error ni un permiso denegado: se entra y el panel lo dice dentro.
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
@@ -435,10 +351,10 @@ export function AplicacionesDrawer({
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 ring-1 ring-amber-100 dark:bg-amber-950/30 dark:ring-amber-900/40">
                   <Rocket className="h-7 w-7 text-amber-500" />
                 </div>
-                <p className="text-sm font-semibold">No tienes aplicaciones asignadas</p>
+                <p className="text-sm font-semibold">Todavía no hay aplicaciones</p>
                 <p className="max-w-[280px] text-xs leading-relaxed text-muted-foreground">
-                  Tu departamento todavía no tiene ninguna aplicación asignada. Si crees que es un error,
-                  contacta con dirección.
+                  Aquí aparecerán las aplicaciones de la empresa que tu rol pueda abrir. Se dan de alta en
+                  Ajustes → Herramientas → Aplicaciones.
                 </p>
               </div>
             )
@@ -490,50 +406,8 @@ export function AccesosDrawer({
 }) {
   const [open, setOpen] = useState(false);
   const { profile, esAdminPlataforma } = useAuth();
-  const { empresaResuelta } = useEmpresa();
   const miRol = (profile?.rol_label ?? "").trim().toLowerCase();
   const soyDirector = esAdminPlataforma;
-
-  // ¿Tengo alguna credencial visible para mi rol? Carga al montar para decidir si
-  // el candado va activo o gris+deshabilitado. null = cargando (botón activo).
-  const [tieneCredenciales, setTieneCredenciales] = useState<boolean | null>(null);
-  useEffect(() => {
-    // Mismo motivo que en useTieneAccesos: con la empresa sin resolver se
-    // consultaba el slug por defecto y el candado salía gris al entrar.
-    //
-    // Aquí hace falta ADEMÁS el rol: el filtro de abajo compara `acc.roles`
-    // contra `miRol`, y el perfil llega después del primer render. Con `miRol`
-    // vacío y sin ser director, ninguna credencial casaba → gris igualmente.
-    if (!empresaSlug || !empresaResuelta) return;
-    if (!soyDirector && !miRol) return;
-    let alive = true;
-    listAccesosApps(empresaSlug)
-      .then((rows) => {
-        if (!alive) return;
-        const hay = rows.some((app) =>
-          app.estado === "Activo" &&
-          app.accesos.some((acc) => {
-            // «Acceso con Google» no tiene secreto que revelar, pero sí un
-            // correo con el que entrar: cuenta como credencial mostrable.
-            const tieneSecreto =
-              acc.accesoGoogle ||
-              acc.tieneContrasena ||
-              (acc.datosExtra ?? []).some((d) => d.tiene);
-            if (!tieneSecreto) return false;
-            if (soyDirector) return true;
-            const r = (acc.roles ?? []).map((x) => x.trim().toLowerCase());
-            return r.length > 0 && r.includes(miRol);
-          }),
-        );
-        setTieneCredenciales(hay);
-      })
-      .catch(() => {
-        if (alive) setTieneCredenciales(true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [empresaSlug, empresaResuelta, miRol, soyDirector]);
 
   const { appsFiltradas, loading, busqueda, setBusqueda, q } = useAccesosApps(empresaSlug, open);
 
@@ -571,16 +445,8 @@ export function AccesosDrawer({
     [appsFiltradas, miRol, soyDirector],
   );
 
-  // Sin ninguna credencial visible para mi rol → candado gris, deshabilitado,
-  // con tooltip. No abre la bóveda. (Va tras todos los hooks: no rompe su orden.)
-  if (tieneCredenciales === false) {
-    return (
-      <TriggerDeshabilitado mensaje="No tienes accesos asignados">
-        {children}
-      </TriggerDeshabilitado>
-    );
-  }
-
+  // El candado va SIEMPRE en color y abre siempre. Sin credenciales guardadas la
+  // bóveda se abre vacía y lo explica dentro; no es un permiso denegado.
   return (
     // Provider FUERA del Sheet: el diálogo de verificación sobrevive al cierre.
     <VerificacionAccesosProvider>
@@ -621,9 +487,10 @@ export function AccesosDrawer({
                   <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 ring-1 ring-red-100 dark:bg-red-950/30 dark:ring-red-900/40">
                     <Lock className="h-7 w-7 text-red-500" />
                   </div>
-                  <p className="text-sm font-semibold">No tienes accesos asignados</p>
+                  <p className="text-sm font-semibold">Todavía no hay contraseñas</p>
                   <p className="max-w-[280px] text-xs leading-relaxed text-muted-foreground">
-                    Tu departamento todavía no tiene ninguna contraseña ni credencial asignada.
+                    Aquí aparecerán las credenciales de la empresa que tu rol pueda ver. Se guardan en
+                    Ajustes → Herramientas → Aplicaciones.
                   </p>
                 </div>
               )

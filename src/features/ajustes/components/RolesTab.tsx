@@ -248,9 +248,21 @@ export function RolesTab() {
             </CardHeader>
 
             {isOpen && (
-              <CardContent className="pt-0 px-4 pb-4 space-y-1">
+              <CardContent className="pt-0 px-4 pb-4">
                 {(() => {
                   const todosActivos = permisosNav.every((p) => p.ver);
+                  // Las herramientas de la barra (y la llave de AJUSTES) NO son
+                  // departamentos del índice lateral, pero se conceden igual: un
+                  // interruptor por fila. Van en la MISMA tabla, bajo su propio
+                  // encabezado, para que todos los interruptores caigan en la
+                  // misma columna y la pantalla no tenga bloques sueltos.
+                  const herramientas = [
+                    { modulo: MODULO_AJUSTES, label: "Ajustes", Icon: Settings, permiso: permisoAjustes },
+                    { modulo: MODULO_CAMARAS, label: "Videovigilancia", Icon: Cctv, permiso: permisoCamaras },
+                    { modulo: MODULO_AGENDA, label: "Agenda", Icon: Notebook, permiso: permisoAgenda },
+                    { modulo: MODULO_APLICACIONES, label: "Aplicaciones", Icon: Rocket, permiso: permisoAplicaciones },
+                    { modulo: MODULO_ACCESOS, label: "Contraseñas", Icon: Lock, permiso: permisoAccesos },
+                  ];
                   return (
                     <table className="w-full text-sm">
                       <thead>
@@ -272,11 +284,35 @@ export function RolesTab() {
                       </thead>
                       <tbody>
                         {permisosNav.map((p) => (
-                          <tr key={p.modulo} className="border-b last:border-0">
+                          <tr key={p.modulo} className="border-b">
                             <td className="py-2 font-medium">{p.modulo}</td>
-                            <td className="py-2 text-right">
+                            <td className="py-2">
                               <div className="flex justify-end pr-1">
                                 <Switch checked={p.ver} onCheckedChange={() => toggleAcceso(rol.id, p.modulo)} />
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+
+                        <tr className="border-b">
+                          <td colSpan={2} className="pt-4 pb-2 text-xs font-bold text-muted-foreground">
+                            HERRAMIENTAS
+                          </td>
+                        </tr>
+                        {herramientas.map(({ modulo, label, Icon, permiso }) => (
+                          <tr key={modulo} className="border-b last:border-0">
+                            <td className="py-2 font-medium">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <span className="truncate">{label}</span>
+                              </div>
+                            </td>
+                            <td className="py-2">
+                              <div className="flex justify-end pr-1">
+                                <Switch
+                                  checked={permiso.ver}
+                                  onCheckedChange={() => toggleAcceso(rol.id, modulo)}
+                                />
                               </div>
                             </td>
                           </tr>
@@ -285,39 +321,6 @@ export function RolesTab() {
                     </table>
                   );
                 })()}
-
-                {/*
-                  Permisos sueltos: no son departamentos del índice lateral,
-                  son las llaves de AJUSTES y de las herramientas de la barra.
-                  Van en UNA columna, con el interruptor alineado con la columna
-                  ACCESO de la tabla, para que la pantalla se lea de un tirón.
-                  El icono y la separación de arriba avisan de que son otra cosa.
-                */}
-                <div className="mt-3 border-t pt-1">
-                  {[
-                    { modulo: MODULO_AJUSTES, label: "Ajustes", Icon: Settings, permiso: permisoAjustes },
-                    { modulo: MODULO_CAMARAS, label: "Videovigilancia", Icon: Cctv, permiso: permisoCamaras },
-                    { modulo: MODULO_AGENDA, label: "Agenda", Icon: Notebook, permiso: permisoAgenda },
-                    { modulo: MODULO_APLICACIONES, label: "Aplicaciones", Icon: Rocket, permiso: permisoAplicaciones },
-                    { modulo: MODULO_ACCESOS, label: "Contraseñas", Icon: Lock, permiso: permisoAccesos },
-                  ].map(({ modulo, label, Icon, permiso }) => (
-                    <div
-                      key={modulo}
-                      className="flex items-center justify-between gap-3 border-b py-2 text-sm last:border-0"
-                    >
-                      <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                        <Icon className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate font-medium">{label}</span>
-                      </div>
-                      <div className="flex w-24 justify-end pr-1">
-                        <Switch
-                          checked={permiso.ver}
-                          onCheckedChange={() => toggleAcceso(rol.id, modulo)}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </CardContent>
             )}
           </Card>
