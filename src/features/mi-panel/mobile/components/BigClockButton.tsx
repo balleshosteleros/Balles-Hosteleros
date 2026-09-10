@@ -144,9 +144,10 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
   //   · SIN TURNO HOY   → no hay nada planificado; se pide por solicitud.
   //   · FUERA DE TURNO  → sí trabaja hoy, pero no a esta hora.
   const motivoApagado: "sin-turno" | "fuera-de-turno" | null = (() => {
-    // Mientras carga no se apaga: apagar y encender a los 300 ms es peor que
-    // esperar. Una vez cerrada la jornada tampoco aplica (el botón ya es gris).
-    if (estado === "completado") return null;
+    // Antes aquí se salía en seco con la jornada cerrada, porque el botón
+    // grande ya era gris y daba igual. Desde que existe "Fichar nueva entrada"
+    // NO da igual: la ventana de cortesía tiene que valer también para esa
+    // segunda entrada. Pasada la cortesía no se ficha, se pide por solicitud.
     // Aún no se sabe: no se apaga (parpadear a gris y volver es peor).
     if (!ventanaCargada) return null;
     // Ya se sabe, y no hay ventana que valga: sin horario.
@@ -456,11 +457,24 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
       {estado === "completado" && (
         <button
           type="button"
-          onClick={() => setConfirmandoEntrada(true)}
+          onClick={apagado ? avisarApagado : () => setConfirmandoEntrada(true)}
           disabled={busy || pending}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-background py-3 text-sm font-medium active:bg-muted disabled:opacity-60"
+          aria-disabled={apagado}
+          className={cn(
+            "mt-3 flex w-full flex-col items-center justify-center gap-1 rounded-2xl border py-3 text-sm font-medium disabled:opacity-60",
+            apagado
+              ? "border-border bg-muted text-muted-foreground"
+              : "border-border bg-background active:bg-muted",
+          )}
         >
-          <Fingerprint className="h-4 w-4" /> Fichar nueva entrada
+          <span className="flex items-center gap-2">
+            <Fingerprint className="h-4 w-4" /> Fichar nueva entrada
+          </span>
+          {apagado && (
+            <span className="text-xs font-normal opacity-80">
+              {motivoApagado === "sin-turno" ? "Hoy no tienes más turnos" : "Fuera de tu turno"}
+            </span>
+          )}
         </button>
       )}
 
