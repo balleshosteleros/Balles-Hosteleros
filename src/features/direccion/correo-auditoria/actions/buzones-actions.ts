@@ -18,6 +18,7 @@ import {
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { sembrarBuzonesDeEmpresa } from "../services/sembrar-buzones";
 import { desconectarBuzon, normalizarEmail } from "../services/buzones";
+import { sincronizarBuzon } from "../services/gmail-ingesta";
 import type { BuzonVista, ConexionBuzon } from "../types";
 
 async function getCtx() {
@@ -160,4 +161,43 @@ export async function anadirBuzonAction(
 
   revalidatePath("/ajustes");
   return { ok: true };
+}
+
+/**
+ * Pone al día un buzón ahora mismo, sin esperar a la pasada de la hora.
+ *
+ * Se le da menos margen que al cron (media hora de correo, no doce meses)
+ * porque aquí hay alguien esperando delante de la pantalla. Si queda histórico
+ * por traer, se dice: no es un fallo, es que va por tramos.
+ */
+export async function sincronizarBuzonAction(
+  buzonId: string,
+): Promise<{ ok: boolean; guardados: number; quedaHistorico: boolean; error?: string }> {
+  const { supabase, user, empresaId } = await getCtx();
+  if (!user || !empresaId) {
+    return { ok: false, guardados: 0, quedaHistorico: false, error: "Sin sesión" };
+  }
+
+  const { data: buzon } = await supabase
+    .from("correo_buzones")
+    .select("id")
+    .eq("id", buzonId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  if (!buzon) {
+    return {
+      ok: false,
+      guardados: 0,
+      quedaHistorico: false,
+      error: "Ese buzón no es de esta empresa",
+    };
+  }
+
+  const res = await sincronizarBuzon(buzonId, 25_000);
+  return {
+    ok: res.ok,
+    guardados: res.guardados,
+    quedaHistorico: res.quedaHistorico,
+    error: res.error,
+  };
 }

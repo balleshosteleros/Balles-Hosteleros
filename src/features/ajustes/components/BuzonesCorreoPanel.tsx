@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2, XCircle, AlertTriangle, Plus } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, Plus, RefreshCw } from "lucide-react";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
@@ -26,6 +26,7 @@ import {
   listarBuzonesAction,
   desconectarBuzonAction,
   anadirBuzonAction,
+  sincronizarBuzonAction,
 } from "@/features/direccion/correo-auditoria/actions/buzones-actions";
 import type { BuzonVista } from "@/features/direccion/correo-auditoria/types";
 
@@ -41,6 +42,8 @@ export function BuzonesCorreoPanel() {
   const [nuevoEmail, setNuevoEmail] = useState("");
   const [nuevaEtiqueta, setNuevaEtiqueta] = useState("");
   const [guardando, setGuardando] = useState(false);
+  /** Buzón que se está poniendo al día ahora mismo, si hay alguno. */
+  const [sincronizando, setSincronizando] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
     setCargando(true);
@@ -78,6 +81,25 @@ export function BuzonesCorreoPanel() {
       toast.error(res.error ?? "No se ha podido desconectar");
       return;
     }
+    cargar();
+  };
+
+  const ponerAlDia = async (buzon: BuzonVista) => {
+    setSincronizando(buzon.id);
+    const res = await sincronizarBuzonAction(buzon.id);
+    setSincronizando(null);
+
+    if (!res.ok) {
+      toast.error(res.error ?? "No se ha podido poner al día");
+      return;
+    }
+    // Que queden meses por traer no es un fallo: el histórico va por tramos y
+    // se completa solo. Se dice para que nadie piense que falta correo.
+    toast.success(
+      res.quedaHistorico
+        ? `${res.guardados} correos nuevos. Sigue trayendo meses anteriores.`
+        : `${res.guardados} correos nuevos.`,
+    );
     cargar();
   };
 
@@ -140,13 +162,28 @@ export function BuzonesCorreoPanel() {
             </div>
 
             {buzon.conexion === "conectado" ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => desconectar(buzon)}
-              >
-                Desconectar
-              </Button>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => ponerAlDia(buzon)}
+                  disabled={sincronizando !== null}
+                  aria-label="Poner al día"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${
+                      sincronizando === buzon.id ? "animate-spin" : ""
+                    }`}
+                  />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => desconectar(buzon)}
+                >
+                  Desconectar
+                </Button>
+              </div>
             ) : (
               <Button size="sm" onClick={() => conectar(buzon.email)}>
                 {buzon.conexion === "caducado" ? "Reconectar" : "Conectar"}
