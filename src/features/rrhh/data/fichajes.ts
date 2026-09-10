@@ -142,6 +142,16 @@ export interface Fichaje {
   // ─── Paralización (cierre anticipado manual) ──────────────────────
   cierreAnticipado?: boolean;
   cierreAnticipadoMotivo?: string | null;
+  /**
+   * En qué ha quedado la salida anticipada de ese día. Pendiente mientras nadie
+   * la gestiona, aprobada si las horas cuentan, rechazada si el día se queda a
+   * 0 h. `null` si ese día no hubo salida anticipada.
+   */
+  salidaAnticipadaEstado?: "pendiente" | "aprobada" | "rechazada" | null;
+  /** Lo que escribió quien la rechazó: qué tiene que hacer para arreglarlo. */
+  salidaAnticipadaRespuesta?: string | null;
+  /** La solicitud que hay que resolver, para poder aprobar o rechazar aquí. */
+  salidaAnticipadaSolicitudId?: string | null;
   // ─── Hora real vs oficial (PRP-060) ───────────────────────────────
   // `horaEntrada`/`horaSalida` son la OFICIAL (redondeada, la que cuenta).
   // Estas son la hora FÍSICA del fichaje (informativa); null en fichajes

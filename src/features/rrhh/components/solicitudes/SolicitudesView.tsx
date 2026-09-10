@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { MOTIVO_MIN_CARACTERES } from "@/features/mi-panel/types";
 import { CheckCircle2, XCircle, Loader2, Inbox, Lock } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -187,6 +188,12 @@ export function SolicitudesView() {
     setModo(m);
     setNotas("");
   }
+
+  // Rechazar una salida anticipada obliga a explicarse: ese texto es el que le
+  // llega al trabajador y donde se le dice qué hacer. El servidor lo exige
+  // también; esto solo evita que se llegue a pulsar en balde.
+  const motivoRechazoObligatorio =
+    modo === "rechazar" && revisando?.tipo === "salida_anticipada";
 
   async function confirmar() {
     if (!revisando) return;
@@ -522,8 +529,10 @@ export function SolicitudesView() {
           </DialogHeader>
           <div className="py-2 space-y-2">
             <label className="text-sm font-medium">
-              Notas{" "}
-              <span className="text-muted-foreground font-normal">(opcional)</span>
+              {motivoRechazoObligatorio ? "Explica por qué la rechazas" : "Notas"}{" "}
+              <span className="text-muted-foreground font-normal">
+                {motivoRechazoObligatorio ? "(obligatorio)" : "(opcional)"}
+              </span>
             </label>
             <Textarea
               value={notas}
@@ -532,9 +541,25 @@ export function SolicitudesView() {
               placeholder={
                 modo === "aprobar"
                   ? "Comentario para el empleado…"
-                  : "Motivo del rechazo (recomendado)…"
+                  : "Motivo del rechazo…"
               }
             />
+            {motivoRechazoObligatorio && (
+              <p className="text-xs text-muted-foreground">
+                El trabajador lo recibirá tal cual: dile qué tiene que hacer para arreglarlo. Mínimo{" "}
+                {MOTIVO_MIN_CARACTERES} caracteres.
+              </p>
+            )}
+            {/* Rechazar una salida anticipada no es un trámite: deja ese día a
+                cero y fuera de su nómina. Que se vea antes de pulsar. */}
+            {motivoRechazoObligatorio && (
+              <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 dark:border-rose-900 dark:bg-rose-950">
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+                <p className="text-xs leading-snug text-rose-900 dark:text-rose-100">
+                  Al rechazarla, ese día se queda en 0:00 h y no entra en su nómina.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -548,7 +573,7 @@ export function SolicitudesView() {
             </Button>
             <Button
               onClick={confirmar}
-              disabled={working}
+              disabled={working || (motivoRechazoObligatorio && notas.trim().length < MOTIVO_MIN_CARACTERES)}
               className={
                 modo === "aprobar"
                   ? "bg-emerald-600 hover:bg-emerald-700"

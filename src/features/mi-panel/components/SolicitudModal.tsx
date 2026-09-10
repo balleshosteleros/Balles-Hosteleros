@@ -52,7 +52,7 @@ import type {
   SolicitudSubtipoTrabajo,
   SolicitudTipo,
 } from "@/features/mi-panel/types";
-import { HORAS_EXTRAS_MOTIVO_MIN } from "@/features/mi-panel/types";
+import { HORAS_EXTRAS_MOTIVO_MIN, SUBTIPO_LABEL } from "@/features/mi-panel/types";
 import { listTiposMaterialParaSolicitar } from "@/features/rrhh/actions/entregas-tipos-actions";
 import { TALLAS_ROPA, type TipoMaterial } from "@/features/rrhh/data/entregas";
 import { DiaTrabajadoAvisoDialog } from "@/features/mi-panel/components/DiaTrabajadoAvisoDialog";
@@ -471,18 +471,6 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
   // Etiquetas dinámicas
   const tipoLabel =
     tipo === "ausencia" ? "Ausencia" : tipo === "entrega" ? "Entregas" : "Trabajo realizado";
-  const subtipoLabel: Record<SolicitudSubtipo, string> = {
-    baja_medica: "Baja médica",
-    vacaciones: "Vacaciones",
-    permiso: "Permiso",
-    baja_contrato: "Baja de contrato",
-    horas_extras: "Horas extras",
-    dia_trabajado: "Día trabajado",
-    entrega_material: "Uniforme o material",
-    // No se elige desde este modal (tiene el suyo), pero el tipo lo exige.
-    denuncia: "Queja o denuncia",
-  };
-
   // Sale de la configuración de RRHH (solo los ACTIVOS). Al nombre de cada tipo
   // le añadimos su plazo de aviso, que lo fija el sistema y no la configuración:
   // así el empleado sabe con cuánta antelación tiene que pedirlo antes de elegir.
@@ -633,7 +621,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
               {paso === "subtipo" && tipo === "trabajo" && "Selecciona qué quieres registrar."}
               {paso === "detalle" && tipo && subtipo && (
                 <>
-                  {tipoLabel} · <span className="font-medium text-foreground">{subtipoLabel[subtipo]}</span>
+                  {tipoLabel} · <span className="font-medium text-foreground">{SUBTIPO_LABEL[subtipo]}</span>
                 </>
               )}
             </DialogDescription>

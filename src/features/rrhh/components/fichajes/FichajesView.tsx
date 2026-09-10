@@ -14,6 +14,7 @@ import { ConfiguracionFichajesSheet } from "@/features/rrhh/components/fichajes/
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { toast } from "sonner";
+import { cn } from "@/shared/lib/utils";
 
 type EmpleadoOpcion = { id: string; nombre: string; puesto: string | null; departamento: string | null };
 
@@ -101,8 +102,30 @@ function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
     distanciaSalidaMetros: (row.distancia_salida_metros as number | null) ?? null,
     cierreAnticipado: Boolean(row.cierre_anticipado),
     cierreAnticipadoMotivo: (row.cierre_anticipado_motivo as string | null) ?? null,
+    salidaAnticipadaEstado:
+      (row.salida_anticipada_estado as "pendiente" | "aprobada" | "rechazada" | undefined) ?? null,
+    salidaAnticipadaRespuesta: (row.salida_anticipada_respuesta as string | null) ?? null,
+    salidaAnticipadaSolicitudId: (row.solicitud_id as string | null) ?? null,
   };
 }
+
+/**
+ * Salida anticipada, tal como se ve en la lista. Una sola familia de palabras
+ * —pendiente, aprobada, rechazada— siempre pegada a "salida anticipada", para
+ * que no compitan con el "Correcto" de un fichaje normal, que dice otra cosa:
+ * que no hubo nada que aprobar.
+ */
+const ETIQUETA_SALIDA_ANTICIPADA = {
+  pendiente: "Salida anticipada · pendiente",
+  aprobada: "Salida anticipada · aprobada",
+  rechazada: "Salida anticipada · rechazada",
+} as const;
+
+const ESTILO_SALIDA_ANTICIPADA = {
+  pendiente: "border-amber-200 bg-amber-50 text-amber-700",
+  aprobada: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  rechazada: "border-rose-200 bg-rose-50 text-rose-700",
+} as const;
 
 export function FichajesView() {
   const { empresaActual } = useEmpresa();
@@ -370,7 +393,7 @@ export function FichajesView() {
                   aria-label="Turnos de empresas distintas solapados — error de configuración"
                 />
               )}
-              {f.cierreAnticipado && (
+              {f.cierreAnticipado && !f.salidaAnticipadaEstado && (
                 <AlertTriangle
                   className="h-4 w-4 shrink-0 text-amber-500"
                   aria-label="Fichaje paralizado antes de tiempo — a revisar"
@@ -379,6 +402,32 @@ export function FichajesView() {
               {f.empleadoNombre}
             </p>
             <p className="text-xs text-muted-foreground">{f.departamento}</p>
+
+            {/* Salida anticipada: el estado y el motivo, en la propia fila.
+                Antes el motivo solo se veía abriendo el detalle del fichaje, o
+                sea que en la práctica no lo leía nadie. */}
+            {f.salidaAnticipadaEstado && (
+              <div className="mt-1.5 space-y-1">
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                    ESTILO_SALIDA_ANTICIPADA[f.salidaAnticipadaEstado],
+                  )}
+                >
+                  {ETIQUETA_SALIDA_ANTICIPADA[f.salidaAnticipadaEstado]}
+                </span>
+                {f.cierreAnticipadoMotivo && (
+                  <p className="text-xs leading-snug text-muted-foreground">
+                    «{f.cierreAnticipadoMotivo}»
+                  </p>
+                )}
+                {f.salidaAnticipadaEstado === "rechazada" && f.salidaAnticipadaRespuesta && (
+                  <p className="text-xs leading-snug text-rose-600">
+                    <span className="font-medium">Rechazo:</span> {f.salidaAnticipadaRespuesta}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </TableCell>
       ),

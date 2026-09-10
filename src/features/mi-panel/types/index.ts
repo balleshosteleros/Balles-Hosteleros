@@ -1,4 +1,4 @@
-export type SolicitudTipo = "ausencia" | "trabajo" | "entrega" | "queja";
+export type SolicitudTipo = "ausencia" | "trabajo" | "entrega" | "queja" | "salida_anticipada";
 
 export type SolicitudSubtipoAusencia =
   | "baja_medica"
@@ -10,11 +10,14 @@ export type SolicitudSubtipoTrabajo = "horas_extras" | "dia_trabajado";
 export type SolicitudSubtipoEntrega = "entrega_material";
 /** Las quejas y denuncias viven en su propia tabla, pero se listan aquí como un tipo más. */
 export type SolicitudSubtipoQueja = "denuncia";
+/** Cerrar la jornada antes de la hora del turno. La crea el propio fichaje. */
+export type SolicitudSubtipoSalidaAnticipada = "salida_anticipada";
 export type SolicitudSubtipo =
   | SolicitudSubtipoAusencia
   | SolicitudSubtipoTrabajo
   | SolicitudSubtipoEntrega
-  | SolicitudSubtipoQueja;
+  | SolicitudSubtipoQueja
+  | SolicitudSubtipoSalidaAnticipada;
 
 export type SolicitudEstado = "pendiente" | "aprobada" | "rechazada" | "anulada";
 
@@ -173,6 +176,7 @@ export const SUBTIPO_LABEL: Record<SolicitudSubtipo, string> = {
   dia_trabajado: "Día trabajado",
   entrega_material: "Uniforme o material",
   denuncia: "Queja o denuncia",
+  salida_anticipada: "Salida anticipada",
 };
 
 export const ESTADO_LABEL: Record<SolicitudEstado, string> = {

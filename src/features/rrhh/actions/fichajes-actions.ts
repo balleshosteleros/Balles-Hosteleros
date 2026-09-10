@@ -205,6 +205,32 @@ export async function listFichajes(fecha?: string) {
       };
     });
 
+    // Estado de las salidas anticipadas de esos días, para poder enseñarlo en
+    // la propia lista (pendiente / aprobada / rechazada) y resolverlas ahí sin
+    // tener que abrir el detalle de cada fichaje.
+    const solicitudIds = enriched
+      .map((r) => (r as Record<string, unknown>).solicitud_id as string | null)
+      .filter((id): id is string => !!id);
+    if (solicitudIds.length > 0) {
+      const { data: sols } = await admin
+        .from("solicitudes_personal")
+        .select("id, estado, notas_revision")
+        .in("id", solicitudIds)
+        .eq("tipo", "salida_anticipada");
+      const porId = new Map(
+        (sols ?? []).map((x) => [
+          x.id as string,
+          { estado: x.estado as string, notas: (x.notas_revision as string | null) ?? null },
+        ]),
+      );
+      for (const r of enriched as Record<string, unknown>[]) {
+        const s = porId.get((r.solicitud_id as string | null) ?? "");
+        if (!s) continue;
+        r.salida_anticipada_estado = s.estado;
+        r.salida_anticipada_respuesta = s.notas;
+      }
+    }
+
     return { ok: true, data: enriched };
   } catch (err) {
     console.error("[fichajes] listFichajes:", err);
