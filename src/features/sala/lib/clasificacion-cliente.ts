@@ -23,6 +23,13 @@ export interface PuntuableValoracion {
   comida: number | null;
   servicio: number | null;
   ambiente: number | null;
+  /**
+   * Categorías que no todos los locales preguntan. Opcionales para no obligar
+   * a tocar cada llamada: quien no las pase sigue promediando lo de siempre.
+   */
+  bebida?: number | null;
+  musica?: number | null;
+  espectaculo?: number | null;
 }
 
 /**
@@ -40,9 +47,14 @@ export interface PuntuableValoracion {
  */
 export function notaValoracion(r: PuntuableValoracion | null): number | null {
   if (!r) return null;
-  const notas = [r.comida, r.servicio, r.ambiente].filter(
-    (n): n is number => typeof n === "number",
-  );
+  const notas = [
+    r.comida,
+    r.bebida,
+    r.servicio,
+    r.ambiente,
+    r.musica,
+    r.espectaculo,
+  ].filter((n): n is number => typeof n === "number");
   if (notas.length === 0) return r.rating;
   return notas.reduce((a, b) => a + b, 0) / notas.length;
 }

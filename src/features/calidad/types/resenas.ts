@@ -79,8 +79,11 @@ export interface Resena {
    * podía ver en ningún sitio: 2.112 valoraciones lo tienen.
    */
   rating_comida: number | null;
+  rating_bebida: number | null;
   rating_servicio: number | null;
   rating_ambiente: number | null;
+  rating_musica: number | null;
+  rating_espectaculo: number | null;
   origen: OrigenResena;
   posicion: number;
   creado_por: string | null;

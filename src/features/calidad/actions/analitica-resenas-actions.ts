@@ -80,8 +80,11 @@ export async function getAnaliticaResenas(
     const filas = await leerTodas<{
       rating: number | null;
       rating_comida: number | null;
+      rating_bebida: number | null;
       rating_servicio: number | null;
       rating_ambiente: number | null;
+      rating_musica: number | null;
+      rating_espectaculo: number | null;
       comentario: string | null;
       fecha: string | null;
       created_at: string | null;
@@ -91,7 +94,7 @@ export async function getAnaliticaResenas(
         .select(
           // `fecha_reseña` lleva eñe: hay que entrecomillarla y darle un alias
           // ASCII, o el parser del cliente no la reconoce.
-          'rating, rating_comida, rating_servicio, rating_ambiente, comentario, created_at, fecha:"fecha_reseña"',
+          'rating, rating_comida, rating_bebida, rating_servicio, rating_ambiente, rating_musica, rating_espectaculo, comentario, created_at, fecha:"fecha_reseña"',
         )
         .eq("empresa_id", empresaId)
         // Solo lo que es una opinión. "No contesta" y "Nuevo comensal" no
@@ -117,8 +120,11 @@ export async function getAnaliticaResenas(
       const nota = notaValoracion({
         rating: r.rating,
         comida: r.rating_comida,
+        bebida: r.rating_bebida,
         servicio: r.rating_servicio,
         ambiente: r.rating_ambiente,
+        musica: r.rating_musica,
+        espectaculo: r.rating_espectaculo,
       });
       if (nota !== null) {
         actual.suma += nota;

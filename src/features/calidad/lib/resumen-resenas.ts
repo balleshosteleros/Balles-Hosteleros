@@ -98,6 +98,9 @@ export function calcularResumenResenas(resenas: Resena[]): ResumenResenas {
       ? notaValoracion({
           rating: r.rating,
           comida: r.rating_comida,
+          bebida: r.rating_bebida,
+          musica: r.rating_musica,
+          espectaculo: r.rating_espectaculo,
           servicio: r.rating_servicio,
           ambiente: r.rating_ambiente,
         })

@@ -68,6 +68,9 @@ function notaDe(r: Resena): number | null {
   return notaValoracion({
     rating: r.rating,
     comida: r.rating_comida,
+    bebida: r.rating_bebida,
+    musica: r.rating_musica,
+    espectaculo: r.rating_espectaculo,
     servicio: r.rating_servicio,
     ambiente: r.rating_ambiente,
   });
@@ -75,7 +78,14 @@ function notaDe(r: Resena): number | null {
 
 /** Cuántas de las tres preguntas contestó. 0 = solo dio una nota global. */
 function preguntasContestadas(r: Resena): number {
-  return [r.rating_comida, r.rating_servicio, r.rating_ambiente].filter(
+  return [
+    r.rating_comida,
+    r.rating_bebida,
+    r.rating_servicio,
+    r.rating_ambiente,
+    r.rating_musica,
+    r.rating_espectaculo,
+  ].filter(
     (n) => typeof n === "number",
   ).length;
 }
