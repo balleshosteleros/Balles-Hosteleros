@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { LogIn, LogOut, Coffee, Play, Loader2, Clock, Plus, MapPin, House } from "lucide-react";
+import { Fingerprint, Coffee, Play, Loader2, Plus, MapPin, House } from "lucide-react";
 import { toast } from "sonner";
 import {
   ficharEntradaPersonal,
@@ -34,6 +34,11 @@ function formatHora(iso: string | null, tz: string): string {
   return formatHoraEnZona(iso, tz) || "—";
 }
 
+/**
+ * El tiempo que lleva. A cero mientras no haya fichado —no en blanco ni con un
+ * guion: un 0:00 dice "hoy no has empezado", un hueco no dice nada— y contando
+ * desde la entrada en cuanto ficha.
+ */
 function calcHorasVivas(fichaje: MiFichajeHoy | null): string {
   if (!fichaje?.horaEntrada) return "0:00 h";
   const entrada = new Date(fichaje.horaEntrada).getTime();
@@ -287,6 +292,14 @@ export function FichajeBar({
     return `${String(Math.floor(proxima / 60)).padStart(2, "0")}:${String(proxima % 60).padStart(2, "0")}`;
   })();
 
+  /**
+   * La huella es la misma que la del botón grande del móvil, y manda lo que
+   * toca AHORA: verde si lo siguiente es entrar, roja si lo siguiente es salir.
+   * El icono no cambia nunca —siempre la huella—, solo el color, para que se
+   * lea de un vistazo sin tener que leer nada.
+   */
+  const tocaSalir = trabajando || enPausa;
+
   const esTeletrabajo = !!fichaje?.modoTeletrabajo;
   let estadoLabel = "Sin fichar";
   let estadoColor = "bg-slate-100 text-slate-700 border-slate-200";
@@ -309,8 +322,14 @@ export function FichajeBar({
       <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
         {/* Estado actual */}
         <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 shrink-0">
-            <Clock className="h-6 w-6 text-primary" />
+          <div
+            className={`flex h-12 w-12 items-center justify-center rounded-full shrink-0 ${
+              tocaSalir ? "bg-rose-500/10" : "bg-emerald-500/10"
+            }`}
+          >
+            <Fingerprint
+              className={`h-6 w-6 ${tocaSalir ? "text-rose-600" : "text-emerald-600"}`}
+            />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -353,7 +372,7 @@ export function FichajeBar({
               onClick={handleEntrada}
               className="h-12 px-6 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-500/50"
             >
-              {working ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <LogIn className="mr-2 h-5 w-5" />}
+              {working ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Fingerprint className="mr-2 h-5 w-5" />}
               Fichar entrada
             </Button>
           )}
@@ -376,7 +395,7 @@ export function FichajeBar({
                 onClick={handleSalida}
                 className="px-5 font-semibold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/25 ring-1 ring-red-500/40"
               >
-                {working ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <LogOut className="mr-1.5 h-4 w-4" />}
+                {working ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Fingerprint className="mr-1.5 h-4 w-4" />}
                 Fichar salida
               </Button>
             </>
@@ -393,7 +412,7 @@ export function FichajeBar({
                 onClick={handleSalida}
                 className="px-5 font-semibold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/25 ring-1 ring-red-500/40"
               >
-                <LogOut className="mr-1.5 h-4 w-4" />
+                <Fingerprint className="mr-1.5 h-4 w-4" />
                 Fichar salida
               </Button>
             </>
@@ -405,7 +424,7 @@ export function FichajeBar({
               onClick={handleEntrada}
               className="px-5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/25 ring-1 ring-emerald-500/40"
             >
-              {working ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <LogIn className="mr-1.5 h-4 w-4" />}
+              {working ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Fingerprint className="mr-1.5 h-4 w-4" />}
               Fichar nueva entrada
             </Button>
           )}
