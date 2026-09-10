@@ -36,7 +36,7 @@ import {
   getNiveles,
 } from "@/features/toques/services/toques.service";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
-import { getZonaHorariaEmpresa, ZONA_HORARIA_DEFAULT } from "@/features/empresa/lib/empresa-server";
+import { getZonaHorariaEmpresa, zonaHorariaDeConfig, ZONA_HORARIA_DEFAULT } from "@/features/empresa/lib/empresa-server";
 import { getDiasVacacionesAnio } from "@/features/rrhh/actions/calendario-config-actions";
 import { minutosDiaEnZona, ahoraEnZona, hoyEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
@@ -1788,6 +1788,8 @@ export interface ComunicadoVisible {
   enlaceTexto: string | null;
   /** Cuándo lo dio por visto este trabajador. Vacío = todavía no lo ha abierto. */
   vistoEl: string | null;
+  /** De qué empresa es. Quien trabaja en dos las ve juntas y tiene que distinguirlas. */
+  empresaNombre: string;
 }
 
 /** El JSONB `adjuntos` puede venir de cualquier forma: solo pasan los completos. */
@@ -1816,43 +1818,53 @@ export async function listarComunicadosVisibles(): Promise<{
   error?: string;
 }> {
   try {
-    const { supabase, user, empresaId, departamento, rolLabel } =
-      await getContext();
-    if (!user || !empresaId) return { ok: false, data: [], error: "No autenticado" };
+    const { supabase, user, departamento, rolLabel } = await getContext();
+    if (!user) return { ok: false, data: [], error: "No autenticado" };
 
     // Los comunicados son para la PLANTILLA. Quien tiene acceso al software
-    // pero no ficha de empleado en esta empresa —una cuenta técnica, alguien de
-    // dirección sin contrato aquí— no los recibe, así que tampoco los ve: si no,
-    // aparecían en su panel comunicados que no iban con él.
-    const { data: ficha } = await createAdminClient()
+    // pero no ficha de empleado —una cuenta técnica, alguien de dirección sin
+    // contrato— no los recibe, así que tampoco los ve.
+    //
+    // Se miran TODAS sus empresas, no solo la que tenga puesta en ese momento:
+    // el gerente trabaja en dos, le llegaba el aviso de un comunicado de una y
+    // al entrar en Comunicados —con la otra puesta— no encontraba nada. Cada
+    // comunicado se lee con la marca y el nombre de su empresa, así que no hay
+    // confusión posible.
+    const { data: fichas } = await createAdminClient()
       .from("empleados")
-      .select("id")
+      .select("empresa_id")
       .eq("user_id", user.id)
-      .eq("empresa_id", empresaId)
-      .eq("estado", "Activo")
-      .maybeSingle();
-    if (!ficha) return { ok: true, data: [] };
+      .eq("estado", "Activo");
+    const empresaIds = [
+      ...new Set(((fichas ?? []) as { empresa_id: string }[]).map((f) => f.empresa_id)),
+    ].filter(Boolean);
+    if (empresaIds.length === 0) return { ok: true, data: [] };
 
-    const zonaHoraria = await getZonaHorariaEmpresa(supabase, empresaId);
-
-    // El comunicado lo firma la empresa: se lee con su marca, igual que el
-    // correo. Si no tiene isotipo se cae al logotipo, y si tampoco, al icono.
-    const { data: marca } = await supabase
+    // Marca, nombre y zona horaria de cada una: el comunicado lo firma su
+    // empresa y su hora es la de ESA empresa, no la de la que se esté mirando.
+    const { data: empresasData } = await createAdminClient()
       .from("empresas")
-      .select("isotipo_url, logo_url")
-      .eq("id", empresaId)
-      .maybeSingle();
-    const isotipoUrl =
-      ((marca?.isotipo_url as string | null) ||
-        (marca?.logo_url as string | null) ||
-        null);
+      .select("id, nombre, isotipo_url, logo_url, config_operativa")
+      .in("id", empresaIds);
+    const porEmpresa = new Map<
+      string,
+      { nombre: string; isotipoUrl: string | null; zonaHoraria: string }
+    >();
+    for (const e of empresasData ?? []) {
+      porEmpresa.set(e.id as string, {
+        nombre: (e.nombre as string | null) ?? "",
+        isotipoUrl:
+          ((e.isotipo_url as string | null) || (e.logo_url as string | null) || null),
+        zonaHoraria: zonaHorariaDeConfig(e.config_operativa),
+      });
+    }
 
     const { data, error } = await supabase
       .from("comunicados")
       .select(
-        "id, titulo, cuerpo, tipo, created_at, estado, toda_empresa, roles_destinatarios, empleados_destinatarios, departamentos_destinatarios, adjuntos, enlace, enlace_texto",
+        "id, empresa_id, titulo, cuerpo, tipo, created_at, estado, toda_empresa, roles_destinatarios, empleados_destinatarios, departamentos_destinatarios, adjuntos, enlace, enlace_texto",
       )
-      .eq("empresa_id", empresaId)
+      .in("empresa_id", empresaIds)
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) throw error;
@@ -1909,19 +1921,23 @@ export async function listarComunicadosVisibles(): Promise<{
 
     return {
       ok: true,
-      data: visibles.map((c: Record<string, unknown>) => ({
+      data: visibles.map((c: Record<string, unknown>) => {
+        const suya = porEmpresa.get(c.empresa_id as string);
+        return {
         id: c.id as string,
         titulo: (c.titulo as string) ?? "",
         contenido: (c.cuerpo as string | null | undefined) ?? "",
         tipo: (c.tipo as string) ?? "informativo",
         createdAt: c.created_at as string,
-        zonaHoraria,
+        zonaHoraria: suya?.zonaHoraria ?? ZONA_HORARIA_DEFAULT,
         adjuntos: adjuntosDeComunicado(c.adjuntos),
-        isotipoUrl,
+        isotipoUrl: suya?.isotipoUrl ?? null,
         enlace: (c.enlace as string | null) ?? null,
         enlaceTexto: (c.enlace_texto as string | null) ?? null,
         vistoEl: vistoPorId.get(c.id as string) ?? null,
-      })),
+        empresaNombre: suya?.nombre ?? "",
+        };
+      }),
     };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);

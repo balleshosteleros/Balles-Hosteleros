@@ -225,8 +225,11 @@ function ComunicadoDetalle({
 
       <div className="flex-1 overflow-y-auto px-5 py-5">
         <h1 className="text-center text-2xl font-semibold leading-tight">{comunicado.titulo}</h1>
-        <p className="mt-1 text-center text-xs capitalize text-muted-foreground">
-          {formatFull(comunicado.createdAt, comunicado.zonaHoraria)}
+        <p className="mt-1 text-center text-xs text-muted-foreground">
+          {comunicado.empresaNombre ? `${comunicado.empresaNombre} · ` : ""}
+          <span className="capitalize">
+            {formatFull(comunicado.createdAt, comunicado.zonaHoraria)}
+          </span>
         </p>
         {comunicado.contenido && (
           <article className="mt-5 whitespace-pre-line text-base leading-relaxed text-foreground">

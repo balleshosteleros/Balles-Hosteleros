@@ -149,6 +149,7 @@ function TarjetaComunicado({
             )}
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
+            {c.empresaNombre ? `${c.empresaNombre} · ` : ""}
             {formatFechaHoraEnZona(c.createdAt, c.zonaHoraria, { month: "long" })}
           </p>
         </div>
