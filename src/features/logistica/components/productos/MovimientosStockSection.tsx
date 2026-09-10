@@ -9,6 +9,7 @@ import {
   ChevronRight,
   ClipboardList,
   Loader2,
+  Lock,
   Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { getCierreAlmacen } from "@/features/logistica/actions/cierre-almacen-actions";
 import { cn } from "@/lib/utils";
 import { listMovimientosProducto } from "@/features/logistica/actions/kardex-actions";
 import {
@@ -108,6 +110,14 @@ export function MovimientosStockSection({
   const [movimientos, setMovimientos] = useState<StockMovimiento[]>([]);
   const [loading, setLoading] = useState(true);
   const [abierta, setAbierta] = useState<string | null>(null);
+  // Primer instante ABIERTO del almacén: todo lo anterior está congelado y se marca
+  // con un candado, para que se entienda por qué la aplicación no deja corregirlo.
+  const [corte, setCorte] = useState<string | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    void getCierreAlmacen().then((r) => { if (vivo) setCorte(r.data?.corte ?? null); });
+    return () => { vivo = false; };
+  }, []);
 
   const [controla, setControla] = useState<boolean | null>(null);
   const [nMovs, setNMovs] = useState(0);
@@ -224,6 +234,7 @@ export function MovimientosStockSection({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="py-2 w-6" aria-label="Cerrado" />
                   <th className="py-2 font-medium">Fecha</th>
                   <th className="py-2 font-medium">Tipo</th>
                   <th className="py-2 text-right font-medium">Cantidad</th>
@@ -238,15 +249,26 @@ export function MovimientosStockSection({
                   const esVenta = m.documento_tipo === "pos_ticket";
                   const desplegable = esVenta && m.documento_id;
                   const abiertaEsta = abierta === m.id;
+                  const cerrado = corte != null && new Date(m.fecha).getTime() < new Date(corte).getTime();
+                  const fijado = m.saldo_fijado != null;
                   return (
                     <Fragment key={m.id}>
                       <tr
                         className={cn(
                           "border-b border-border/50",
+                          cerrado && "bg-muted/30",
                           desplegable && "cursor-pointer hover:bg-muted/40",
                         )}
                         onClick={() => desplegable && setAbierta(abiertaEsta ? null : m.id)}
                       >
+                        <td className="py-2 align-middle">
+                          {cerrado && (
+                            <Lock
+                              className="h-3 w-3 text-muted-foreground"
+                              aria-label="En período cerrado"
+                            />
+                          )}
+                        </td>
                         <td className="py-2 whitespace-nowrap">{fmtFecha(m.fecha, tz)}</td>
                         <td className="py-2">
                           {(() => {
@@ -271,7 +293,15 @@ export function MovimientosStockSection({
                             </>
                           )}
                         </td>
-                        <td className="py-2 text-right tabular-nums">{fmtNum(m.saldo_resultante)}</td>
+                        <td className="py-2 text-right tabular-nums">
+                          {fijado ? (
+                            <span title="Recuento: esta fila FIJA el saldo, no lo suma ni lo resta">
+                              {fmtNum(m.saldo_resultante)} <span className="text-muted-foreground">=</span>
+                            </span>
+                          ) : (
+                            fmtNum(m.saldo_resultante)
+                          )}
+                        </td>
                         <td className="py-2 pl-4 text-right tabular-nums text-muted-foreground">
                           {fmtEuros(m.coste_unitario)}
                         </td>
@@ -294,7 +324,7 @@ export function MovimientosStockSection({
                       </tr>
                       {abiertaEsta && m.documento_id && (
                         <tr>
-                          <td colSpan={7} className="pb-3">
+                          <td colSpan={8} className="pb-3">
                             <FacturaAgoraInline ticketId={m.documento_id} />
                           </td>
                         </tr>

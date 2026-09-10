@@ -47,6 +47,8 @@ import { inventariosIO } from "@/features/logistica/io/inventarios.io";
 import { toast } from "sonner";
 import InventarioModal from "@/features/logistica/components/inventarios/InventarioModal";
 import DetalleInventario from "@/features/logistica/components/inventarios/DetalleInventario";
+import ConfirmarInventarioDialog from "@/features/logistica/components/inventarios/ConfirmarInventarioDialog";
+import { cerrarAlmacen } from "@/features/logistica/actions/cierre-almacen-actions";
 import InventarioConfigView from "@/features/logistica/components/inventarios/InventarioConfigView";
 import { formatearFechaEs } from "@/shared/lib/fecha";
 
@@ -55,7 +57,7 @@ export function InventariosView() {
   useEffect(() => { sessionStorage.setItem("logistica_last", pathname); }, [pathname]);
 
   const { empresaActual } = useEmpresa();
-  const { profile } = useAuth();
+  const { profile, puedeEditar } = useAuth();
 
   // Nombre del usuario automático
   const usuarioNombre = profile
@@ -63,6 +65,9 @@ export function InventariosView() {
     : "Usuario actual";
 
   const [inventarios, setInventarios] = useState<Inventario[]>([]);
+  // Inventario a punto de confirmarse: lo enseña el diálogo antes de tocar el almacén.
+  const [aConfirmar, setAConfirmar] = useState<Inventario | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
   const [stock, setStock] = useState<ProductoStock[]>([]);
   const [tipos, setTipos] = useState<TipoInventario[]>([]);
   const [plantillas, setPlantillas] = useState<PlantillaInventario[]>([]);
@@ -248,24 +253,63 @@ export function InventariosView() {
     })));
   }, [stock]);
 
-  const handleConfirmar = async (inv: Inventario) => {
-    // 1. Persistir las líneas contadas antes de ajustar el stock.
-    const guardado = await persistirConteos(inv);
-    if (!guardado.ok) { toast.error("No se pudieron guardar los conteos."); return; }
-    // 2. Marcar confirmado y ajustar stock real vía kardex (PRP-058).
-    const estadoRes = await updateInventarioEstadoAction(inv.id, "Confirmado", usuarioNombre);
-    if (!estadoRes.ok) { toast.error(estadoRes.error ?? "No se pudo confirmar."); return; }
-    const kardex = await confirmarInventarioKardex(inv.id);
-    if (!kardex.ok) { toast.error(kardex.error ?? "No se pudo ajustar el stock."); return; }
-    toast.success(`Inventario confirmado. ${kardex.ajustados ?? 0} producto(s) ajustados.`);
-    await loadInventarios();
-    setDetalleId(null);
+  const fmtDia = (dia: string) => {
+    const [a, m, d] = dia.split("-");
+    return `${d}/${m}/${a}`;
+  };
+
+  // Confirmar ya no es un clic seco: primero se enseña qué va a pasar, y de paso se
+  // ofrece cerrar el almacén, que es la decisión seria de esta pantalla.
+  const handleConfirmar = (inv: Inventario) => setAConfirmar(inv);
+
+  const confirmarDeVerdad = async (opciones: { cerrarHasta?: string }) => {
+    const inv = aConfirmar;
+    if (!inv) return;
+    setConfirmando(true);
+    try {
+      // 1. Persistir las líneas contadas antes de ajustar el stock.
+      const guardado = await persistirConteos(inv);
+      if (!guardado.ok) { toast.error("No se pudieron guardar los conteos."); return; }
+
+      // 2. Ajustar el stock por el kardex ANTES de marcar el estado: si el ajuste
+      //    falla (p. ej. el almacén ya está cerrado a esa fecha), el inventario tiene
+      //    que seguir en borrador. Al revés quedaba "Confirmado" sin haber movido nada.
+      const kardex = await confirmarInventarioKardex(inv.id);
+      if (!kardex.ok) { toast.error(kardex.error ?? "No se pudo ajustar el stock."); return; }
+
+      const estadoRes = await updateInventarioEstadoAction(inv.id, "Confirmado", usuarioNombre);
+      if (!estadoRes.ok) { toast.error(estadoRes.error ?? "No se pudo confirmar."); return; }
+
+      // 3. Y, si lo han pedido, cerrar el almacén con este recuento.
+      if (opciones.cerrarHasta) {
+        const cierre = await cerrarAlmacen({ dia: opciones.cerrarHasta, inventarioId: inv.id });
+        if (!cierre.ok) {
+          toast.warning(`Inventario confirmado, pero el almacén no se ha cerrado: ${cierre.error}`);
+        } else {
+          toast.success(`Inventario confirmado y almacén cerrado hasta el ${fmtDia(cierre.corteDia ?? opciones.cerrarHasta)}.`);
+          setAConfirmar(null);
+          await loadInventarios();
+          setDetalleId(null);
+          return;
+        }
+      }
+
+      toast.success(`Inventario confirmado. ${kardex.ajustados ?? 0} producto(s) ajustados.`);
+      setAConfirmar(null);
+      await loadInventarios();
+      setDetalleId(null);
+    } finally {
+      setConfirmando(false);
+    }
   };
 
   const handleDeshacerConfirmacion = async (inv: Inventario) => {
+    // Deshacer el kardex va PRIMERO: si el período está cerrado no se puede, y el
+    // inventario tiene que seguir figurando como confirmado.
+    const kardex = await revertirInventarioKardex(inv.id);
+    if (!kardex.ok) { toast.error(kardex.error ?? "No se pudo deshacer."); return; }
     const estadoRes = await updateInventarioEstadoAction(inv.id, "Borrador");
     if (!estadoRes.ok) { toast.error("No se pudo deshacer."); return; }
-    await revertirInventarioKardex(inv.id);
     toast.info("Confirmación deshecha. El inventario vuelve a Borrador.");
     await loadInventarios();
   };
@@ -334,6 +378,15 @@ export function InventariosView() {
           onUpdate={handleUpdateInventario}
           onConfirmar={handleConfirmar}
           onDeshacerConfirmacion={handleDeshacerConfirmacion}
+        />
+        <ConfirmarInventarioDialog
+          abierto={!!aConfirmar}
+          onCerrar={() => setAConfirmar(null)}
+          onConfirmar={confirmarDeVerdad}
+          conteos={aConfirmar?.conteos.reduce((n, c) => n + c.lineas.length, 0) ?? 0}
+          fechaInventario={aConfirmar?.fecha ?? ""}
+          puedeCerrar={puedeEditar("LOGÍSTICA")}
+          guardando={confirmando}
         />
       </div>
     );

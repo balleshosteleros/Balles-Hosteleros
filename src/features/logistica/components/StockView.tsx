@@ -44,6 +44,7 @@ import {
   type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import CierreAlmacenBanner from "@/features/logistica/components/CierreAlmacenBanner";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { stockIO } from "@/features/logistica/io/stock.io";
@@ -793,6 +794,9 @@ export function StockView() {
             </div>
           ) : (
             <>
+              {/* Almacén cerrado: por qué no deja corregir lo de antes de tal día */}
+              <CierreAlmacenBanner />
+
               {/* Indicador temporada activa */}
               {temporadaActiva && (
                 <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 border border-primary/20 rounded-md px-3 py-1.5">
