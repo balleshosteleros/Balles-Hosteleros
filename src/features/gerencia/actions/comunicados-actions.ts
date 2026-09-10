@@ -49,6 +49,27 @@ export interface EmpleadoSelector {
   puesto: string | null;
 }
 
+/**
+ * `user_id` de la plantilla ACTIVA de la empresa.
+ *
+ * Va con la clave de servicio porque solo hace falta cruzar identificadores y
+ * la RLS de `empleados` depende de quién mire: quien publica un comunicado no
+ * tiene por qué poder leer las fichas de personal.
+ */
+async function userIdsDeLaPlantilla(empresaId: string): Promise<Set<string>> {
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const { data } = await createAdminClient()
+    .from("empleados")
+    .select("user_id")
+    .eq("empresa_id", empresaId)
+    .eq("estado", "Activo");
+  const ids = new Set<string>();
+  for (const f of (data ?? []) as Array<{ user_id: string | null }>) {
+    if (f.user_id) ids.add(f.user_id);
+  }
+  return ids;
+}
+
 export async function listEmpleadosParaComunicado(): Promise<{
   ok: boolean;
   data: EmpleadoSelector[];
@@ -57,14 +78,21 @@ export async function listEmpleadosParaComunicado(): Promise<{
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [], error: "No autenticado" };
-    // Vía RPC SECURITY DEFINER: resuelve el PUESTO real (empleado_puestos) y
-    // filtra solo activos. usuarios tiene RLS que solo deja ver el propio perfil.
+    // Vía RPC SECURITY DEFINER: resuelve el PUESTO real (empleado_puestos).
+    // usuarios tiene RLS que solo deja ver el propio perfil.
     const { data, error } = await supabase.rpc("chat_empleados", { p_empresa: empresaId });
     if (error) throw error;
+
+    // Un comunicado se dirige a EMPLEADOS, no a cualquiera que tenga acceso al
+    // software. La RPC parte de los logins, así que colaba a quien no tiene
+    // ficha en esta empresa —entre ellos la cuenta de pruebas de Ágora—, y esa
+    // gente aparecía en la lista de destinatarios como si fuera plantilla.
+    const plantilla = await userIdsDeLaPlantilla(empresaId);
+
     return {
       ok: true,
       data: (data ?? [])
-        .filter((r: Record<string, unknown>) => !!r.user_id)
+        .filter((r: Record<string, unknown>) => !!r.user_id && plantilla.has(r.user_id as string))
         .map((r: Record<string, unknown>) => ({
           userId: r.user_id as string,
           nombre: (r.nombre as string) ?? "",

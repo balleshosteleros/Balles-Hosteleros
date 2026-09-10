@@ -2,17 +2,17 @@
  * A QUIÉN va un comunicado. Fuente ÚNICA para los tres avisos: la campana de la
  * app, el push del móvil y el correo.
  *
- * Por qué existe y por qué usa la clave de servicio:
- * la tabla `usuarios` tiene una RLS que solo deja ver el PROPIO perfil. La
- * resolución anterior consultaba `usuarios` con la sesión de quien publicaba,
- * así que un comunicado "a toda la empresa" resolvía exactamente una persona:
- * el que le daba a publicar. Nadie más recibía ni aviso ni push. Y filtrar por
- * departamento o por rol no devolvía a nadie en absoluto.
+ * La audiencia son los EMPLEADOS ACTIVOS de la empresa, y solo ellos. Es lo
+ * mismo que ofrece la ficha del comunicado, donde se elige por persona de una
+ * lista de empleados: si "toda la empresa" incluyera además cualquier login,
+ * el comunicado acabaría en cuentas que no son nadie de la plantilla —pasó: se
+ * colaba la cuenta de pruebas de Ágora—.
  *
- * La audiencia son los LOGINS de la empresa (los suyos y los de quien la tiene
- * como secundaria), quitando a quien ya no trabaja allí. Se parte de los logins
- * y no de la plantilla porque hay usuarios sin ficha de empleado —dirección,
- * administración— que también tienen que enterarse.
+ * Por qué usa la clave de servicio: la tabla `usuarios` tiene una RLS que solo
+ * deja ver el PROPIO perfil. La resolución anterior la consultaba con la sesión
+ * de quien publicaba, así que un comunicado "a toda la empresa" resolvía
+ * exactamente una persona —la que le daba a publicar— y filtrar por
+ * departamento o por rol no devolvía a nadie.
  */
 
 import "server-only";
@@ -24,7 +24,7 @@ export interface ComunicadoAudiencia {
   titulo: string;
   cuerpo: string;
   estado: string;
-  /** Logins que deben recibirlo (campana y push). */
+  /** Logins de los empleados destinatarios (campana y push). */
   userIds: string[];
   /** Direcciones de correo, ya limpias y sin repetir. */
   emails: string[];
@@ -82,58 +82,51 @@ export async function resolverAudienciaComunicado(
   const c = data as FilaComunicado | null;
   if (!c || c.estado !== "publicado") return VACIA;
 
-  const empresaId = c.empresa_id;
+  const base = {
+    empresaId: c.empresa_id,
+    titulo: c.titulo ?? "",
+    cuerpo: c.cuerpo ?? "",
+    estado: c.estado,
+  };
 
-  // 1) Logins de la empresa: los que la tienen como principal y los que la
-  //    tienen como secundaria (quien trabaja en dos).
-  const [principales, secundarias] = await Promise.all([
-    supabase.from("usuarios").select("user_id").eq("empresa_id", empresaId),
-    supabase.from("usuario_empresas").select("user_id").eq("empresa_id", empresaId),
-  ]);
-  const deLaEmpresa = new Set<string>();
-  for (const fila of [...(principales.data ?? []), ...(secundarias.data ?? [])]) {
-    const id = (fila as { user_id: string | null }).user_id;
-    if (id) deLaEmpresa.add(id);
-  }
-  if (deLaEmpresa.size === 0) {
-    return { ...VACIA, empresaId, titulo: c.titulo ?? "", cuerpo: c.cuerpo ?? "", estado: c.estado };
-  }
-
-  // 2) Fichas de empleado de esa empresa: dan el correo y dicen quién sigue.
+  // 1) La plantilla ACTIVA de esa empresa. Nadie más.
   const { data: fichas } = await supabase
     .from("empleados")
-    .select("user_id, estado, email_personal, email_empresa")
-    .eq("empresa_id", empresaId);
+    .select("user_id, email_personal, email_empresa")
+    .eq("empresa_id", c.empresa_id)
+    .eq("estado", "Activo");
 
-  const porUsuario = new Map<
-    string,
-    { estado: string; email: string }
-  >();
-  for (const f of (fichas ?? []) as Array<{
+  const plantilla = (fichas ?? []) as Array<{
     user_id: string | null;
-    estado: string | null;
     email_personal: string | null;
     email_empresa: string | null;
-  }>) {
+  }>;
+  if (plantilla.length === 0) return { ...VACIA, ...base };
+
+  // El correo del trabajo manda sobre el personal; ver [[emails_empleado]].
+  const correoDe = new Map<string, string>();
+  for (const f of plantilla) {
     if (!f.user_id) continue;
-    porUsuario.set(f.user_id, {
-      estado: (f.estado ?? "").trim(),
-      email: (f.email_empresa || f.email_personal || "").trim().toLowerCase(),
-    });
+    correoDe.set(
+      f.user_id,
+      (f.email_empresa || f.email_personal || "").trim().toLowerCase(),
+    );
   }
+  // Quien todavía no tiene login no puede recibir el aviso en la app, pero el
+  // correo sí le llega: sigue siendo de la plantilla.
+  const correosSinLogin = plantilla
+    .filter((f) => !f.user_id)
+    .map((f) => (f.email_empresa || f.email_personal || "").trim().toLowerCase());
 
-  // Quien tiene ficha en la empresa y NO está activo, fuera: un comunicado no
-  // se le manda a quien ya causó baja. Quien no tiene ficha (dirección,
-  // administración) se queda: es un login de la empresa igual.
-  const candidatos = Array.from(deLaEmpresa).filter((id) => {
-    const ficha = porUsuario.get(id);
-    return !ficha || ficha.estado === "Activo";
-  });
+  const conLogin = Array.from(correoDe.keys());
 
-  // 3) A quién va, según lo elegido en la ficha del comunicado.
+  // 2) A quién va, según lo elegido en la ficha del comunicado.
   let elegidos: string[];
+  let emailsExtra: string[] = [];
+
   if (c.toda_empresa === true) {
-    elegidos = candidatos;
+    elegidos = conLogin;
+    emailsExtra = correosSinLogin;
   } else {
     const set = new Set<string>(
       (c.empleados_destinatarios ?? []).filter((id): id is string => !!id),
@@ -142,11 +135,12 @@ export async function resolverAudienciaComunicado(
     const departamentos = (c.departamentos_destinatarios ?? []).filter(Boolean).map(norm);
     const roles = (c.roles_destinatarios ?? []).filter(Boolean).map(norm);
 
-    if ((departamentos.length > 0 || roles.length > 0) && candidatos.length > 0) {
+    if ((departamentos.length > 0 || roles.length > 0) && conLogin.length > 0) {
+      // El departamento y el puesto de cada persona viven en `usuarios`.
       const { data: perfiles } = await supabase
         .from("usuarios")
         .select("user_id, departamento, rol_label")
-        .in("user_id", candidatos);
+        .in("user_id", conLogin);
 
       for (const p of (perfiles ?? []) as Array<{
         user_id: string;
@@ -167,39 +161,15 @@ export async function resolverAudienciaComunicado(
       }
     }
 
-    // Solo quien de verdad pertenece a la empresa y sigue en ella.
-    elegidos = candidatos.filter((id) => set.has(id));
-  }
-
-  // El correo sale de su ficha de empleado. Quien no la tiene —dirección,
-  // administración— recibe en el correo con el que entra al software, que es el
-  // único que hay de esa persona.
-  const sinFicha = elegidos.filter((id) => !porUsuario.get(id)?.email);
-  const correoDeAcceso = new Map<string, string>();
-  if (sinFicha.length > 0) {
-    const { data: logins } = await supabase
-      .from("usuarios")
-      .select("user_id, email")
-      .in("user_id", sinFicha);
-    for (const l of (logins ?? []) as Array<{ user_id: string; email: string | null }>) {
-      correoDeAcceso.set(l.user_id, (l.email ?? "").trim().toLowerCase());
-    }
+    // Solo quien de verdad está en la plantilla activa de esta empresa.
+    elegidos = conLogin.filter((id) => set.has(id));
   }
 
   const emails = Array.from(
     new Set(
-      elegidos
-        .map((id) => porUsuario.get(id)?.email || correoDeAcceso.get(id) || "")
-        .filter(esEmailUtil),
+      [...elegidos.map((id) => correoDe.get(id) ?? ""), ...emailsExtra].filter(esEmailUtil),
     ),
   );
 
-  return {
-    empresaId,
-    titulo: c.titulo ?? "",
-    cuerpo: c.cuerpo ?? "",
-    estado: c.estado,
-    userIds: elegidos,
-    emails,
-  };
+  return { ...base, userIds: elegidos, emails };
 }
