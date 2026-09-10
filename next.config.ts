@@ -601,6 +601,24 @@ const nextConfig: NextConfig = {
           permanent: false,
         },
       ]),
+      // La web comercial del SOFTWARE no puede servirse desde el subdominio de
+      // la escuela. Todo el proyecto vive en la misma app, así que
+      // `laescuela.balleshosteleros.com/software` respondía con la web del
+      // producto: el mismo contenido bajo dos dominios, y el alumno saliendo de
+      // su portal sin enterarse. Se manda al dominio que le toca, permanente
+      // para que Google se quede solo con ese.
+      {
+        source: '/software',
+        has: [{ type: 'host', value: ESCUELA_HOST }],
+        destination: `https://${SOFTWARE_HOST}`,
+        permanent: true,
+      },
+      {
+        source: '/software/:resto*',
+        has: [{ type: 'host', value: ESCUELA_HOST }],
+        destination: `https://${SOFTWARE_HOST}/:resto*`,
+        permanent: true,
+      },
       // Raíz del subdominio de QR, sin código (alguien teclea el subdominio a
       // pelo): aviso neutro en vez de la pantalla de login del sistema.
       //
