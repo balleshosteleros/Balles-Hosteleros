@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   Sheet,
@@ -42,6 +42,27 @@ function fmtFecha(iso: string, tz: string): string {
 // Campana + círculo de no vistas + bandeja (Sheet) con acuse por notificación.
 // variant="panel" → botón redondo con borde (Mi Panel / móvil).
 // variant="toolbar" → icono ghost integrado en la barra de herramientas superior.
+
+/**
+ * Pantallas del trabajador que existen en las dos versiones. La campana también
+ * está en el móvil, y un aviso que lleva a "/mi-panel/..." abría ahí la pantalla
+ * de escritorio dentro de la app del teléfono.
+ */
+const PANTALLAS_EN_MOVIL = new Set([
+  "calendario", "comunicados", "condiciones", "cronograma", "cuestionarios",
+  "documentos", "entregas", "equipo", "fichajes", "formacion", "horario",
+  "inspecciones", "pagos", "points",
+]);
+
+/** Traduce una ruta de escritorio del trabajador a su pantalla del móvil. */
+function aPantallaMovil(url: string): string {
+  if (url === "/mi-panel") return "/m";
+  if (!url.startsWith("/mi-panel/")) return url;
+  const resto = url.slice("/mi-panel/".length);
+  const seccion = resto.split(/[/?#]/)[0];
+  return PANTALLAS_EN_MOVIL.has(seccion) ? `/m/${resto}` : url;
+}
+
 export function NotificacionBell({
   className,
   variant = "panel",
@@ -51,6 +72,9 @@ export function NotificacionBell({
 }) {
   const { empresaActual } = useEmpresa();
   const router = useRouter();
+  // Dentro de la app del móvil las pantallas viven bajo "/m".
+  const pathname = usePathname();
+  const enApp = pathname === "/m" || pathname.startsWith("/m/");
   const [items, setItems] = useState<NotificacionApp[]>([]);
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -107,10 +131,11 @@ export function NotificacionBell({
   // Ruta interna a la que lleva la notificación al pulsarla. Solo aceptamos
   // rutas propias ("/..."): un `accion_url` absoluto (los hay, para enlaces de
   // firma que van por correo) no debe sacar al usuario de la aplicación.
-  const destinoInterno = (n: NotificacionApp): string | null =>
-    n.accionUrl && n.accionUrl.startsWith("/") && !n.accionUrl.startsWith("//")
-      ? n.accionUrl
-      : null;
+  const destinoInterno = (n: NotificacionApp): string | null => {
+    const url = n.accionUrl;
+    if (!url || !url.startsWith("/") || url.startsWith("//")) return null;
+    return enApp ? aPantallaMovil(url) : url;
+  };
 
   // Al pulsar el cuerpo: cierra la bandeja y abre la pantalla correspondiente.
   // No damos el acuse aquí: el aviso sigue sin ver hasta que se pulse su botón,
