@@ -1809,6 +1809,20 @@ export async function listarComunicadosVisibles(): Promise<{
     const { supabase, user, empresaId, departamento, rolLabel } =
       await getContext();
     if (!user || !empresaId) return { ok: false, data: [], error: "No autenticado" };
+
+    // Los comunicados son para la PLANTILLA. Quien tiene acceso al software
+    // pero no ficha de empleado en esta empresa —una cuenta técnica, alguien de
+    // dirección sin contrato aquí— no los recibe, así que tampoco los ve: si no,
+    // aparecían en su panel comunicados que no iban con él.
+    const { data: ficha } = await createAdminClient()
+      .from("empleados")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("empresa_id", empresaId)
+      .eq("estado", "Activo")
+      .maybeSingle();
+    if (!ficha) return { ok: true, data: [] };
+
     const zonaHoraria = await getZonaHorariaEmpresa(supabase, empresaId);
 
     const { data, error } = await supabase
