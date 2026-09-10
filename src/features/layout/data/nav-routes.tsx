@@ -266,6 +266,7 @@ const EXTRA_ROUTES: Record<string, { title: string; icon?: IconType }> = {
   "/mi-panel/formacion/curso": { title: "CURSO", icon: GraduationCap },
   "/rrhh/formacion/curso": { title: "CURSO", icon: GraduationCap },
   "/direccion/cronogramas/productividad": { title: "PRODUCTIVIDAD", icon: TrendingUp },
+  "/direccion/auditorias/correo": { title: "AUDITORÍA DE CORREO", icon: Mail },
   "/direccion/presentaciones/branding": { title: "BRANDING", icon: Presentation },
   "/logistica/fichas-tecnicas": { title: "FICHAS TÉCNICAS", icon: ClipboardList },
   "/logistica/partidas": { title: "PARTIDAS", icon: LayoutGrid },

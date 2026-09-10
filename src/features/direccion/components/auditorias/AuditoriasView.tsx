@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { toast } from "sonner";
-import { Plus, ClipboardList, ChevronRight, CircleSlash } from "lucide-react";
+import { Plus, ClipboardList, ChevronRight, CircleSlash, Mail } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -162,6 +163,16 @@ export function AuditoriasView() {
             ))}
           </SelectContent>
         </Select>
+
+        {/* Auditoría de correo: cuánto correo mueve cada área y con quién.
+            Vive dentro de Auditorías porque es el mismo material con el que se
+            valora cada departamento en la reunión del mes. */}
+        <Button asChild variant="outline" size="sm" className="ml-auto h-9">
+          <Link href="/direccion/auditorias/correo">
+            <Mail className="mr-1.5 h-4 w-4" />
+            Correo
+          </Link>
+        </Button>
       </div>
 
       {loading ? (
