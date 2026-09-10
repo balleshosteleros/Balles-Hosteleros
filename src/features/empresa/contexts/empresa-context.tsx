@@ -637,17 +637,20 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
       if (empresaPrevia?.dbId) setEmpresaActivaCliente(empresaPrevia.dbId);
 
       if (motivo === "sesion_caducada") {
-        toast.error("Tu sesión ha caducado. Vuelve a entrar para continuar.", {
-          duration: Infinity,
-          action: {
-            label: "Volver a entrar",
-            // `/salir` borra las cookies de sesión (son del servidor, el
-            // navegador no puede tocarlas) y deja el login limpio.
-            onClick: () => {
-              window.location.href = "/salir";
-            },
-          },
+        // Se sale SOLO, sin pedirle nada. Con las cookies muertas no hay
+        // ninguna decisión que tomar: quedarse solo sirve para toparse con el
+        // mismo "no autenticado" en la siguiente cosa que se pulse. El aviso da
+        // el tiempo justo de leerse antes de que la pantalla cambie, para que
+        // el salto al login no parezca que la app se ha caído.
+        //
+        // `/salir` borra las cookies de sesión (son del servidor, el navegador
+        // no puede tocarlas) y deja el login limpio.
+        toast.error("Tu sesión ha caducado. Te llevo a entrar de nuevo…", {
+          duration: 3000,
         });
+        window.setTimeout(() => {
+          window.location.href = "/salir";
+        }, 1800);
         return;
       }
       if (motivo === "sin_acceso") {
