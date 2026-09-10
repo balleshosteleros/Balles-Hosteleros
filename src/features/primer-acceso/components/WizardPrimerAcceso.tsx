@@ -79,12 +79,12 @@ const DOCUMENTOS: { tipo: TipoDocPropio; label: string; ayuda: string }[] = [
   {
     tipo: "dni_anverso",
     label: "DNI o NIE — cara delantera",
-    ayuda: "La cara de la foto. Que se lean todos los datos.",
+    ayuda: "Donde está tu foto. Que se lean bien todos los datos.",
   },
   {
     tipo: "dni_reverso",
     label: "DNI o NIE — cara trasera",
-    ayuda: "La cara del domicilio.",
+    ayuda: "Donde figura tu domicilio.",
   },
   {
     tipo: "iban",

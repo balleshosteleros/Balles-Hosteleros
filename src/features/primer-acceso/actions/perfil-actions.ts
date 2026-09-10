@@ -268,7 +268,14 @@ export async function subirYLeerDocumentoPropio(input: {
 
   const lectura = await leerDocumentoConIA(doc.campoIA, input.file.type, buffer);
 
-  revalidatePath("/", "layout");
+  // ⛔ AQUÍ NO SE REVALIDA. Al subir el ÚLTIMO documento, revalidar el layout
+  // hacía que el guard se recalculara en ese mismo instante, viera que ya no
+  // falta nada y echara a la persona del asistente a media faena: pantalla en
+  // blanco y, al recargar, «This page couldn't load». Y encima antes de que
+  // pudiera pulsar «Finalizar», con lo que los datos leídos se perdían.
+  //
+  // El árbol se refresca al terminar, en `confirmarDatosDocumentacion`, que es
+  // cuando la persona ya ha aprobado sus datos y toca salir del asistente.
   return { ok: true as const, lectura };
 }
 

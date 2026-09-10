@@ -314,6 +314,16 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                   */}
                   <MiniReproductor />
 
+                  {/* Fichaje: SUELTO y a la izquierda de la barra, fuera de la
+                      píldora a propósito. Dentro se leía como una herramienta
+                      más entre las de Google; fuera se ve como lo que es, el
+                      botón de entrar y salir de tu turno. Solo el icono; el
+                      tiempo aparece al pasar por encima. No se pinta a quien no
+                      puede fichar. */}
+                  <div className="hidden md:flex items-center">
+                    <FichajePill />
+                  </div>
+
                   {/* Integraciones: Google (cuenta + email + calendario + meet) | tareas + chat + llamadas | apps */}
                   {/* Un solo proveedor para todas las etiquetas de la barra: así el
                       retardo de aparición es común y, al pasar de un icono al de al
@@ -322,11 +332,6 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                     <div className="hidden md:flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5">
                       {/* Notificaciones — joya de la corona, la primera de la barra */}
                       <NotificacionBell variant="toolbar" />
-
-                      {/* Fichar sin salir de donde estés. Solo el icono; el
-                          tiempo aparece al pasar por encima. No se pinta a quien
-                          no puede fichar. */}
-                      <FichajePill />
 
                       {/* Separador visual */}
                       <span className="w-px h-5 bg-border mx-0.5" />
