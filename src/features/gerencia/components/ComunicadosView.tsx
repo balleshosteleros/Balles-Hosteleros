@@ -29,6 +29,7 @@ import {
   updateComunicado,
   cambiarEstadoComunicado,
   enviarCorreoComunicado,
+  duplicarComunicado,
   deleteComunicado,
   listEmpleadosParaComunicado,
   crearUrlsSubidaComunicado,
@@ -79,7 +80,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   CalendarDays, MoreHorizontal, Eye, Clock, Archive,
   Trash2, FileText, Users, ArrowLeft, Send, Upload, X, AlertTriangle, Bell, Mail, Paperclip,
-  ChevronLeft, ChevronRight, Settings, ShieldAlert, Link as LinkIcon,
+  ChevronLeft, ChevronRight, Settings, ShieldAlert, Link as LinkIcon, Copy,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -1094,6 +1095,17 @@ export function ComunicadosView() {
     await loadComunicados();
   };
 
+  /** Copiar un comunicado para reaprovecharlo: la copia nace en borrador. */
+  const duplicar = async (c: Comunicado) => {
+    const res = await duplicarComunicado(c.id);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo duplicar");
+      return;
+    }
+    toast.success("Copia creada en borrador");
+    await loadComunicados();
+  };
+
   const eliminar = async (c: Comunicado) => {
     const ok = await confirm({
       title: "¿Eliminar este comunicado?",
@@ -1425,6 +1437,7 @@ export function ComunicadosView() {
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => openEdit(c)}><Eye className="h-4 w-4 mr-2" />Ver / editar</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => duplicar(c)}><Copy className="h-4 w-4 mr-2" />Duplicar</DropdownMenuItem>
                           {c.estado === "publicado" && (
                             <DropdownMenuItem onClick={() => mandarPorCorreo(c)}><Mail className="h-4 w-4 mr-2" />Mandar por correo</DropdownMenuItem>
                           )}

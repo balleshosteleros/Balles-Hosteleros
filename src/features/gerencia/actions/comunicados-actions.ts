@@ -245,7 +245,8 @@ export interface ComunicadoInput {
   titulo: string;
   cuerpo?: string;
   estado?: string;
-  prioridad?: string;
+  /** Tipo del comunicado: urgente, novedades o informativo. */
+  tipo?: string;
   recurrencia?: string;
   todaEmpresa?: boolean;
   rolesDestinatarios?: string[];
@@ -287,7 +288,7 @@ function toRow(input: ComunicadoInput) {
     titulo: input.titulo,
     cuerpo: input.cuerpo ?? "",
     estado: input.estado ?? "borrador",
-    prioridad: input.prioridad ?? "normal",
+    tipo: input.tipo ?? "informativo",
     recurrencia: input.recurrencia ?? "sin_repeticion",
     toda_empresa: input.todaEmpresa ?? true,
     roles_destinatarios: input.rolesDestinatarios ?? [],
@@ -537,6 +538,59 @@ export async function updateComunicado(
   } catch (err: unknown) {
     const msg = friendlyError(err, "comunicados");
     console.error("[comunicados] updateComunicado:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Copia un comunicado y deja la copia en BORRADOR.
+ *
+ * Sirve para lo que se manda una y otra vez con cuatro palabras cambiadas —el
+ * cambio de horario, el recordatorio de fichajes— sin tener que reescribirlo ni
+ * arriesgarse a tocar el original, que ya salió.
+ *
+ * La copia se lleva el mensaje, los destinatarios, el enlace y los documentos.
+ * Lo que NO se lleva es nada de lo que ya pasó: no hereda la fecha de envío ni
+ * la constancia de que el correo salió, porque la copia todavía no ha salido.
+ * Los documentos apuntan a los mismos archivos del almacén; borrar un
+ * comunicado no borra sus archivos, así que la copia nunca deja al original sin
+ * ellos.
+ */
+export async function duplicarComunicado(
+  id: string,
+): Promise<ResultadoGuardarComunicado> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data: original, error: errLeer } = await supabase
+      .from("comunicados")
+      .select(
+        "titulo, cuerpo, tipo, recurrencia, toda_empresa, roles_destinatarios, empleados_destinatarios, departamentos_destinatarios, observaciones, adjuntos, enviar_email, enlace, enlace_texto",
+      )
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (errLeer) throw errLeer;
+    if (!original) return { ok: false, error: "El comunicado ya no existe" };
+
+    const { data, error } = await supabase
+      .from("comunicados")
+      .insert({
+        ...original,
+        titulo: `${original.titulo} (copia)`,
+        empresa_id: empresaId,
+        creador_id: user?.id ?? null,
+        estado: "borrador",
+        envio: null,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return { ok: true, data };
+  } catch (err: unknown) {
+    const msg = friendlyError(err, "comunicados");
+    console.error("[comunicados] duplicarComunicado:", msg);
     return { ok: false, error: msg };
   }
 }
