@@ -51,6 +51,23 @@ function colorSeguro(c: string | null | undefined, porDefecto: string): string {
 }
 
 /**
+ * ¿El color del texto de la marca es claro u oscuro?
+ *
+ * La sombra del título solo ayuda cuando el texto es claro sobre el color de la
+ * empresa. Con un texto oscuro —Bacanal lo tiene, negro sobre dorado— una
+ * sombra negra lo emborrona en vez de darle relieve, así que no se pinta.
+ */
+function esColorClaro(hex: string): boolean {
+  const v = hex.replace("#", "");
+  const full = v.length === 3 ? v.split("").map((c) => c + c).join("") : v.slice(0, 6);
+  if (full.length !== 6) return true;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
+}
+
+/**
  * HTML de la cabecera del comunicado.
  *
  * `srcIsotipo` se pasa aparte para poder referenciar `cid:` cuando la imagen va
@@ -72,6 +89,7 @@ export function comunicadoHeaderHtml(
         ? marca.logoUrl
         : "");
   const alt = escapeAttr(marca.nombre || "");
+  const sombra = esColorClaro(texto) ? "text-shadow:0 2px 4px rgba(0,0,0,0.22);" : "";
 
   // El isotipo va sobre un disco claro: destaca sobre el degradado y le da el
   // relieve. Si la empresa no tiene imagen no se pinta el disco vacío.
@@ -90,7 +108,7 @@ export function comunicadoHeaderHtml(
     <td align="center" style="padding:36px 24px 30px 24px;background-color:${color};background-image:linear-gradient(135deg, ${color} 0%, ${color2} 100%);">
       ${disco}
       <div style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${texto};opacity:0.85;margin-bottom:8px;">Comunicado oficial</div>
-      <div style="font-family:Helvetica,Arial,sans-serif;font-size:23px;line-height:1.3;font-weight:bold;color:${texto};text-shadow:0 2px 4px rgba(0,0,0,0.22);">${escapeAttr(titulo)}</div>
+      <div style="font-family:Helvetica,Arial,sans-serif;font-size:23px;line-height:1.3;font-weight:bold;color:${texto};${sombra}">${escapeAttr(titulo)}</div>
     </td>
   </tr>
   <tr>

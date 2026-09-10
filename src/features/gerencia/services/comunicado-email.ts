@@ -77,6 +77,26 @@ function aTextoPlano(html: string): string {
     .trim();
 }
 
+/**
+ * El cuerpo del comunicado se escribe en un campo de texto normal, no en un
+ * editor de HTML: llega con saltos de línea de verdad y puede traer un «<» o un
+ * «&» sueltos. Si se pegara tal cual dentro del correo, todos los párrafos se
+ * juntarían en un ladrillo y un símbolo suelto podría partir el HTML. Aquí se
+ * escapa y se monta en párrafos: línea en blanco = párrafo nuevo, salto suelto
+ * = salto de línea. Así el correo se lee igual que en la app.
+ */
+function cuerpoPlanoAHtml(texto: string): string {
+  const limpio = texto.replace(/\r\n?/g, "\n").trim();
+  if (!limpio) return "";
+  return limpio
+    .split(/\n{2,}/)
+    .map(
+      (parrafo) =>
+        `<p style="margin:0 0 16px 0;">${escapeHtml(parrafo).replace(/\n/g, "<br />")}</p>`,
+    )
+    .join("");
+}
+
 /** Bloque HTML con los documentos: enlace al software para cada uno. */
 function bloqueAdjuntosHtml(adjuntos: ComunicadoAdjunto[], color: string): string {
   if (adjuntos.length === 0) return "";
@@ -149,7 +169,7 @@ export async function enviarComunicadoPorEmail(
       });
     }
 
-    const cuerpo = c.cuerpo ?? "";
+    const cuerpo = cuerpoPlanoAHtml(c.cuerpo ?? "");
     const colorEnlace = marca?.color || "#111827";
     const cuerpoConAdjuntos = `${cuerpo}${bloqueAdjuntosHtml(adjuntos, colorEnlace)}`;
 
