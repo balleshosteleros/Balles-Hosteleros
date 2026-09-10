@@ -31,11 +31,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-// Iconos de fichar: flecha CONTRA una línea (entrar) y flecha DESDE una línea
-// (salir). Se parecen a los de sesión pero NO son los mismos a propósito: el de
-// salir de sesión es `LogOut` y usar ese aquí hacía pensar que el botón de la
-// barra cerraba la sesión en vez de cerrar el turno.
-import { ArrowRightToLine, ArrowRightFromLine, Check, Loader2 } from "lucide-react";
+// Fichar es SIEMPRE la huella, la misma que el botón grande del móvil y la de
+// la tarjeta de Mi Panel: un solo dibujo para una sola acción, se entre por
+// donde se entre. Antes eran flechas, que se confundían con las de cerrar
+// sesión. Lo único que cambia es el color, y lo dice lo que toca AHORA: verde
+// para entrar, roja para salir.
+import { Fingerprint, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -165,14 +166,10 @@ export function FichajePill() {
     }
   }
 
-  const Icono =
-    estado === "dentro" ? ArrowRightFromLine : estado === "terminado" ? Check : ArrowRightToLine;
   const color =
     estado === "dentro"
       ? "text-rose-600 dark:text-rose-400"
-      : estado === "terminado"
-        ? "text-muted-foreground"
-        : "text-emerald-600 dark:text-emerald-400";
+      : "text-emerald-600 dark:text-emerald-400";
 
   return (
     <div
@@ -199,7 +196,10 @@ export function FichajePill() {
         )}
       >
         <span className="text-[11px] font-medium tabular-nums text-foreground/80">
-          {estado === "sin-fichar" ? ROTULO[estado] : horasVivas(fichaje)}
+          {/* El tiempo se enseña siempre: a 0:00 h mientras no se ha fichado y
+              contando desde la entrada en cuanto se ficha. Antes ponía "Sin
+              fichar" y había que abrirlo para saber si llevabas horas. */}
+          {horasVivas(fichaje)}
           {estado !== "sin-fichar" && fichaje?.modoTeletrabajo ? (
             <span className="ml-1 font-normal text-muted-foreground">· Teletrabajo</span>
           ) : null}
@@ -263,7 +263,7 @@ export function FichajePill() {
           {enviando ? (
             <Loader2 className={`h-4 w-4 animate-spin ${color}`} />
           ) : (
-            <Icono className={`h-[18px] w-[18px] ${color}`} />
+            <Fingerprint className={`h-[18px] w-[18px] ${color}`} />
           )}
         </button>
       </span>

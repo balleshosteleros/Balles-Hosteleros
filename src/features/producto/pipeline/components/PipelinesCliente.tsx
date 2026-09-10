@@ -47,7 +47,10 @@ export function PipelinesCliente({ clienteId }: { clienteId: string }) {
     };
   }, [clienteId, esMatriz]);
 
-  const filas = cargado?.clienteId === clienteId ? cargado.filas : [];
+  const filas = useMemo(
+    () => (cargado?.clienteId === clienteId ? cargado.filas : []),
+    [cargado, clienteId],
+  );
 
   /**
    * Las notas de la persona, sin repetir.
