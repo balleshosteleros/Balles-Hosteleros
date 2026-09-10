@@ -41,8 +41,21 @@ function pintaDocumento(nombre: string) {
   return { Icono: File, color: "text-slate-500", fondo: "bg-muted" };
 }
 
-/** Documento como ficha cuadrada, no como una fila de hoja de cálculo. */
-function FichaDocumento({ a }: { a: ComunicadoAdjunto }) {
+/**
+ * Documento como ficha cuadrada, no como una fila de hoja de cálculo.
+ *
+ * Se llama como el comunicado, no como el archivo: los nombres de archivo salen
+ * con guiones bajos y extensiones y quedan feos. Si hay más de uno, se numeran.
+ */
+function FichaDocumento({
+  a,
+  titulo,
+  numero,
+}: {
+  a: ComunicadoAdjunto;
+  titulo: string;
+  numero: number | null;
+}) {
   const { Icono, color, fondo } = pintaDocumento(a.name);
   return (
     <a
@@ -54,7 +67,10 @@ function FichaDocumento({ a }: { a: ComunicadoAdjunto }) {
       <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${fondo}`}>
         <Icono className={`h-[18px] w-[18px] ${color}`} strokeWidth={1.75} />
       </span>
-      <span className="line-clamp-2 text-[11px] font-medium leading-tight break-all">{a.name}</span>
+      <span className="line-clamp-2 text-[11px] font-medium leading-tight">
+        {titulo}
+        {numero !== null ? ` ${numero}` : ""}
+      </span>
       {a.size > 0 && (
         <span className="text-[10px] text-muted-foreground">{tamanoLegible(a.size)}</span>
       )}
@@ -139,8 +155,13 @@ function TarjetaComunicado({ c }: { c: ComunicadoVisible }) {
             {c.adjuntos.length === 1 ? "Documento adjunto" : "Documentos adjuntos"}
           </p>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-            {c.adjuntos.map((a) => (
-              <FichaDocumento key={a.path} a={a} />
+            {c.adjuntos.map((a, i) => (
+              <FichaDocumento
+                key={a.path}
+                a={a}
+                titulo={c.titulo}
+                numero={c.adjuntos.length > 1 ? i + 1 : null}
+              />
             ))}
           </div>
         </div>

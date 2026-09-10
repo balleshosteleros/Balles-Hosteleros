@@ -249,7 +249,7 @@ function ComunicadoDetalle({
             <p className="text-xs font-medium text-muted-foreground">
               {comunicado.adjuntos.length === 1 ? "Documento adjunto" : "Documentos adjuntos"}
             </p>
-            {comunicado.adjuntos.map((a) => (
+            {comunicado.adjuntos.map((a, i) => (
               <a
                 key={a.path}
                 href={urlAdjuntoComunicado(a.path)}
@@ -258,7 +258,10 @@ function ComunicadoDetalle({
                 className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-3 text-sm active:bg-muted"
               >
                 <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="truncate">{a.name}</span>
+                <span className="truncate">
+                  {comunicado.titulo}
+                  {comunicado.adjuntos.length > 1 ? ` ${i + 1}` : ""}
+                </span>
                 {a.size > 0 && (
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                     {tamanoLegible(a.size)}
