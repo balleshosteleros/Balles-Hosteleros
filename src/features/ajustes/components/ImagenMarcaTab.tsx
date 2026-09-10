@@ -309,9 +309,10 @@ export function ImagenMarcaTab() {
             />
             <LogoSlot
               titulo="Isotipo"
-              descripcion="Solo el icono, sin texto. Se usa en el avatar del sidebar, favicons y vistas compactas."
+              descripcion="Solo el icono, sin texto. Se ve siempre redondo: en la barra superior, en el favicon y en las vistas compactas."
               url={estado.isotipoUrl}
               previewBg="#FFFFFF"
+              redondo
               uploading={subiendoIsotipo}
               fileRef={fileIsotipoRef}
               onUpload={subirIsotipoFile}
@@ -426,6 +427,7 @@ function LogoSlot({
   fileRef,
   onUpload,
   onDelete,
+  redondo = false,
 }: {
   titulo: string;
   descripcion: string;
@@ -435,6 +437,8 @@ function LogoSlot({
   fileRef: React.RefObject<HTMLInputElement | null>;
   onUpload: (file: File) => void;
   onDelete: () => void;
+  /** El isotipo se ve SIEMPRE redondo en el software: la vista previa también. */
+  redondo?: boolean;
 }) {
   return (
     <div className="space-y-2 rounded-lg border bg-card p-3">
@@ -448,7 +452,17 @@ function LogoSlot({
       >
         {url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={titulo} className="max-h-full max-w-full object-contain p-3" />
+          <img
+            src={url}
+            alt={titulo}
+            className={
+              redondo
+                // Tal cual se verá en el software: recortado en círculo, aunque
+                // la imagen que se sube sea cuadrada.
+                ? "h-24 w-24 rounded-full object-cover"
+                : "max-h-full max-w-full object-contain p-3"
+            }
+          />
         ) : (
           <ImageIcon className="h-10 w-10 text-muted-foreground/40" />
         )}

@@ -17,6 +17,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+/**
+ * Icono de la empresa. SIEMPRE redondo, suba quien suba lo que suba.
+ *
+ * El isotipo se recorta en círculo aunque la imagen sea cuadrada (regla de
+ * Iván): un isotipo cuadrado dentro de un recuadro con las esquinas
+ * redondeadas no se ve redondo, se ve como una pastilla, y desentonaba con el
+ * resto de iconos de la barra. Por eso `object-cover` y no `object-contain`:
+ * la imagen llena el círculo en vez de dejar esquinas al aire.
+ */
 function EmpresaAvatar({ empresa, logoUrl, size = "md" }: { empresa: Empresa; logoUrl?: string; size?: "sm" | "md" }) {
   const cls = size === "sm" ? "h-5 w-5 text-[9px]" : "h-8 w-8 text-[11px]";
   if (logoUrl) {
@@ -24,13 +33,13 @@ function EmpresaAvatar({ empresa, logoUrl, size = "md" }: { empresa: Empresa; lo
       <img
         src={logoUrl}
         alt={empresa.nombre}
-        className={`${cls} rounded-md object-contain shrink-0`}
+        className={`${cls} rounded-full object-cover shrink-0`}
       />
     );
   }
   return (
     <div
-      className={`${cls} rounded-md flex items-center justify-center font-bold text-white shrink-0`}
+      className={`${cls} rounded-full flex items-center justify-center font-bold text-white shrink-0`}
       style={{ backgroundColor: empresa.color }}
     >
       {empresa.iniciales}

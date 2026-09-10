@@ -72,12 +72,12 @@ export function EmpresaSwitcherMobile({ empresaActual, empresas, size = "md" }: 
             alt={actual?.nombre ?? ""}
             width={px}
             height={px}
-            className={`${box} shrink-0 rounded-md object-contain`}
+            className={`${box} shrink-0 rounded-full object-cover`}
             unoptimized
           />
         ) : (
           <span
-            className={`${box} flex shrink-0 items-center justify-center overflow-hidden rounded-md`}
+            className={`${box} flex shrink-0 items-center justify-center overflow-hidden rounded-full`}
             style={{ backgroundColor: actual?.color ?? "hsl(220 70% 45%)" }}
           >
             {actual ? (
@@ -123,12 +123,12 @@ export function EmpresaSwitcherMobile({ empresaActual, empresas, size = "md" }: 
                           alt={e.nombre}
                           width={28}
                           height={28}
-                          className="h-7 w-7 shrink-0 rounded-md object-contain"
+                          className="h-7 w-7 shrink-0 rounded-full object-cover"
                           unoptimized
                         />
                       ) : (
                         <span
-                          className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full"
                           style={{ backgroundColor: e.color ?? "hsl(220 70% 45%)" }}
                         >
                           <span className="text-[10px] font-bold text-white">
