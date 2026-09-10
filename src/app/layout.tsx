@@ -30,11 +30,16 @@ export const metadata: Metadata = {
   // nuevo (mismo truco que en el manifest de la PWA).
   //
   // v3 = 08-09-2026, redondo y aligerado de 536 KB a 36 KB.
+  // v4 = 10-09-2026. El dibujo NO ha cambiado: el archivo que se sirve ya es
+  // redondo (esquinas transparentes), pero en los navegadores que se quedaron
+  // con el cuadrado guardado seguía saliendo en pico — el archivo de favicons
+  // del navegador no se vuelve a pedir si la dirección es la misma. Subir el
+  // número es lo único que le obliga a bajarlo otra vez.
   icons: {
-    icon: "/icon.png?v=3",
-    shortcut: "/icon.png?v=3",
+    icon: "/icon.png?v=4",
+    shortcut: "/icon.png?v=4",
     // iOS sigue con el cuadrado: la pantalla de inicio lo recorta ella.
-    apple: "/apple-icon.png?v=3",
+    apple: "/apple-icon.png?v=4",
   },
 };
 

@@ -317,9 +317,11 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                   {/* Fichaje: SUELTO y a la izquierda de la barra, fuera de la
                       píldora a propósito. Dentro se leía como una herramienta
                       más entre las de Google; fuera se ve como lo que es, el
-                      botón de entrar y salir de tu turno. Solo el icono; el
-                      tiempo aparece al pasar por encima. No se pinta a quien no
-                      puede fichar. */}
+                      botón de entrar y salir de tu turno. En reposo es solo su
+                      círculo —mismo estilo que los iconos de la píldora—; el
+                      tiempo y los botones de fichar/desfichar se abren hacia la
+                      izquierda al ponerse encima o al pulsarlo. No se pinta a
+                      quien no puede fichar. */}
                   <div className="hidden md:flex items-center">
                     <FichajePill />
                   </div>
