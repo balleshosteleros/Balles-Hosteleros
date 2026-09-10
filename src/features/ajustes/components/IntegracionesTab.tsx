@@ -35,7 +35,11 @@ import {
 import { FichaGooglePanel } from "@/features/ajustes/components/FichaGooglePanel";
 import { AgoraPanel } from "@/features/ajustes/components/AgoraPanel";
 import { RevolutPanel } from "@/features/ajustes/components/RevolutPanel";
+import { MetaPanel } from "@/features/ajustes/components/MetaPanel";
+import { getMetaEstadoAction } from "@/features/marketing/meta-ads/actions/cuenta-actions";
 import { getRevolutConfig } from "@/features/ajustes/actions/revolut-config-actions";
+import { BuzonesCorreoPanel } from "@/features/ajustes/components/BuzonesCorreoPanel";
+import { listarBuzonesAction } from "@/features/direccion/correo-auditoria/actions/buzones-actions";
 
 /** Estado de conexión de cada integración. */
 type EstadoConexion = "conectado" | "sin_conectar";
@@ -67,6 +71,18 @@ const INTEGRACIONES: IntegracionDef[] = [
     resumen: "Cobra por adelantado las reservas y los tickets.",
     logo: "revolut",
   },
+  {
+    key: "meta",
+    nombre: "Meta",
+    resumen: "Lleva los anuncios de Facebook e Instagram desde Marketing.",
+    logo: "meta",
+  },
+  {
+    key: "correo",
+    nombre: "Correo",
+    resumen: "Cuenta el correo de cada área y con quién habla.",
+    logo: "gmail",
+  },
 ];
 
 export function IntegracionesTab() {
@@ -85,7 +101,9 @@ export function IntegracionesTab() {
       getEmpresaPlaceInfo(),
       getAgoraIntegracion(),
       getRevolutConfig(),
-    ]).then(([place, agora, revolut]) => {
+      getMetaEstadoAction(),
+      listarBuzonesAction(),
+    ]).then(([place, agora, revolut, meta, buzones]) => {
       setEstados({
         google: place?.googlePlaceId ? "conectado" : "sin_conectar",
         agora:
@@ -98,6 +116,17 @@ export function IntegracionesTab() {
           revolut.configurado && revolut.activo && revolut.webhookConfigurado
             ? "conectado"
             : "sin_conectar",
+        // Conectado solo cuando además de la cuenta hay tope de gasto y está
+        // activa: sin tope no se puede lanzar nada, así que no está lista.
+        meta:
+          meta.ok && meta.data.activo && meta.data.adAccountId
+            ? "conectado"
+            : "sin_conectar",
+        // Conectado en cuanto haya AL MENOS un buzón dando datos: con uno solo
+        // el panel de auditoría ya dice algo. Cuántos faltan se ve al abrirlo.
+        correo: buzones.some((b) => b.conexion === "conectado")
+          ? "conectado"
+          : "sin_conectar",
       });
       setCargando(false);
     });
@@ -208,6 +237,8 @@ export function IntegracionesTab() {
               {abierta === "google" ? <FichaGooglePanel /> : null}
               {abierta === "agora" ? <AgoraPanel /> : null}
               {abierta === "revolut" ? <RevolutPanel /> : null}
+              {abierta === "meta" ? <MetaPanel /> : null}
+              {abierta === "correo" ? <BuzonesCorreoPanel /> : null}
             </>
           ) : null}
         </DialogContent>

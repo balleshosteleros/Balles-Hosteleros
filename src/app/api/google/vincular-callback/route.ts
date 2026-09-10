@@ -6,6 +6,7 @@ import {
   upsertAccount,
   writeAccountsTo,
 } from "@/lib/google/accounts";
+import { registrarBuzonDesdeVinculacion } from "@/features/direccion/correo-auditoria/services/buzones";
 
 const TEMP_CLEAR = { path: "/", maxAge: 0 };
 
@@ -166,6 +167,22 @@ export async function GET(request: Request) {
     refreshToken: tokens.refresh_token,
   });
   await writeAccountsTo(response.cookies, actualizadas, user.id);
+
+  /*
+    Auditoría de correos (PRP-094): si el correo que se acaba de vincular es un
+    buzón de la empresa, el permiso se guarda TAMBIÉN a nombre del buzón.
+
+    Es lo que hace que la conexión la sostenga la empresa y no la persona: lo
+    vincule quien lo vincule vale, y cuando alguien se quite luego la cuenta de
+    su selector personal, la auditoría siga contando. Si el correo no es un
+    buzón auditado, no hace nada. No puede romper la vinculación: traga sus
+    propios errores.
+  */
+  await registrarBuzonDesdeVinculacion(
+    email,
+    tokens.refresh_token,
+    user.id,
+  );
 
   limpiarTemporales(response);
   return response;

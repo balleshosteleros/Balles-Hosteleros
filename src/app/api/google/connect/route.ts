@@ -61,6 +61,14 @@ export async function GET(request: Request) {
   const origin = url.origin;
   const switchAccount = url.searchParams.get("switch") === "1";
   const nextPath = url.searchParams.get("next") || "/";
+  /*
+    Correo concreto que se quiere vincular (PRP-094). Google lo usa para
+    preseleccionar esa cuenta en su pantalla. Es importante al conectar un buzón
+    de la empresa desde Ajustes: sin esto, la pantalla de Google sale con la
+    cuenta que ya está dentro y es facilísimo conectar el buzón equivocado —y
+    entonces la auditoría contaría el correo de otra persona.
+  */
+  const hint = url.searchParams.get("hint")?.trim() || "";
 
   // Vincular es una acción del usuario que ya está dentro. Sin sesión no hay
   // a quién asociar la cuenta, así que al login.
@@ -104,6 +112,8 @@ export async function GET(request: Request) {
   );
   authUrl.searchParams.set("include_granted_scopes", "true");
   authUrl.searchParams.set("state", state);
+  // Sugerencia, no imposición: si el usuario elige otra cuenta, Google le deja.
+  if (hint) authUrl.searchParams.set("login_hint", hint);
 
   const response = NextResponse.redirect(authUrl.toString());
   response.cookies.set("g_vincular_next", nextPath, TEMP_OPTS);
