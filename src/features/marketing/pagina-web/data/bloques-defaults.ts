@@ -156,5 +156,7 @@ export function crearBloqueDefault(tipo: BloqueTipo, orden: number): Bloque {
           imagenes: [],
         },
       };
+    case "imagen":
+      return { ...base, tipo, datos: { url: "", alt: "", ancho: "contenido" } };
   }
 }

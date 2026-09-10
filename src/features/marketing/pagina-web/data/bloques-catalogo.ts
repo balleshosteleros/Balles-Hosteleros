@@ -45,6 +45,7 @@ export const BLOQUES_CATALOGO: BloqueCatalogoEntrada[] = [
   { tipo: "instagram", label: "Instagram", descripcion: "Tarjeta de perfil con seguidores y verificado", icon: Images },
   { tipo: "historia", label: "Nuestra historia", descripcion: "Relato + foto + valoración de Google", icon: Images },
   { tipo: "premios", label: "Premios", descripcion: "Insignias y reconocimientos (Restaurant Guru…)", icon: Images },
+  { tipo: "imagen", label: "Imagen", descripcion: "Una imagen sola, a tamaño completo", icon: ImageIcon },
   { tipo: "collage_carta", label: "Collage + carta", descripcion: "Mosaico de fotos con el botón a la carta digital", icon: Images },
 ];
 

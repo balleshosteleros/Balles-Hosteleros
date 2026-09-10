@@ -118,6 +118,17 @@ export function BloqueRenderer({ bloque, modo }: Props) {
           text={`Bolsa inspectores · ${bloque.datos.titulo}`}
         />
       );
+    case "imagen":
+      return bloque.datos.url ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={bloque.datos.url}
+          alt={bloque.datos.alt}
+          className="max-h-40 w-full rounded-md object-contain"
+        />
+      ) : (
+        <PlaceholderEtiqueta text="Imagen · sin subir" />
+      );
     default: {
       const catalogo = getCatalogo((bloque as Bloque).tipo);
       return <PlaceholderEtiqueta text={catalogo.label} />;

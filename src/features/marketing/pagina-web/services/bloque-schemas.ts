@@ -213,6 +213,13 @@ export const historiaDatosSchema = z.object({
   rating_href: z.string().url().max(1000).optional(),
 });
 
+export const imagenDatosSchema = z.object({
+  url: z.string().url().max(1000),
+  alt: z.string().max(200),
+  ancho: z.enum(["contenido", "completo"]),
+  pie: z.string().max(300).optional(),
+});
+
 export const instagramDatosSchema = z.object({
   usuario: z.string().min(1).max(60),
   titulo: z.string().min(1).max(200),
@@ -273,6 +280,7 @@ export const bloqueSchema = z.discriminatedUnion("tipo", [
   bloqueBaseSchema.extend({ tipo: z.literal("premios"), datos: premiosDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("historia"), datos: historiaDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("instagram"), datos: instagramDatosSchema }),
+  bloqueBaseSchema.extend({ tipo: z.literal("imagen"), datos: imagenDatosSchema }),
 ]);
 
 export const bloquesArraySchema = z.array(bloqueSchema).max(80);

@@ -29,6 +29,7 @@ export const BLOQUE_TIPOS = [
   "premios",
   "historia",
   "instagram",
+  "imagen",
 ] as const;
 
 export type BloqueTipo = (typeof BLOQUE_TIPOS)[number];
@@ -182,6 +183,19 @@ export interface RedesDatos {
   descripcion?: string;
 }
 
+/**
+ * Una imagen sola, a tamaño completo. Nace para los mockups: el bloque `cta`
+ * usa la foto de FONDO —desenfocada y con texto encima—, así que una pieza de
+ * diseño metida ahí se veía borrosa y recortada. Aquí la imagen se ve entera.
+ */
+export interface ImagenDatos {
+  url: string;
+  alt: string;
+  /** "contenido" la deja centrada con márgenes; "completo" la lleva a sangre. */
+  ancho: "contenido" | "completo";
+  pie?: string;
+}
+
 export type Bloque =
   | (BloqueBase & { tipo: "hero"; datos: HeroDatos })
   | (BloqueBase & { tipo: "galeria"; datos: GaleriaDatos })
@@ -200,7 +214,8 @@ export type Bloque =
   | (BloqueBase & { tipo: "collage_carta"; datos: CollageCartaDatos })
   | (BloqueBase & { tipo: "premios"; datos: PremiosDatos })
   | (BloqueBase & { tipo: "historia"; datos: HistoriaDatos })
-  | (BloqueBase & { tipo: "instagram"; datos: InstagramDatos });
+  | (BloqueBase & { tipo: "instagram"; datos: InstagramDatos })
+  | (BloqueBase & { tipo: "imagen"; datos: ImagenDatos });
 
 export type BloqueDatos<T extends BloqueTipo> = Extract<Bloque, { tipo: T }>["datos"];
 

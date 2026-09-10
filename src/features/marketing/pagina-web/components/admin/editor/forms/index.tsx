@@ -19,6 +19,7 @@ import { CollageCartaForm } from "./CollageCartaForm";
 import { PremiosForm } from "./PremiosForm";
 import { HistoriaForm } from "./HistoriaForm";
 import { InstagramForm } from "./InstagramForm";
+import { ImagenForm } from "./ImagenForm";
 
 export function BloqueForm({ bloque }: { bloque: Bloque }) {
   switch (bloque.tipo) {
@@ -58,5 +59,7 @@ export function BloqueForm({ bloque }: { bloque: Bloque }) {
       return <HistoriaForm bloque={bloque} />;
     case "instagram":
       return <InstagramForm bloque={bloque} />;
+    case "imagen":
+      return <ImagenForm bloque={bloque} />;
   }
 }

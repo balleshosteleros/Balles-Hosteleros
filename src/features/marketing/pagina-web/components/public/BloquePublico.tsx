@@ -60,7 +60,38 @@ export function BloquePublico({
       return <HistoriaPublica bloque={bloque} />;
     case "instagram":
       return <InstagramPublico bloque={bloque} contexto={contexto} />;
+    case "imagen":
+      return <ImagenPublica bloque={bloque} />;
   }
+}
+
+/**
+ * Una imagen sola, entera. Sin recortes ni desenfoque: el bloque nace para las
+ * piezas de diseño (mockups), donde recortar es destrozar la pieza.
+ */
+function ImagenPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "imagen" }> }) {
+  const { url, alt, ancho, pie } = bloque.datos;
+  if (!url) return null;
+
+  return (
+    <section className={ancho === "completo" ? "py-10 md:py-14" : "px-4 py-12 md:py-16"}>
+      <figure className={ancho === "completo" ? "" : "mx-auto max-w-6xl"}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imagenOptimizada(url, { width: 1800, quality: 82 })}
+          srcSet={srcSetOptimizado(url, [800, 1200, 1800, 2400])}
+          sizes={ancho === "completo" ? "100vw" : "(max-width: 768px) 100vw, 1152px"}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          className={`h-auto w-full ${ancho === "completo" ? "" : "rounded-xl"}`}
+        />
+        {pie ? (
+          <figcaption className="mt-3 text-center text-sm opacity-70">{pie}</figcaption>
+        ) : null}
+      </figure>
+    </section>
+  );
 }
 
 /**
