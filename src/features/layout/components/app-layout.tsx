@@ -51,6 +51,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { CamarasDrawer } from "@/features/camaras/components/CamarasDrawer";
 import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";
 import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
+import { FichajePill } from "@/features/mi-panel/components/FichajePill";
 import { PushEscritorioAviso } from "@/features/notificaciones/components/PushEscritorioAviso";
 import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
 import { CountdownOverlay } from "@/features/recorder/components/CountdownOverlay";
@@ -321,6 +322,11 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                     <div className="hidden md:flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5">
                       {/* Notificaciones — joya de la corona, la primera de la barra */}
                       <NotificacionBell variant="toolbar" />
+
+                      {/* Fichar sin salir de donde estés. Solo el icono; el
+                          tiempo aparece al pasar por encima. No se pinta a quien
+                          no puede fichar. */}
+                      <FichajePill />
 
                       {/* Separador visual */}
                       <span className="w-px h-5 bg-border mx-0.5" />

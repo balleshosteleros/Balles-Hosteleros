@@ -63,7 +63,7 @@ export function GateDocumentacion({
                 Nos falta documentación tuya
               </p>
               <p className="mt-0.5 text-[11px] leading-snug text-destructive/80">
-                Necesitamos que lo regularices.
+                Necesitamos que lo regularices: el software queda anulado hasta que la subas.
               </p>
             </div>
             <button
@@ -106,7 +106,8 @@ export function GateDocumentacion({
           Ir a fichar
         </Button>
         <p className="text-[11px] text-muted-foreground">
-          Fichar puedes hacerlo aunque no hayas subido nada. Lo demás se abre en cuanto lo subas.
+          El uso del software queda anulado hasta que subas tu documentación. Lo único que puedes
+          hacer mientras tanto es fichar.
         </p>
       </div>
     </div>
