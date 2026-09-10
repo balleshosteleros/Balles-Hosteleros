@@ -42,6 +42,7 @@ interface DepartamentoTileExt extends DepartamentoTile {
 
 const ALL_DEPARTAMENTOS: DepartamentoTileExt[] = [
   { key: "direccion",    modulo: "DIRECCIÓN",        label: "DIRECCIÓN",    href: "/direccion",    icon: Crown,           description: "Organigrama, cronogramas, aperturas",       color: "text-amber-600" },
+  { key: "producto",     modulo: "PRODUCTO",         label: "PRODUCTO",     href: "/producto",     icon: Boxes,           description: "Clientes del software, escuela",             color: "text-indigo-600" },
   { key: "sala",         modulo: "SALA",             label: "SALA",         href: "/sala",         icon: UtensilsCrossed, description: "POS, reservas, clientes",                    color: "text-rose-600" },
   { key: "cocina",       modulo: "COCINA",           label: "COCINA",       href: "/cocina",       icon: ChefHat,         description: "Comandas, escandallos, partidas",            color: "text-orange-600" },
   { key: "gerencia",     modulo: "GERENCIA",         label: "GERENCIA",     href: "/gerencia",     icon: Briefcase,       description: "Mantenimiento, cierres, ratios, comunicados", color: "text-blue-600" },
@@ -52,7 +53,6 @@ const ALL_DEPARTAMENTOS: DepartamentoTileExt[] = [
   { key: "contabilidad", modulo: "CONTABILIDAD",     label: "CONTABILIDAD", href: "/contabilidad", icon: Calculator,      description: "Facturas, transacciones, conciliación",      color: "text-cyan-600" },
   { key: "gestoria",     modulo: "GESTORÍA",         label: "GESTORÍA",     href: "/gestoria",     icon: FileText,        description: "Fiscal y laboral",                   color: "text-sky-600" },
   { key: "juridico",     modulo: "JURÍDICO",         label: "JURÍDICO",     href: "/juridico",     icon: Scale,           description: "Procesos legales",                           color: "text-fuchsia-600" },
-  { key: "producto",     modulo: "PRODUCTO",         label: "PRODUCTO",     href: "/producto",     icon: Boxes,           description: "Clientes del software, escuela",             color: "text-indigo-600" },
 ];
 
 // Subtítulo según el nivel real de acceso: DIRECCIÓN (admin de plataforma) ve

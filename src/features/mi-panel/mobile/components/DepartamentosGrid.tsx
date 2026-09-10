@@ -43,6 +43,7 @@ type Depto = {
 // económica/legal (índigo→violeta).
 const DEPARTAMENTOS: Depto[] = [
   { key: "direccion", modulo: "DIRECCIÓN", label: "Dirección", icon: Crown, hue: 211 },
+  { key: "producto", modulo: "PRODUCTO", label: "Producto", icon: Boxes, hue: 252 },
   { key: "sala", modulo: "SALA", label: "Sala", icon: UtensilsCrossed, hue: 211 },
   { key: "cocina", modulo: "COCINA", label: "Cocina", icon: ChefHat, hue: 211 },
   { key: "gerencia", modulo: "GERENCIA", label: "Gerencia", icon: Briefcase, hue: 211 },
@@ -53,7 +54,6 @@ const DEPARTAMENTOS: Depto[] = [
   { key: "contabilidad", modulo: "CONTABILIDAD", label: "Contabilidad", icon: Calculator, hue: 231 },
   { key: "gestoria", modulo: "GESTORÍA", label: "Gestoría", icon: FileText, hue: 231 },
   { key: "juridico", modulo: "JURÍDICO", label: "Jurídico", icon: Scale, hue: 252 },
-  { key: "producto", modulo: "PRODUCTO", label: "Producto", icon: Boxes, hue: 252 },
 ];
 
 export function DepartamentosGrid() {

@@ -217,6 +217,7 @@ export const productoSubs: SubItem[] = [
 
 export const allSections: Section[] = [
   { key: "direccion", modulo: "DIRECCIÓN", icon: Crown, label: "DIRECCIÓN", prefix: "/direccion", items: direccionSubs, linkTo: "/direccion" },
+  { key: "producto", modulo: "PRODUCTO", icon: Boxes, label: "PRODUCTO", prefix: "/producto", items: productoSubs, linkTo: "/producto" },
   { key: "sala", modulo: "SALA", icon: UtensilsCrossed, label: "SALA", prefix: "/sala", items: salaSubs, linkTo: "/sala" },
   { key: "cocina", modulo: "COCINA", icon: ChefHat, label: "COCINA", prefix: "/cocina", items: cocinaSubs, linkTo: "/cocina" },
   { key: "logistica", modulo: "LOGÍSTICA", icon: Package, label: "LOGÍSTICA", prefix: "/logistica", items: logisticaSubs, linkTo: "/logistica" },
@@ -227,7 +228,6 @@ export const allSections: Section[] = [
   { key: "calidad", modulo: "CALIDAD", icon: CheckCircle2, label: "CALIDAD", prefix: "/calidad", items: calidadSubs, linkTo: "/calidad" },
   { key: "gestoria", modulo: "GESTORÍA", icon: FileText, label: "GESTORÍA", prefix: "/gestoria", items: gestoriaSubs, linkTo: "/gestoria" },
   { key: "juridico", modulo: "JURÍDICO", icon: Scale, label: "JURÍDICO", prefix: "/juridico", items: juridicoSubs, linkTo: "/juridico" },
-  { key: "producto", modulo: "PRODUCTO", icon: Boxes, label: "PRODUCTO", prefix: "/producto", items: productoSubs, linkTo: "/producto" },
 ];
 
 // ─── Módulos (raíz: icono + label corto) ───────────────────────────────────
