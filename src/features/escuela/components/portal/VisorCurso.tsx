@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Check, ChevronLeft, Circle, Clock } from "lucide-react";
+import { Check, ChevronLeft, Circle, Clock, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/shared/lib/utils";
 import { analizarVideo } from "../../lib/video";
@@ -149,11 +149,27 @@ export function VisorCurso({
         <aside className="space-y-4 lg:max-h-[calc(100vh-160px)] lg:overflow-y-auto">
           {curso.modulos.map((m) => (
             <section key={m.id} className="overflow-hidden rounded-2xl border bg-background">
-              <header className="flex items-baseline justify-between gap-2 border-b px-4 py-3">
-                <h3 className="text-sm font-semibold uppercase tracking-wide">{m.titulo}</h3>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {m.lecciones.length} {m.lecciones.length === 1 ? "lección" : "lecciones"}
-                </span>
+              <header className="border-b px-4 py-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide">{m.titulo}</h3>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {m.lecciones.length} {m.lecciones.length === 1 ? "lección" : "lecciones"}
+                  </span>
+                </div>
+                {/* La presentación del módulo, para llevársela. El enlace va
+                    firmado y caduca: el PDF no queda al alcance de cualquiera. */}
+                {m.documentoUrl ? (
+                  <a
+                    href={m.documentoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium hover:underline"
+                    style={{ color: "var(--marca-primario)" }}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Presentación del módulo
+                  </a>
+                ) : null}
               </header>
               <ul>
                 {m.lecciones.map((l, i) => {

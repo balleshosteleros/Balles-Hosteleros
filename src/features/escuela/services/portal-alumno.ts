@@ -61,6 +61,9 @@ export interface ModuloPortal {
   titulo: string;
   descripcion: string;
   orden: number;
+  /** Presentación del módulo: URL firmada (1 h) del PDF, si lo tiene. */
+  documentoUrl: string | null;
+  documentoNombre: string | null;
   lecciones: LeccionPortal[];
 }
 
@@ -249,7 +252,7 @@ export async function getCursoDetalle(
     supa.from("formacion_cursos").select("id, titulo, descripcion, cover").eq("id", cursoId).maybeSingle(),
     supa
       .from("formacion_secciones")
-      .select("id, titulo, descripcion, orden, publicado")
+      .select("id, titulo, descripcion, orden, publicado, documento_path, documento_nombre")
       .eq("curso_id", cursoId)
       .order("orden", { ascending: true }),
     supa
@@ -273,15 +276,36 @@ export async function getCursoDetalle(
     orden: number | null;
   };
 
-  const modulosPortal: ModuloPortal[] = (
-    (modulos ?? []) as { id: string; titulo: string; descripcion: string | null; orden: number; publicado: boolean | null }[]
-  )
-    .filter((m) => m.publicado !== false)
+  type ModuloRow = {
+    id: string;
+    titulo: string;
+    descripcion: string | null;
+    orden: number;
+    publicado: boolean | null;
+    documento_path: string | null;
+    documento_nombre: string | null;
+  };
+  const modulosVisibles = ((modulos ?? []) as ModuloRow[]).filter((m) => m.publicado !== false);
+
+  // El bucket es privado: la presentación se sirve con una URL firmada de una
+  // hora, nunca con la ruta a pelo.
+  const firmadas = new Map<string, string>();
+  const rutas = modulosVisibles.map((m) => m.documento_path).filter((r): r is string => !!r);
+  if (rutas.length) {
+    const { data: urls } = await supa.storage.from("formacion-docs").createSignedUrls(rutas, 60 * 60);
+    for (const u of urls ?? []) {
+      if (u.path && u.signedUrl) firmadas.set(u.path, u.signedUrl);
+    }
+  }
+
+  const modulosPortal: ModuloPortal[] = modulosVisibles
     .map((m) => ({
       id: m.id,
       titulo: m.titulo ?? "",
       descripcion: m.descripcion ?? "",
       orden: m.orden ?? 0,
+      documentoUrl: m.documento_path ? firmadas.get(m.documento_path) ?? null : null,
+      documentoNombre: m.documento_nombre ?? null,
       lecciones: ((lecciones ?? []) as LeccionRow[])
         .filter((l) => l.seccion_id === m.id)
         .map((l) => ({

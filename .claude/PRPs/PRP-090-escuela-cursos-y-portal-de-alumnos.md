@@ -215,9 +215,17 @@ ALTER TABLE public.escuela_accesos    ENABLE ROW LEVEL SECURITY;
 
 Los vídeos de GoHighLevel **no sirven**: viven dentro de su reproductor. Los buenos son los que ya están en YouTube. Por eso el back-office lleva un importador: se pega el enlace de una lista de reproducción o de un canal, enseña qué va a traer y crea las lecciones con su título y su vídeo. Sin clave de API y sin cuenta (lee el `ytInitialData` de la página), y vale con listas «no listadas». Idempotente por `video_url`.
 
+### Contenido cargado (09/10-09-2026)
+
+- **Máster** montado entero desde el **TEMARIO** de Drive (`2.PRODUCTO / MASTER / TEMARIO`): 10 módulos, 53 lecciones, con la práctica de cada módulo.
+- **52 de 53 lecciones con su vídeo**, traídos de la lista de YouTube «Master en Direccion Hostelera», que está OCULTA (oculto ≠ privado: se incrusta igual). Falta el «MODULO 8 B», así que «8.2 Clientes insatisfechos» se quedó sin vídeo.
+- El curso gratuito «Delega tu restaurante y deja de ser un esclavo» (8 lecciones) quedó como curso APARTE.
+- **Presentaciones del módulo**: `formacion_secciones` gana `documento_path`/`documento_nombre`; las 8 del máster (94 MB) subidas a `formacion-docs` desde el Drive montado en local. Dirección y Despedida no tienen presentación en Drive.
+
 ### Lo que falta
 
-- **El contenido real de GoHighLevel**: la dirección de YouTube de cada lección y los textos del resto de módulos. Está detrás del login de la escuela vieja; hace falta acceso o un volcado.
+- **Los textos** de cada lección (solo está el de la primera): siguen en la escuela vieja, detrás de su login. En Drive hay las transcripciones por módulo, que podrían servir.
+- El vídeo que falta («MODULO 8 B») y los de los otros dos programas (Sistemas operativos, Expansión).
 - **El dominio** `laescuela.balleshosteleros.com`: es lo ÚLTIMO, cuando el contenido esté verificado (ver decisión 5).
 - Fase 8 (test y certificado), que sigue sin empezar.
 
