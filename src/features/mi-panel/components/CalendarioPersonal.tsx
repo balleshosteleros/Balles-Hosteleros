@@ -47,13 +47,24 @@ function ymd(d: Date): string {
   return `${y}-${m}-${dd}`;
 }
 
-type EstadoDia = "vacaciones" | "baja" | "permiso" | "hoy" | "trabajado" | "trabajar" | "libre";
+type EstadoDia = "vacaciones" | "baja" | "permiso" | "hoy" | "trabajado" | "trabajar" | "libre" | "sinDato";
 
 interface DiaInfo {
   estado: EstadoDia;
   badgeText: string;
   horario: string;
 }
+
+/**
+ * LIBRE Y SIN HORARIO NO SON LO MISMO (regla de Iván).
+ *
+ * "Libre" es una afirmación sobre tu jornada: tienes horario y ese día
+ * descansas. "Sin horario" es la AUSENCIA del dato: nadie te ha asignado
+ * horario, o tu asignación ya terminó. El calendario pintaba los dos casos de
+ * gris con el rótulo LIBRE, así que a quien no tenía horario puesto el mes
+ * entero le salía de días libres — y no libraba: es que no había horario.
+ */
+const TEXTO_SIN_HORARIO = "Sin horario asignado";
 
 function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: string): DiaInfo {
   const isToday = fecha === todayKey;
@@ -71,14 +82,22 @@ function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: st
   const trabajaPrevisto = previsto?.trabaja ?? false;
   const textoPrevisto = previsto?.texto ? previsto.texto : "—";
 
+  // Un día sin horario se explica igual sea hoy o cualquier otro: el dato es el
+  // mismo. Hoy conserva su color amarillo —ubicarse en el mes ayuda— pero no un
+  // vocabulario propio.
+  const sinHorario = !previsto && !info?.fichado;
   const horarioFichado = info?.fichado
     ? `${formatHorasDecimal(info.horasFichaje)} fichadas`
-    : textoPrevisto;
+    : sinHorario
+      ? TEXTO_SIN_HORARIO
+      : textoPrevisto;
 
   if (isToday) return { estado: "hoy", badgeText: "HOY", horario: horarioFichado };
   if (info?.fichado || (trabajaPrevisto && isPast)) return { estado: "trabajado", badgeText: "TRABAJADO", horario: horarioFichado };
   if (trabajaPrevisto && isFuture) return { estado: "trabajar", badgeText: "TRABAJAR", horario: textoPrevisto };
-  return { estado: "libre", badgeText: "LIBRE", horario: previsto ? "—" : textoPrevisto };
+  // Día fuera de toda vigencia de horario: no se afirma que libras.
+  if (!previsto) return { estado: "sinDato", badgeText: "SIN HORARIO", horario: TEXTO_SIN_HORARIO };
+  return { estado: "libre", badgeText: "LIBRE", horario: "—" };
 }
 
 const TW_CLASSES: Record<EstadoDia, { bg: string; badge: string; horario: string }> = {
@@ -89,6 +108,9 @@ const TW_CLASSES: Record<EstadoDia, { bg: string; badge: string; horario: string
   trabajado:  { bg: "bg-emerald-50 hover:bg-emerald-100 border border-emerald-200", badge: "bg-emerald-500 text-white", horario: "text-emerald-700" },
   trabajar:   { bg: "bg-orange-50 hover:bg-orange-100 border border-orange-200", badge: "bg-orange-500 text-white", horario: "text-orange-700" },
   libre:      { bg: "bg-slate-50 hover:bg-slate-100 border border-slate-200",     badge: "bg-slate-400 text-white",  horario: "text-slate-500" },
+  // Sin horario = sin dato: fondo en blanco y borde discontinuo, para que a
+  // simple vista no se confunda con un día libre (gris relleno).
+  sinDato:    { bg: "bg-white hover:bg-slate-50 border border-dashed border-slate-300", badge: "bg-slate-200 text-slate-600", horario: "text-slate-400" },
 };
 
 const HEX_STYLES: Record<EstadoDia, { bg: string; border: string; badge: string; text: string }> = {
@@ -99,6 +121,7 @@ const HEX_STYLES: Record<EstadoDia, { bg: string; border: string; badge: string;
   trabajado:  { bg: "#ecfdf5", border: "#a7f3d0", badge: "#10b981", text: "#047857" },
   trabajar:   { bg: "#fff7ed", border: "#fed7aa", badge: "#f97316", text: "#c2410c" },
   libre:      { bg: "#f8fafc", border: "#e2e8f0", badge: "#94a3b8", text: "#64748b" },
+  sinDato:    { bg: "#ffffff", border: "#cbd5e1", badge: "#e2e8f0", text: "#94a3b8" },
 };
 
 interface CalendarioPersonalProps {
@@ -309,6 +332,7 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
       { color: HEX_STYLES.hoy.badge, text: "Hoy" },
       { color: HEX_STYLES.trabajar.badge, text: "Trabajar" },
       { color: HEX_STYLES.libre.badge, text: "Libre" },
+      { color: HEX_STYLES.sinDato.badge, text: "Sin horario" },
       { color: HEX_STYLES.vacaciones.badge, text: "Vacaciones" },
       { color: HEX_STYLES.baja.badge, text: "Baja médica" },
       { color: HEX_STYLES.permiso.badge, text: "Permiso" },
@@ -336,7 +360,6 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
   .legend{margin-top:14px;display:flex;flex-wrap:wrap;gap:10px;font-size:10px;color:#64748b}
   .leg-item{display:inline-flex;align-items:center;gap:4px}
   .sw{width:10px;height:10px;border-radius:2px;display:inline-block}
-  .footer-note{margin-top:8px;font-size:9px;font-style:italic;color:#94a3b8}
   @media print{body{padding:14px}.cell{min-height:64px}}
 </style></head>
 <body>
@@ -351,7 +374,6 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
   <div class="grid">${headersHtml}</div>
   <div class="grid" style="margin-top:4px">${cellsHtml}</div>
   <div class="legend">${leyendaHtml}</div>
-  <div class="footer-note">Horario provisional (mock)</div>
   <script>window.addEventListener("load",function(){setTimeout(function(){window.print();},200);});</script>
 </body></html>`;
 
@@ -422,12 +444,12 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-yellow-500" /> Hoy</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-orange-500" /> Trabajar</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-slate-400" /> Libre</span>
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-dashed border-slate-400 bg-white" /> Sin horario</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-500" /> Vacaciones</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-rose-500" /> Baja médica</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-violet-500" /> Permiso</span>
         <span className="flex items-center gap-1"><AlertCircle className="h-3 w-3 text-rose-500" /> Festivo</span>
         <span className="flex items-center gap-1"><Info className="h-3 w-3 text-sky-500" /> Víspera</span>
-        <span className="ml-auto italic">Horario provisional (mock)</span>
       </div>
     </Card>
   );
