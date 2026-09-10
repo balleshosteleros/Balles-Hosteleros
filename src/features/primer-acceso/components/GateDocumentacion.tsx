@@ -30,10 +30,13 @@ const RUTAS_LIBRES = ["/m/fichajes", "/mi-panel/fichajes"];
 export function GateDocumentacion({
   activo,
   modo,
+  bloquea,
   children,
 }: {
   activo: boolean;
   modo: ModoPrimerAcceso;
+  /** false = solo se avisa (DIRECCIÓN); true = se tapa la pantalla. */
+  bloquea: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -43,12 +46,14 @@ export function GateDocumentacion({
 
   const esFichaje = RUTAS_LIBRES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
 
+  // Quien no se bloquea (DIRECCIÓN) ve el mismo recuadro que en el fichaje, en
+  // todas las pantallas, pero sigue trabajando con normalidad.
   // Fichando: pasa, pero con el recuadro rojo bien visible.
   //
   // Rojo y no ámbar: en ámbar sobre fondo amarillo parecía un aviso de virus del
   // navegador y la gente lo ignora. Un recuadro rojo limpio, con el borde y el
   // texto como único color, se lee como lo que es: la empresa reclamando algo.
-  if (esFichaje) {
+  if (esFichaje || !bloquea) {
     return (
       <>
         <div className="p-3 pb-0">
@@ -91,8 +96,17 @@ export function GateDocumentacion({
         <Button className="w-full" onClick={() => router.push("/primer-acceso")}>
           Subirlo ahora
         </Button>
+        {/* Decir «puedes fichar» sin dar forma de llegar al fichaje dejaba a la
+            persona mirando una frase que no podía usar. */}
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => router.push("/m/fichajes")}
+        >
+          Ir a fichar
+        </Button>
         <p className="text-[11px] text-muted-foreground">
-          Puedes fichar aunque no lo hayas subido.
+          Fichar puedes hacerlo aunque no hayas subido nada. Lo demás se abre en cuanto lo subas.
         </p>
       </div>
     </div>

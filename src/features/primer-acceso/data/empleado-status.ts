@@ -85,9 +85,22 @@ async function getCtx() {
 }
 
 export const getEmpleadoGuardStatus = cache(
-  async (): Promise<{ shouldShowWizard: boolean; hasUser: boolean; modo: ModoPrimerAcceso }> => {
+  async (): Promise<{
+    shouldShowWizard: boolean;
+    hasUser: boolean;
+    modo: ModoPrimerAcceso;
+    /**
+     * Si TAPAR la pantalla o solo avisar.
+     *
+     * A DIRECCIÓN se le avisa pero no se le bloquea: es quien lleva la recogida
+     * y quien tiene que poder entrar a ver cómo va. Bloqueándola se quedaba sin
+     * poder usar el sistema entero por su propio aviso — le pasó a Iván nada más
+     * activarlo, atrapado en su propia pantalla.
+     */
+    bloquea: boolean;
+  }> => {
     const { supabase, user } = await getCtx();
-    if (!user) return { shouldShowWizard: false, hasUser: false, modo: "alta" };
+    if (!user) return { shouldShowWizard: false, hasUser: false, modo: "alta", bloquea: false };
 
     // Un trabajador en VARIAS empresas tiene una ficha por empresa, así que aquí
     // pueden venir 2+ filas. Con `.maybeSingle()` la consulta fallaba y devolvía
@@ -110,19 +123,34 @@ export const getEmpleadoGuardStatus = cache(
         .eq("user_id", user.id);
 
       if (!fichas || fichas.length === 0) {
-        return { shouldShowWizard: false, hasUser: true, modo: "alta" };
+        return { shouldShowWizard: false, hasUser: true, modo: "alta", bloquea: false };
       }
+
+      // DIRECCIÓN (rol con `es_admin_plataforma`) recibe el aviso, no el bloqueo.
+      const { data: quien } = await supabase
+        .from("usuarios")
+        .select("empresa_roles(es_admin_plataforma)")
+        .eq("id", user.id)
+        .maybeSingle();
+      const rol = (quien as Record<string, unknown> | null)?.empresa_roles as
+        | { es_admin_plataforma?: boolean }
+        | { es_admin_plataforma?: boolean }[]
+        | null
+        | undefined;
+      const esDireccion = Array.isArray(rol)
+        ? Boolean(rol[0]?.es_admin_plataforma)
+        : Boolean(rol?.es_admin_plataforma);
 
       // Una baja no tiene que rellenar nada: se le deja entrar a lo suyo sin
       // atascarlo en un asistente que ya no le corresponde.
       const vigentes = fichas.filter((f) => f.estado === "Activo");
       if (vigentes.length === 0) {
-        return { shouldShowWizard: false, hasUser: true, modo: "alta" };
+        return { shouldShowWizard: false, hasUser: true, modo: "alta", bloquea: false };
       }
 
       // Alta pendiente manda sobre todo lo demás: es un onboarding entero.
       if (vigentes.some((f) => !f.perfil_completado)) {
-        return { shouldShowWizard: true, hasUser: true, modo: "alta" };
+        return { shouldShowWizard: true, hasUser: true, modo: "alta", bloquea: !esDireccion };
       }
 
       // Repesca: perfil hecho pero sin documentación. Los documentos viven en
@@ -132,13 +160,13 @@ export const getEmpleadoGuardStatus = cache(
         const faltaDoc = vigentes.some((f) =>
           DOCS_OBLIGATORIOS.some((c) => !f[c as keyof typeof f]),
         );
-        if (faltaDoc) return { shouldShowWizard: true, hasUser: true, modo: "documentos" };
+        if (faltaDoc) return { shouldShowWizard: true, hasUser: true, modo: "documentos", bloquea: !esDireccion };
       }
 
-      return { shouldShowWizard: false, hasUser: true, modo: "alta" };
+      return { shouldShowWizard: false, hasUser: true, modo: "alta", bloquea: false };
     } catch (e) {
       console.error("[guard] getEmpleadoGuardStatus falló — se deja entrar:", e);
-      return { shouldShowWizard: false, hasUser: true, modo: "alta" };
+      return { shouldShowWizard: false, hasUser: true, modo: "alta", bloquea: false };
     }
   },
 );

@@ -63,7 +63,7 @@ export default async function MobileLayout({ children }: { children: React.React
   // Guardia de sesión: en producción el middleware deja pasar /m sin sesión
   // (fail-open), así que un usuario sin sesión (o caducada) veía un panel vacío
   // en vez de ir al login. ?auth=1 evita el rebote del redirect móvil "/"→"/m".
-  const { shouldShowWizard, hasUser, modo } = await getEmpleadoGuardStatus();
+  const { shouldShowWizard, hasUser, modo, bloquea } = await getEmpleadoGuardStatus();
   if (!hasUser) {
     // `?auth=1` es OBLIGATORIO: sin él, la regla de `next.config.ts` devolvería
     // "/" → "/m" por user-agent móvil y entraríamos en un rebote infinito.
@@ -119,7 +119,7 @@ export default async function MobileLayout({ children }: { children: React.React
             por tramos hasta 1100px, que es donde la rejilla deja de estirarse.
       */}
       <main className="mx-auto w-full max-w-screen-sm flex-1 bg-transparent md:max-w-3xl lg:max-w-5xl xl:max-w-[1100px]">
-        <GateDocumentacion activo={shouldShowWizard} modo={modo}>
+        <GateDocumentacion activo={shouldShowWizard} modo={modo} bloquea={bloquea}>
           {children}
         </GateDocumentacion>
       </main>

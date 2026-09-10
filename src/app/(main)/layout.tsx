@@ -11,7 +11,7 @@ import { CatalogoEmpresaProvider } from "@/features/empresa/contexts/catalogo-em
 export const dynamic = "force-dynamic";
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
-  const { shouldShowWizard, hasUser, modo } = await getEmpleadoGuardStatus();
+  const { shouldShowWizard, hasUser, modo, bloquea } = await getEmpleadoGuardStatus();
   // Sin sesión → login. Refuerza al middleware, que en producción deja pasar
   // las rutas de módulo sin sesión (fail-open). ?auth=1 evita el rebote móvil.
   if (!hasUser) {
@@ -91,7 +91,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         {/* key = empresa activa → remonta la página al cambiar de empresa, para
             que los client components recarguen sus datos con la nueva empresa. */}
         <div key={empresaActivaKey ?? "sin-empresa"} className="contents">
-          <GateDocumentacion activo={shouldShowWizard} modo={modo}>
+          <GateDocumentacion activo={shouldShowWizard} modo={modo} bloquea={bloquea}>
             {children}
           </GateDocumentacion>
         </div>

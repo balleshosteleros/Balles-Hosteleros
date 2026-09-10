@@ -23,6 +23,7 @@ import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import type { DatosPersonalesInput, DatosPersonalesCompletos } from "@/features/mi-panel/actions/datos-personales-actions";
 import type { SolicitudPersonal, SolicitudSubtipo, SolicitudTipo, SolicitudEstado } from "@/features/mi-panel/types";
+import { copiarDocsEntreEmpresas } from "@/features/rrhh/services/documentacion/copiar-docs-entre-empresas";
 
 export type EstadoEmpleado = "Activo" | "Inactivo";
 
@@ -1196,6 +1197,16 @@ export async function copiarEmpleadoAEmpresa(input: {
 
     // Locales de fichaje elegidos.
     await admin.from("empleado_locales").insert(localIds.map((local_id) => ({ empleado_id: nuevoId, local_id })));
+
+    // Documentación identificativa: los DATOS ya se copiaron arriba, pero los
+    // ARCHIVOS viven en un almacén separado por empresa y no viajaban. La ficha
+    // nueva nacía completa de datos y sin un solo documento, y a esa persona el
+    // sistema le volvía a pedir el DNI que ya había entregado.
+    await copiarDocsEntreEmpresas(admin, {
+      empleadoOrigenId: input.empleadoId,
+      empleadoDestinoId: nuevoId,
+      empresaDestinoId: input.empresaDestinoId,
+    });
 
     // Acceso a la empresa destino.
     const { data: link } = await admin.from("usuario_empresas").select("user_id").eq("user_id", origen.user_id).eq("empresa_id", input.empresaDestinoId).maybeSingle();
