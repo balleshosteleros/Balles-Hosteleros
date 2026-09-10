@@ -183,9 +183,8 @@ const CAMPOS_NUEVAS_RECETAS: CampoSubmodulo[] = [
 
 const CAMPOS_COMUNICADOS: CampoSubmodulo[] = [
   { key: "titulo", label: "Título" },
-  { key: "asunto", label: "Asunto" },
   { key: "cuerpo", label: "Mensaje" },
-  { key: "prioridad", label: "Prioridad" },
+  { key: "tipo", label: "Tipo" },
   { key: "estado", label: "Estado" },
   { key: "envioFecha", label: "Fecha de envío" },
 ];
@@ -323,7 +322,7 @@ export const CATALOGO: ModuloDef[] = [
         key: "comunicados",
         label: "Comunicados",
         campos: CAMPOS_COMUNICADOS,
-        obligatorios: ["titulo", "asunto", "cuerpo"],
+        obligatorios: ["titulo", "cuerpo"],
       },
     ],
   },

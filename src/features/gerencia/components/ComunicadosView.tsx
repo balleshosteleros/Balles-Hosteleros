@@ -11,7 +11,18 @@ import {
   ZONA_HORARIA_FALLBACK,
 } from "@/features/empresa/lib/zona-horaria";
 import { useAuth } from "@/features/auth/contexts/auth-context";
-import { type Comunicado, ESTADO_COMUNICADO_LABELS, RECURRENCIA_LABELS, type EstadoComunicado, type Recurrencia } from "@/features/rrhh/data/comunicados";
+import {
+  type Comunicado,
+  ESTADO_COMUNICADO_LABELS,
+  RECURRENCIA_LABELS,
+  type EstadoComunicado,
+  type Recurrencia,
+  TIPOS_COMUNICADO,
+  TIPO_COMUNICADO_LABEL,
+  TIPO_COMUNICADO_COLOR,
+  tipoComunicado,
+  type TipoComunicado,
+} from "@/features/rrhh/data/comunicados";
 import {
   listComunicados,
   createComunicado,
@@ -119,12 +130,11 @@ type IntencionGuardado = "publicar" | "borrador";
 
 interface EditorForm {
   titulo: string;
-  asunto: string;
   cuerpo: string;
   creadorId: string;
   estado: EstadoComunicado;
   recurrencia: Recurrencia;
-  prioridad: string;
+  tipo: TipoComunicado;
   todaEmpresa: boolean;
   rolesDestinatarios: string[];
   departamentosDestinatarios: string[];
@@ -147,8 +157,8 @@ interface EditorForm {
 }
 
 const emptyForm: EditorForm = {
-  titulo: "", asunto: "", cuerpo: "", creadorId: "", estado: "borrador",
-  recurrencia: "sin_repeticion", prioridad: "normal", todaEmpresa: true,
+  titulo: "", cuerpo: "", creadorId: "", estado: "borrador",
+  recurrencia: "sin_repeticion", tipo: "informativo", todaEmpresa: true,
   rolesDestinatarios: [], departamentosDestinatarios: [], empleadosDestinatarios: [], programado: false,
   envioFecha: "", envioHora: "", textoNotificacion: "", adjuntos: [],
   archivosNuevos: [], enviarEmail: false, observaciones: "",
@@ -167,11 +177,13 @@ function formFromComunicado(c: Comunicado, tz: string): EditorForm {
   const fecha = claveDiaEnZona(c.envio, tz);
   const hora = formatHoraEnZona(c.envio, tz);
   return {
-    titulo: c.titulo, asunto: c.asunto, cuerpo: c.cuerpo, creadorId: c.creadorId,
-    estado: c.estado, recurrencia: c.recurrencia, prioridad: c.prioridad,
+    titulo: c.titulo, cuerpo: c.cuerpo, creadorId: c.creadorId,
+    estado: c.estado, recurrencia: c.recurrencia, tipo: c.tipo,
     todaEmpresa: c.todaEmpresa, rolesDestinatarios: [...c.rolesDestinatarios],
-    departamentosDestinatarios: [],
-    empleadosDestinatarios: [],
+    // Los elegidos se recuperan tal cual estaban guardados. Venían en blanco:
+    // abrir un comunicado y salir dejaba el comunicado sin destinatarios.
+    departamentosDestinatarios: [...c.departamentosDestinatarios],
+    empleadosDestinatarios: [...c.empleadosDestinatarios],
     programado: c.estado === "programado", envioFecha: fecha, envioHora: hora,
     textoNotificacion: `Nuevo comunicado: ${c.titulo}`,
     adjuntos: [...c.adjuntos], archivosNuevos: [], enviarEmail: c.enviarEmail,
@@ -245,7 +257,6 @@ function ComunicadoEditor({
   /** ¿Hay algo escrito? Salir de una ficha en blanco no debe dejar borradores vacíos. */
   const tieneContenido =
     !!form.titulo.trim() ||
-    !!form.asunto.trim() ||
     !!form.cuerpo.trim() ||
     form.adjuntos.length > 0 ||
     form.archivosNuevos.length > 0;
@@ -301,7 +312,6 @@ function ComunicadoEditor({
             <h1 className="text-2xl font-bold text-white drop-shadow-sm">{form.titulo || "Sin título"}</h1>
           </div>
           <CardContent className="p-6 space-y-4">
-            {form.asunto && <p className="text-sm text-muted-foreground">Asunto: {form.asunto}</p>}
             <div className="whitespace-pre-wrap text-sm leading-relaxed">{form.cuerpo || "Sin contenido"}</div>
             {form.enlace.trim() && (
               <a
@@ -364,15 +374,6 @@ function ComunicadoEditor({
                     onChange={e => u({ titulo: e.target.value })}
                     placeholder="Cambio de horario de invierno"
                     className="text-2xl font-bold border-0 rounded-none px-0 h-auto py-1 focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/40 placeholder:font-normal"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">Asunto</Label>
-                  <Input
-                    value={form.asunto}
-                    onChange={e => u({ asunto: e.target.value })}
-                    placeholder="Entra en vigor el domingo 26 de octubre"
-                    className="border-0 rounded-none px-0 h-auto py-1 text-base focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/40"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -526,10 +527,12 @@ function ComunicadoEditor({
                     <div><Label className="text-xs">Hora</Label><Input type="time" value={form.envioHora} onChange={e => u({ envioHora: e.target.value })} /></div>
                   </div>
                 )}
-                <div>
-                  <Label className="text-xs">Recurrencia</Label>
+                {/* Etiqueta y valor en la MISMA línea: partido en dos ocupaba
+                    el doble y se leía como si fueran dos cosas. */}
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs shrink-0">Recurrencia</Label>
                   <Select value={form.recurrencia} onValueChange={v => u({ recurrencia: v as Recurrencia })}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-8 w-[150px] text-xs whitespace-nowrap"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="sin_repeticion">Sin repetición</SelectItem>
                       <SelectItem value="diaria">Diaria</SelectItem>
@@ -627,14 +630,13 @@ function ComunicadoEditor({
 
             <div className="space-y-3">
               <div>
-                <Label className="text-xs">Prioridad</Label>
-                <Select value={form.prioridad} onValueChange={v => u({ prioridad: v })}>
+                <Label className="text-xs">Tipo</Label>
+                <Select value={form.tipo} onValueChange={v => u({ tipo: v as TipoComunicado })}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="baja">Baja</SelectItem>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="alta">Alta</SelectItem>
-                    <SelectItem value="urgente">Urgente</SelectItem>
+                    {TIPOS_COMUNICADO.map((t) => (
+                      <SelectItem key={t} value={t}>{TIPO_COMUNICADO_LABEL[t]}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -830,7 +832,6 @@ function filaAComunicado(fila: Record<string, unknown>): Comunicado {
   return {
     id: texto(fila.id),
     titulo: texto(fila.titulo),
-    asunto: texto(fila.asunto),
     cuerpo: texto(fila.cuerpo),
     estado: (texto(fila.estado) || "borrador") as EstadoComunicado,
     creadorId: texto(fila.creador_id),
@@ -840,12 +841,14 @@ function filaAComunicado(fila: Record<string, unknown>): Comunicado {
     alcancePct: Number(fila.alcance_pct ?? 0) || 0,
     rolesDestinatarios: lista(fila.roles_destinatarios),
     todaEmpresa,
+    departamentosDestinatarios: departamentos,
+    empleadosDestinatarios: empleados,
     destinatarios: {
       empresas: todaEmpresa ? 1 : 0,
       departamentos: departamentos.length,
       empleados: empleados.length,
     },
-    prioridad: (texto(fila.prioridad) || "normal") as Comunicado["prioridad"],
+    tipo: tipoComunicado(fila.tipo),
     observaciones: texto(fila.observaciones),
     adjuntos: normalizarAdjuntosFila(fila.adjuntos),
     enviarEmail: fila.enviar_email === true,
@@ -945,7 +948,7 @@ export function ComunicadosView() {
   const accesoComunicado = (c: Comunicado, campo: string): unknown => {
     if (campo === "estado") return c.estado;
     if (campo === "recurrencia") return c.recurrencia;
-    if (campo === "prioridad") return c.prioridad;
+    if (campo === "tipo") return c.tipo;
     if (campo === "titulo") return c.titulo;
     if (campo === "creadoEl") return c.creadoEl;
     if (campo === "envio") return c.envio ?? "";
@@ -956,7 +959,7 @@ export function ComunicadosView() {
   const filtered = useMemo(() => {
     let lista = comunicados.filter(c => {
       const q = search.toLowerCase();
-      return !q || c.titulo.toLowerCase().includes(q) || c.asunto.toLowerCase().includes(q);
+      return !q || c.titulo.toLowerCase().includes(q);
     });
     const accesoGenerico = accesoComunicado as unknown as (
       c: Record<string, unknown>,
@@ -1090,9 +1093,8 @@ export function ComunicadosView() {
     if (intencion === "publicar") {
       const { labelsFaltantes } = validarComunicado({
         titulo: form.titulo,
-        asunto: form.asunto,
         cuerpo: form.cuerpo,
-        prioridad: form.prioridad,
+        tipo: form.tipo,
         estado: estadoFinal,
         envioFecha: form.envioFecha,
       });
@@ -1148,10 +1150,9 @@ export function ComunicadosView() {
 
     const payload = {
       titulo: form.titulo,
-      asunto: form.asunto,
       cuerpo: form.cuerpo,
       estado: estadoFinal,
-      prioridad: form.prioridad,
+      tipo: form.tipo,
       recurrencia: form.recurrencia,
       todaEmpresa: form.todaEmpresa,
       rolesDestinatarios: [],
@@ -1219,6 +1220,7 @@ export function ComunicadosView() {
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "titulo", label: "Título" },
+    { campo: "tipo", label: "Tipo" },
     { campo: "estado", label: "Estado" },
     { campo: "creadoEl", label: "Creado el" },
     { campo: "envio", label: "Envío" },
@@ -1233,6 +1235,16 @@ export function ComunicadosView() {
       td: (c) => (
         <TableCell key="titulo">
           <p className="font-semibold text-sm">{c.titulo}</p>
+        </TableCell>
+      ),
+    },
+    tipo: {
+      th: <TableHead key="tipo">Tipo</TableHead>,
+      td: (c) => (
+        <TableCell key="tipo">
+          <Badge variant="outline" className={`text-[11px] ${TIPO_COMUNICADO_COLOR[c.tipo]}`}>
+            {TIPO_COMUNICADO_LABEL[c.tipo]}
+          </Badge>
         </TableCell>
       ),
     },

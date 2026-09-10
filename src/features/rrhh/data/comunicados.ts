@@ -27,7 +27,6 @@ import type { ComunicadoAdjunto } from "@/features/gerencia/data/comunicados-adj
 export interface Comunicado {
   id: string;
   titulo: string;
-  asunto: string;
   cuerpo: string;
   estado: EstadoComunicado;
   creadorId: string;
@@ -37,8 +36,12 @@ export interface Comunicado {
   alcancePct: number;
   rolesDestinatarios: string[];
   todaEmpresa: boolean;
+  /** Departamentos elegidos, por nombre. Vacío si va a toda la empresa. */
+  departamentosDestinatarios: string[];
+  /** Empleados elegidos, por su login. Vacío si va a toda la empresa. */
+  empleadosDestinatarios: string[];
   destinatarios: DestinatarioInfo;
-  prioridad: "baja" | "normal" | "alta" | "urgente";
+  tipo: TipoComunicado;
   observaciones: string;
   /** Documentos colgados del comunicado. Vacío = ninguno. */
   adjuntos: ComunicadoAdjunto[];
@@ -49,3 +52,41 @@ export interface Comunicado {
   /** Lo que se lee en ese botón. Vacío = "Abrir enlace". */
   enlaceTexto: string;
 }
+
+/**
+ * TIPO de comunicado. No es una prioridad: es de qué va, y cada uno se reconoce
+ * por su color (Iván, 10-09-2026).
+ *   · Urgente     → rojo
+ *   · Novedades   → amarillo
+ *   · Informativo → verde
+ */
+export const TIPOS_COMUNICADO = ["urgente", "novedades", "informativo"] as const;
+export type TipoComunicado = (typeof TIPOS_COMUNICADO)[number];
+
+export const TIPO_COMUNICADO_LABEL: Record<TipoComunicado, string> = {
+  urgente: "Urgente",
+  novedades: "Novedades",
+  informativo: "Informativo",
+};
+
+/** Lo que llegue raro (o de antes) se lee como informativo. */
+export function tipoComunicado(v: unknown): TipoComunicado {
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  return (TIPOS_COMUNICADO as readonly string[]).includes(s)
+    ? (s as TipoComunicado)
+    : "informativo";
+}
+
+/** Colores del tipo, para la píldora de las listas y las fichas. */
+export const TIPO_COMUNICADO_COLOR: Record<TipoComunicado, string> = {
+  urgente: "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900",
+  novedades: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900",
+  informativo: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900",
+};
+
+/** Punto de color del tipo. */
+export const TIPO_COMUNICADO_PUNTO: Record<TipoComunicado, string> = {
+  urgente: "bg-rose-500",
+  novedades: "bg-amber-400",
+  informativo: "bg-emerald-500",
+};

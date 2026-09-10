@@ -37,7 +37,6 @@ type Comunicado = {
   id: string;
   empresa_id: string;
   titulo: string;
-  asunto: string | null;
   cuerpo: string | null;
   recurrencia: string;
   envio: string;
@@ -80,7 +79,7 @@ export async function GET(request: Request) {
 
   const ahora = new Date().toISOString();
   const CAMPOS =
-    "id, empresa_id, titulo, asunto, cuerpo, recurrencia, envio, enviar_email";
+    "id, empresa_id, titulo, cuerpo, recurrencia, envio, enviar_email";
 
   // 1) Los que se repiten: se publican cada vez que les toca y se reprograman.
   const { data, error } = await supabase

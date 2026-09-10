@@ -1,25 +1,44 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, ChevronRight, X, Megaphone, Paperclip, Link as LinkIcon } from "lucide-react";
+import { Loader2, ChevronRight, X, Megaphone, Paperclip, Link as LinkIcon, Check } from "lucide-react";
 import {
   listarComunicadosVisibles,
   type ComunicadoVisible,
 } from "@/features/mi-panel/actions/mi-panel-actions";
+import { marcarComunicadosVistos } from "@/features/mi-panel/actions/comunicados-vistos-actions";
 import {
   formatFechaEnZona,
   formatFechaHoraEnZona,
 } from "@/features/empresa/lib/zona-horaria";
 import { cn } from "@/shared/lib/utils";
 import {
+  TIPO_COMUNICADO_LABEL,
+  tipoComunicado,
+  type TipoComunicado,
+} from "@/features/rrhh/data/comunicados";
+import {
   tamanoLegible,
   urlAdjuntoComunicado,
 } from "@/features/gerencia/data/comunicados-adjuntos";
 
-const PRIORIDAD_STYLE: Record<string, { label: string; dot: string; tint: string }> = {
-  alta: { label: "Urgente", dot: "bg-rose-500", tint: "border-rose-200 bg-rose-50/40" },
-  normal: { label: "Normal", dot: "bg-blue-500", tint: "border-border/60 bg-card" },
-  baja: { label: "Informativo", dot: "bg-slate-400", tint: "border-border/60 bg-card" },
+/** Cada tipo con su color: urgente rojo, novedades amarillo, informativo verde. */
+const TIPO_STYLE: Record<TipoComunicado, { dot: string; tint: string; pill: string }> = {
+  urgente: {
+    dot: "bg-rose-500",
+    tint: "border-rose-200 bg-rose-50/50 dark:border-rose-900 dark:bg-rose-950/20",
+    pill: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
+  },
+  novedades: {
+    dot: "bg-amber-400",
+    tint: "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20",
+    pill: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
+  },
+  informativo: {
+    dot: "bg-emerald-500",
+    tint: "border-border/60 bg-card",
+    pill: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+  },
 };
 
 function formatRel(s: string, tz: string): string {
@@ -87,12 +106,17 @@ export function MisComunicadosMobile() {
     <>
       <ul className="space-y-2">
         {items.map((c) => {
-          const style = PRIORIDAD_STYLE[c.prioridad] ?? PRIORIDAD_STYLE.normal;
+          const tipo = tipoComunicado(c.tipo);
+          const style = TIPO_STYLE[tipo];
           return (
             <li key={c.id}>
               <button
                 type="button"
-                onClick={() => setSelected(c)}
+                onClick={() => {
+                  setSelected(c);
+                  // Abrirlo es haberlo leído: así el alcance dice la verdad.
+                  void marcarComunicadosVistos([c.id]);
+                }}
                 className={cn(
                   "flex w-full items-start gap-3 rounded-2xl border p-3.5 text-left active:opacity-70",
                   style.tint,
@@ -100,7 +124,7 @@ export function MisComunicadosMobile() {
               >
                 <span
                   className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", style.dot)}
-                  aria-label={style.label}
+                  aria-label={TIPO_COMUNICADO_LABEL[tipo]}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
@@ -139,7 +163,8 @@ function ComunicadoDetalle({
   comunicado: ComunicadoVisible;
   onClose: () => void;
 }) {
-  const style = PRIORIDAD_STYLE[comunicado.prioridad] ?? PRIORIDAD_STYLE.normal;
+  const tipo = tipoComunicado(comunicado.tipo);
+  const style = TIPO_STYLE[tipo];
 
   // Bloquear scroll del body mientras está abierto
   useEffect(() => {
@@ -163,8 +188,8 @@ function ComunicadoDetalle({
         </button>
         <div className="min-w-0 flex-1 flex items-center gap-2">
           <span className={cn("h-2 w-2 rounded-full", style.dot)} />
-          <span className="truncate text-xs uppercase tracking-wider text-muted-foreground">
-            {style.label}
+          <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", style.pill)}>
+            {TIPO_COMUNICADO_LABEL[tipo]}
           </span>
         </div>
       </header>
@@ -212,6 +237,12 @@ function ComunicadoDetalle({
             <LinkIcon className="h-4 w-4" />
             {(comunicado.enlaceTexto ?? "").trim() || "Abrir enlace"}
           </a>
+        )}
+        {comunicado.vistoEl && (
+          <p className="mt-6 flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <Check className="h-3.5 w-3.5" />
+            Visto el {formatFull(comunicado.vistoEl, comunicado.zonaHoraria)}
+          </p>
         )}
         {comunicado.adjuntos.length > 0 && (
           <div className="mt-6 space-y-2 border-t border-border/60 pt-4">

@@ -19,6 +19,60 @@ async function getContext() {
   return { supabase, user, empresaId };
 }
 
+/**
+ * Cuánta gente ha visto cada comunicado.
+ *
+ * El alcance salía SIEMPRE al 0 %: la columna `alcance_pct` no la escribía
+ * nadie. Se cuenta de lo único que dice la verdad: el aviso que recibió cada
+ * destinatario y si lo dio por visto.
+ *
+ * Va con la clave de servicio porque los avisos son de cada uno: con la sesión
+ * de quien mira el listado solo se contarían los suyos.
+ *
+ * Lee por páginas: Supabase corta en 1000 filas y con plantilla grande el
+ * recuento se quedaría corto sin avisar.
+ */
+async function alcanceDeComunicados(
+  empresaId: string,
+  ids: string[],
+): Promise<Map<string, number>> {
+  const pct = new Map<string, number>();
+  if (ids.length === 0) return pct;
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+    const conteo = new Map<string, { avisados: number; vistos: number }>();
+
+    const PAGINA = 1000;
+    for (let desde = 0; ; desde += PAGINA) {
+      const { data, error } = await admin
+        .from("notificaciones")
+        .select("entidad_id, vista_at")
+        .eq("empresa_id", empresaId)
+        .eq("entidad_tipo", "comunicados")
+        .in("entidad_id", ids)
+        .range(desde, desde + PAGINA - 1);
+      if (error) throw error;
+      const filas = data ?? [];
+      for (const f of filas) {
+        const id = f.entidad_id as string;
+        const c = conteo.get(id) ?? { avisados: 0, vistos: 0 };
+        c.avisados++;
+        if (f.vista_at) c.vistos++;
+        conteo.set(id, c);
+      }
+      if (filas.length < PAGINA) break;
+    }
+
+    for (const [id, c] of conteo) {
+      pct.set(id, c.avisados === 0 ? 0 : Math.round((c.vistos / c.avisados) * 100));
+    }
+  } catch (e) {
+    console.error("[comunicados] alcance:", e);
+  }
+  return pct;
+}
+
 export async function listComunicados() {
   try {
     const { supabase, empresaId } = await getContext();
@@ -31,7 +85,16 @@ export async function listComunicados() {
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return { ok: true, data: data ?? [] };
+
+    const filas = data ?? [];
+    const pct = await alcanceDeComunicados(
+      empresaId,
+      filas.map((c) => c.id as string),
+    );
+    return {
+      ok: true,
+      data: filas.map((c) => ({ ...c, alcance_pct: pct.get(c.id as string) ?? 0 })),
+    };
   } catch (err) {
     console.error("[comunicados] listComunicados:", err);
     return { ok: false, data: [], error: friendlyError(err, "listComunicados") };
@@ -180,7 +243,6 @@ export interface ResultadoGuardarComunicado {
 
 export interface ComunicadoInput {
   titulo: string;
-  asunto?: string;
   cuerpo?: string;
   estado?: string;
   prioridad?: string;
@@ -223,7 +285,6 @@ function normalizarEnlace(raw: string | undefined): string | null {
 function toRow(input: ComunicadoInput) {
   return {
     titulo: input.titulo,
-    asunto: input.asunto ?? null,
     cuerpo: input.cuerpo ?? "",
     estado: input.estado ?? "borrador",
     prioridad: input.prioridad ?? "normal",

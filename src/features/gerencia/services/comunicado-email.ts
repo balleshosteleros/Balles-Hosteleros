@@ -52,7 +52,6 @@ interface ComunicadoFila {
   id: string;
   empresa_id: string;
   titulo: string;
-  asunto: string | null;
   cuerpo: string | null;
   estado: string;
   adjuntos: unknown;
@@ -146,7 +145,7 @@ export async function enviarComunicadoPorEmail(
 
     const { data, error } = await supabase
       .from("comunicados")
-      .select("id, empresa_id, titulo, asunto, cuerpo, estado, adjuntos, enlace, enlace_texto")
+      .select("id, empresa_id, titulo, cuerpo, estado, adjuntos, enlace, enlace_texto")
       .eq("id", comunicadoId)
       .maybeSingle();
     if (error) throw error;
@@ -200,7 +199,9 @@ export async function enviarComunicadoPorEmail(
       html = comunicadoEmailHtml("", cuerpoConAdjuntos);
     }
 
-    const asunto = c.asunto?.trim() || c.titulo;
+    // El asunto del correo es el título del comunicado: es lo que lo identifica
+    // en la bandeja igual que dentro de la app.
+    const asunto = c.titulo;
     let enviados = 0;
     for (const to of emails) {
       const res = await sendEmail({

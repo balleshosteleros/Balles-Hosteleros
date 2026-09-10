@@ -1773,7 +1773,8 @@ export interface ComunicadoVisible {
   id: string;
   titulo: string;
   contenido: string;
-  prioridad: string;
+  /** Tipo del comunicado: urgente, novedades o informativo. */
+  tipo: string;
   createdAt: string;
   /** Zona horaria de la empresa para formatear `createdAt` (instante). */
   zonaHoraria: string;
@@ -1785,6 +1786,8 @@ export interface ComunicadoVisible {
   enlace: string | null;
   /** Lo que se lee en ese botón. Vacío = "Abrir enlace". */
   enlaceTexto: string | null;
+  /** Cuándo lo dio por visto este trabajador. Vacío = todavía no lo ha abierto. */
+  vistoEl: string | null;
 }
 
 /** El JSONB `adjuntos` puede venir de cualquier forma: solo pasan los completos. */
@@ -1847,7 +1850,7 @@ export async function listarComunicadosVisibles(): Promise<{
     const { data, error } = await supabase
       .from("comunicados")
       .select(
-        "id, titulo, cuerpo, prioridad, created_at, estado, toda_empresa, roles_destinatarios, empleados_destinatarios, departamentos_destinatarios, adjuntos, enlace, enlace_texto",
+        "id, titulo, cuerpo, tipo, created_at, estado, toda_empresa, roles_destinatarios, empleados_destinatarios, departamentos_destinatarios, adjuntos, enlace, enlace_texto",
       )
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false })
@@ -1888,19 +1891,36 @@ export async function listarComunicadosVisibles(): Promise<{
       return false;
     });
 
+    // Cuándo dio por visto cada comunicado ESTE trabajador. Sale de su propio
+    // aviso, que es donde se guarda el «visto» de cada uno.
+    const vistoPorId = new Map<string, string>();
+    if (visibles.length > 0) {
+      const { data: avisos } = await supabase
+        .from("notificaciones")
+        .select("entidad_id, vista_at")
+        .eq("usuario_id", user.id)
+        .eq("entidad_tipo", "comunicados")
+        .in("entidad_id", visibles.map((c: Record<string, unknown>) => c.id as string));
+      for (const a of avisos ?? []) {
+        const cuando = a.vista_at as string | null;
+        if (cuando) vistoPorId.set(a.entidad_id as string, cuando);
+      }
+    }
+
     return {
       ok: true,
       data: visibles.map((c: Record<string, unknown>) => ({
         id: c.id as string,
         titulo: (c.titulo as string) ?? "",
         contenido: (c.cuerpo as string | null | undefined) ?? "",
-        prioridad: (c.prioridad as string) ?? "normal",
+        tipo: (c.tipo as string) ?? "informativo",
         createdAt: c.created_at as string,
         zonaHoraria,
         adjuntos: adjuntosDeComunicado(c.adjuntos),
         isotipoUrl,
         enlace: (c.enlace as string | null) ?? null,
         enlaceTexto: (c.enlace_texto as string | null) ?? null,
+        vistoEl: vistoPorId.get(c.id as string) ?? null,
       })),
     };
   } catch (err: unknown) {
