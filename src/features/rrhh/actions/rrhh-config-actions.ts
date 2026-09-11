@@ -10,8 +10,12 @@ import {
   PERMISO_REGLAS_DEFAULT,
 } from "@/features/mi-panel/lib/vacaciones-reglas";
 
-/** Lo que pidió el negocio: recordar cada 3 días hasta que la gestoría lo suba. */
-export const BAJA_MEDICA_RECORDATORIO_DIAS_DEFECTO = 3;
+/**
+ * Lo que pidió el negocio: recordar cada 3 días hasta que la gestoría lo suba.
+ * Sin exportar: un fichero "use server" solo puede exportar funciones async, y
+ * exportarla tumbaba el módulo entero —y con él, Ajustes— al compilar.
+ */
+const BAJA_MEDICA_RECORDATORIO_DIAS_DEFECTO = 3;
 
 export interface RrhhConfig {
   /** Departamento cuyos empleados validan a los empleados de área operativa. */
