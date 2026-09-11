@@ -26,9 +26,11 @@ import type { LucideIcon } from "lucide-react";
  */
 type Item = { href: string; label: string; icon: LucideIcon; hue: number };
 
-// Mismo orden de antes, ahora en una sola rejilla plana. El `hue` agrupa por
-// color: día (azul), nómina (cian), comunicación (índigo), equipo (violeta).
+// Perfil va SIEMPRE el primero (Iván, 11-sep). El resto mantiene el orden de
+// antes en una sola rejilla plana. El `hue` agrupa por color: día (azul),
+// nómina (cian), comunicación (índigo), equipo y perfil (violeta).
 const ITEMS: Item[] = [
+  { href: "/m/perfil", label: "Perfil", icon: UserCircle, hue: 252 },
   { href: "/m/fichajes", label: "Fichajes", icon: Fingerprint, hue: 211 },
   { href: "/m/cronograma", label: "Cronograma", icon: CalendarClock, hue: 211 },
   { href: "/m/horario", label: "Horario", icon: Timer, hue: 211 },
@@ -43,7 +45,6 @@ const ITEMS: Item[] = [
   { href: "/m/inspecciones", label: "Inspecciones", icon: FileSearch, hue: 231 },
   { href: "/m/equipo", label: "Equipo", icon: Network, hue: 252 },
   { href: "/m/formacion", label: "Formación", icon: GraduationCap, hue: 252 },
-  { href: "/m/perfil", label: "Perfil", icon: UserCircle, hue: 252 },
   { href: "/m/points", label: "Points", icon: Trophy, hue: 252 },
 ];
 
