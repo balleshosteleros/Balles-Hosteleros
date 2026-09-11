@@ -14,6 +14,7 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getIdentidadEmpresa } from "@/features/empresa/services/identidad-empresa";
 import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 import { generarAnulacionPreavisoPDF } from "./anulacion-preaviso-pdf";
 import { crearFirmaInterno } from "./crear-firma";
@@ -43,15 +44,12 @@ export async function enviarAnulacionPreaviso(input: {
   try {
     const admin = createAdminClient();
 
-    const [empleadoRes, empresaRes] = await Promise.all([
-      admin
-        .from("empleados")
-        .select("id, nombre, apellidos, dni_nie, local_id")
-        .eq("id", input.empleadoId)
-        .eq("empresa_id", input.empresaId)
-        .maybeSingle(),
-      admin.from("empresas").select("nombre").eq("id", input.empresaId).maybeSingle(),
-    ]);
+    const empleadoRes = await admin
+      .from("empleados")
+      .select("id, nombre, apellidos, dni_nie, local_id")
+      .eq("id", input.empleadoId)
+      .eq("empresa_id", input.empresaId)
+      .maybeSingle();
 
     const emp = empleadoRes.data as
       | {
@@ -66,7 +64,9 @@ export async function enviarAnulacionPreaviso(input: {
 
     const empleadoNombre =
       `${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim() || "Empleado/a";
-    const empresaNombre = (empresaRes.data?.nombre as string | undefined) ?? "La empresa";
+    // La sociedad, desde Ajustes → Empresa: es con quien sigue el contrato.
+    const identidad = await getIdentidadEmpresa(admin, input.empresaId);
+    const empresaNombre = identidad.razonSocial;
 
     // Ciudad del local del trabajador, para el encabezado (best-effort).
     let ciudad: string | null = null;

@@ -15,6 +15,7 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getIdentidadEmpresa } from "@/features/empresa/services/identidad-empresa";
 import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
 import {
   generarActaEntregaPDF,
@@ -106,14 +107,10 @@ export async function enviarActaEntregaAFirma(
       `${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim() || "Trabajador/a";
 
     // ─── Empresa y ciudad para la cabecera del acta ─────────────
-    const { data: empresa } = await admin
-      .from("empresas")
-      .select("nombre, nif")
-      .eq("id", input.empresaId)
-      .maybeSingle();
-    const emprRow = empresa as { nombre?: string | null; nif?: string | null } | null;
-    const empresaNombre = emprRow?.nombre ?? "La empresa";
-    const empresaCif = emprRow?.nif ?? null;
+    // El material lo entrega la SOCIEDAD: razón social y NIF de Ajustes → Empresa.
+    const identidad = await getIdentidadEmpresa(admin, input.empresaId);
+    const empresaNombre = identidad.razonSocial;
+    const empresaCif = identidad.cif;
 
     let ciudad: string | null = null;
     if (emp.local_id) {
@@ -124,6 +121,7 @@ export async function enviarActaEntregaAFirma(
         .maybeSingle();
       ciudad = (local as { ciudad?: string | null } | null)?.ciudad ?? null;
     }
+    ciudad = ciudad ?? identidad.ciudad;
 
     // ─── El acta ────────────────────────────────────────────────
     const esEntrega = input.variante === "entrega";

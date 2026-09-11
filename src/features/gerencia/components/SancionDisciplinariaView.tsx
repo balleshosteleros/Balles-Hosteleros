@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +48,7 @@ import { listEmpleadosParaComunicado, type EmpleadoSelector } from "@/features/g
 import {
   crearSancionDisciplinaria,
   listSancionesDisciplinarias,
+  getEmpresaDeLaSancion,
   type SancionResumen,
 } from "@/features/gerencia/actions/sancion-disciplinaria-actions";
 import {
@@ -63,10 +63,16 @@ import type { GravedadSancion } from "@/features/gerencia/services/sancion-disci
 /** Letra y trazo del menú de acciones: el mismo que en el resto del software. */
 const ITEM_MENU = "cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold tracking-tight";
 
-const GRAVEDAD_OPCIONES: { value: GravedadSancion; label: string; className: string }[] = [
-  { value: "leve", label: "Falta leve", className: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" },
-  { value: "grave", label: "Falta grave", className: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" },
-  { value: "muy_grave", label: "Falta muy grave", className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
+/**
+ * Las tres calificaciones que admite la ley, cada una con su plazo de
+ * prescripción (art. 60.2 del Estatuto de los Trabajadores): la falta prescribe
+ * a esos días DESDE QUE LA EMPRESA TUVO CONOCIMIENTO de ella y, en todo caso, a
+ * los seis meses de haberse cometido.
+ */
+const GRAVEDAD_OPCIONES: { value: GravedadSancion; label: string; className: string; prescribeDias: number }[] = [
+  { value: "leve", label: "Falta leve", className: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200", prescribeDias: 10 },
+  { value: "grave", label: "Falta grave", className: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200", prescribeDias: 20 },
+  { value: "muy_grave", label: "Falta muy grave", className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200", prescribeDias: 60 },
 ];
 
 const GRAVEDAD_BARRA: Record<GravedadSancion, string> = {
@@ -165,6 +171,14 @@ function ColumnFilter({ label, options, selected, onChange }: {
   );
 }
 
+/** La empresa tal y como se imprime en la sanción (Ajustes → Empresa). */
+interface EmpresaSancion {
+  nombre: string;
+  razonSocial: string;
+  cif: string | null;
+  domicilio: string | null;
+}
+
 interface SancionForm {
   empleadoId: string;
   gravedad: GravedadSancion;
@@ -173,6 +187,8 @@ interface SancionForm {
   normaInfringida: string;
   medida: string;
   fechaEmision: string;
+  cumplimientoDesde: string;
+  cumplimientoHasta: string;
   plazoDias: number;
 }
 
@@ -184,6 +200,8 @@ const emptyForm: SancionForm = {
   normaInfringida: "",
   medida: "",
   fechaEmision: hoyISO(),
+  cumplimientoDesde: "",
+  cumplimientoHasta: "",
   plazoDias: 15,
 };
 
@@ -202,10 +220,10 @@ function AvisoAcuseRecibo() {
 }
 
 /** Prototipo visual de la sanción — refleja el PDF que firmará el trabajador. */
-function PrototipoSancion({ form, empleado, empresaNombre }: {
+function PrototipoSancion({ form, empleado, empresa }: {
   form: SancionForm;
   empleado: EmpleadoSelector | null;
-  empresaNombre: string;
+  empresa: EmpresaSancion | null;
 }) {
   const gravLabel = GRAVEDAD_OPCIONES.find(g => g.value === form.gravedad)?.label ?? "";
   const barra = GRAVEDAD_BARRA[form.gravedad];
@@ -218,7 +236,12 @@ function PrototipoSancion({ form, empleado, empresaNombre }: {
           <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: barra }}>{gravLabel}</span>
         </div>
         <h1 className="text-lg font-bold leading-tight">COMUNICACIÓN DE SANCIÓN DISCIPLINARIA</h1>
-        <p className="text-xs text-muted-foreground mt-1">{empresaNombre || "La empresa"}</p>
+        {/* Quien sanciona es la SOCIEDAD, no el rótulo del local: es lo que sale
+            impreso, tal cual está en Ajustes → Empresa. */}
+        <p className="text-xs text-muted-foreground mt-1">
+          {empresa ? `${empresa.razonSocial}${empresa.cif ? ` · NIF ${empresa.cif}` : ""}` : "—"}
+        </p>
+        {empresa?.domicilio && <p className="text-[11px] text-muted-foreground">{empresa.domicilio}</p>}
       </div>
       <Separator />
       <div className="px-6 py-4 space-y-3 text-sm">
@@ -229,14 +252,29 @@ function PrototipoSancion({ form, empleado, empresaNombre }: {
         <CampoParrafo label="Hechos que motivan la sanción" value={form.hechos} />
         {form.normaInfringida.trim() && <CampoParrafo label="Norma / convenio infringido" value={form.normaInfringida} />}
         <CampoParrafo label="Medida disciplinaria adoptada" value={form.medida} />
+        {form.cumplimientoDesde && (
+          <Campo
+            label="Cumplimiento de la medida"
+            value={
+              !form.cumplimientoHasta || form.cumplimientoHasta === form.cumplimientoDesde
+                ? `El día ${fmtFechaCorta(form.cumplimientoDesde)}`
+                : `Del ${fmtFechaCorta(form.cumplimientoDesde)} al ${fmtFechaCorta(form.cumplimientoHasta)}, ambos inclusive`
+            }
+          />
+        )}
         <Separator />
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Mediante la firma de este documento, el trabajador/a declara haber sido <strong>informado/a</strong> y
           haber recibido la presente comunicación. La firma constituye únicamente <strong>acuse de recibo y de
           lectura</strong>; NO implica conformidad ni aceptación de los hechos ni de la medida adoptada. El
-          trabajador/a conserva su derecho a impugnar la sanción por los cauces legales previstos.
+          trabajador/a puede impugnar esta sanción ante el Juzgado de lo Social en el plazo de veinte días
+          hábiles desde su notificación (art. 114 de la Ley Reguladora de la Jurisdicción Social), previa
+          presentación de la papeleta de conciliación cuando proceda.
         </p>
-        <Campo label="Emitido por" value={`${empresaNombre || "La dirección"} · ${fmtFechaCorta(form.fechaEmision)}`} />
+        <Campo
+          label="Emitido por"
+          value={`La dirección de ${empresa?.razonSocial ?? "la empresa"} · ${fmtFechaCorta(form.fechaEmision)}`}
+        />
         <div>
           <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Firma del trabajador/a (leído y recibido)</p>
           <div className="h-16 rounded-md border border-dashed flex items-center justify-center text-[11px] text-muted-foreground">
@@ -271,9 +309,9 @@ function CampoParrafo({ label, value }: { label: string; value: string }) {
  * un comunicado: a la izquierda la ficha y a la derecha, en vivo, el documento
  * tal y como le llegará al trabajador.
  */
-function SancionEditor({ empleados, empresaNombre, onVolver, onEnviada }: {
+function SancionEditor({ empleados, empresa, onVolver, onEnviada }: {
   empleados: EmpleadoSelector[];
-  empresaNombre: string;
+  empresa: EmpresaSancion | null;
   onVolver: () => void;
   onEnviada: () => void | Promise<void>;
 }) {
@@ -286,11 +324,35 @@ function SancionEditor({ empleados, empresaNombre, onVolver, onEnviada }: {
     [empleados, form.empleadoId],
   );
 
-  const puedeEnviar = !!form.empleadoId && !!form.hechos.trim() && !!form.medida.trim() && !!form.fechaEmision && !enviando;
+  const puedeEnviar =
+    !!form.empleadoId && !!form.hechos.trim() && !!form.medida.trim() &&
+    !!form.fechaHechos && !!form.fechaEmision && !enviando;
+
+  /**
+   * Aviso de PRESCRIPCIÓN (art. 60.2 ET). No bloquea: el plazo corre desde que
+   * la empresa tuvo conocimiento de los hechos, y eso solo lo sabe quien la
+   * emite. Pero si la fecha que ha puesto ya se pasa de plazo, tiene que verlo
+   * antes de mandarla.
+   */
+  const prescripcion = useMemo(() => {
+    if (!form.fechaHechos) return null;
+    const opcion = GRAVEDAD_OPCIONES.find(g => g.value === form.gravedad);
+    if (!opcion) return null;
+    const hechos = new Date(`${form.fechaHechos}T00:00:00`);
+    const dias = Math.floor((Date.now() - hechos.getTime()) / 86_400_000);
+    if (Number.isNaN(dias) || dias < 0) return null;
+    if (dias > 180) {
+      return `Han pasado ${dias} días desde los hechos. Pasados seis meses la falta prescribe en todo caso (art. 60.2 del Estatuto de los Trabajadores).`;
+    }
+    if (dias > opcion.prescribeDias) {
+      return `Han pasado ${dias} días desde los hechos. Una ${opcion.label.toLowerCase()} prescribe a los ${opcion.prescribeDias} días desde que la empresa tuvo conocimiento de ella (art. 60.2 del Estatuto de los Trabajadores).`;
+    }
+    return null;
+  }, [form.fechaHechos, form.gravedad]);
 
   const enviar = async () => {
     if (!puedeEnviar) {
-      toast.error("Completa trabajador, hechos y medida disciplinaria");
+      toast.error("Completa trabajador, fecha de los hechos, hechos y medida disciplinaria");
       return;
     }
     setEnviando(true);
@@ -298,11 +360,13 @@ function SancionEditor({ empleados, empresaNombre, onVolver, onEnviada }: {
       const res = await crearSancionDisciplinaria({
         empleadoId: form.empleadoId,
         gravedad: form.gravedad,
-        fechaHechos: form.fechaHechos || null,
+        fechaHechos: form.fechaHechos,
         hechos: form.hechos,
         normaInfringida: form.normaInfringida || null,
         medida: form.medida,
         fechaEmision: form.fechaEmision,
+        cumplimientoDesde: form.cumplimientoDesde || null,
+        cumplimientoHasta: form.cumplimientoHasta || null,
         plazoDias: form.plazoDias,
       });
       if (res.ok) {
@@ -365,6 +429,12 @@ function SancionEditor({ empleados, empresaNombre, onVolver, onEnviada }: {
               </div>
             </div>
 
+            {prescripcion && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                {prescripcion}
+              </p>
+            )}
+
             <div>
               <Label className="text-xs text-muted-foreground">Hechos que motivan la sanción</Label>
               <Textarea
@@ -399,6 +469,21 @@ function SancionEditor({ empleados, empresaNombre, onVolver, onEnviada }: {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <Label className="text-xs text-muted-foreground">Cumplimiento desde (opcional)</Label>
+                <Input type="date" value={form.cumplimientoDesde} onChange={e => u({ cumplimientoDesde: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Cumplimiento hasta (opcional)</Label>
+                <Input type="date" value={form.cumplimientoHasta} onChange={e => u({ cumplimientoHasta: e.target.value })} className="mt-1" />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              Si la medida son días de suspensión, di qué días se cumplen: el trabajador tiene que saber
+              exactamente cuándo no acude.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
                 <Label className="text-xs text-muted-foreground">Fecha de emisión</Label>
                 <Input type="date" value={form.fechaEmision} onChange={e => u({ fechaEmision: e.target.value })} className="mt-1" />
               </div>
@@ -426,7 +511,7 @@ function SancionEditor({ empleados, empresaNombre, onVolver, onEnviada }: {
         {/* Así le llega */}
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground flex items-center gap-1"><FileWarning className="h-3.5 w-3.5" />Así verá y firmará el trabajador la sanción</p>
-          <PrototipoSancion form={form} empleado={empleadoSel} empresaNombre={empresaNombre} />
+          <PrototipoSancion form={form} empleado={empleadoSel} empresa={empresa} />
         </div>
       </div>
     </div>
@@ -434,11 +519,10 @@ function SancionEditor({ empleados, empresaNombre, onVolver, onEnviada }: {
 }
 
 export function SancionDisciplinariaView() {
-  const { empresaActual } = useEmpresa();
-  const empresaNombre = empresaActual?.nombre || "";
   const { confirm, dialog: dialogoConfirmar } = useConfirmDelete();
   const [modo, setModo] = useState<"list" | "nueva">("list");
   const [empleados, setEmpleados] = useState<EmpleadoSelector[]>([]);
+  const [empresa, setEmpresa] = useState<EmpresaSancion | null>(null);
   const [sanciones, setSanciones] = useState<SancionResumen[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [fTrabajador, setFTrabajador] = useState<Set<string>>(new Set());
@@ -449,12 +533,14 @@ export function SancionDisciplinariaView() {
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
 
   const load = useCallback(async () => {
-    const [emps, sancs] = await Promise.all([
+    const [emps, sancs, empr] = await Promise.all([
       listEmpleadosParaComunicado(),
       listSancionesDisciplinarias(),
+      getEmpresaDeLaSancion(),
     ]);
     if (emps.ok) setEmpleados(emps.data);
     if (sancs.ok) setSanciones(sancs.data);
+    if (empr.ok) setEmpresa(empr.data);
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -534,7 +620,7 @@ export function SancionDisciplinariaView() {
     return (
       <SancionEditor
         empleados={empleados}
-        empresaNombre={empresaNombre}
+        empresa={empresa}
         onVolver={() => setModo("list")}
         onEnviada={load}
       />

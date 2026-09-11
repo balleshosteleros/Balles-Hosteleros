@@ -21,6 +21,7 @@
 
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getIdentidadEmpresa } from "@/features/empresa/services/identidad-empresa";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { requireAdminUser } from "@/features/rrhh/services/empleados-core";
 import { contratarCandidato } from "@/features/rrhh/actions/contratacion-actions";
@@ -206,6 +207,9 @@ export async function iniciarContratacion(
       .select("nombre, nif")
       .eq("id", empresaId)
       .maybeSingle();
+    // Quién contrata: la SOCIEDAD, con su NIF y su ciudad, tal y como están en
+    // Ajustes → Empresa. El rótulo del local no identifica al empleador.
+    const identidad = await getIdentidadEmpresa(admin, empresaId);
     const cfg = await getReclutamientoConfigPorEmpresa(admin, empresaId);
 
     const empleadoNombre = `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "Trabajador";
@@ -213,9 +217,9 @@ export async function iniciarContratacion(
     const contratoInterno = await generarContratoInternoPDF({
       empleadoNombre,
       empleadoDni: (emp?.dni_nie as string | null) ?? null,
-      empresaNombre: (empresa?.nombre as string) ?? "La empresa",
-      empresaCif: (empresa?.nif as string | null) ?? null,
-      ciudad: null,
+      empresaNombre: identidad.razonSocial,
+      empresaCif: identidad.cif,
+      ciudad: identidad.ciudad,
       puesto: (emp?.puesto as string | null) ?? null,
       fecha: fechaEs(new Date()),
       cuerpo: (cfg.contrato_interno_plantilla as string | null) ?? null,
@@ -287,6 +291,9 @@ export async function iniciarContratacion(
       .select("nombre, nif")
       .eq("id", empresaId)
       .maybeSingle();
+    // Quién contrata: la SOCIEDAD, con su NIF y su ciudad, tal y como están en
+    // Ajustes → Empresa. El rótulo del local no identifica al empleador.
+    const identidad = await getIdentidadEmpresa(admin, empresaId);
     const cfg = await getReclutamientoConfigPorEmpresa(admin, empresaId);
 
     const empleadoNombre = `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "Trabajador";
@@ -294,9 +301,9 @@ export async function iniciarContratacion(
     const { pdf, casillas, posicionFirma } = await generarReconocimientoMedicoPDF({
       empleadoNombre,
       empleadoDni: (emp?.dni_nie as string | null) ?? null,
-      empresaNombre: (empresa?.nombre as string) ?? "La empresa",
-      empresaCif: (empresa?.nif as string | null) ?? null,
-      ciudad: null,
+      empresaNombre: identidad.razonSocial,
+      empresaCif: identidad.cif,
+      ciudad: identidad.ciudad,
       puesto: (emp?.puesto as string | null) ?? null,
       fecha: fechaEs(new Date()),
       cuerpo: (cfg.reconocimiento_medico_plantilla as string | null) ?? null,

@@ -9,6 +9,7 @@ import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
 import { generarCartaBajaVoluntariaPDF } from "@/features/rrhh/services/firmas/baja-voluntaria-pdf";
 import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getIdentidadEmpresa } from "@/features/empresa/services/identidad-empresa";
 import type { ComunicadoAdjunto } from "@/features/gerencia/data/comunicados-adjuntos";
 import { resolverDestinatario } from "@/features/rrhh/services/email-plantillas/resolver";
 import type {
@@ -3665,9 +3666,11 @@ async function onBajaContratoCreada(args: {
     return;
   }
 
-  const empresaNombre =
-    (empresaRes.data?.nombre as string | undefined) ?? "Tu empresa";
-  const empresaCif: string | null = null;
+  // La carta va dirigida a la SOCIEDAD que le tiene contratado, con su NIF.
+  // Antes salía el rótulo del local y el CIF en blanco, fijo a null.
+  const identidad = await getIdentidadEmpresa(admin, args.empresaId);
+  const empresaNombre = identidad.razonSocial;
+  const empresaCif = identidad.cif;
 
   // Ciudad para la cabecera de la carta (best-effort).
   let ciudad: string | null = null;
@@ -3681,6 +3684,7 @@ async function onBajaContratoCreada(args: {
       ciudad = (local.ciudad as string | null) ?? null;
     }
   }
+  ciudad = ciudad ?? identidad.ciudad;
 
   const empleadoNombre =
     `${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim() ||

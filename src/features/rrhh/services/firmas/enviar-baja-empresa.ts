@@ -13,6 +13,7 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getIdentidadEmpresa } from "@/features/empresa/services/identidad-empresa";
 import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 import { generarCartaBajaEmpresaPDF } from "./baja-empresa-pdf";
 import { crearFirmaInterno } from "./crear-firma";
@@ -56,19 +57,12 @@ export async function enviarCartaBajaEmpresa(input: {
   try {
     const admin = createAdminClient();
 
-    const [empleadoRes, empresaRes] = await Promise.all([
-      admin
-        .from("empleados")
-        .select("id, nombre, apellidos, dni_nie, local_id")
-        .eq("id", input.empleadoId)
-        .eq("empresa_id", input.empresaId)
-        .maybeSingle(),
-      admin
-        .from("empresas")
-        .select("nombre, datos_generales")
-        .eq("id", input.empresaId)
-        .maybeSingle(),
-    ]);
+    const empleadoRes = await admin
+      .from("empleados")
+      .select("id, nombre, apellidos, dni_nie, local_id")
+      .eq("id", input.empleadoId)
+      .eq("empresa_id", input.empresaId)
+      .maybeSingle();
 
     const emp = empleadoRes.data as
       | { id: string; nombre: string | null; apellidos: string | null; dni_nie: string | null; local_id: string | null }
@@ -77,13 +71,11 @@ export async function enviarCartaBajaEmpresa(input: {
 
     const empleadoNombre =
       `${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim() || "Empleado/a";
-    const empresaNombre = (empresaRes.data?.nombre as string | undefined) ?? "La empresa";
-
-    // CIF de la empresa (Ajustes → Datos generales). Best-effort: si no está,
-    // la carta se emite igual sin él.
-    const dg = (empresaRes.data?.datos_generales as Record<string, unknown> | null) ?? null;
-    const empresaCif =
-      typeof dg?.cif === "string" && dg.cif.trim() ? (dg.cif as string).trim() : null;
+    // Quién extingue el contrato es la SOCIEDAD, con su NIF: sale de
+    // Ajustes → Empresa, no del rótulo del local.
+    const identidad = await getIdentidadEmpresa(admin, input.empresaId);
+    const empresaNombre = identidad.razonSocial;
+    const empresaCif = identidad.cif;
 
     // Ciudad del local del trabajador, para el encabezado (best-effort).
     let ciudad: string | null = null;
@@ -95,6 +87,8 @@ export async function enviarCartaBajaEmpresa(input: {
         .maybeSingle();
       ciudad = (local?.ciudad as string | null) ?? null;
     }
+    // Sin local, la del domicilio fiscal: el encabezado no se queda en «—».
+    ciudad = ciudad ?? identidad.ciudad;
 
     const fechaComunicacionIso =
       input.fechaComunicacionIso ?? new Date().toISOString().slice(0, 10);

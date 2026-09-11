@@ -13,7 +13,12 @@ export type LineaPedidoPDF = {
 };
 
 export type DatosPedidoPDF = {
+  /** Razón social de quien compra: es a quien el proveedor tiene que facturar. */
   empresaNombre: string;
+  /** NIF de la sociedad compradora. */
+  empresaCif?: string | null;
+  /** Domicilio fiscal, para la factura del proveedor. */
+  empresaDomicilio?: string | null;
   proveedorNombre: string;
   proveedorEmail?: string | null;
   numero?: string | null;
@@ -61,8 +66,16 @@ export async function generarPedidoPDF(d: DatosPedidoPDF): Promise<Uint8Array> {
     page.drawText(t, { x: right - bold.widthOfTextAtSize(t, 12), y: y + 2, size: 12, font: bold, color: accent });
   }
   y -= 24;
-  page.drawText(`De: ${d.empresaNombre}`, { x: margin, y, size: 10, font, color: texto });
+  page.drawText(
+    `De: ${d.empresaNombre}${d.empresaCif ? ` · NIF ${d.empresaCif}` : ""}`,
+    { x: margin, y, size: 10, font, color: texto },
+  );
   y -= 14;
+  // El domicilio fiscal, para que el proveedor pueda facturar sin preguntarlo.
+  if (d.empresaDomicilio) {
+    page.drawText(d.empresaDomicilio, { x: margin + 18, y, size: 9, font, color: label });
+    y -= 13;
+  }
   page.drawText(`Para: ${d.proveedorNombre}${d.proveedorEmail ? ` · ${d.proveedorEmail}` : ""}`, { x: margin, y, size: 10, font, color: texto });
   y -= 14;
   const fechas = `Fecha: ${d.fecha}`;

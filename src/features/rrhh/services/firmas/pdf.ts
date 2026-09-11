@@ -51,7 +51,10 @@ export type DatosActa = {
   tipo: string;
   modalidad: string;
   validez: string;
+  /** Razón social de la empresa: quien requiere la firma es la SOCIEDAD. */
   empresaNombre: string;
+  /** NIF de la sociedad, para que el acta identifique al empleador. */
+  empresaCif?: string | null;
   /** Zona horaria (IANA) de la empresa, para sellar el acta en hora local (PRP-069). */
   zonaHoraria: string;
   empleadoNombre: string;
@@ -158,7 +161,10 @@ export async function generarActa(
 
   drawField("Documento", datos.titulo);
   drawField("Tipo", datos.tipo);
-  drawField("Empresa requirente", datos.empresaNombre);
+  drawField(
+    "Empresa requirente",
+    `${datos.empresaNombre}${datos.empresaCif ? ` · NIF ${datos.empresaCif}` : ""}`,
+  );
   drawField(
     porLectura ? "Destinatario" : "Firmante",
     `${datos.empleadoNombre}${datos.empleadoDni ? ` · DNI/NIE ${datos.empleadoDni}` : ""}${datos.empleadoEmail ? ` · ${datos.empleadoEmail}` : ""}`,

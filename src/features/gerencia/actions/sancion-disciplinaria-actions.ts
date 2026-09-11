@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getIdentidadEmpresa } from "@/features/empresa/services/identidad-empresa";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { sha256, generarToken, hashToken } from "@/features/rrhh/services/firmas/crypto";
@@ -27,7 +28,7 @@ async function getRequestMeta() {
   return { ip, userAgent: h.get("user-agent") || null };
 }
 
-async function requireAdmin(): Promise<{ userId: string; userName: string; empresaId: string }> {
+async function requireAdmin(): Promise<{ userId: string; empresaId: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -42,12 +43,10 @@ async function requireAdmin(): Promise<{ userId: string; userName: string; empre
   const { empresaId } = await getAppContext();
   if (!empresaId) throw new Error("Empresa no resuelta para el usuario actual");
 
-  const fullName =
-    (user.user_metadata?.full_name as string | undefined) ||
-    (user.email as string | undefined) ||
-    "Dirección";
-
-  return { userId: user.id, userName: fullName, empresaId };
+  // No se devuelve el nombre a propósito: la sanción la impone la EMPRESA y en
+  // ningún papel figura quién de la plantilla pulsó el botón. Para el registro
+  // interno basta con `userId`, que es lo que se guarda en `enviado_por`.
+  return { userId: user.id, empresaId };
 }
 
 /** Una línea con lo esencial de la sanción, para el listado y la ficha de firmas. */
@@ -67,11 +66,15 @@ function fmtFechaEs(iso: string): string {
 export interface SancionInput {
   empleadoId: string;
   gravedad: GravedadSancion;
-  fechaHechos?: string | null;
+  /** Obligatoria: el art. 58.2 ET exige hacer constar la fecha de los hechos. */
+  fechaHechos: string;
   hechos: string;
   normaInfringida?: string | null;
   medida: string;
   fechaEmision: string;
+  /** Primer y último día de cumplimiento de la medida, si los tiene. */
+  cumplimientoDesde?: string | null;
+  cumplimientoHasta?: string | null;
   /** Días de plazo para firmar el acuse de recibo. */
   plazoDias?: number;
 }
@@ -91,13 +94,19 @@ export async function crearSancionDisciplinaria(
   input: SancionInput,
 ): Promise<CrearSancionResult> {
   try {
-    const { userId, userName, empresaId } = await requireAdmin();
+    const { userId, empresaId } = await requireAdmin();
     const admin = createAdminClient();
     const meta = await getRequestMeta();
 
     const empleadoId = (input.empleadoId ?? "").trim();
     if (!empleadoId) return { ok: false, error: "Falta el trabajador destinatario" };
     if (!input.hechos?.trim()) return { ok: false, error: "Describe los hechos que motivan la sanción" };
+    // Sin fecha de los hechos la comunicación no cumple el art. 58.2 ET.
+    if (!input.fechaHechos) return { ok: false, error: "Falta la fecha de los hechos" };
+    if (input.cumplimientoDesde && input.cumplimientoHasta &&
+        input.cumplimientoHasta < input.cumplimientoDesde) {
+      return { ok: false, error: "El cumplimiento de la medida no puede acabar antes de empezar" };
+    }
     if (!input.medida?.trim()) return { ok: false, error: "Indica la medida disciplinaria adoptada" };
     if (!input.fechaEmision) return { ok: false, error: "Falta la fecha de emisión" };
 
@@ -136,14 +145,10 @@ export async function crearSancionDisciplinaria(
     const destino = (emp.email_empresa as string | null) || (emp.email_personal as string | null);
     if (!destino) return { ok: false, error: "El trabajador no tiene email; añádelo antes de enviar" };
 
-    const { data: empresa } = await admin
-      .from("empresas")
-      .select("nombre, logo_url, isotipo_url")
-      .eq("id", empresaId)
-      .maybeSingle();
-    const empresaNombre = (empresa?.nombre as string) ?? "La empresa";
-    const empresaLogoUrl =
-      ((empresa?.isotipo_url as string | null) || (empresa?.logo_url as string | null)) ?? null;
+    // Quién sanciona sale de Ajustes → Empresa: razón social, NIF y domicilio.
+    const empresa = await getIdentidadEmpresa(admin, empresaId);
+    const empresaNombre = empresa.nombre;
+    const empresaLogoUrl = empresa.marcaUrl;
 
     // A partir de aquí SIEMPRE el id de la ficha: `empleadoId` es lo que llegó de
     // la pantalla y puede ser el id del usuario, que no vale para guardar.
@@ -155,17 +160,21 @@ export async function crearSancionDisciplinaria(
     // 1) Generar el PDF oficial de la sanción.
     const { bytes: pdfBytes, posicionFirma } = await generarSancionPdf({
       empresaNombre,
+      empresaRazonSocial: empresa.razonSocial,
+      empresaCif: empresa.cif,
+      empresaDomicilio: empresa.domicilio,
       empleadoNombre: empleadoNombre || "Trabajador/a",
       empleadoDni: (emp.dni_nie as string | null) ?? null,
       puesto: (emp.puesto as string | null) ?? null,
       departamento,
       gravedad: input.gravedad,
-      fechaHechos: input.fechaHechos ?? null,
+      fechaHechos: input.fechaHechos,
       hechos: input.hechos.trim(),
       normaInfringida: input.normaInfringida?.trim() || null,
       medida: input.medida.trim(),
       fechaEmision: input.fechaEmision,
-      emitidoPor: userName,
+      cumplimientoDesde: input.cumplimientoDesde ?? null,
+      cumplimientoHasta: input.cumplimientoHasta ?? null,
     });
     const pdfBuffer = Buffer.from(pdfBytes);
     const sha256Original = sha256(pdfBuffer);
@@ -247,13 +256,14 @@ export async function crearSancionDisciplinaria(
       empresaLogoUrl,
       empleadoNombre: empleadoNombre || "Trabajador/a",
       tituloDocumento: titulo,
-      enviadoPor: userName,
+      // La sanción la impone la empresa: en el correo tampoco se señala a nadie.
+      enviadoPor: empresaNombre,
       token,
       expiraEn: expira,
       asuntoOverride: `Comunicación de sanción disciplinaria — ${empresaNombre}`,
       introOverride:
         `Hola ${empleadoNombre || ""},\n\n` +
-        `La dirección de ${empresaNombre} te comunica una sanción disciplinaria. ` +
+        `La dirección de ${empresa.razonSocial} te comunica una sanción disciplinaria. ` +
         `Debes firmar el documento como acuse de recibo (leído/informado). ` +
         `La firma NO implica conformidad: conservas tu derecho a impugnarla.`,
     });
@@ -295,6 +305,28 @@ export async function crearSancionDisciplinaria(
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[sancion] crearSancionDisciplinaria:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+/**
+ * La empresa tal y como va a salir IMPRESA en la sanción, para que la
+ * previsualización enseñe lo mismo que el PDF y no el rótulo del local.
+ * Sale de Ajustes → Empresa.
+ */
+export async function getEmpresaDeLaSancion(): Promise<
+  | { ok: true; data: { nombre: string; razonSocial: string; cif: string | null; domicilio: string | null } }
+  | { ok: false; error: string }
+> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const e = await getIdentidadEmpresa(supabase, empresaId);
+    return {
+      ok: true,
+      data: { nombre: e.nombre, razonSocial: e.razonSocial, cif: e.cif, domicilio: e.domicilio },
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Error" };
   }
 }
 

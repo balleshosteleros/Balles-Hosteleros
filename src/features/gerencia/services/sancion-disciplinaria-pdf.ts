@@ -32,15 +32,24 @@ export const GRAVEDAD_LABEL: Record<GravedadSancion, string> = {
 };
 
 export type DatosSancion = {
+  /** Nombre comercial: el rótulo, solo para el titular de la hoja. */
   empresaNombre: string;
+  /** Sociedad que sanciona. Es quien tiene que figurar como empleador. */
+  empresaRazonSocial?: string | null;
   empresaCif?: string | null;
+  /** Domicilio fiscal, en una línea. */
+  empresaDomicilio?: string | null;
   empleadoNombre: string;
   empleadoDni?: string | null;
   puesto?: string | null;
   departamento?: string | null;
   gravedad: GravedadSancion;
-  /** Fecha de los hechos (YYYY-MM-DD) o texto libre. */
-  fechaHechos?: string | null;
+  /**
+   * Fecha de los hechos (YYYY-MM-DD). OBLIGATORIA: el art. 58.2 del Estatuto de
+   * los Trabajadores exige que la comunicación escrita haga constar la fecha y
+   * los hechos, y sin ella tampoco puede contarse la prescripción.
+   */
+  fechaHechos: string;
   /** Descripción de los hechos que motivan la sanción. */
   hechos: string;
   /** Norma/convenio/artículo infringido (opcional). */
@@ -49,8 +58,10 @@ export type DatosSancion = {
   medida: string;
   /** Fecha de emisión (YYYY-MM-DD). */
   fechaEmision: string;
-  /** Firmante por la empresa (nombre y cargo). */
-  emitidoPor?: string | null;
+  /** Primer día de cumplimiento de la medida (YYYY-MM-DD), si tiene fechas. */
+  cumplimientoDesde?: string | null;
+  /** Último día de cumplimiento de la medida (YYYY-MM-DD). */
+  cumplimientoHasta?: string | null;
 };
 
 const GRAVEDAD_COLOR: Record<GravedadSancion, ReturnType<typeof rgb>> = {
@@ -154,10 +165,23 @@ export async function generarSancionPdf(
     color: colorTitulo,
   });
   y -= 20;
+  // Identificación del EMPLEADOR: la sociedad, su NIF y su domicilio fiscal.
+  // El rótulo del local («BACANAL») no identifica a quien sanciona.
+  const razonSocial = (datos.empresaRazonSocial || "").trim() || datos.empresaNombre;
   page.drawText(
-    textoPdf(`${datos.empresaNombre}${datos.empresaCif ? ` · CIF ${datos.empresaCif}` : ""}`),
+    textoPdf(`${razonSocial}${datos.empresaCif ? ` · NIF ${datos.empresaCif}` : ""}`),
     { x: margin, y, size: 10, font, color: colorMuted },
   );
+  if (datos.empresaDomicilio?.trim()) {
+    y -= 13;
+    page.drawText(textoPdf(datos.empresaDomicilio.trim()), {
+      x: margin,
+      y,
+      size: 9,
+      font,
+      color: colorMuted,
+    });
+  }
   y -= 24;
   page.drawLine({
     start: { x: margin, y },
@@ -208,6 +232,17 @@ export async function generarSancionPdf(
     drawParrafo("Norma / convenio infringido", datos.normaInfringida);
   }
   drawParrafo("Medida disciplinaria adoptada", datos.medida);
+  // Una suspensión de empleo y sueldo tiene que decir QUÉ DÍAS se cumple: el
+  // trabajador debe saber exactamente cuándo no acude a trabajar.
+  if (datos.cumplimientoDesde) {
+    const hasta = datos.cumplimientoHasta || datos.cumplimientoDesde;
+    drawField(
+      "Cumplimiento de la medida",
+      hasta === datos.cumplimientoDesde
+        ? `El día ${fmtFecha(datos.cumplimientoDesde)}`
+        : `Del ${fmtFecha(datos.cumplimientoDesde)} al ${fmtFecha(hasta)}, ambos inclusive`,
+    );
+  }
 
   // Cláusula de acuse de recibo (leído, no conforme).
   nuevaPaginaSiHaceFalta(120);
@@ -223,21 +258,29 @@ export async function generarSancionPdf(
     "Mediante la firma de este documento, el trabajador/a declara haber sido informado/a y haber " +
     "recibido la presente comunicación de sanción disciplinaria. La firma constituye únicamente acuse " +
     "de recibo y de lectura; NO implica conformidad ni aceptación de los hechos ni de la medida " +
-    "adoptada. El trabajador/a conserva su derecho a impugnar la sanción por los cauces legales " +
-    "previstos.";
+    "adoptada. El trabajador/a puede impugnar esta sanción ante el Juzgado de lo Social en el plazo " +
+    "de veinte días hábiles desde su notificación (art. 114 de la Ley Reguladora de la Jurisdicción " +
+    "Social), previa presentación de la papeleta de conciliación cuando proceda.";
   for (const ln of wrap(clausula, font, 9.5, contentWidth)) {
     page.drawText(ln, { x: margin, y, size: 9.5, font, color: colorMuted });
     y -= 13;
   }
   y -= 10;
 
-  drawField("Emitido por", `${datos.emitidoPor?.trim() || datos.empresaNombre} · ${fmtFecha(datos.fechaEmision)}`);
+  // La sanción la impone la EMPRESA (art. 58.1 ET), no un empleado concreto: en
+  // el documento va la sociedad, para no señalar a nadie de la plantilla. Quién
+  // la emitió queda igualmente guardado en el registro interno y en el acta.
+  drawField("Emitido por", `La dirección de ${razonSocial} · ${fmtFecha(datos.fechaEmision)}`);
 
   // Banda reservada a la firma manuscrita del trabajador. Se reserva ENTERA en
   // una sola página: si no cabe, se pasa a la siguiente antes de dibujarla, para
   // que el recuadro y el trazo no queden partidos entre dos hojas.
   const FIRMA_ALTO = 70;
-  nuevaPaginaSiHaceFalta(FIRMA_ALTO + 30);
+  // Aquí se mide a ojo de cirujano, no con el margen de seguridad general: la
+  // banda (70) + las tres líneas del sello que van debajo (~40) + aire. Con el
+  // colchón genérico, una sanción corta se iba a una segunda hoja casi vacía.
+  const ALTO_BANDA_COMPLETA = 14 + FIRMA_ALTO + 46;
+  if (y - ALTO_BANDA_COMPLETA < 24) nuevaPagina();
   y -= 6;
   page.drawText("FIRMA DEL TRABAJADOR/A (LEÍDO Y RECIBIDO)", {
     x: margin,

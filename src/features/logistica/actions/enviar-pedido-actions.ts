@@ -15,6 +15,7 @@
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { whatsappHref, whatsappNumero } from "@/shared/lib/telefono";
 import { generarPedidoPDF, type LineaPedidoPDF } from "@/features/logistica/lib/pedido-pdf";
+import { getIdentidadEmpresa } from "@/features/empresa/services/identidad-empresa";
 import { evaluarReparto, describirReparto, type RepartoProveedor } from "@/features/logistica/data/pedidos";
 import { sendEmail } from "@/lib/email/send";
 
@@ -67,12 +68,13 @@ async function cargarPedido(
       reparto = { dias, horario, principal: (data.dia_reparto_principal as string | null) ?? null };
     }
   }
-  let empresaNombre = "Balles Hosteleros";
-  if (pedido.empresa_id) {
-    const { data } = await supabase.from("empresas").select("nombre").eq("id", pedido.empresa_id).single();
-    if (data?.nombre) empresaNombre = data.nombre as string;
-  }
-  return { pedido, lineas: (lineas ?? []) as LineaRow[], proveedor, reparto, empresaNombre };
+  // Quien compra es la SOCIEDAD, con su NIF y su domicilio fiscal: es lo que el
+  // proveedor necesita para facturar. Antes salía el rótulo del local y, sin
+  // empresa, un «Balles Hosteleros» escrito a mano que no era de nadie.
+  const empresa = pedido.empresa_id
+    ? await getIdentidadEmpresa(supabase, pedido.empresa_id as string)
+    : null;
+  return { pedido, lineas: (lineas ?? []) as LineaRow[], proveedor, reparto, empresa };
 }
 
 /** Referencia visible del pedido: el Nº libre si existe, si no el ID correlativo PED-x. */
@@ -95,7 +97,7 @@ function aLineasPDF(lineas: LineaRow[]): LineaPedidoPDF[] {
 export async function enviarPedidoEmail(pedidoId: string): Promise<{ ok: boolean; email?: string; error?: string }> {
   try {
     const { supabase } = await getLogisticaContext();
-    const { pedido, lineas, proveedor, reparto, empresaNombre } = await cargarPedido(supabase, pedidoId);
+    const { pedido, lineas, proveedor, reparto, empresa } = await cargarPedido(supabase, pedidoId);
 
     const email = (proveedor?.email_pedidos?.trim() || proveedor?.email_principal?.trim() || "");
     if (!email) return { ok: false, error: "El proveedor no tiene email de pedidos configurado." };
@@ -103,7 +105,9 @@ export async function enviarPedidoEmail(pedidoId: string): Promise<{ ok: boolean
     const evalRep = evaluarReparto(pedido.fecha_entrega, pedido.hora_entrega, pedido.hora_entrega_hasta, reparto);
     const ref = refPedido(pedido);
     const pdf = await generarPedidoPDF({
-      empresaNombre,
+      empresaNombre: empresa?.razonSocial ?? "—",
+      empresaCif: empresa?.cif ?? null,
+      empresaDomicilio: empresa?.domicilio ?? null,
       proveedorNombre: pedido.proveedor_nombre || proveedor?.nombre_comercial || "Proveedor",
       proveedorEmail: email,
       numero: ref,
@@ -122,6 +126,7 @@ export async function enviarPedidoEmail(pedidoId: string): Promise<{ ok: boolean
       total: Number(pedido.total) || 0,
     });
 
+    const empresaNombre = empresa?.nombre ?? "—";
     const html = `<p>Buenos días,</p><p>Adjuntamos nuestro pedido <strong>${ref}</strong>. El detalle está en el PDF adjunto.</p><p>Un saludo,<br/>${empresaNombre}</p>`;
     const text = `Buenos dias,\n\nAdjuntamos nuestro pedido ${ref}. El detalle esta en el PDF adjunto.\n\nUn saludo,\n${empresaNombre}`;
 
@@ -160,9 +165,10 @@ export async function enviarPedidoEmail(pedidoId: string): Promise<{ ok: boolean
 export async function prepararWhatsappPedido(pedidoId: string): Promise<{ ok: boolean; url?: string; telefono?: string | null; error?: string }> {
   try {
     const { supabase } = await getLogisticaContext();
-    const { pedido, lineas, proveedor, empresaNombre } = await cargarPedido(supabase, pedidoId);
+    const { pedido, lineas, proveedor, empresa } = await cargarPedido(supabase, pedidoId);
     const ref = refPedido(pedido);
     const lineasTxt = lineas.map((l) => `• ${l.producto_nombre}: ${Number(l.cantidad)} ${l.unidad ?? "ud"}`).join("\n");
+    const empresaNombre = empresa?.nombre ?? "—";
     const texto = `*Pedido ${ref} — ${empresaNombre}*\n${lineasTxt}\nTotal: ${(Number(pedido.total) || 0).toFixed(2)} €\n(Te enviamos el PDF por email.)`;
 
     // El movil es `telefono_principal`; el secundario es el fijo del almacen y

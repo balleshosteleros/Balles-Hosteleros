@@ -23,6 +23,7 @@
 
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getIdentidadEmpresa } from "@/features/empresa/services/identidad-empresa";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAdminUser } from "@/features/rrhh/services/empleados-core";
@@ -312,18 +313,15 @@ export async function promocionarEmpleado(
   let anexoEnviado = false;
   if (input.enviarAnexo !== false) {
     try {
-      const { data: empresa } = await admin
-        .from("empresas")
-        .select("nombre, nif")
-        .eq("id", empresaId)
-        .maybeSingle();
+      // La sociedad que firma el anexo, desde Ajustes → Empresa.
+      const identidad = await getIdentidadEmpresa(admin, empresaId);
       const empleadoNombre = `${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim() || "Trabajador";
       const anexo = await generarAnexoPromocionPDF({
         empleadoNombre,
         empleadoDni: (emp.dni_nie as string | null) ?? null,
-        empresaNombre: (empresa?.nombre as string) ?? "La empresa",
-        empresaCif: (empresa?.nif as string | null) ?? null,
-        ciudad: null,
+        empresaNombre: identidad.razonSocial,
+        empresaCif: identidad.cif,
+        ciudad: identidad.ciudad,
         puestoAnterior: puestoOrigenNombre,
         puestoNuevo: puesto.nombre as string,
         fechaEfecto: fechaEs(new Date(`${input.primerDia}T00:00:00`)),

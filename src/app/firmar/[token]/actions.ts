@@ -18,6 +18,7 @@ import {
   sellarSancion,
   type PosicionFirmaSancion,
 } from "@/features/gerencia/services/sancion-disciplinaria-pdf";
+import { getIdentidadEmpresa } from "@/features/empresa/services/identidad-empresa";
 import { registrarMovimiento } from "@/features/rrhh/services/material/movimientos";
 import type { CategoriaMaterial } from "@/features/rrhh/data/entregas";
 
@@ -553,6 +554,9 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       .select("full_name, email")
       .eq("id", doc.enviado_por)
       .maybeSingle();
+    // El acta identifica al empleador por su razón social y su NIF, no por el
+    // rótulo del local: sale de Ajustes → Empresa.
+    const identidad = await getIdentidadEmpresa(admin, doc.empresa_id as string);
 
     let trazoPng: Uint8Array | null = null;
     if (doc.modalidad === "manuscrita_digital") {
@@ -595,7 +599,8 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       tipo: doc.tipo as string,
       modalidad: doc.modalidad as string,
       validez: doc.validez as string,
-      empresaNombre: (empresa?.nombre as string) ?? "—",
+      empresaNombre: identidad.razonSocial,
+      empresaCif: identidad.cif,
       zonaHoraria:
         ((empresa?.config_operativa as Record<string, unknown> | null)?.zonaHoraria as string | undefined)?.trim() ||
         "Europe/Madrid",
@@ -1188,6 +1193,7 @@ export async function acusarLectura(
         .maybeSingle(),
       admin.from("usuarios").select("full_name, email").eq("id", doc.enviado_por).maybeSingle(),
     ]);
+    const identidad = await getIdentidadEmpresa(admin, doc.empresa_id as string);
 
     const leidoEnIso = new Date().toISOString();
     await registrarEvento({
@@ -1209,7 +1215,8 @@ export async function acusarLectura(
       tipo: doc.tipo as string,
       modalidad: doc.modalidad as string,
       validez: doc.validez as string,
-      empresaNombre: (empresa?.nombre as string) ?? "—",
+      empresaNombre: identidad.razonSocial,
+      empresaCif: identidad.cif,
       zonaHoraria:
         ((empresa?.config_operativa as Record<string, unknown> | null)?.zonaHoraria as string | undefined)?.trim() ||
         "Europe/Madrid",
