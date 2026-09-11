@@ -69,8 +69,18 @@ export type SendEmailInput = {
    * Adjuntos opcionales (nodemailer). P.ej. el PDF de un pedido al proveedor.
    * `content` admite Buffer/Uint8Array o string. Aditivo: los llamadores que no
    * lo usan no se ven afectados.
+   *
+   * `cid` es para las imágenes que van DENTRO del correo (un logo, una
+   * cabecera): se referencian desde el HTML como `src="cid:…"` y no se listan
+   * como archivo adjunto. Sin él, la imagen llegaba rota y encima aparecía
+   * colgada del correo como si fuera un documento más.
    */
-  attachments?: { filename: string; content: Buffer | Uint8Array | string; contentType?: string }[];
+  attachments?: {
+    filename: string;
+    content: Buffer | Uint8Array | string;
+    contentType?: string;
+    cid?: string;
+  }[];
 };
 
 /** Extrae la dirección de un From que puede venir como "Nombre <email>" o "email". */
@@ -248,11 +258,13 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
           contentType: a.contentType,
           cid: a.cid,
         })),
-        // Adjuntos normales que pase el llamador.
+        // Adjuntos que pase el llamador. Los que traen `cid` son imágenes del
+        // propio correo: van inline, no como archivo suelto.
         ...(input.attachments?.map((a) => ({
           filename: a.filename,
           content: a.content instanceof Uint8Array ? Buffer.from(a.content) : a.content,
           contentType: a.contentType,
+          ...(a.cid ? { cid: a.cid, contentDisposition: "inline" as const } : {}),
         })) ?? []),
       ],
     });

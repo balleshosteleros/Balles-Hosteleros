@@ -181,8 +181,12 @@ export async function fetchEmpresaMarca(empresaId: string): Promise<EmpresaMarca
 }
 
 /**
- * Documento HTML completo del comunicado: cabecera + cuerpo sobre fondo neutro.
+ * Documento HTML completo del comunicado: cabecera + cuerpo sobre fondo BLANCO.
  * El cuerpo llega ya en HTML (lo escribe quien redacta el comunicado).
+ *
+ * Nada de recuadro gris alrededor: el correo iba sobre un gris con la tarjeta
+ * flotando encima y quedaba fatal. Un comunicado se lee como una carta, blanco
+ * de lado a lado; el color lo pone la cabecera de la empresa y nada más.
  */
 export function comunicadoEmailHtml(
   cabecera: string,
@@ -195,11 +199,11 @@ export function comunicadoEmailHtml(
   return `<!doctype html>
 <html lang="es">
 <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
-<body style="margin:0;padding:0;background-color:#F3F4F6;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;background-color:#F3F4F6;border-collapse:collapse;">
+<body style="margin:0;padding:0;background-color:#FFFFFF;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;background-color:#FFFFFF;border-collapse:collapse;">
     <tr>
-      <td align="center" style="padding:24px 12px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;background-color:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.08);border-collapse:collapse;">
+      <td align="center" style="padding:0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;background-color:#FFFFFF;border-collapse:collapse;">
           <tr><td style="padding:0;">${cabecera}</td></tr>
           <tr>
             <td style="padding:28px 28px 24px 28px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.65;color:#1F2937;">
