@@ -189,6 +189,38 @@ type PagoDbRow = {
 const PAGO_COLS =
   "empleado_id, empleado_nombre, fijo, nomina, horas_reales, horas_trabajadas, complemento, ajuste, horas_extras, bonus, ss_empleado, ss_empresa, irpf, total, pagado, comentario, comentario_empleado, confirmacion_rechazada_at, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
 
+/**
+ * El nombre que se ve SIEMPRE es el de la ficha del empleado, no la copia que
+ * quedó congelada en `rrhh_pagos.empleado_nombre` al guardar el pago.
+ *
+ * Esa copia se congela a propósito (el trigger `rrhh_pagos_lock_confirmado`
+ * la bloquea en cuanto se envía la liquidación), así que si la ficha se
+ * corrige después —una falta de ortografía, un apellido que faltaba— el
+ * histórico se quedaba con el nombre viejo y la misma persona salía escrita de
+ * dos formas distintas según el mes. Se resuelve por `empleado_id` y entran
+ * TODAS las fichas, también las de gente ya inactiva: si no, un ex-empleado se
+ * quedaba con el nombre antiguo para siempre.
+ */
+async function nombresDeFicha(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  empresaId: string,
+  empleadoIds: Array<string | null>,
+): Promise<Map<string, string>> {
+  const ids = Array.from(new Set(empleadoIds.filter((x): x is string => !!x)));
+  const mapa = new Map<string, string>();
+  if (ids.length === 0) return mapa;
+  const { data } = await supabase
+    .from("empleados")
+    .select("id, nombre, apellidos")
+    .eq("empresa_id", empresaId)
+    .in("id", ids);
+  for (const e of data ?? []) {
+    const nombre = `${(e.nombre as string) ?? ""} ${(e.apellidos as string) ?? ""}`.trim();
+    if (nombre) mapa.set(e.id as string, nombre);
+  }
+  return mapa;
+}
+
 function dbToPago(r: PagoDbRow): PagoGuardado {
   return {
     empleadoId: r.empleado_id,
@@ -255,8 +287,14 @@ export async function loadPagos(
       porEmpleado.set(id, lista);
       if (r.empleado_inactivo_al_subir === true) inactivoAlSubir.add(id);
     }
+    const nombres = await nombresDeFicha(
+      supabase,
+      empresaId,
+      (data ?? []).map((r) => (r as PagoDbRow).empleado_id),
+    );
     const filas = (data ?? []).map((r) => {
       const p = dbToPago(r as PagoDbRow);
+      if (p.empleadoId) p.empleadoNombre = nombres.get(p.empleadoId) ?? p.empleadoNombre;
       const detalle = p.empleadoId ? porEmpleado.get(p.empleadoId) ?? [] : [];
       p.numNominas = detalle.length;
       p.detalleNominas = detalle;
@@ -810,9 +848,15 @@ export async function loadPagosRango(
 
     // Agregación por trabajador. Los sueltos (ex-empleados sin ficha) se agrupan
     // por su nombre, que es lo único que los identifica.
+    const nombres = await nombresDeFicha(
+      supabase,
+      empresaId,
+      (data ?? []).map((r) => (r as PagoDbRow).empleado_id),
+    );
     const acc = new Map<string, PagoGuardado>();
     for (const row of data ?? []) {
       const p = dbToPago(row as PagoDbRow);
+      if (p.empleadoId) p.empleadoNombre = nombres.get(p.empleadoId) ?? p.empleadoNombre;
       const clave = p.empleadoId ?? `ext:${p.empleadoNombre}`;
       const prev = acc.get(clave);
       if (!prev) {

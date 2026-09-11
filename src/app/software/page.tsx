@@ -215,7 +215,7 @@ function Navbar() {
             Planes
           </a>
           <a href="#faq" className="text-sm text-white/80 transition hover:text-white">
-            FAQ
+            Preguntas frecuentes
           </a>
           <Link href="/" className="text-sm text-white/80 transition hover:text-white">
             Iniciar sesión
@@ -254,7 +254,7 @@ function Navbar() {
               Planes
             </a>
             <a href="#faq" onClick={() => setOpen(false)} className="text-sm text-white/85">
-              FAQ
+              Preguntas frecuentes
             </a>
             <Link href="/" className="text-sm text-white/85">
               Iniciar sesión
@@ -755,7 +755,7 @@ export default function SoftwareLanding() {
                 </li>
                 <li>
                   <a href="#faq" className="hover:text-slate-300">
-                    FAQ
+                    Preguntas frecuentes
                   </a>
                 </li>
               </ul>

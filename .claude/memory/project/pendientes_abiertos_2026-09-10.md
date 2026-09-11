@@ -2,36 +2,70 @@
 
 Los 5 puntos que quedaron en el aire, con el estado REAL comprobado en código y BD.
 
-## 1. Nóminas brutas y complementos de la tabla que pasó Iván — BLOQUEADO
-La tabla no está en esta ventana. Hay que volver a pasarla para cargarla.
-Hoy `rrhh_pagos` tiene 1 sola línea por empleado y mes (verificado con Alejandro:
-8 meses × 2 empresas, sin duplicados) y el reparto nómina/complemento ya existe:
-p. ej. HABANA 2026-08 → nómina 731,14 € + complemento 218,86 €.
-Ver [[pagos_una_linea_por_empleado_mes]].
+## 1. Nóminas brutas, complementos y Seguridad Social — NADA QUE COMPLETAR
+Comprobado línea a línea el 12/09/2026 sobre las 168 líneas de `rrhh_pagos`
+(ene–ago 2026, HABANA y BACANAL).
 
-## 2. Puesto principal de Alejandro Mojica — NO SE REPRODUCE
+- El reparto nómina/complemento **no cambia ningún coste**: Ratios suma `total`, no los
+  conceptos sueltos.
+- ⚠️ **`ss_empresa` a 0 NO es un hueco de datos: es el valor REAL.** Las 46 líneas sin
+  Seguridad Social son de gente que **no va por nómina**, cobra complemento y extras:
+  Iván Ballesteros (1.250–1.500 €/mes), Sofía Terrón (100 €/mes, ver
+  [[sofia_terron_siempre_complemento]]), Albero Cieliczka (120–150 €/mes) y dos sueltas
+  de Alejandro Mojica y Ruth González. 43 de esas 46 tienen además la nómina a 0.
+  **Sin nómina no hay Seguridad Social de empresa. Poner un número ahí sería inventarlo
+  e inflar el coste.** No tocar.
+
+### Lo único de verdad roto que salió al mirar
+
+- **Karen Johanna Aguilar, HABANA, abril 2026**: el `total` (1.285 €) se dejó fuera el
+  bonus de 155 €; los conceptos suman 1.440 €. Es la ÚNICA línea descuadrada de las 168.
+  Pendiente de decidir si se corrige.
+- **Alberto Cieliczka: RESUELTO (12/09/2026).** No estaba duplicado: una sola persona,
+  mismo `user_id` (`a2601c39-…`) y una ficha por empresa, el espejo normal multiempresa.
+  Salían dos nombres porque su ficha está **Inactiva** y la pantalla de Pagos solo lista
+  activos: sus líneas caían por la rama de "externos", que pintaba la copia congelada
+  `rrhh_pagos.empleado_nombre` en vez del nombre de la ficha.
+  Arreglado en los dos frentes: el nombre bueno es **Alberto** (lo confirmó Iván; el
+  apellido Cieliczka ya estaba bien, su correo es `wojciechjancieliczka@`), corregido en
+  las 2 fichas, en `usuarios`, en los 8 fichajes y en las 4 líneas de pago aún no
+  enviadas. Y `loadPagos`/`loadPagosRango` ahora resuelven el nombre por `empleado_id`
+  contra la ficha (helper `nombresDeFicha`, incluidas las fichas inactivas), así que
+  **el nombre sale igual en todas las pantallas** aunque la copia congelada diga otra cosa.
+  Las 11 líneas con la liquidación ya enviada también se corrigieron (orden de Iván):
+  eran dos erratas, "Albero" sin t en BACANAL y "Cielicka" sin z en HABANA. Como el
+  trigger `rrhh_pagos_lock_confirmado()` congela `empleado_nombre` junto con los importes,
+  se apagó SOLO `trg_rrhh_pagos_lock` dentro de un bloque atómico, se corrigió el texto y
+  se volvió a encender (comprobado: los 3 triggers quedan activos). No se tocó ni un
+  importe ni ninguna marca de envío. Las 15 líneas dicen ya "Alberto Cieliczka".
+
+## 2. Puesto principal de Alejandro Mojica — CERRADO (12/09/2026)
+Iván: "está bien, pues listo". No había triplicado. Queda como estaba.
 En BD está bien: HABANA → GERENTE `es_principal = true`, LOGÍSTICA y RECURSOS
 HUMANOS a false; BACANAL → GERENTE principal.
 `src/features/gerencia/actions/ratios-actions.ts:222` coge el principal
 (`asignaciones.find(p => p.es_principal)`) y el mapa de costes va indexado por
 `user_id`, una sola entrada por persona: no hay triplicado en Ratios.
 `rrhh_pagos` tampoco lo duplica.
-⚠️ Falta que Iván diga EN QUÉ PANTALLA vio el coste × 3 para poder cerrarlo.
 Dato suelto: NO tiene fila en `empleado_condiciones` (ninguna de las dos fichas),
 así que su coste sale del salario del PUESTO. Ver [[condiciones_empleado_fuentes]].
 
-## 3. Consultas pendientes — PÁGINA MUERTA, DUPLICADO DEL SISTEMA REAL
-`/consultas-pendientes` existe, no tiene enlace en el menú (solo label+icono en
-`nav-routes.tsx:256`) y no guarda nada: `ConsultasPendientesView` cuelga de
-`features/ajustes/contexts/ayuda-context.tsx`, que es `useState` en memoria con
-artículos de `features/ajustes/data/ayuda` inventados. Al recargar, se pierde todo.
-El sistema BUENO ya existe en otro sitio: `features/soporte` + `/ayuda` +
-el botón flotante de soporte, sobre `soporte_conocimiento` (6 filas reales).
-→ Lo de `ajustes` es deuda: sobra entero. Falta permiso para borrar.
-⚠️ La tabla `soporte_consultas` EXISTE en BD pero **ningún código la usa** (0 filas):
-si se quieren registrar las dudas de verdad, ahí es donde van.
+## 3. Consultas pendientes — BORRADO (12/09/2026)
+Iván dio permiso ("bórralo si no existe"). Era una copia muerta del sistema de Ayuda:
+página sin enlace en el menú y todo en memoria del navegador, sin guardar nada.
+Se fue la cadena entera, comprobando antes que no colgaba nada vivo:
+`app/(main)/consultas-pendientes/`, `ajustes/components/ConsultasPendientesView.tsx`,
+`ajustes/components/ayuda/AyudaChat.tsx` (tampoco lo usaba nadie),
+`ajustes/contexts/ayuda-context.tsx`, `ajustes/data/ayuda.ts`, el `<AyudaProvider>` de
+`shared/providers.tsx` y las 2 entradas de `nav-routes.tsx`. `npx tsc --noEmit` limpio.
+El sistema bueno sigue intacto: `/ayuda` + botón flotante de soporte sobre
+`soporte_conocimiento`. ⚠️ La tabla `soporte_consultas` sigue existiendo y vacía, sin
+código que la use: ahí es donde irían las dudas el día que se registren de verdad.
 
-## 4. FAQs — la tabla NO existe, la pantalla miente
+## 4. Preguntas frecuentes (antes "FAQs") — la tabla NO existe, la pantalla miente
+🔤 **NOMBRE DECIDIDO (12/09/2026): "Preguntas frecuentes"**. "FAQ" no se entiende y ya
+está fuera de todos los textos visibles (panel de Ayuda y la web `/software`).
+La tabla se monta EN OTRA VENTANA: debe llamarse igual de sencillo.
 `src/features/soporte/actions/faq-actions.ts` consulta `faqs` en 6 sitios y esa
 tabla **no está en la base**. La migración `supabase/migrations/003_faqs.sql`
 nunca se aplicó (numeración vieja, pre-timestamp).
@@ -41,6 +75,13 @@ Decisión pendiente de Iván: crear la tabla (migración idempotente nueva con
 `003_faqs.sql` dentro) o quitar las FAQs y quedarse solo con `soporte_conocimiento`.
 
 ## 5. Horas extras y bonus en Ratios — SIN IMPLEMENTAR
+✅ **El precio de la hora extra YA está bien puesto (comprobado 12/09/2026)**, tal y como
+lo dijo Iván: **10 €/h en TODOS los puestos, menos ARTISTAS, donde manda su precio/hora**
+— CANTANTE y MÚSICO (BACANAL) **62,50 €**, DJ (HABANA) **18 €**. Campo
+`puesto_salarios.precio_hora_extra` (y su espejo en `empleado_condiciones`), 58 puestos
+repasados, ni una excepción suelta.
+⚠️ Único hueco de datos: HABANA → MANTENIMIENTO → **SEGURIDAD** es el único puesto con
+`coste_hora` a NULL.
 Detalle en [[ratios_coste_personal]] (sección Pendiente): `fichajes.tipo` distingue
 NOR/EXT pero solo hay 3 fichajes marcados EXT en toda la base, y el bonus va como
 complemento mensual por persona, no repartido por día.

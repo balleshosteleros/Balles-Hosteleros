@@ -7,7 +7,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider } from "@/features/auth/contexts/auth-context";
 import { EmpresaProvider } from "@/features/empresa/contexts/empresa-context";
-import { AyudaProvider } from "@/features/ajustes/contexts/ayuda-context";
 import { MarketingProvider } from "@/features/marketing/contexts/marketing-context";
 import { ViewModeProvider } from "@/features/layout/contexts/view-mode-context";
 import { LlamadasProvider } from "@/features/llamadas-internas/components/LlamadasProvider";
@@ -22,19 +21,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <TooltipProvider>
         <AuthProvider>
           <EmpresaProvider>
-            <AyudaProvider>
-              <MarketingProvider>
-                <ViewModeProvider>
-                  <LlamadasProvider>{children}</LlamadasProvider>
-                  <Toaster />
-                  <Sonner />
-                  <GlobalLoadingOverlay />
-                  <Suspense fallback={null}>
-                    <NavigationLoadingDetector />
-                  </Suspense>
-                </ViewModeProvider>
-              </MarketingProvider>
-            </AyudaProvider>
+            <MarketingProvider>
+              <ViewModeProvider>
+                <LlamadasProvider>{children}</LlamadasProvider>
+                <Toaster />
+                <Sonner />
+                <GlobalLoadingOverlay />
+                <Suspense fallback={null}>
+                  <NavigationLoadingDetector />
+                </Suspense>
+              </ViewModeProvider>
+            </MarketingProvider>
           </EmpresaProvider>
         </AuthProvider>
       </TooltipProvider>
