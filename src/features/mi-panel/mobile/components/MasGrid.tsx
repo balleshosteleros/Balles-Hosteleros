@@ -26,26 +26,27 @@ import type { LucideIcon } from "lucide-react";
  */
 type Item = { href: string; label: string; icon: LucideIcon; hue: number };
 
-// Perfil va SIEMPRE el primero (Iván, 11-sep). El resto mantiene el orden de
-// antes en una sola rejilla plana. El `hue` agrupa por color: día (azul),
-// nómina (cian), comunicación (índigo), equipo y perfil (violeta).
+// MISMO ORDEN que en el menú del ordenador (`miPanelSubs`), con Perfil el
+// primero (Iván, 11-sep): quien usa las dos pantallas encuentra cada panel en
+// el mismo sitio. El `hue` solo agrupa por color: día (azul), nómina (cian),
+// comunicación (índigo), persona y equipo (violeta).
 const ITEMS: Item[] = [
   { href: "/m/perfil", label: "Perfil", icon: UserCircle, hue: 252 },
-  { href: "/m/fichajes", label: "Fichajes", icon: Fingerprint, hue: 211 },
+  { href: "/m/points", label: "Points", icon: Trophy, hue: 252 },
+  { href: "/m/calendario", label: "Calendario", icon: CalendarDays, hue: 211 },
   { href: "/m/cronograma", label: "Cronograma", icon: CalendarClock, hue: 211 },
   { href: "/m/horario", label: "Horario", icon: Timer, hue: 211 },
-  { href: "/m/calendario", label: "Calendario", icon: CalendarDays, hue: 211 },
+  { href: "/m/fichajes", label: "Fichajes", icon: Fingerprint, hue: 211 },
+  { href: "/m/formacion", label: "Formación", icon: GraduationCap, hue: 252 },
   { href: "/m/condiciones", label: "Condiciones", icon: ClipboardCheck, hue: 192 },
   { href: "/m/pagos", label: "Pagos", icon: Euro, hue: 192 },
-  { href: "/m/entregas", label: "Entregas", icon: PackageCheck, hue: 192 },
-  { href: "/m/documentos", label: "Documentos", icon: Files, hue: 192 },
+  { href: "/m/cuestionarios", label: "Cuestionarios", icon: FileQuestion, hue: 231 },
   { href: "/m/solicitudes", label: "Solicitudes", icon: Inbox, hue: 192 },
   { href: "/m/comunicados", label: "Comunicados", icon: Megaphone, hue: 231 },
-  { href: "/m/cuestionarios", label: "Cuestionarios", icon: FileQuestion, hue: 231 },
+  { href: "/m/entregas", label: "Entregas", icon: PackageCheck, hue: 192 },
+  { href: "/m/documentos", label: "Documentos", icon: Files, hue: 192 },
   { href: "/m/inspecciones", label: "Inspecciones", icon: FileSearch, hue: 231 },
   { href: "/m/equipo", label: "Equipo", icon: Network, hue: 252 },
-  { href: "/m/formacion", label: "Formación", icon: GraduationCap, hue: 252 },
-  { href: "/m/points", label: "Points", icon: Trophy, hue: 252 },
 ];
 
 export function MasGrid() {

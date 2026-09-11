@@ -22,6 +22,14 @@ import { PuestosEmpleadoTab } from "@/features/rrhh/components/empleados/Puestos
 import { EntregasEmpleadoTab } from "@/features/rrhh/components/empleados/EntregasEmpleadoTab";
 import { CalendarioEmpleadoTab } from "@/features/rrhh/components/empleados/CalendarioEmpleadoTab";
 import {
+  PointsEmpleadoTab,
+  CronogramaEmpleadoTab,
+  FormacionEmpleadoTab,
+  ComunicadosEmpleadoTab,
+  DocumentosEmpleadoTab,
+} from "@/features/rrhh/components/empleados/PanelesEmpleadoTabs";
+import { EquipoOrganigramaView } from "@/features/mi-panel/components/EquipoOrganigramaView";
+import {
   DatosPersonalesForm,
   type DatosPersonalesFormHandle,
 } from "@/features/mi-panel/components/DatosPersonalesForm";
@@ -44,25 +52,35 @@ import { cn } from "@/shared/lib/utils";
 import {
   User,
   Fingerprint, Inbox, FileSignature, Calendar, Timer,
-  Euro, Briefcase,
+  Euro, ClipboardCheck,
   FileQuestion, FileSearch, PackageCheck,
+  Trophy, CalendarClock, GraduationCap, Megaphone, Files, Network,
   Save, Loader2,
 } from "lucide-react";
 
 type EmpresaAcceso = { id: string; nombre: string; esPrincipal: boolean };
 
+// MISMO ORDEN que sus paneles (`miPanelSubs`): la ficha enseña lo que ve el
+// trabajador y en su mismo orden, para poder comprobar de un vistazo lo que él
+// tiene delante. Al final, lo que solo existe en la ficha: sus firmas.
 const TOP_TABS = [
   { id: "perfil",          label: "Perfil",         icon: User              },
+  { id: "points",          label: "Points",         icon: Trophy            },
+  { id: "calendarios",     label: "Calendario",     icon: Calendar          },
+  { id: "cronograma",      label: "Cronograma",     icon: CalendarClock     },
+  { id: "horarios",        label: "Horario",        icon: Timer             },
   { id: "fichajes",        label: "Fichajes",       icon: Fingerprint       },
-  { id: "solicitudes",     label: "Solicitudes",    icon: Inbox             },
-  { id: "firmas",          label: "Firmas",         icon: FileSignature     },
-  { id: "calendarios",     label: "Calendarios",    icon: Calendar          },
-  { id: "horarios",        label: "Horarios",       icon: Timer             },
-  { id: "entregas",        label: "Entregas",       icon: PackageCheck      },
+  { id: "formacion",       label: "Formación",      icon: GraduationCap     },
+  { id: "condiciones",     label: "Condiciones",    icon: ClipboardCheck    },
   { id: "pagos",           label: "Pagos",          icon: Euro              },
-  { id: "puestos",         label: "Puestos",        icon: Briefcase         },
   { id: "cuestionarios",   label: "Cuestionarios",  icon: FileQuestion      },
+  { id: "solicitudes",     label: "Solicitudes",    icon: Inbox             },
+  { id: "comunicados",     label: "Comunicados",    icon: Megaphone         },
+  { id: "entregas",        label: "Entregas",       icon: PackageCheck      },
+  { id: "documentos",      label: "Documentos",     icon: Files             },
   { id: "inspecciones",    label: "Inspecciones",   icon: FileSearch        },
+  { id: "equipo",          label: "Equipo",         icon: Network           },
+  { id: "firmas",          label: "Firmas",         icon: FileSignature     },
 ] as const;
 
 type TopTab = typeof TOP_TABS[number]["id"];
@@ -309,7 +327,9 @@ export default function FichaEmpleadoPage() {
         return <EntregasEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "pagos":
         return <PagosEmpleadoTab empleadoId={empleadoRegistro.id} />;
-      case "puestos":
+      case "condiciones":
+        // Su puesto con las condiciones vigentes (salario, jornada, horario) y
+        // el histórico de cambios: es lo que él ve en «Mi panel → Condiciones».
         return (
           <PuestosEmpleadoTab
             empleadoId={empleadoRegistro.id}
@@ -320,6 +340,19 @@ export default function FichaEmpleadoPage() {
         return <CuestionariosEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "inspecciones":
         return <InspeccionesEmpleadoTab empleadoId={empleadoRegistro.id} />;
+      case "points":
+        return <PointsEmpleadoTab empleadoId={empleadoRegistro.id} />;
+      case "cronograma":
+        return <CronogramaEmpleadoTab userId={empleadoRegistro.user_id} />;
+      case "formacion":
+        return <FormacionEmpleadoTab empleadoId={empleadoRegistro.id} />;
+      case "comunicados":
+        return <ComunicadosEmpleadoTab empleadoId={empleadoRegistro.id} />;
+      case "documentos":
+        return <DocumentosEmpleadoTab empleadoId={empleadoRegistro.id} />;
+      case "equipo":
+        // El organigrama de su empresa, el mismo que él abre en su panel.
+        return <div className="h-full min-h-[32rem]"><EquipoOrganigramaView /></div>;
     }
   }
 

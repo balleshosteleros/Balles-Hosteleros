@@ -138,9 +138,19 @@ const ORDEN_DEPARTAMENTOS = [
   "SALA",
 ];
 
-export async function getMiCronograma(): Promise<MiCronogramaResult> {
+/**
+ * Tareas del cronograma de una persona.
+ *
+ * Sin argumento, las del usuario que mira (Mi panel → Cronograma). Con
+ * `empleadoUserId` devuelve las de ESE trabajador: es lo que enseña su ficha en
+ * RRHH, que muestra sus mismos paneles en solo lectura.
+ */
+export async function getMiCronograma(
+  empleadoUserId?: string,
+): Promise<MiCronogramaResult> {
   try {
-    const { supabase, userId, empresaId } = await getAppContext();
+    const { supabase, userId: userIdSesion, empresaId } = await getAppContext();
+    const userId = empleadoUserId || userIdSesion;
     if (!userId) {
       return { ok: true, data: { rolLabel: null, departamentos: [] } };
     }
