@@ -705,15 +705,24 @@ export async function subirTc1Mes(input: {
       ? (input.periodoCotizacion as string)
       : mesAnterior(input.periodo);
 
-    // Mes confirmado = inmutable: tampoco se le añaden TC1.
-    const { data: mesRow } = await supabase
-      .from("rrhh_nominas_mes")
-      .select("confirmado_en")
+    // Lo que cierra la puerta es el visto bueno de los SEGUROS SOCIALES de ese
+    // mes cotizado, no el de las nóminas: son dos documentos que se aprueban por
+    // separado. Antes bastaba con haber confirmado las nóminas del mes para no
+    // poder adjuntar el recibo, y como el recibo de julio llega a mediados de
+    // agosto —después de aprobar las nóminas de agosto— se quedaba fuera para
+    // siempre, con la pantalla diciendo "sin documento" mes tras mes.
+    const { data: yaAprobado } = await supabase
+      .from("rrhh_nominas_tc1")
+      .select("id")
       .eq("empresa_id", empresaId)
-      .eq("periodo", input.periodo)
-      .maybeSingle();
-    if (mesRow?.confirmado_en) {
-      return { ok: false as const, error: "El mes está confirmado. Reábrelo para cambiar los TC1." };
+      .eq("periodo_cotizacion", mesCotizado)
+      .not("aprobado_en", "is", null)
+      .limit(1);
+    if ((yaAprobado ?? []).length > 0) {
+      return {
+        ok: false as const,
+        error: "Los seguros sociales de ese mes ya están aprobados. Reábrelos para añadir otro recibo.",
+      };
     }
 
     const admin = createAdminClient();

@@ -530,6 +530,18 @@ export function PagosView() {
   const mesSubidaYaTieneNominas = (estadoMesSubida?.nominas ?? 0) > 0;
   const mesSubidaConfirmado = estadoMesSubida?.confirmado === true;
 
+  // Lo que cierra los seguros sociales es SU propio visto bueno, no el de las
+  // nóminas: el recibo de julio llega a mediados de agosto, cuando las nóminas de
+  // agosto ya están aprobadas, y atarlo a ellas dejaba el recibo fuera para
+  // siempre. Se mira el mes que COTIZA el recibo que se va a adjuntar.
+  const ssMesElegidoAprobado = useMemo(
+    () =>
+      Object.values(estadoSubidaMeses).some((e) =>
+        e.cuadrePorMesCotizado.some((c) => c.periodo === mesCotizadoTc1 && c.aprobadoEn != null),
+      ),
+    [estadoSubidaMeses, mesCotizadoTc1],
+  );
+
   // Formatea horas decimales a "8h" o "8h 30m".
   const fmtHoras = (h: number): string => {
     const signo = h < 0 ? "−" : "";
@@ -1689,12 +1701,11 @@ export function PagosView() {
           variant="outline"
           className={nominasEnMes > 0 && !esVistaAgregada ? "gap-2" : "ml-auto gap-2"}
           onClick={() => setShowDocsMes(true)}
-          disabled={subiendoNominas || estadoMes.confirmado || esVistaAgregada}
-          title={
-            estadoMes.confirmado
-              ? "Las nóminas de este mes ya están confirmadas: para subir otras hay que reabrir el mes"
-              : "Elige el mes y sube sus nóminas y TC1; la IA los lee y vuelca los datos"
-          }
+          // Con el mes confirmado se sigue pudiendo abrir: dentro, las nóminas
+          // quedan bloqueadas pero el recibo de cotizaciones no, que llega más
+          // tarde y es un documento aparte.
+          disabled={subiendoNominas || esVistaAgregada}
+          title="Elige el mes y sube sus nóminas y TC1; la IA los lee y vuelca los datos"
         >
           <Upload className="h-4 w-4" />
           {subiendoNominas
@@ -2122,7 +2133,12 @@ export function PagosView() {
                   variant="outline"
                   size="sm"
                   className="shrink-0 gap-1.5"
-                  disabled={subiendoTc1 || mesSubidaConfirmado}
+                  disabled={subiendoTc1 || ssMesElegidoAprobado}
+                  title={
+                    ssMesElegidoAprobado
+                      ? `Los seguros sociales de ${nombreMesLargo(mesCotizadoTc1)} ya están aprobados: reábrelos para añadir otro recibo`
+                      : undefined
+                  }
                   onClick={() => tc1InputRef.current?.click()}
                 >
                   {subiendoTc1 ? <Clock className="h-4 w-4 animate-pulse" /> : <Upload className="h-4 w-4" />}
@@ -2139,7 +2155,7 @@ export function PagosView() {
                 <Select
                   value={mesCotizadoTc1}
                   onValueChange={setMesTc1Elegido}
-                  disabled={subiendoTc1 || mesSubidaConfirmado}
+                  disabled={subiendoTc1 || ssMesElegidoAprobado}
                 >
                   <SelectTrigger className="mt-1.5 h-9">
                     <SelectValue placeholder="Elige el mes" />
@@ -2198,7 +2214,7 @@ export function PagosView() {
                         variant="ghost"
                         size="sm"
                         className="shrink-0 gap-1.5 text-muted-foreground hover:text-destructive"
-                        disabled={mesSubidaConfirmado}
+                        disabled={t.aprobadoEn != null}
                         onClick={() => quitarTc1(t.id, t.nombre)}
                       >
                         <X className="h-4 w-4" />
