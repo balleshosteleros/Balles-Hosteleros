@@ -48,7 +48,11 @@ export type TipoNotificacion =
   // Tipos propios para poder encenderlos/apagarlos por separado en Ajustes
   | "firma_pendiente"
   | "resena_google"
-  | "modelos_aeat";
+  | "modelos_aeat"
+  // Cumpleaños del trabajador: felicitación + points. Se enciende y se apaga en
+  // Points (regla «Cumpleaños»), NO en Ajustes → Notificaciones: un solo
+  // interruptor para el mensaje y para el regalo.
+  | "cumpleanos";
 
 export interface TipoMeta {
   /** Etiqueta legible (sentence case). */
@@ -282,6 +286,14 @@ export const TIPOS_NOTIFICACION: Record<TipoNotificacion, TipoMeta> = {
     color: "text-orange-600",
     badge: "bg-orange-100 text-orange-700",
     accionLabel: "Visto",
+    requiereAccion: false,
+  },
+  cumpleanos: {
+    label: "Cumpleaños",
+    icono: "cumpleanos",
+    color: "text-pink-600",
+    badge: "bg-pink-100 text-pink-700",
+    accionLabel: "¡Gracias!",
     requiereAccion: false,
   },
 };

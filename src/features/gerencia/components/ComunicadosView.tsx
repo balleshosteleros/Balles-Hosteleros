@@ -34,7 +34,14 @@ import {
   listEmpleadosParaComunicado,
   crearUrlsSubidaComunicado,
   type EmpleadoSelector,
+  type LecturaComunicado,
 } from "@/features/gerencia/actions/comunicados-actions";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/shared/components/ui/hover-card";
 import { createClient as createSupabaseBrowser } from "@/lib/supabase/client";
 import {
   BUCKET_COMUNICADOS,
@@ -117,10 +124,26 @@ function EstadoBadge({ estado }: { estado: EstadoComunicado }) {
   return <Badge className={`${colors[estado]} border-0 font-medium`}>{ESTADO_COMUNICADO_LABELS[estado]}</Badge>;
 }
 
-function AlcanceCircle({ pct }: { pct: number }) {
+/**
+ * El alcance del comunicado y, al ponerse delante, QUIÉN lo ha abierto y cuándo.
+ *
+ * El porcentaje solo decía "59 %" y no servía para perseguir a nadie: lo que
+ * hace falta es el nombre y el día y la hora a la que lo abrió (Iván,
+ * 11-09-2026). Los que aún no lo han abierto salen detrás, para verlos de un
+ * vistazo sin abrir nada.
+ */
+function AlcanceCircle({
+  pct,
+  lecturas,
+  tz,
+}: {
+  pct: number;
+  lecturas: LecturaComunicado[];
+  tz: string;
+}) {
   const r = 16, c = 2 * Math.PI * r;
   const color = pct >= 80 ? "text-emerald-500" : pct >= 40 ? "text-amber-500" : "text-muted-foreground";
-  return (
+  const rueda = (
     <div className="flex items-center gap-2">
       <svg width="40" height="40" className="-rotate-90">
         <circle cx="20" cy="20" r={r} fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
@@ -129,6 +152,46 @@ function AlcanceCircle({ pct }: { pct: number }) {
       </svg>
       <span className="text-sm font-medium">{pct}%</span>
     </div>
+  );
+
+  if (lecturas.length === 0) return rueda;
+
+  const abiertos = lecturas.filter(l => l.vistaAt);
+  const pendientes = lecturas.filter(l => !l.vistaAt);
+
+  return (
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <div className="cursor-default">{rueda}</div>
+      </HoverCardTrigger>
+      <HoverCardContent align="start" className="w-80 p-0">
+        <div className="border-b px-3 py-2 text-xs font-semibold">
+          Lo han abierto {abiertos.length} de {lecturas.length}
+        </div>
+        <div className="max-h-64 overflow-y-auto py-1">
+          {abiertos.map((l, i) => (
+            <div key={`v-${i}`} className="flex items-baseline justify-between gap-3 px-3 py-1.5 text-xs">
+              <span className="truncate">{l.nombre}</span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {formatFechaHoraEnZona(l.vistaAt, tz)}
+              </span>
+            </div>
+          ))}
+          {pendientes.length > 0 && (
+            <>
+              <div className="border-t px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Sin abrir
+              </div>
+              {pendientes.map((l, i) => (
+                <div key={`p-${i}`} className="px-3 py-1.5 text-xs text-muted-foreground">
+                  {l.nombre}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 
@@ -298,8 +361,23 @@ function ComunicadoEditor({
    * se resuelve al guardar con el usuario de la sesión. No se exige tener ficha
    * de empleado: dirección puede no tenerla y el comunicado quedaba sin autor.
    */
-  const guardar = (intencion: IntencionGuardado) =>
-    onSave({ ...form, creadorId: form.creadorId || user?.id || "" }, intencion);
+  /**
+   * Publicar TARDA: sube los documentos y manda los correos uno a uno. Pulsar y
+   * que no pase nada hasta que salta el aviso abajo parece que el botón está
+   * roto (Iván, 11-09-2026), así que el botón se queda en marcha y no admite un
+   * segundo clic —que además publicaría dos veces—.
+   */
+  const [enMarcha, setEnMarcha] = useState<IntencionGuardado | null>(null);
+
+  const guardar = async (intencion: IntencionGuardado) => {
+    if (enMarcha) return;
+    setEnMarcha(intencion);
+    try {
+      await onSave({ ...form, creadorId: form.creadorId || user?.id || "" }, intencion);
+    } finally {
+      setEnMarcha(null);
+    }
+  };
 
 
   /** ¿Hay algo escrito? Salir de una ficha en blanco no debe dejar borradores vacíos. */
@@ -318,12 +396,13 @@ function ComunicadoEditor({
    *   publicar más tarde desde el listado.
    */
   const salir = async () => {
+    if (enMarcha) return;
     const hayCambios = firmaForm(form) !== firmaInicial;
     if (!hayCambios) {
       onBack();
       return;
     }
-    if (isEdit || tieneContenido) await onSave(form, "borrador");
+    if (isEdit || tieneContenido) await guardar("borrador");
     else onBack();
   };
 
@@ -412,15 +491,27 @@ function ComunicadoEditor({
     <div className="flex flex-col h-[calc(100%+7rem)] -mb-28">
       <div className="flex items-center justify-between px-6 py-3 border-b bg-card shrink-0">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={salir}><ArrowLeft className="h-4 w-4 mr-1" />Volver</Button>
+          <Button variant="ghost" size="sm" onClick={salir} disabled={!!enMarcha}><ArrowLeft className="h-4 w-4 mr-1" />Volver</Button>
           <Separator orientation="vertical" className="h-5" />
           <h2 className="text-sm font-bold">{isEdit ? "Editar comunicado" : "Crear comunicado"}</h2>
           <EstadoBadge estado={form.estado} />
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setPreview(true)}><Eye className="h-4 w-4 mr-1" />Previsualizar</Button>
-          <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => guardar("publicar")}>
-            <Send className="h-4 w-4 mr-1" />{vaProgramado ? "Programar" : "Publicar"}
+          <Button variant="outline" size="sm" onClick={() => setPreview(true)} disabled={!!enMarcha}><Eye className="h-4 w-4 mr-1" />Previsualizar</Button>
+          <Button
+            size="sm"
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+            onClick={() => guardar("publicar")}
+            disabled={!!enMarcha}
+          >
+            {enMarcha === "publicar" ? (
+              <LoadingSpinner size="sm" className="py-0 mr-1" iconClassName="text-current" />
+            ) : (
+              <Send className="h-4 w-4 mr-1" />
+            )}
+            {enMarcha === "publicar"
+              ? vaProgramado ? "Programando…" : "Publicando…"
+              : vaProgramado ? "Programar" : "Publicar"}
           </Button>
         </div>
       </div>
@@ -956,6 +1047,7 @@ function filaAComunicado(fila: Record<string, unknown>): Comunicado {
     envio: typeof fila.envio === "string" ? fila.envio : null,
     recurrencia: (texto(fila.recurrencia) || "sin_repeticion") as Recurrencia,
     alcancePct: Number(fila.alcance_pct ?? 0) || 0,
+    lecturas: Array.isArray(fila.lecturas) ? (fila.lecturas as LecturaComunicado[]) : [],
     rolesDestinatarios: lista(fila.roles_destinatarios),
     todaEmpresa,
     departamentosDestinatarios: departamentos,
@@ -1422,7 +1514,7 @@ export function ComunicadosView() {
     alcance: {
       th: <TableHead key="alcance">Alcance</TableHead>,
       td: (c) => (
-        <TableCell key="alcance"><AlcanceCircle pct={c.alcancePct} /></TableCell>
+        <TableCell key="alcance"><AlcanceCircle pct={c.alcancePct} lecturas={c.lecturas} tz={tz} /></TableCell>
       ),
     },
     destinatarios: {

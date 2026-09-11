@@ -129,6 +129,23 @@ export const ESTADO_COLOR: Record<EstadoFirma, string> = {
   borrador: "border-sky-300 bg-sky-50 text-sky-700",
 };
 
+/**
+ * Etiqueta y color del estado teniendo en cuenta QUÉ documento es. Una sanción
+ * cerrada sin firma no es un «leído» cualquiera: es una sanción NO FIRMADA, y
+ * así tiene que leerse —en rojo— allí donde se mire.
+ */
+export function estadoFirmaLabel(estado: EstadoFirma | string, tipo?: string): string {
+  if (estado === "leido" && tipo === "sancion_disciplinaria") return "No firmada";
+  return ESTADO_LABEL[estado as EstadoFirma] ?? String(estado);
+}
+
+export function estadoFirmaColor(estado: EstadoFirma | string, tipo?: string): string {
+  if (estado === "leido" && tipo === "sancion_disciplinaria") {
+    return "border-rose-300 bg-rose-50 text-rose-700";
+  }
+  return ESTADO_COLOR[estado as EstadoFirma] ?? "border-zinc-300 bg-zinc-50 text-zinc-600";
+}
+
 export const TIPOS_DOCUMENTO: TipoDocumento[] = [
   "contrato",
   "anexo_contrato",

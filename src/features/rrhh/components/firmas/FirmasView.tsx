@@ -73,8 +73,8 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   TIPOS_DOCUMENTO,
   TIPO_LABEL,
-  ESTADO_LABEL,
-  ESTADO_COLOR,
+  estadoFirmaLabel,
+  estadoFirmaColor,
   type DocumentoFirma,
   type TipoDocumento,
   type ModalidadFirma,
@@ -221,7 +221,7 @@ export function FirmasView() {
 
   const acceso = (d: DocumentoFirma, campo: string): unknown => {
     if (campo === "tipo") return TIPO_LABEL[d.tipo];
-    if (campo === "estado") return ESTADO_LABEL[d.estado];
+    if (campo === "estado") return estadoFirmaLabel(d.estado, d.tipo);
     if (campo === "empleado") return d.empleadoNombre;
     if (campo === "departamento") return d.departamento;
     if (campo === "enviadoEn") return d.enviadoEn;
@@ -441,8 +441,8 @@ export function FirmasView() {
       td: (d) => (
         <TableCell key="estado">
           <div className="flex flex-col items-start gap-1">
-            <Badge variant="outline" className={ESTADO_COLOR[d.estado]}>
-              {ESTADO_LABEL[d.estado]}
+            <Badge variant="outline" className={estadoFirmaColor(d.estado, d.tipo)}>
+              {estadoFirmaLabel(d.estado, d.tipo)}
             </Badge>
             {/* Acuse de LECTURA: solo aporta información mientras el documento
                 no está firmado. Una vez firmado, la firma ya lo dice todo. */}
@@ -728,8 +728,8 @@ export function FirmasView() {
                 <Info
                   label="Estado"
                   value={
-                    <Badge variant="outline" className={ESTADO_COLOR[verDoc.estado]}>
-                      {ESTADO_LABEL[verDoc.estado]}
+                    <Badge variant="outline" className={estadoFirmaColor(verDoc.estado, verDoc.tipo)}>
+                      {estadoFirmaLabel(verDoc.estado, verDoc.tipo)}
                     </Badge>
                   }
                 />

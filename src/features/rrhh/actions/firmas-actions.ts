@@ -730,6 +730,9 @@ export async function getAuditTrail(documentoId: string) {
   }
 }
 
+/** Estados en los que el documento final (con su acta) ya existe en el almacén. */
+const DOCS_CERRADOS = ["firmado", "leido"];
+
 export async function getDescargaFirmadoUrl(
   documentoId: string,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
@@ -744,8 +747,12 @@ export async function getDescargaFirmadoUrl(
       .maybeSingle();
     if (!doc) return { ok: false, error: "Documento no encontrado" };
     if (doc.empresa_id !== empresaId) return { ok: false, error: "Sin acceso a este documento" };
-    if (doc.estado !== "firmado" || !doc.pdf_firmado_path) {
-      return { ok: false, error: "El documento aún no está firmado" };
+    // «leido» = cerrado SIN firma (la comunicación de baja, la sanción que el
+    // trabajador se negó a firmar). Ese PDF existe igual —con su acta y, en la
+    // sanción, con el NO FIRMADO en rojo— y es justo el que hay que poder ver y
+    // descargar: exigir «firmado» lo dejaba inaccesible desde la app.
+    if (!DOCS_CERRADOS.includes(doc.estado as string) || !doc.pdf_firmado_path) {
+      return { ok: false, error: "El documento aún no está cerrado" };
     }
 
     // `download` hace que Storage sirva el PDF con Content-Disposition: attachment,
@@ -789,8 +796,12 @@ export async function getVisorFirmadoUrl(
       .maybeSingle();
     if (!doc) return { ok: false, error: "Documento no encontrado" };
     if (doc.empresa_id !== empresaId) return { ok: false, error: "Sin acceso a este documento" };
-    if (doc.estado !== "firmado" || !doc.pdf_firmado_path) {
-      return { ok: false, error: "El documento aún no está firmado" };
+    // «leido» = cerrado SIN firma (la comunicación de baja, la sanción que el
+    // trabajador se negó a firmar). Ese PDF existe igual —con su acta y, en la
+    // sanción, con el NO FIRMADO en rojo— y es justo el que hay que poder ver y
+    // descargar: exigir «firmado» lo dejaba inaccesible desde la app.
+    if (!DOCS_CERRADOS.includes(doc.estado as string) || !doc.pdf_firmado_path) {
+      return { ok: false, error: "El documento aún no está cerrado" };
     }
 
     const signed = await admin.storage

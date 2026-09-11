@@ -34,6 +34,8 @@ export interface Comunicado {
   envio: string | null;
   recurrencia: Recurrencia;
   alcancePct: number;
+  /** Quién recibió el aviso y cuándo lo abrió. Vacío = sin avisos registrados. */
+  lecturas: { nombre: string; vistaAt: string | null }[];
   rolesDestinatarios: string[];
   todaEmpresa: boolean;
   /** Departamentos elegidos, por nombre. Vacío si va a toda la empresa. */

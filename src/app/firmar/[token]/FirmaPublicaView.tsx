@@ -101,6 +101,17 @@ export function FirmaPublicaView({
    * abrió y lo leyó.
    */
   const esComunicacionBaja = documento.tipo === "baja_empresa";
+  /**
+   * Sanción disciplinaria. Igual que la baja: firmarla es acusar recibo, no dar
+   * la conformidad, así que tampoco se declara que la información sea correcta.
+   * Y como el trabajador puede negarse a firmarla sin que eso la invalide, tiene
+   * las dos salidas a la vista: «Firmar» y «No firmar». Las dos cierran el
+   * documento dejando la misma constancia (apertura, hora, IP y navegador); la
+   * que no lleva firma se archiva marcada en rojo como NO FIRMADA.
+   */
+  const esSancion = documento.tipo === "sancion_disciplinaria";
+  const esAcuseRecibo = esComunicacionBaja || esSancion;
+  const [showNoFirmar, setShowNoFirmar] = useState(false);
   const [decision, setDecision] = useState<"si" | "no" | null>(null);
   const [showAvisoSi, setShowAvisoSi] = useState(false);
   // Distingue "cerró confirmando" de "cerró cancelando" (Escape / clic fuera).
@@ -397,7 +408,7 @@ export function FirmaPublicaView({
             <Card className="p-5 space-y-3">
               {/* En la comunicación de baja no se declara nada: solo se firma
                   el recibí, o se cierra la página sin firmar. */}
-              {!esComunicacionBaja && (
+              {!esAcuseRecibo && (
                 <label className="flex items-start gap-2 text-sm text-zinc-700 cursor-pointer">
                   <input
                     type="checkbox"
@@ -414,7 +425,7 @@ export function FirmaPublicaView({
               <Button
                 onClick={pedirOTP}
                 disabled={
-                  (!acepto && !esComunicacionBaja) ||
+                  (!acepto && !esAcuseRecibo) ||
                   enviandoOtp ||
                   (esReconocimiento && !decision) ||
                   acusando
@@ -425,9 +436,11 @@ export function FirmaPublicaView({
                 <PenLine className="h-4 w-4 mr-1" />
                 {enviandoOtp
                   ? "Enviando código…"
-                  : esComunicacionBaja
-                    ? "Firmar y cerrar"
-                    : "Continuar a firmar"}
+                  : esSancion
+                    ? "Firmar"
+                    : esComunicacionBaja
+                      ? "Firmar y cerrar"
+                      : "Continuar a firmar"}
               </Button>
               {/* La comunicación de baja NO obliga a firmar: basta con darse por
                   enterado. Las dos salidas cierran el documento y dejan el mismo
@@ -450,7 +463,26 @@ export function FirmaPublicaView({
                   </p>
                 </>
               )}
-              {!esComunicacionBaja && (
+              {esSancion && (
+                <>
+                  <Button
+                    onClick={() => setShowNoFirmar(true)}
+                    disabled={acusando || enviandoOtp}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    <MailOpen className="h-4 w-4 mr-1" />
+                    {acusando ? "Guardando…" : "No firmar"}
+                  </Button>
+                  <p className="text-xs text-zinc-600">
+                    Firmar es solo acusar recibo: no significa que estés de acuerdo.
+                    Si prefieres no firmarla, la sanción surte efecto igualmente y
+                    quedará constancia del día y la hora en que la abriste y en que
+                    se te informó.
+                  </p>
+                </>
+              )}
+              {!esAcuseRecibo && (
                 <button
                   onClick={() => setShowRechazar(true)}
                   className="text-xs text-rose-600 hover:underline w-full text-center"
@@ -543,12 +575,18 @@ export function FirmaPublicaView({
               <div className="flex items-center gap-2 text-emerald-700">
                 <CheckCircle2 className="h-5 w-5" />
                 <h2 className="text-sm font-semibold">
-                  {cerradoPorLectura ? "Documento leído" : "Documento firmado"}
+                  {cerradoPorLectura
+                    ? esSancion
+                      ? "Sanción no firmada"
+                      : "Documento leído"
+                    : "Documento firmado"}
                 </h2>
               </div>
               <p className="text-sm text-zinc-700">
                 {cerradoPorLectura
-                  ? "Queda constancia de que lo has recibido y leído, con la fecha y la hora. Recibirás una copia en tu email. También puedes descargarla ahora:"
+                  ? esSancion
+                    ? "Queda constancia del día y la hora en que la abriste y en que se te informó. El documento se ha guardado marcado como NO FIRMADO. Recibirás una copia en tu email. También puedes descargarla ahora:"
+                    : "Queda constancia de que lo has recibido y leído, con la fecha y la hora. Recibirás una copia en tu email. También puedes descargarla ahora:"
                   : "Recibirás una copia firmada en tu email. También puedes descargarla ahora:"}
               </p>
               {descargaUrl && (
@@ -631,6 +669,43 @@ export function FirmaPublicaView({
               }}
             >
               Sí, confirmo que quiero pasarlo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showNoFirmar} onOpenChange={setShowNoFirmar}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cerrar sin firmar</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 text-left">
+                <p>
+                  La sanción <strong>surte efecto igualmente</strong>: no firmarla no
+                  la anula ni te quita el derecho a impugnarla.
+                </p>
+                <p>
+                  Queda registrado el día y la hora en que abriste el documento y en
+                  que se te informó, y el documento se guardará marcado como{" "}
+                  <strong>NO FIRMADO</strong> en tus documentos personales.
+                </p>
+                <p>¿Quieres cerrarlo sin firmar?</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNoFirmar(false)}>
+              Volver
+            </Button>
+            <Button
+              variant="primary"
+              disabled={acusando}
+              onClick={() => {
+                setShowNoFirmar(false);
+                void darPorLeido();
+              }}
+            >
+              {acusando ? "Guardando…" : "Aceptar"}
             </Button>
           </DialogFooter>
         </DialogContent>

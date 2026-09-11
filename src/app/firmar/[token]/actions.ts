@@ -14,6 +14,10 @@ import { registrarEvento, listarEventos } from "@/features/rrhh/services/firmas/
 import { enviarCodigoOTP, enviarCopiaFirmada } from "@/features/rrhh/services/firmas/email";
 import { generarActa, aplicarFirmaYConcatenar, type DatosActa } from "@/features/rrhh/services/firmas/pdf";
 import { marcarNotificacionesVistasPorRef } from "@/features/notificaciones/actions/notificaciones-actions";
+import {
+  sellarSancion,
+  type PosicionFirmaSancion,
+} from "@/features/gerencia/services/sancion-disciplinaria-pdf";
 import { registrarMovimiento } from "@/features/rrhh/services/material/movimientos";
 import type { CategoriaMaterial } from "@/features/rrhh/data/entregas";
 
@@ -445,7 +449,14 @@ export type FirmarResult =
  * qué aceptar. Todo lo demás —contratos, anulaciones, actas de material— exige
  * firma: ahí la firma no es un acuse, es el consentimiento.
  */
-const DOCS_ACUSE_LECTURA = ["baja_empresa"];
+/**
+ * Documentos que se pueden cerrar SIN firmarlos. El trabajador puede negarse a
+ * firmar —la comunicación de baja y la sanción son notificaciones, no acuerdos—
+ * y esa negativa no las invalida: lo que la empresa tiene que poder acreditar es
+ * que se le entregó, cuándo lo abrió y cuándo quedó informado. Eso es justo lo
+ * que sella el acta de entrega y lectura.
+ */
+const DOCS_ACUSE_LECTURA = ["baja_empresa", "sancion_disciplinaria"];
 
 export async function firmarDocumento(input: FirmarDocumentoInput): Promise<FirmarResult> {
   try {
@@ -627,6 +638,19 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       }
     }
 
+    // Sanción disciplinaria: en la hoja queda escrito cuándo la abrió, cuándo
+    // quedó informado y desde dónde. El acta de detrás lo detalla, pero esto se
+    // lee en la misma página de la firma, sin pasar hoja.
+    if ((doc.tipo as string) === "sancion_disciplinaria") {
+      originalBytes = new Uint8Array(await sellarSancionSiProcede(originalBytes, doc, eventos, {
+        cerradoEn: firmadoEnIso,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+        zonaHoraria: datos.zonaHoraria,
+        firmado: true,
+      }));
+    }
+
     // Dónde se estampa el trazo lo decide el SERVIDOR con el hueco detectado al
     // crear el documento, no lo que mande el navegador: así el firmante no puede
     // desplazar la firma sobre el texto del contrato. La posición del cliente
@@ -695,28 +719,17 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
     // quede guardado de forma permanente. Best-effort: si falla, la firma ya está
     // completada y el trabajador recibió su copia por email.
     if ((doc.tipo as string) === "sancion_disciplinaria") {
-      try {
-        const destPath = `${doc.empresa_id}/${doc.empleado_id}/sancion-${documentoId}.pdf`;
-        const copia = await admin.storage
-          .from("empleados-docs")
-          .upload(destPath, firmadoBytes, { upsert: true, contentType: "application/pdf" });
-        if (!copia.error) {
-          await admin.from("documentos_empleado").insert({
-            empresa_id: doc.empresa_id,
-            empleado_id: doc.empleado_id,
-            categoria: "sanciones",
-            nombre: `${doc.titulo} (firmada).pdf`,
-            storage_path: destPath,
-            tipo_mime: "application/pdf",
-            tamano_bytes: firmadoBytes.length,
-            created_by: (emp?.user_id as string) ?? null,
-          });
-        } else {
-          console.error("[firmar/firmar] archivar sanción:", copia.error.message);
-        }
-      } catch (e) {
-        console.error("[firmar/firmar] archivar sanción en documentos del empleado:", e);
-      }
+      await archivarEnCarpetaEmpleado(admin, {
+        empresaId: doc.empresa_id as string,
+        empleadoId: doc.empleado_id as string,
+        documentoId,
+        titulo: doc.titulo as string,
+        bytes: firmadoBytes,
+        creadoPor: (emp?.user_id as string) ?? null,
+        sufijo: "firmada",
+        categoria: "sanciones",
+        prefijo: "sancion",
+      });
     }
 
     // Actas de material firmadas: igual que la sanción, se archiva una copia en
@@ -1049,6 +1062,37 @@ export async function getEstadoFirma(
  * trabajador, para que le quede de forma permanente aunque caduque el enlace de
  * descarga. Best-effort: nunca puede tumbar el cierre del documento.
  */
+/**
+ * Sella en la hoja de la SANCIÓN la constancia de su apertura y de cómo se cerró
+ * (firmada o NO FIRMADA en rojo). Necesita el hueco de firma que guardó el
+ * generador; si el documento es antiguo y no lo lleva, se deja tal cual: el acta
+ * de auditoría sigue acreditando lo mismo.
+ */
+async function sellarSancionSiProcede(
+  bytes: Uint8Array,
+  doc: { posicion_firma_default?: unknown },
+  eventos: { tipo: string; ocurridoEn: string }[],
+  sello: {
+    cerradoEn: string;
+    ip: string | null;
+    userAgent: string | null;
+    zonaHoraria: string;
+    firmado: boolean;
+  },
+): Promise<Uint8Array> {
+  try {
+    const posiciones = doc.posicion_firma_default as PosicionFirmaSancion[] | null;
+    const posicion = posiciones?.[0];
+    if (!posicion) return bytes;
+    // La PRIMERA apertura es la que vale: es cuando se le entregó de verdad.
+    const abiertoEn = eventos.find((e) => e.tipo === "abierto")?.ocurridoEn ?? null;
+    return await sellarSancion(bytes, posicion, { ...sello, abiertoEn });
+  } catch (e) {
+    console.error("[firmar] sellar sanción:", e);
+    return bytes;
+  }
+}
+
 async function archivarEnCarpetaEmpleado(
   admin: ReturnType<typeof createAdminClient>,
   args: {
@@ -1059,21 +1103,26 @@ async function archivarEnCarpetaEmpleado(
     bytes: Uint8Array;
     creadoPor: string | null;
     sufijo: string;
+    /** Carpeta del empleado donde se guarda. Por defecto, «Contratos». */
+    categoria?: string;
+    /** Prefijo del fichero en el almacén. Por defecto, `baja`. */
+    prefijo?: string;
   },
 ): Promise<void> {
   try {
-    const destPath = `${args.empresaId}/${args.empleadoId}/baja-${args.documentoId}.pdf`;
+    const prefijo = args.prefijo ?? "baja";
+    const destPath = `${args.empresaId}/${args.empleadoId}/${prefijo}-${args.documentoId}.pdf`;
     const copia = await admin.storage
       .from("empleados-docs")
       .upload(destPath, args.bytes, { upsert: true, contentType: "application/pdf" });
     if (copia.error) {
-      console.error("[firmar] archivar baja:", copia.error.message);
+      console.error("[firmar] archivar en la carpeta del empleado:", copia.error.message);
       return;
     }
     await admin.from("documentos_empleado").insert({
       empresa_id: args.empresaId,
       empleado_id: args.empleadoId,
-      categoria: "contratos",
+      categoria: args.categoria ?? "contratos",
       nombre: `${args.titulo} (${args.sufijo}).pdf`,
       storage_path: destPath,
       tipo_mime: "application/pdf",
@@ -1081,7 +1130,7 @@ async function archivarEnCarpetaEmpleado(
       created_by: args.creadoPor,
     });
   } catch (e) {
-    console.error("[firmar] archivar baja en documentos del empleado:", e);
+    console.error("[firmar] archivar en documentos del empleado:", e);
   }
 }
 
@@ -1116,7 +1165,7 @@ export async function acusarLectura(
     const { data: doc } = await admin
       .from("firmas_documentos")
       .select(
-        "id, empresa_id, empleado_id, titulo, tipo, modalidad, validez, estado, sha256_original, pdf_original_path, enviado_por, enviado_en",
+        "id, empresa_id, empleado_id, titulo, tipo, modalidad, validez, estado, sha256_original, pdf_original_path, posicion_firma_default, enviado_por, enviado_en",
       )
       .eq("id", documentoId)
       .maybeSingle();
@@ -1183,7 +1232,19 @@ export async function acusarLectura(
       .from(BUCKET)
       .download(doc.pdf_original_path as string);
     if (dlErr || !originalDl) return { ok: false, error: "No se pudo cargar el PDF original" };
-    const originalBytes = new Uint8Array(await originalDl.arrayBuffer());
+    let originalBytes = new Uint8Array(await originalDl.arrayBuffer());
+
+    // Sanción sin firmar: la hoja se marca NO FIRMADO en rojo, con la hora en que
+    // la abrió y en que quedó informado. Quien abra el PDF lo ve de inmediato.
+    if ((doc.tipo as string) === "sancion_disciplinaria") {
+      originalBytes = new Uint8Array(await sellarSancionSiProcede(originalBytes, doc, eventos, {
+        cerradoEn: leidoEnIso,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+        zonaHoraria: datos.zonaHoraria,
+        firmado: false,
+      }));
+    }
 
     // Sin trazo ni posición: el acta se pega detrás del documento tal cual.
     const finalBytes = await aplicarFirmaYConcatenar(originalBytes, actaBytes, null, null);
@@ -1215,7 +1276,9 @@ export async function acusarLectura(
       .eq("id", res.tokenRow.id)
       .is("consumido_en", null);
 
-    // Su carpeta: la comunicación se archiva igual, firmada o solo leída.
+    // Su carpeta: el documento se archiva igual, firmado o solo leído. La
+    // sanción va a «Sanciones» y con el nombre en claro: «(no firmada)».
+    const esSancion = (doc.tipo as string) === "sancion_disciplinaria";
     await archivarEnCarpetaEmpleado(admin, {
       empresaId: doc.empresa_id as string,
       empleadoId: doc.empleado_id as string,
@@ -1223,7 +1286,9 @@ export async function acusarLectura(
       titulo: doc.titulo as string,
       bytes: finalBytes,
       creadoPor: (emp?.user_id as string) ?? null,
-      sufijo: "leída",
+      sufijo: esSancion ? "no firmada" : "leída",
+      categoria: esSancion ? "sanciones" : "contratos",
+      prefijo: esSancion ? "sancion" : "baja",
     });
 
     const signed = await admin.storage

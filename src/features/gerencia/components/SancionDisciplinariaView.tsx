@@ -10,18 +10,58 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, ShieldAlert, Send, FileWarning, CheckCircle2, Clock, XCircle } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  SubmoduleToolbar,
+  ordenarColumnas,
+  colVisible,
+  type ToolbarColumna,
+  type ToolbarColumnaVisible,
+} from "@/shared/components/SubmoduleToolbar";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import {
+  ArrowLeft,
+  ShieldAlert,
+  Send,
+  FileWarning,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  ListFilter,
+  MoreHorizontal,
+  Eye,
+  Download,
+  RefreshCw,
+  Ban,
+} from "lucide-react";
 import { listEmpleadosParaComunicado, type EmpleadoSelector } from "@/features/gerencia/actions/comunicados-actions";
 import {
   crearSancionDisciplinaria,
   listSancionesDisciplinarias,
   type SancionResumen,
 } from "@/features/gerencia/actions/sancion-disciplinaria-actions";
+import {
+  getVisorOriginalUrl,
+  getVisorFirmadoUrl,
+  getDescargaFirmadoUrl,
+  reenviarFirma,
+  cancelarFirma,
+} from "@/features/rrhh/actions/firmas-actions";
 import type { GravedadSancion } from "@/features/gerencia/services/sancion-disciplinaria-pdf";
+
+/** Letra y trazo del menú de acciones: el mismo que en el resto del software. */
+const ITEM_MENU = "cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold tracking-tight";
 
 const GRAVEDAD_OPCIONES: { value: GravedadSancion; label: string; className: string }[] = [
   { value: "leve", label: "Falta leve", className: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" },
@@ -39,22 +79,90 @@ function hoyISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Fecha siempre en día/mes/año, la regla del software. */
 function fmtFechaCorta(iso: string | null): string {
   if (!iso) return "—";
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
+const ESTADO_CFG: Record<string, { label: string; className: string; icon: typeof Clock }> = {
+  pendiente: { label: "Pendiente de firma", className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200", icon: Clock },
+  firmado: { label: "Firmada", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200", icon: CheckCircle2 },
+  // Se negó a firmarla: queda informado, con día y hora, y el documento se
+  // archiva marcado NO FIRMADO. Se lee en rojo, no como un «leído» cualquiera.
+  leido: { label: "No firmada", className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200", icon: XCircle },
+  rechazado: { label: "Rechazada", className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200", icon: XCircle },
+  expirado: { label: "Expirada", className: "bg-muted text-muted-foreground", icon: XCircle },
+};
+
+function estadoLabel(estado: string): string {
+  return ESTADO_CFG[estado]?.label ?? estado;
+}
+
 function EstadoBadge({ estado }: { estado: string }) {
-  const map: Record<string, { label: string; className: string; icon: typeof Clock }> = {
-    pendiente: { label: "Pendiente de firma", className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200", icon: Clock },
-    firmado: { label: "Firmada (leído)", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200", icon: CheckCircle2 },
-    rechazado: { label: "Rechazada", className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200", icon: XCircle },
-    expirado: { label: "Expirada", className: "bg-muted text-muted-foreground", icon: XCircle },
-  };
-  const cfg = map[estado] ?? { label: estado, className: "bg-muted text-muted-foreground", icon: Clock };
+  const cfg = ESTADO_CFG[estado] ?? { label: estado, className: "bg-muted text-muted-foreground", icon: Clock };
   const Icon = cfg.icon;
   return <Badge className={`${cfg.className} border-0 font-medium gap-1`}><Icon className="h-3 w-3" />{cfg.label}</Badge>;
+}
+
+function gravedadLabel(g: GravedadSancion | null): string {
+  return GRAVEDAD_OPCIONES.find(o => o.value === g)?.label ?? "—";
+}
+
+/** Filtro dentro de la cabecera de la columna, con los valores reales que hay. */
+function ColumnFilter({ label, options, selected, onChange }: {
+  label: string;
+  options: string[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const active = selected.size > 0;
+  const toggle = (value: string) => {
+    const next = new Set(selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    onChange(next);
+  };
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${
+            active ? "bg-primary/10 text-primary" : "text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+          }`}
+          title={`Filtrar ${label.toLowerCase()}`}
+        >
+          <ListFilter className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-0">
+        <div className="flex items-center justify-between border-b px-3 py-2">
+          <p className="text-[10px] font-bold tracking-wider text-muted-foreground">{label}</p>
+          {active && (
+            <button type="button" onClick={() => onChange(new Set())} className="text-[10px] font-semibold text-primary hover:underline">
+              Limpiar
+            </button>
+          )}
+        </div>
+        <ul className="max-h-64 overflow-y-auto py-1">
+          {options.length === 0 ? (
+            <li className="px-3 py-2 text-xs text-muted-foreground">Sin opciones</li>
+          ) : (
+            options.map(opt => (
+              <li key={opt}>
+                <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-muted/50">
+                  <Checkbox checked={selected.has(opt)} onCheckedChange={() => toggle(opt)} />
+                  <span className="text-sm">{opt}</span>
+                </label>
+              </li>
+            ))
+          )}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 interface SancionForm {
@@ -78,6 +186,20 @@ const emptyForm: SancionForm = {
   fechaEmision: hoyISO(),
   plazoDias: 15,
 };
+
+/** Aviso de qué es esto: el mismo texto en el listado y al redactarla. */
+function AvisoAcuseRecibo() {
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 flex gap-2">
+      <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+      <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+        La sanción se envía al trabajador para que la firme como <strong>acuse de recibo (leído/informado)</strong>.
+        No requiere su conformidad. No sale en sus comunicados: le llega por correo y aviso, aparece en RRHH → Firmas y,
+        una vez firmada, queda guardada para siempre en su carpeta «Sanciones» de documentos.
+      </p>
+    </div>
+  );
+}
 
 /** Prototipo visual de la sanción — refleja el PDF que firmará el trabajador. */
 function PrototipoSancion({ form, empleado, empresaNombre }: {
@@ -144,33 +266,20 @@ function CampoParrafo({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function SancionDisciplinariaView() {
-  const { empresaActual } = useEmpresa();
-  const empresaNombre = empresaActual?.nombre || "";
-  const [empleados, setEmpleados] = useState<EmpleadoSelector[]>([]);
-  const [sanciones, setSanciones] = useState<SancionResumen[]>([]);
+/**
+ * Redacción de una sanción nueva. Se abre desde «Nuevo» del listado, igual que
+ * un comunicado: a la izquierda la ficha y a la derecha, en vivo, el documento
+ * tal y como le llegará al trabajador.
+ */
+function SancionEditor({ empleados, empresaNombre, onVolver, onEnviada }: {
+  empleados: EmpleadoSelector[];
+  empresaNombre: string;
+  onVolver: () => void;
+  onEnviada: () => void | Promise<void>;
+}) {
   const [form, setForm] = useState<SancionForm>(emptyForm);
   const [enviando, setEnviando] = useState(false);
-
   const u = (patch: Partial<SancionForm>) => setForm(f => ({ ...f, ...patch }));
-
-  const load = useCallback(async () => {
-    const [emps, sancs] = await Promise.all([
-      listEmpleadosParaComunicado(),
-      listSancionesDisciplinarias(),
-    ]);
-    if (emps.ok) setEmpleados(emps.data);
-    if (sancs.ok) setSanciones(sancs.data);
-  }, []);
-
-  useEffect(() => { void load(); }, [load]);
-
-  // Sincronizacion en vivo: una sancion registrada o firmada por otro
-  // responsable aparece sin recargar.
-  useSincronizacionEnVivo({
-    tablas: ["firmas_documentos"],
-    onCambio: () => void load(),
-  });
 
   const empleadoSel = useMemo(
     () => empleados.find(e => e.userId === form.empleadoId) ?? null,
@@ -198,8 +307,8 @@ export function SancionDisciplinariaView() {
       });
       if (res.ok) {
         toast.success(res.emailEnviado ? "Sanción enviada al trabajador para firma" : "Sanción creada (revisa el email del trabajador)");
-        setForm({ ...emptyForm, fechaEmision: hoyISO() });
-        await load();
+        await onEnviada();
+        onVolver();
       } else {
         toast.error(res.error || "No se pudo emitir la sanción");
       }
@@ -209,17 +318,17 @@ export function SancionDisciplinariaView() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 flex gap-2">
-        <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-        <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-          La sanción se envía al trabajador para que la firme como <strong>acuse de recibo (leído/informado)</strong>.
-          No requiere su conformidad. Una vez firmada, queda guardada de forma permanente en sus documentos personales.
-        </p>
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" onClick={onVolver}><ArrowLeft className="h-4 w-4 mr-1" />Volver</Button>
+        <Separator orientation="vertical" className="h-5" />
+        <h2 className="text-sm font-bold">Nueva sanción disciplinaria</h2>
       </div>
 
+      <AvisoAcuseRecibo />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Editor */}
+        {/* Ficha */}
         <Card>
           <CardContent className="p-5 space-y-4">
             <div>
@@ -309,49 +418,298 @@ export function SancionDisciplinariaView() {
 
             <Button onClick={enviar} disabled={!puedeEnviar} className="w-full">
               <Send className="h-4 w-4 mr-1" />
-              {enviando ? "Enviando…" : "Enviar al trabajador para firma"}
+              {enviando ? "Enviando…" : "Enviar"}
             </Button>
           </CardContent>
         </Card>
 
-        {/* Prototipo visual */}
+        {/* Así le llega */}
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground flex items-center gap-1"><FileWarning className="h-3.5 w-3.5" />Así verá y firmará el trabajador la sanción</p>
           <PrototipoSancion form={form} empleado={empleadoSel} empresaNombre={empresaNombre} />
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Sanciones emitidas */}
+export function SancionDisciplinariaView() {
+  const { empresaActual } = useEmpresa();
+  const empresaNombre = empresaActual?.nombre || "";
+  const { confirm, dialog: dialogoConfirmar } = useConfirmDelete();
+  const [modo, setModo] = useState<"list" | "nueva">("list");
+  const [empleados, setEmpleados] = useState<EmpleadoSelector[]>([]);
+  const [sanciones, setSanciones] = useState<SancionResumen[]>([]);
+  const [busqueda, setBusqueda] = useState("");
+  const [fTrabajador, setFTrabajador] = useState<Set<string>>(new Set());
+  const [fDepartamento, setFDepartamento] = useState<Set<string>>(new Set());
+  const [fFalta, setFFalta] = useState<Set<string>>(new Set());
+  const [fEstado, setFEstado] = useState<Set<string>>(new Set());
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+
+  const load = useCallback(async () => {
+    const [emps, sancs] = await Promise.all([
+      listEmpleadosParaComunicado(),
+      listSancionesDisciplinarias(),
+    ]);
+    if (emps.ok) setEmpleados(emps.data);
+    if (sancs.ok) setSanciones(sancs.data);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  // Sincronizacion en vivo: una sancion registrada o firmada por otro
+  // responsable aparece sin recargar.
+  useSincronizacionEnVivo({
+    tablas: ["firmas_documentos"],
+    onCambio: () => void load(),
+  });
+
+  // La búsqueda acota primero; los filtros de columna se alimentan de lo que
+  // queda, para no ofrecer valores que no están en la tabla.
+  const buscadas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return sanciones;
+    return sanciones.filter(s =>
+      s.empleadoNombre.toLowerCase().includes(q) ||
+      s.departamento.toLowerCase().includes(q) ||
+      s.resumen.toLowerCase().includes(q) ||
+      estadoLabel(s.estado).toLowerCase().includes(q),
+    );
+  }, [sanciones, busqueda]);
+
+  const filtradas = useMemo(() => buscadas.filter(s =>
+    (fTrabajador.size === 0 || fTrabajador.has(s.empleadoNombre)) &&
+    (fDepartamento.size === 0 || fDepartamento.has(s.departamento)) &&
+    (fFalta.size === 0 || fFalta.has(gravedadLabel(s.gravedad))) &&
+    (fEstado.size === 0 || fEstado.has(estadoLabel(s.estado))),
+  ), [buscadas, fTrabajador, fDepartamento, fFalta, fEstado]);
+
+  const opciones = (valores: string[]) => Array.from(new Set(valores)).sort((a, b) => a.localeCompare(b, "es"));
+
+  const abrir = async (accion: () => Promise<{ ok: true; url: string } | { ok: false; error: string }>) => {
+    const res = await accion();
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  };
+
+  const reenviar = async (s: SancionResumen) => {
+    const ok = await confirm({
+      title: "Reenviar la sanción",
+      description: `Se vuelve a mandar a ${s.empleadoNombre} el correo con el enlace para firmarla.`,
+      confirmLabel: "Aceptar",
+      tono: "normal",
+    });
+    if (!ok) return;
+    const res = await reenviarFirma(s.id);
+    if (res.ok) {
+      toast.success(res.emailEnviado ? "Sanción reenviada" : "Reenviada (revisa el email del trabajador)");
+      await load();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  const cancelar = async (s: SancionResumen) => {
+    const ok = await confirm({
+      title: "Cancelar la sanción",
+      description: `La sanción de ${s.empleadoNombre} quedará anulada y el enlace de firma dejará de funcionar.`,
+      confirmLabel: "Cancelar sanción",
+    });
+    if (!ok) return;
+    const res = await cancelarFirma(s.id);
+    if (res.ok) {
+      toast.success("Sanción cancelada");
+      await load();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  if (modo === "nueva") {
+    return (
+      <SancionEditor
+        empleados={empleados}
+        empresaNombre={empresaNombre}
+        onVolver={() => setModo("list")}
+        onEnviada={load}
+      />
+    );
+  }
+
+  const columnasDef: ToolbarColumna[] = [
+    { campo: "trabajador", label: "Trabajador", bloqueada: true },
+    { campo: "departamento", label: "Departamento" },
+    { campo: "falta", label: "Falta" },
+    { campo: "resumen", label: "Sanción" },
+    { campo: "estado", label: "Estado" },
+    { campo: "enviada", label: "Enviada" },
+    { campo: "firmada", label: "Cerrada" },
+  ];
+
+  const columnDefs: Record<string, { th: React.ReactNode; td: (s: SancionResumen) => React.ReactNode }> = {
+    trabajador: {
+      th: (
+        <TableHead key="trabajador">
+          <span className="inline-flex items-center gap-1">
+            Trabajador
+            <ColumnFilter label="Trabajador" options={opciones(buscadas.map(s => s.empleadoNombre))} selected={fTrabajador} onChange={setFTrabajador} />
+          </span>
+        </TableHead>
+      ),
+      td: s => <TableCell key="trabajador" className="font-medium">{s.empleadoNombre}</TableCell>,
+    },
+    departamento: {
+      th: (
+        <TableHead key="departamento">
+          <span className="inline-flex items-center gap-1">
+            Departamento
+            <ColumnFilter label="Departamento" options={opciones(buscadas.map(s => s.departamento))} selected={fDepartamento} onChange={setFDepartamento} />
+          </span>
+        </TableHead>
+      ),
+      td: s => <TableCell key="departamento" className="text-muted-foreground">{s.departamento}</TableCell>,
+    },
+    falta: {
+      th: (
+        <TableHead key="falta">
+          <span className="inline-flex items-center gap-1">
+            Falta
+            <ColumnFilter label="Falta" options={opciones(buscadas.map(s => gravedadLabel(s.gravedad)))} selected={fFalta} onChange={setFFalta} />
+          </span>
+        </TableHead>
+      ),
+      td: s => (
+        <TableCell key="falta">
+          {s.gravedad ? (
+            <Badge className={`${GRAVEDAD_OPCIONES.find(g => g.value === s.gravedad)?.className} border-0 font-medium`}>
+              {gravedadLabel(s.gravedad)}
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+      ),
+    },
+    resumen: {
+      th: <TableHead key="resumen">Sanción</TableHead>,
+      td: s => (
+        <TableCell key="resumen" className="max-w-[22rem] truncate text-sm text-muted-foreground" title={s.resumen}>
+          {s.resumen || "—"}
+        </TableCell>
+      ),
+    },
+    estado: {
+      th: (
+        <TableHead key="estado">
+          <span className="inline-flex items-center gap-1">
+            Estado
+            <ColumnFilter label="Estado" options={opciones(buscadas.map(s => estadoLabel(s.estado)))} selected={fEstado} onChange={setFEstado} />
+          </span>
+        </TableHead>
+      ),
+      td: s => <TableCell key="estado"><EstadoBadge estado={s.estado} /></TableCell>,
+    },
+    enviada: {
+      th: <TableHead key="enviada">Enviada</TableHead>,
+      td: s => <TableCell key="enviada" className="text-muted-foreground whitespace-nowrap">{fmtFechaCorta(s.enviadoEn)}</TableCell>,
+    },
+    firmada: {
+      th: <TableHead key="firmada">Cerrada</TableHead>,
+      td: s => <TableCell key="firmada" className="text-muted-foreground whitespace-nowrap">{s.firmadoEn ? fmtFechaCorta(s.firmadoEn) : "—"}</TableCell>,
+    },
+  };
+
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    c => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
+  return (
+    <div className="space-y-4">
+      <AvisoAcuseRecibo />
+
+      <SubmoduleToolbar
+        viewKey="gerencia-comunicados-sanciones"
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        placeholderBusqueda="Buscar"
+        onNuevo={() => setModo("nueva")}
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+      />
+
       <Card>
-        <div className="px-4 py-3 border-b">
-          <p className="text-sm font-semibold flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-600" />Sanciones emitidas</p>
-        </div>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Trabajador</TableHead>
-              <TableHead>Departamento</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Enviada</TableHead>
-              <TableHead>Firmada</TableHead>
+              {columnasRender.map(c => columnDefs[c.campo]?.th)}
+              <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sanciones.map(s => (
+            {filtradas.map(s => (
               <TableRow key={s.id}>
-                <TableCell className="font-medium">{s.empleadoNombre}</TableCell>
-                <TableCell className="text-muted-foreground">{s.departamento}</TableCell>
-                <TableCell><EstadoBadge estado={s.estado} /></TableCell>
-                <TableCell className="text-muted-foreground whitespace-nowrap">{fmtFechaCorta(s.enviadoEn)}</TableCell>
-                <TableCell className="text-muted-foreground whitespace-nowrap">{s.firmadoEn ? fmtFechaCorta(s.firmadoEn) : "—"}</TableCell>
+                {columnasRender.map(c => columnDefs[c.campo]?.td(s))}
+                <TableCell>
+                  <div className="flex items-center justify-end">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground">
+                          <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 rounded-xl p-1.5 shadow-lg">
+                        <DropdownMenuItem className={ITEM_MENU} onClick={() => void abrir(() => getVisorOriginalUrl(s.id))}>
+                          <Eye className="h-4 w-4" strokeWidth={1.75} />Ver la sanción
+                        </DropdownMenuItem>
+                        {/* «leido» = la cerró sin firmarla: ese PDF también existe,
+                            con el NO FIRMADO en rojo y su acta detrás. */}
+                        {(s.estado === "firmado" || s.estado === "leido") && (
+                          <>
+                            <DropdownMenuItem className={ITEM_MENU} onClick={() => void abrir(() => getVisorFirmadoUrl(s.id))}>
+                              <Eye className="h-4 w-4" strokeWidth={1.75} />
+                              {s.estado === "firmado" ? "Ver la firmada" : "Ver la no firmada"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className={ITEM_MENU} onClick={() => void abrir(() => getDescargaFirmadoUrl(s.id))}>
+                              <Download className="h-4 w-4" strokeWidth={1.75} />Descargar con el acta
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        {s.estado === "pendiente" && (
+                          <>
+                            <DropdownMenuItem className={ITEM_MENU} onClick={() => void reenviar(s)}>
+                              <RefreshCw className="h-4 w-4" strokeWidth={1.75} />Reenviar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className={`${ITEM_MENU} text-red-600 focus:text-red-600`} onClick={() => void cancelar(s)}>
+                              <Ban className="h-4 w-4" strokeWidth={1.75} />Cancelar
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
-            {sanciones.length === 0 && (
-              <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Aún no se ha emitido ninguna sanción disciplinaria</TableCell></TableRow>
+            {filtradas.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={columnasRender.length + 1} className="text-center text-muted-foreground py-8">
+                  {sanciones.length === 0 ? "Aún no se ha emitido ninguna sanción disciplinaria" : "Ninguna sanción coincide con la búsqueda"}
+                </TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>
       </Card>
+
+      {dialogoConfirmar}
     </div>
   );
 }

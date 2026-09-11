@@ -19,6 +19,12 @@ async function getContext() {
   return { supabase, user, empresaId };
 }
 
+/** Quién recibió el aviso de un comunicado y cuándo lo abrió (null = aún no). */
+export interface LecturaComunicado {
+  nombre: string;
+  vistaAt: string | null;
+}
+
 /**
  * Cuánta gente ha visto cada comunicado.
  *
@@ -35,19 +41,19 @@ async function getContext() {
 async function alcanceDeComunicados(
   empresaId: string,
   ids: string[],
-): Promise<Map<string, number>> {
-  const pct = new Map<string, number>();
-  if (ids.length === 0) return pct;
+): Promise<Map<string, { pct: number; lecturas: LecturaComunicado[] }>> {
+  const salida = new Map<string, { pct: number; lecturas: LecturaComunicado[] }>();
+  if (ids.length === 0) return salida;
   try {
     const { createAdminClient } = await import("@/lib/supabase/admin");
     const admin = createAdminClient();
-    const conteo = new Map<string, { avisados: number; vistos: number }>();
+    const porComunicado = new Map<string, Array<{ userId: string; vistaAt: string | null }>>();
 
     const PAGINA = 1000;
     for (let desde = 0; ; desde += PAGINA) {
       const { data, error } = await admin
         .from("notificaciones")
-        .select("entidad_id, vista_at")
+        .select("entidad_id, usuario_id, vista_at")
         .eq("empresa_id", empresaId)
         .eq("entidad_tipo", "comunicados")
         .in("entidad_id", ids)
@@ -56,21 +62,65 @@ async function alcanceDeComunicados(
       const filas = data ?? [];
       for (const f of filas) {
         const id = f.entidad_id as string;
-        const c = conteo.get(id) ?? { avisados: 0, vistos: 0 };
-        c.avisados++;
-        if (f.vista_at) c.vistos++;
-        conteo.set(id, c);
+        const lista = porComunicado.get(id) ?? [];
+        lista.push({
+          userId: (f.usuario_id as string | null) ?? "",
+          vistaAt: (f.vista_at as string | null) ?? null,
+        });
+        porComunicado.set(id, lista);
       }
       if (filas.length < PAGINA) break;
     }
 
-    for (const [id, c] of conteo) {
-      pct.set(id, c.avisados === 0 ? 0 : Math.round((c.vistos / c.avisados) * 100));
+    // El nombre de cada uno, de una vez: en el listado se lee "quién lo ha
+    // abierto", no un puñado de identificadores.
+    const userIds = Array.from(
+      new Set(
+        Array.from(porComunicado.values())
+          .flat()
+          .map((l) => l.userId)
+          .filter(Boolean),
+      ),
+    );
+    const nombreDe = new Map<string, string>();
+    if (userIds.length > 0) {
+      const { data: perfiles } = await admin
+        .from("usuarios")
+        .select("user_id, nombre, apellidos")
+        .in("user_id", userIds);
+      for (const p of (perfiles ?? []) as Array<{
+        user_id: string;
+        nombre: string | null;
+        apellidos: string | null;
+      }>) {
+        nombreDe.set(p.user_id, `${p.nombre ?? ""} ${p.apellidos ?? ""}`.trim());
+      }
+    }
+
+    for (const [id, lista] of porComunicado) {
+      const vistos = lista.filter((l) => l.vistaAt).length;
+      const lecturas: LecturaComunicado[] = lista
+        .map((l) => ({
+          nombre: nombreDe.get(l.userId) || "Sin nombre",
+          vistaAt: l.vistaAt,
+        }))
+        // Primero quien lo abrió, del más reciente al más antiguo; detrás, los
+        // que todavía no lo han abierto, por orden alfabético.
+        .sort((a, b) => {
+          if (a.vistaAt && b.vistaAt) return b.vistaAt.localeCompare(a.vistaAt);
+          if (a.vistaAt) return -1;
+          if (b.vistaAt) return 1;
+          return a.nombre.localeCompare(b.nombre, "es");
+        });
+      salida.set(id, {
+        pct: lista.length === 0 ? 0 : Math.round((vistos / lista.length) * 100),
+        lecturas,
+      });
     }
   } catch (e) {
     console.error("[comunicados] alcance:", e);
   }
-  return pct;
+  return salida;
 }
 
 export async function listComunicados() {
@@ -87,13 +137,16 @@ export async function listComunicados() {
     if (error) throw error;
 
     const filas = data ?? [];
-    const pct = await alcanceDeComunicados(
+    const alcance = await alcanceDeComunicados(
       empresaId,
       filas.map((c) => c.id as string),
     );
     return {
       ok: true,
-      data: filas.map((c) => ({ ...c, alcance_pct: pct.get(c.id as string) ?? 0 })),
+      data: filas.map((c) => {
+        const a = alcance.get(c.id as string);
+        return { ...c, alcance_pct: a?.pct ?? 0, lecturas: a?.lecturas ?? [] };
+      }),
     };
   } catch (err) {
     console.error("[comunicados] listComunicados:", err);

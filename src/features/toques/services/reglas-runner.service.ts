@@ -458,7 +458,12 @@ export async function ejecutarReglasDelDia(
   const reglasAntiguedadPorEmpresa = new Map<string, ReglaActiva[]>();
   const reglasNormales: ReglaActiva[] = [];
   for (const r of reglas) {
-    if (r.codigo.startsWith("aniversario_") || r.codigo === "cumpleanos_propio" || r.codigo === "san_valentin_balles") {
+    // El cumpleaños se lleva en su propio cron de media mañana
+    // (`/api/points/cron/cumpleanos`), que regala los points y felicita en la
+    // misma pasada. Aquí se ignora a propósito: este runner corre de madrugada
+    // y una felicitación a esa hora no es una felicitación.
+    if (r.codigo === "cumpleanos_propio") continue;
+    if (r.codigo.startsWith("aniversario_") || r.codigo === "san_valentin_balles") {
       const list = reglasAntiguedadPorEmpresa.get(r.empresaId) ?? [];
       list.push(r);
       reglasAntiguedadPorEmpresa.set(r.empresaId, list);

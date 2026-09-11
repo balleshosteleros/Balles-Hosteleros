@@ -27,8 +27,8 @@ import {
   TIPO_LABEL,
   MODALIDAD_LABEL,
   VALIDEZ_LABEL,
-  ESTADO_LABEL,
-  ESTADO_COLOR,
+  estadoFirmaLabel,
+  estadoFirmaColor,
   type TipoDocumento,
   type ModalidadFirma,
   type ValidezLegal,
@@ -305,8 +305,8 @@ export function FirmasEmpleadoTab({ empleadoId }: { empleadoId: string }) {
                           {fmt(d.firmadoEn)}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={ESTADO_COLOR[d.estado]}>
-                            {ESTADO_LABEL[d.estado]}
+                          <Badge variant="outline" className={estadoFirmaColor(d.estado, d.tipo)}>
+                            {estadoFirmaLabel(d.estado, d.tipo)}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
@@ -393,8 +393,8 @@ export function FirmasEmpleadoTab({ empleadoId }: { empleadoId: string }) {
                   <Info
                     label="Estado"
                     value={
-                      <Badge variant="outline" className={ESTADO_COLOR[verDoc.estado]}>
-                        {ESTADO_LABEL[verDoc.estado]}
+                      <Badge variant="outline" className={estadoFirmaColor(verDoc.estado, verDoc.tipo)}>
+                        {estadoFirmaLabel(verDoc.estado, verDoc.tipo)}
                       </Badge>
                     }
                   />
@@ -582,8 +582,8 @@ function RecuadroDocumento({
       </div>
 
       <div className="mt-3 space-y-1.5">
-        <Badge variant="outline" className={cn("text-[11px]", ESTADO_COLOR[doc.estado])}>
-          {ESTADO_LABEL[doc.estado]}
+        <Badge variant="outline" className={cn("text-[11px]", estadoFirmaColor(doc.estado, doc.tipo))}>
+          {estadoFirmaLabel(doc.estado, doc.tipo)}
         </Badge>
         <div className="text-xs text-muted-foreground">
           {firmado ? fmt(doc.firmadoEn) : `Enviado ${fmt(doc.enviadoEn)}`}

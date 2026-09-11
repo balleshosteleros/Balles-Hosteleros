@@ -15,6 +15,7 @@ import {
   CalendarClock,
   ListChecks,
   FileClock,
+  Cake,
   Bell,
   type LucideIcon,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const ICONOS: Record<string, LucideIcon> = {
   cronograma: ListChecks,
   comunicado: Megaphone,
   solicitud: FileClock,
+  cumpleanos: Cake,
 };
 
 /** Resuelve el componente de icono por su clave del catálogo. */
