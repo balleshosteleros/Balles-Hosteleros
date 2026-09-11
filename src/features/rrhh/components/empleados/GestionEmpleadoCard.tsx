@@ -3,11 +3,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, UserRoundX, ShieldAlert, Briefcase, Building2, Star } from "lucide-react";
+import { Loader2, Briefcase, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorMultiple } from "@/components/ui/selector-multiple";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -22,9 +24,7 @@ import {
 import {
   listDepartamentos,
   updateEmpleadoEmpresasAcceso,
-  setEmpleadoEstado,
   quitarEmpleadoDeEmpresa,
-  type EstadoEmpleado,
 } from "@/features/rrhh/actions/empleados-actions";
 import { listPuestosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
 import { getPuestosDeEmpleado, setPuestosDeEmpleado, getVigenciaHorarioEmpleado } from "@/features/rrhh/actions/empleado-puestos-actions";
@@ -36,9 +36,14 @@ import {
 } from "@/features/ajustes/actions/locales-actions";
 import { getEmpresasAccesibles, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
 import { CopiarEmpleadoDialog } from "@/features/rrhh/components/empleados/CopiarEmpleadoDialog";
-import { HistorialEstadoDialog } from "@/features/rrhh/components/empleados/HistorialEstadoDialog";
 import { getNombreValidadorEmpleado } from "@/features/rrhh/actions/validadores-actions";
-import { PASOS_OMITIDOS_ALTA } from "@/features/rrhh/data/empleado-estado-pasos";
+
+/**
+ * Color del día elegido en el calendario propio. Va en un portal fuera del
+ * formulario, así que el color del tema no le llega por herencia: se le pasa.
+ */
+const COLOR_MARCA = "hsl(var(--primary))";
+const COLOR_MARCA_TEXTO = "hsl(var(--primary-foreground))";
 
 type DepartamentoOpt = { id: string; nombre: string };
 type LocalOpt = { id: string; nombre: string };
@@ -54,8 +59,6 @@ type Props = {
     puesto: string | null;
     localId: string | null;
     permiteTeletrabajo: boolean | null;
-    estado: EstadoEmpleado;
-    fechaBaja: string | null;
   };
   onUpdated: () => Promise<void> | void;
   onDeleted?: () => void;
@@ -103,20 +106,6 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
   // Fin del horario. "" = sin fecha de fin (ilimitado, se repite hasta la baja).
   const [fechaFinHorario, setFechaFinHorario] = useState<string>("");
   const [permiteTeletrabajo, setPermiteTeletrabajo] = useState(Boolean(initial.permiteTeletrabajo));
-  const [estado, setEstado] = useState<EstadoEmpleado>(initial.estado);
-  const [fechaBaja, setFechaBaja] = useState(initial.fechaBaja ?? "");
-  // Fecha efectiva del alta al reactivar. Arranca vacía a propósito (no con la
-  // fecha de alta original): es una incorporación nueva y hay que teclearla.
-  const [fechaAlta, setFechaAlta] = useState("");
-  const [motivoEstado, setMotivoEstado] = useState("");
-  const [savingEstado, setSavingEstado] = useState(false);
-  // Fuerzan la recarga del historial tras guardar, y alimentan el contador.
-  const [historialKey, setHistorialKey] = useState(0);
-  const [totalMovimientos, setTotalMovimientos] = useState(0);
-  // Confirmación de activar / desactivar. Ya no hay que buscar sustituto: quien
-  // valida las solicitudes es un departamento, no esta persona, así que darle de
-  // baja no deja ninguna solicitud sin nadie que la resuelva.
-  const [confirmOpen, setConfirmOpen] = useState(false);
   // Quitar (desvincular) de una empresa: confirma, pasa su ficha a Inactivo y le
   // retira el acceso a esa empresa. Mínimo 1 empresa (el server lo garantiza).
   const router = useRouter();
@@ -179,26 +168,10 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
     setAccesosCargados(ids.length > 0);
   }, [empresasAccesoKey, initial.empresaId]);
 
-  // Estado y fecha de baja los guarda SOLO el botón del recuadro de estado. El
-  // "Guardar" azul de la ficha recarga los datos al terminar, y esa recarga
-  // llegaba hasta aquí y reponía ambos a lo que hubiera en BD: si el usuario
-  // había puesto "Inactivo" con su fecha y pulsaba el azul, se le descartaba lo
-  // escrito sin avisar. Ahora, en cuanto los toca, mandan sus valores hasta que
-  // los guarde o cambie de empleado.
-  const estadoTocado = useRef(false);
-
   useEffect(() => {
     setPermiteTeletrabajo(Boolean(initial.permiteTeletrabajo));
     baseline.current.teletrabajo = Boolean(initial.permiteTeletrabajo);
-    if (estadoTocado.current) return;
-    setEstado(initial.estado);
-    setFechaBaja(initial.fechaBaja ?? "");
-  }, [initial.permiteTeletrabajo, initial.estado, initial.fechaBaja]);
-
-  // Al cambiar de empleado se parte de cero otra vez.
-  useEffect(() => {
-    estadoTocado.current = false;
-  }, [empleadoId]);
+  }, [initial.permiteTeletrabajo]);
 
   function togglePuesto(id: string, checked: boolean) {
     setPuestosSel((prev) => {
@@ -371,54 +344,6 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
 
   useImperativeHandle(ref, () => ({ saveGeneral }));
 
-  // Clic en "Guardar" del recuadro de estado: pide confirmación. Ya no hay que
-  // buscar sustituto al desactivar, porque quien valida las solicitudes es un
-  // departamento y no esta persona.
-  function onGuardarClick() {
-    if (estado !== "Activo" && !fechaBaja) {
-      toast.error("La fecha de baja es obligatoria al desactivar a un empleado");
-      return;
-    }
-    if (estado === "Activo" && !fechaAlta) {
-      toast.error("La fecha de alta es obligatoria al activar a un empleado");
-      return;
-    }
-    setConfirmOpen(true);
-  }
-
-  async function guardarEstado() {
-    setSavingEstado(true);
-    const res = await setEmpleadoEstado({
-      id: empleadoId,
-      estado,
-      fechaBaja: fechaBaja || null,
-      fechaAlta: fechaAlta || null,
-      motivo: motivoEstado || null,
-    });
-    setSavingEstado(false);
-    setConfirmOpen(false);
-
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudo actualizar el estado");
-      return;
-    }
-
-    // Al reactivar, la fecha de baja anterior se limpia en servidor: el
-    // formulario tiene que reflejarlo para no seguir enseñando una baja vieja.
-    if (estado === "Activo") setFechaBaja("");
-    setMotivoEstado("");
-    setHistorialKey((k) => k + 1);
-    // Ya está persistido: la ficha vuelve a mandar sobre estos dos campos.
-    estadoTocado.current = false;
-
-    toast.success(
-      estado === "Activo"
-        ? "Empleado activado: acceso al sistema restablecido"
-        : "Empleado desactivado: acceso al sistema bloqueado",
-    );
-    await onUpdated();
-  }
-
   return (
     <div className="space-y-3">
       <div className="rounded-xl border bg-card p-4 space-y-4">
@@ -434,51 +359,22 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
             Puestos
             <span className="text-muted-foreground/70 font-normal"> (uno o varios; marca el principal)</span>
           </Label>
-          {puestosCatalogo.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No hay puestos — créalos en RRHH → Puestos.</p>
-          ) : (
-            <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-              {puestosCatalogo.map((p) => {
-                const marcado = puestosSel.includes(p.id);
-                const esPrincipal = principalPuestoId === p.id;
-                // El último puesto marcado no se puede desmarcar.
-                const esUltimo = marcado && puestosSel.length === 1;
-                const dep = departamentos.find((d) => d.id === p.departamento_id)?.nombre;
-                return (
-                  <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border bg-card px-3 py-2">
-                    <label
-                      className="flex items-center gap-2 text-sm cursor-pointer min-w-0"
-                      title={esUltimo ? "El empleado debe tener al menos un puesto" : undefined}
-                    >
-                      <Checkbox
-                        checked={marcado}
-                        disabled={esUltimo}
-                        onCheckedChange={(v) => togglePuesto(p.id, v === true)}
-                      />
-                      <span className="truncate">{p.nombre}</span>
-                      {dep && <span className="text-[11px] text-muted-foreground truncate">· {dep}</span>}
-                    </label>
-                    {marcado && (
-                      esPrincipal ? (
-                        <span className="flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0">
-                          <Star className="h-3 w-3 fill-current" />
-                          Principal
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setPrincipalPuestoId(p.id)}
-                          className="text-[10px] text-muted-foreground hover:text-foreground underline shrink-0"
-                        >
-                          Hacer principal
-                        </button>
-                      )
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {/* Desplegable propio: veintitantas casillas sueltas llenaban la
+              pantalla para enseñar el único puesto que casi todos llevan. */}
+          <SelectorMultiple
+            values={puestosSel}
+            opciones={puestosCatalogo.map((p) => ({
+              value: p.id,
+              label: p.nombre,
+              nota: departamentos.find((d) => d.id === p.departamento_id)?.nombre,
+            }))}
+            onToggle={togglePuesto}
+            destacado={principalPuestoId}
+            onDestacar={setPrincipalPuestoId}
+            placeholder={puestosCargados ? "Sin puestos — pulsa para elegir" : "Cargando…"}
+            vacioTexto="No hay puestos — créalos en RRHH → Puestos."
+            className="max-w-3xl"
+          />
           <p className="text-[11px] text-muted-foreground">
             Cada puesto aporta su horario y sus tareas. El principal fija el departamento y el
             puesto que aparece en la ficha.
@@ -487,22 +383,24 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
             <div className="flex flex-wrap items-end gap-x-6 gap-y-2 pt-1">
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Inicio del horario</Label>
-                <Input
-                  type="date"
+                <SelectorFecha
                   value={fechaInicioHorario}
-                  onChange={(e) => setFechaInicioHorario(e.target.value)}
+                  onChange={setFechaInicioHorario}
                   className="w-44 h-9"
+                  colorMarca={COLOR_MARCA}
+                  colorMarcaTexto={COLOR_MARCA_TEXTO}
                 />
               </div>
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Fin del horario (opcional)</Label>
                 <div className="flex items-center gap-2">
-                  <Input
-                    type="date"
+                  <SelectorFecha
                     value={fechaFinHorario}
                     min={fechaInicioHorario || undefined}
-                    onChange={(e) => setFechaFinHorario(e.target.value)}
+                    onChange={setFechaFinHorario}
                     className="w-44 h-9"
+                    colorMarca={COLOR_MARCA}
+                    colorMarcaTexto={COLOR_MARCA_TEXTO}
                   />
                   {fechaFinHorario && (
                     <Button
@@ -639,167 +537,6 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
               Crea su ficha en otra empresa reutilizando sus datos personales.
             </p>
           </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border-2 border-destructive/30 bg-destructive/5 p-4 space-y-3">
-        <div className="flex items-start gap-2">
-          <div className="h-7 w-7 rounded-md bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
-            <ShieldAlert className="h-4 w-4" />
-          </div>
-          <div className="flex-1 space-y-0.5">
-            <div className="flex items-start justify-between gap-2">
-              <h4 className="text-sm font-semibold text-foreground">Estado y acceso al sistema</h4>
-              <HistorialEstadoDialog
-                empleadoId={empleadoId}
-                refreshKey={historialKey}
-                onCargado={setTotalMovimientos}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">Inactivo</strong> le retira el acceso al sistema
-              (Mi Panel y Mis Departamentos); <strong className="text-foreground">Activo</strong> se
-              lo devuelve al instante. La fecha es obligatoria y cada movimiento queda en el historial
-              {totalMovimientos > 0 ? ` (${totalMovimientos})` : ""}.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <div className="space-y-1.5">
-            <Label>Estado</Label>
-            <Select
-              value={estado}
-              onValueChange={(value) => {
-                estadoTocado.current = true;
-                setEstado(value as EstadoEmpleado);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Activo">Activo</SelectItem>
-                <SelectItem value="Inactivo">Inactivo</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {/* La fecha que se pide depende del movimiento: al activar es la de
-              incorporación, al desactivar la de baja. Ambas obligatorias. */}
-          {estado === "Activo" ? (
-            <div className="space-y-1.5">
-              <Label>
-                Fecha de alta <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                type="date"
-                value={fechaAlta}
-                onChange={(e) => setFechaAlta(e.target.value)}
-              />
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <Label>
-                Fecha de baja <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                type="date"
-                value={fechaBaja}
-                onChange={(e) => {
-                  estadoTocado.current = true;
-                  setFechaBaja(e.target.value);
-                }}
-              />
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label>Motivo (opcional)</Label>
-            <Input
-              value={motivoEstado}
-              onChange={(e) => setMotivoEstado(e.target.value)}
-              placeholder={
-                estado === "Activo" ? "Reincorporación…" : "Fin de contrato, baja voluntaria…"
-              }
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end">
-          <Button
-            variant="destructive"
-            disabled={savingEstado}
-            className="gap-2"
-            onClick={onGuardarClick}
-          >
-            {/* "Guardar estado", no "Guardar" a secas: en esta misma pestaña
-                está el Guardar general, y con el mismo texto se confundían. */}
-            {savingEstado
-              ? <><Loader2 className="h-4 w-4 animate-spin" />Actualizando…</>
-              : <><UserRoundX className="h-4 w-4" />Guardar estado</>}
-          </Button>
-
-          <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {estado === "Activo"
-                    ? "¿Reactivar el acceso de este empleado?"
-                    : "¿Desactivar el acceso de este empleado?"}
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta acción es importante y afecta de inmediato al empleado.{" "}
-                  {estado === "Activo" ? (
-                    <>
-                      Al guardar, <strong className="text-foreground">se le reactivará el acceso</strong> al
-                      sistema con sus credenciales actuales y podrá volver a iniciar sesión y{" "}
-                      <strong className="text-foreground">visualizar todo aquello que su rol le permita</strong>{" "}
-                      (Mi Panel, Mis Departamentos y los módulos de su rol). Revisa después sus{" "}
-                      <strong className="text-foreground">locales de fichaje</strong>: si se le había
-                      quitado de esta empresa, hay que volver a marcarlos.
-                    </>
-                  ) : (
-                    <>
-                      Al guardar, <strong className="text-foreground">se le retirará el acceso</strong> al
-                      sistema y se registrará su fecha de baja. Dejará de poder iniciar sesión y de{" "}
-                      visualizar cualquier módulo hasta que se le reactive.
-                    </>
-                  )}{" "}
-                  ¿Seguro que quieres continuar?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-
-              {/* Un alta a mano no es una contratación: solo abre el acceso. Todo
-                  lo que sí hace contratar desde Reclutamiento se queda sin hacer,
-                  y hay que decirlo aquí, antes de guardar, no después. */}
-              {estado === "Activo" ? (
-                <div className="rounded-md bg-amber-50 p-3 text-xs text-amber-800">
-                  <div className="flex items-center gap-1.5 font-semibold">
-                    <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-                    Esto no sustituye a una contratación
-                  </div>
-                  <ul className="mt-1.5 list-disc space-y-0.5 pl-4">
-                    {PASOS_OMITIDOS_ALTA.map((p) => (
-                      <li key={p.clave}>{p.texto}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-1.5">
-                    Si es una contratación de verdad, hazla desde Reclutamiento. Si aun así
-                    continúas, tendrás que completar estos pasos a mano.
-                  </p>
-                </div>
-              ) : null}
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={guardarEstado}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Sí, guardar
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </div>
       </div>
 

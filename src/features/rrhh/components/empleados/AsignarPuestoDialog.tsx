@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -311,10 +312,13 @@ export function AsignarPuestoDialog({
             <Label className="flex items-center gap-1.5">
               <CalendarDays className="h-3.5 w-3.5" /> Primer día en el nuevo puesto
             </Label>
-            <Input
-              type="date"
+            {/* Calendario propio: el del navegador sale distinto en cada
+                equipo y en el idioma del sistema. */}
+            <SelectorFecha
               value={primerDia}
-              onChange={(e) => setPrimerDia(e.target.value)}
+              onChange={setPrimerDia}
+              colorMarca="hsl(var(--primary))"
+              colorMarcaTexto="hsl(var(--primary-foreground))"
             />
           </div>
 

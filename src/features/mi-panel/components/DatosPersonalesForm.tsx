@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 import {
   Select,
   SelectContent,
@@ -56,6 +57,12 @@ import {
   type TipoDocumento,
 } from "@/features/mi-panel/lib/datos-personales-validators";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
+
+/** Tope del calendario de nacimiento: hoy, leyendo el día LOCAL (no el UTC). */
+const HOY_ISO = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+})();
 
 interface Props {
   initial: DatosPersonalesCompletos;
@@ -342,10 +349,16 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
             />
           </Field>
           <Field label="Fecha de nacimiento">
-            <Input
-              type="date"
+            {/* Calendario propio, y abierto por un año lejano: con el mes
+                actual, quien nació en los 80 queda a decenas de clics. */}
+            <SelectorFecha
               value={form.fecha_nacimiento}
-              onChange={(e) => update("fecha_nacimiento", e.target.value)}
+              onChange={(v) => update("fecha_nacimiento", v)}
+              min="1930-01-01"
+              max={HOY_ISO}
+              mesPorDefecto="1995-01-01"
+              colorMarca="hsl(var(--primary))"
+              colorMarcaTexto="hsl(var(--primary-foreground))"
             />
           </Field>
           <Field label="Nacionalidad">
