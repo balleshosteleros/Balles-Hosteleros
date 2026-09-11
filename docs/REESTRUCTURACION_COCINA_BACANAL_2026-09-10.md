@@ -29,13 +29,13 @@ volumen real, sin que el servicio lo note.
 
 | Día | Jefe de Cocina 1 | Jefe de Cocina 2 |
 |---|---|---|
-| **Lunes** | COMIDA · 12:30–17:00 → 4,5 h | NOCHE · 19:30–00:00 → 4,5 h |
-| **Martes** | COMIDA · 12:30–17:00 → 4,5 h | NOCHE · 19:30–00:00 → 4,5 h |
-| **Miércoles** | LIBRE | PARTIDO · 12:30–17:00 + 19:30–**23:30** → 8,5 h |
-| **Jueves** | PARTIDO · 12:30–17:00 + 19:30–**23:30** → 8,5 h | LIBRE |
+| **Lunes** | COMIDA · 12:30–17:00 → 4,5 h | TARDE · 19:30–00:00 → 4,5 h |
+| **Martes** | LIBRE | PARTIDO · 12:30–17:00 + 19:30–**23:30** → 8,5 h |
+| **Miércoles** | PARTIDO · 12:30–17:00 + 19:30–**23:30** → 8,5 h | LIBRE |
+| **Jueves** | MAÑANA · 12:30–17:00 → 4,5 h | TARDE · 19:30–00:00 → 4,5 h |
 | **Viernes** | PARTIDO · 12:30–17:00 + 19:30–00:00 → 9 h | PARTIDO · 12:30–17:00 + 19:30–00:00 → 9 h |
 | **Sábado** | PARTIDO · 12:30–17:00 + 19:30–00:00 → 9 h | PARTIDO · 12:30–17:00 + 19:30–00:00 → 9 h |
-| **Domingo** | COMIDA · 12:30–17:00 → 4,5 h | NOCHE · 19:30–00:00 → 4,5 h |
+| **Domingo** | TARDE · 19:30–00:00 → 4,5 h | MAÑANA · 12:30–17:00 → 4,5 h |
 | **Total** | **40 h** | **40 h** |
 
 ### El cierre del fin de semana
@@ -54,27 +54,26 @@ esa última franja del viernes y el sábado no hay venta.
 
 ### El resto del ajuste
 
-- **De 41,5 h a 40 h por jefe.** Se recortan **1,5 horas semanales** a cada uno.
-- **Se respetan sus días de libranza:** el Jefe de Cocina 1 sigue librando el
-  miércoles y el Jefe de Cocina 2 el jueves.
-- **El lunes vuelve a su horario normal** (cierre a las 17:00 y a las 00:00).
-- **El viernes y el sábado se sale a las 00:00**, ya no a las 00:30.
-- **La media hora que falta se recorta en el partido entre diario:** el jueves
-  para el Jefe 1 y el miércoles para el Jefe 2. Ese día hacen 8,5 h.
-- **Los dos jefes están en la comida del viernes**, que es cuando más falta
-  hacen. A cambio, el domingo al mediodía se queda uno solo.
+- **Cada uno se queda con sus días, tal cual.** El Jefe 1 libra el **martes** y
+  el Jefe 2 el **miércoles**, y ninguno cambia de turno de día: los mismos
+  mediodías, las mismas tardes y los mismos partidos que ya tenían.
+- **Lo único que cambia son las 1,5 horas de recorte**, y están en dos sitios:
+  - **El viernes y el sábado se sale a las 00:00**, ya no a las 00:30.
+  - **El partido entre diario cierra a las 23:30**: el miércoles para el Jefe 1
+    y el martes para el Jefe 2. Ese día hacen 8,5 h.
+- **De 41,5 h a 40 h** para cada uno.
 
 ### Cobertura del servicio
 
 | Día | Comida | Noche |
 |---|---|---|
 | Lunes | Jefe 1 | Jefe 2 |
-| Martes | Jefe 1 | Jefe 2 |
-| Miércoles | Jefe 2 | Jefe 2 |
-| Jueves | Jefe 1 | Jefe 1 |
+| Martes | Jefe 2 | Jefe 2 |
+| Miércoles | Jefe 1 | Jefe 1 |
+| Jueves | Jefe 1 | Jefe 2 |
 | Viernes | Los dos | Los dos |
 | Sábado | Los dos | Los dos |
-| Domingo | Jefe 1 | Jefe 2 |
+| Domingo | Jefe 2 | Jefe 1 |
 
 Ningún servicio se queda sin jefe de cocina, y el viernes y el sábado —los dos
 días fuertes— están los dos al completo.

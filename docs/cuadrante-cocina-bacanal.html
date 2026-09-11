@@ -277,7 +277,7 @@
     <p class="eyebrow">BACANAL · Departamento de cocina</p>
     <h1>El cuadrante nuevo de cocina</h1>
     <div class="rule"></div>
-    <p class="lede">Dos decisiones y dos puestos distintos: los <strong>jefes de cocina</strong> siguen los dos, con la jornada ajustada a 40 horas; el <strong>cocinero&nbsp;1</strong>, que es el refuerzo de fin de semana, sale del cuadrante.</p>
+    <p class="lede">Dos decisiones y dos puestos distintos: los <strong>jefes de cocina</strong> siguen los dos, con sus días de siempre y la jornada ajustada a 40 horas; el <strong>cocinero&nbsp;1</strong>, que es el refuerzo de fin de semana, sale del cuadrante.</p>
     <dl class="stats">
       <div class="stat"><dt class="stat__l">Jornada de cada jefe de cocina</dt><dd class="stat__k">40 h</dd></div>
       <div class="stat stat--cut"><dt class="stat__l">Lo que se recorta a cada uno por semana</dt><dd class="stat__k">−1,5 h</dd></div>
@@ -317,7 +317,7 @@
         <div><span class="hora">23:30</span><span><strong>La cocina deja de servir</strong> a los clientes.</span></div>
         <div><span class="hora">00:00</span><span><strong>El local cierra al público</strong>, y el equipo de cocina sale — media hora después de la última comanda, para dejarlo cerrado.</span></div>
       </div>
-      <p><strong>Que quede claro para todos:</strong> la cocina cierra <em>de cara al cliente</em> a las 23:30. La gente de cocina no sale a esa hora, sale a las 00:00 como siempre. Su horario no se toca por esto.</p>
+      <p><strong>Que quede claro para todos:</strong> la cocina cierra <em>de cara al cliente</em> a las 23:30. La gente de cocina no sale a esa hora, <strong>sale a las 00:00</strong> como siempre: media hora de cierre. Su horario no se toca por esto.</p>
     </div>
   </section>
 
@@ -326,24 +326,20 @@
     <div class="panel panel__pad">
       <ul class="cambios">
         <li>
-          <p><strong>Cada uno mantiene su día de libranza.</strong> El jefe 1 sigue librando el miércoles y el jefe 2 el jueves.</p>
+          <p><strong>Cada uno se queda con sus días, tal cual.</strong> El jefe 1 libra el martes y el jefe 2 el miércoles, y ninguno cambia de turno de día.</p>
           <span class="swap"><span class="desp">Sin cambios</span></span>
         </li>
         <li>
-          <p><strong>El lunes vuelve a su hora normal.</strong> Se deshace el recorte que se había hecho ahí.</p>
-          <span class="swap"><span class="antes">16:30</span><span class="flecha">→</span><span class="desp">17:00</span></span>
+          <p><strong>El lunes se queda igual que estaba.</strong></p>
+          <span class="swap"><span class="desp">Sin cambios</span></span>
         </li>
         <li>
           <p><strong>El viernes y el sábado salen a las 00:00</strong>, media hora antes que hasta ahora.</p>
           <span class="swap"><span class="antes">00:30</span><span class="flecha">→</span><span class="desp">00:00</span></span>
         </li>
         <li>
-          <p><strong>La media hora que falta se recorta en el partido entre diario</strong>, que es el día más flojo de los dos: el jueves para el jefe 1 y el miércoles para el jefe 2.</p>
+          <p><strong>La media hora que falta se recorta en el partido entre diario</strong>, que es el día más flojo de cada uno: el miércoles para el jefe 1 y el martes para el jefe 2.</p>
           <span class="swap"><span class="antes">00:00</span><span class="flecha">→</span><span class="desp">23:30</span></span>
-        </li>
-        <li>
-          <p><strong>Los dos jefes están en la comida del viernes</strong>, que es donde más falta hacen. A cambio, el domingo al mediodía se queda uno solo.</p>
-          <span class="swap"><span class="antes">Domingo</span><span class="flecha">→</span><span class="desp">Viernes</span></span>
         </li>
         <li>
           <p><strong>La jornada baja de 41,5 a 40 horas</strong> para cada uno.</p>
@@ -501,12 +497,12 @@
   // ---- cuadrante de los jefes ----
   var DIAS = [
     { d:"Lunes",     j1:[["12:30","17:00"]],                      j2:[["19:30","00:00"]] },
-    { d:"Martes",    j1:[["12:30","17:00"]],                      j2:[["19:30","00:00"]] },
-    { d:"Miércoles", j1:null,                                     j2:[["12:30","17:00"],["19:30","23:30"]], cut:2 },
-    { d:"Jueves",    j1:[["12:30","17:00"],["19:30","23:30"]],    j2:null, cut:1 },
+    { d:"Martes",    j1:null,                                     j2:[["12:30","17:00"],["19:30","23:30"]], cut:2 },
+    { d:"Miércoles", j1:[["12:30","17:00"],["19:30","23:30"]],    j2:null, cut:1 },
+    { d:"Jueves",    j1:[["12:30","17:00"]],                      j2:[["19:30","00:00"]] },
     { d:"Viernes",   j1:[["12:30","17:00"],["19:30","00:00"]],    j2:[["12:30","17:00"],["19:30","00:00"]], fuerte:true, srv:true },
     { d:"Sábado",    j1:[["12:30","17:00"],["19:30","00:00"]],    j2:[["12:30","17:00"],["19:30","00:00"]], fuerte:true, srv:true },
-    { d:"Domingo",   j1:[["12:30","17:00"]],                      j2:[["19:30","00:00"]] }
+    { d:"Domingo",   j1:[["19:30","00:00"]],                      j2:[["12:30","17:00"]] }
   ];
 
   var html = escala();
@@ -524,8 +520,8 @@
 
   // ---- cobertura por servicio ----
   var COB = [
-    ["Lunes","1","2"], ["Martes","1","2"], ["Miércoles","2","2"], ["Jueves","1","1"],
-    ["Viernes","dos","dos"], ["Sábado","dos","dos"], ["Domingo","1","2"]
+    ["Lunes","1","2"], ["Martes","2","2"], ["Miércoles","1","1"], ["Jueves","1","2"],
+    ["Viernes","dos","dos"], ["Sábado","dos","dos"], ["Domingo","2","1"]
   ];
   document.getElementById("tabla-cobertura").innerHTML = COB.map(function(r){
     function cel(v){
