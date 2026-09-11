@@ -155,7 +155,6 @@ interface EditorForm {
   programado: boolean;
   envioFecha: string;
   envioHora: string;
-  textoNotificacion: string;
   /** Documentos YA subidos al almacén (los que trae un comunicado guardado). */
   adjuntos: ComunicadoAdjunto[];
   /** Archivos recién elegidos, todavía en el navegador. Se suben al guardar. */
@@ -173,7 +172,7 @@ const emptyForm: EditorForm = {
   titulo: "", cuerpo: "", creadorId: "", estado: "borrador",
   recurrencia: "sin_repeticion", tipo: "informativo", todaEmpresa: true,
   rolesDestinatarios: [], departamentosDestinatarios: [], empleadosDestinatarios: [], programado: false,
-  envioFecha: "", envioHora: "", textoNotificacion: "", adjuntos: [],
+  envioFecha: "", envioHora: "", adjuntos: [],
   archivosNuevos: [], enviarEmail: false, observaciones: "",
   enlace: "", enlaceTexto: "",
 };
@@ -198,7 +197,6 @@ function formFromComunicado(c: Comunicado, tz: string): EditorForm {
     departamentosDestinatarios: [...c.departamentosDestinatarios],
     empleadosDestinatarios: [...c.empleadosDestinatarios],
     programado: c.estado === "programado", envioFecha: fecha, envioHora: hora,
-    textoNotificacion: `Nuevo comunicado: ${c.titulo}`,
     adjuntos: [...c.adjuntos], archivosNuevos: [], enviarEmail: c.enviarEmail,
     enlace: c.enlace, enlaceTexto: c.enlaceTexto,
     observaciones: c.observaciones,
@@ -212,7 +210,7 @@ function formFromComunicado(c: Comunicado, tz: string): EditorForm {
  * cualquier salida lo guardaba otra vez y a un comunicado programado le quitaba
  * la fecha y lo bajaba a borrador, así que dejaba de salir el día que tocaba.
  *
- * Se queda fuera lo que no escribe el usuario (`creadorId`, `textoNotificacion`).
+ * Se queda fuera lo que no escribe el usuario (`creadorId`).
  */
 function firmaForm(f: EditorForm): string {
   return JSON.stringify({
@@ -638,13 +636,16 @@ function ComunicadoEditor({
               <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <Bell className="h-3.5 w-3.5" />Aviso en el móvil
               </Label>
-              <Textarea
-                value={form.textoNotificacion}
-                onChange={e => u({ textoNotificacion: e.target.value })}
-                rows={2}
-                className="text-xs"
-                placeholder="Texto corto que le salta al equipo…"
-              />
+              {/* Lo que le salta al equipo es EL TÍTULO del comunicado, tal cual.
+                  Aquí había una casilla que se podía escribir y no guardaba nada,
+                  y encima enseñaba un "Nuevo comunicado:" por delante que no sale
+                  en ningún sitio. Se enseña el aviso de verdad y punto. */}
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
+                {form.titulo.trim() || "Nuevo comunicado"}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Es el título del comunicado: cámbialo arriba y cambia el aviso.
+              </p>
             </div>
 
             <Separator />
@@ -995,6 +996,11 @@ export function ComunicadosView() {
   // `empresaResuelta` evita enseñar el nombre de la empresa por defecto mientras
   // aún se está resolviendo cuál es la activa del usuario.
   const { empresaActual, empresaResuelta, getIsotipoUrl } = useEmpresa();
+  // La sanción disciplinaria no es un comunicado: es un documento laboral que
+  // firma el trabajador, y solo lo emite quien puede editar Recursos Humanos
+  // (es el permiso que exige el servidor). Sin él, ni se enseña la pestaña.
+  const { puedeEditar, permisosLoaded } = useAuth();
+  const puedeSancionar = permisosLoaded && puedeEditar("RECURSOS HUMANOS");
   const { confirm, dialog: dialogoConfirmar } = useConfirmDelete();
   // Las fechas guardadas son instantes: se leen en la hora de la EMPRESA, no en
   // la del navegador de quien mira la pantalla.
@@ -1459,7 +1465,9 @@ export function ComunicadosView() {
         <TabsList>
           <TabsTrigger value="listado"><FileText className="h-4 w-4 mr-1" />Comunicados</TabsTrigger>
           <TabsTrigger value="calendario"><CalendarDays className="h-4 w-4 mr-1" />Calendario</TabsTrigger>
-          <TabsTrigger value="sancion"><ShieldAlert className="h-4 w-4 mr-1" />Sanción disciplinaria</TabsTrigger>
+          {puedeSancionar && (
+            <TabsTrigger value="sancion"><ShieldAlert className="h-4 w-4 mr-1" />Sanción disciplinaria</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="listado">
@@ -1576,7 +1584,7 @@ export function ComunicadosView() {
         </TabsContent>
 
         <TabsContent value="sancion">
-          <SancionDisciplinariaView />
+          {puedeSancionar && <SancionDisciplinariaView />}
         </TabsContent>
       </Tabs>
       {publicando && (
