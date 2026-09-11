@@ -670,8 +670,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
               >
                 <div className="font-semibold">Queja o denuncia</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  Acoso, discriminación, seguridad o cualquier otra queja. Es el
-                  único canal válido y lo revisa Recursos Humanos.
+                  Acoso, discriminación, seguridad o cualquier otra queja.
                 </div>
               </button>
             </div>

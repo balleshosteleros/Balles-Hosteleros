@@ -12,15 +12,7 @@ import {
   type EstadoDenuncia,
   type MiDenuncia,
 } from "@/features/mi-panel/actions/denuncias-actions";
-import { CATEGORIA_LABEL } from "./DenunciaModal";
-
-const ESTADO_LABEL: Record<EstadoDenuncia, string> = {
-  recibida: "Recibida",
-  en_investigacion: "En investigación",
-  informacion_solicitada: "Información solicitada",
-  resuelta: "Resuelta",
-  archivada: "Archivada",
-};
+import { CATEGORIA_LABEL, DENUNCIA_ESTADO_LABEL } from "./DenunciaModal";
 
 const ESTADO_COLOR: Record<EstadoDenuncia, string> = {
   recibida: "bg-blue-100 text-blue-800 border-blue-300",
@@ -90,12 +82,12 @@ export function MisDenunciasCard({ refreshKey }: { refreshKey: number }) {
                   </div>
                 </div>
                 <Badge className={`shrink-0 text-xs ${ESTADO_COLOR[d.estado]}`}>
-                  {ESTADO_LABEL[d.estado]}
+                  {DENUNCIA_ESTADO_LABEL[d.estado]}
                 </Badge>
               </div>
               {d.respuesta && (
                 <p className="mt-2 rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
-                  <strong className="text-foreground">Respuesta de recursos humanos:</strong>{" "}
+                  <strong className="text-foreground">Respuesta de RRHH:</strong>{" "}
                   {d.respuesta}
                 </p>
               )}

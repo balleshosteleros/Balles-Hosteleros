@@ -2,17 +2,25 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, ShieldCheck, UserRound, VenetianMask } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   presentarDenuncia,
   type CategoriaDenuncia,
+  type EstadoDenuncia,
   type ModalidadDenuncia,
 } from "@/features/mi-panel/actions/denuncias-actions";
 
@@ -26,7 +34,23 @@ export const CATEGORIA_LABEL: Record<CategoriaDenuncia, string> = {
   otro: "Otro",
 };
 
+/**
+ * Cómo se llama cada estado de una queja. Se nombra aquí y solo aquí: la lista
+ * del móvil y la del panel dicen lo mismo palabra por palabra.
+ */
+export const DENUNCIA_ESTADO_LABEL: Record<EstadoDenuncia, string> = {
+  recibida: "Recibida",
+  en_investigacion: "En investigación",
+  informacion_solicitada: "Información solicitada",
+  resuelta: "Resuelta",
+  archivada: "Archivada",
+};
+
 const CATEGORIAS = Object.keys(CATEGORIA_LABEL) as CategoriaDenuncia[];
+
+/** Mismo estilo de tarjeta que el paso «tipo» de una solicitud. */
+const TARJETA =
+  "text-left p-4 rounded-lg border transition-colors hover:border-primary hover:bg-primary/5 active:border-blue-600 active:bg-blue-50 active:text-blue-700";
 
 interface Props {
   open: boolean;
@@ -76,7 +100,7 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
       return;
     }
     onCreated?.();
-    toast.success("Comunicación presentada. Recursos Humanos la revisará.");
+    toast.success("Queja presentada. RRHH la revisará.");
     cerrar();
   }
 
@@ -84,70 +108,29 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
   if (!modalidad) {
     return (
       <Dialog open={open} onOpenChange={cerrar}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Presentar una queja o denuncia</DialogTitle>
+            <DialogTitle>Queja o denuncia</DialogTitle>
+            <DialogDescription>
+              Único canal válido: no se tramita nada por correo, teléfono ni de
+              palabra. ¿Cómo quieres presentarla?
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-lg border bg-muted/40 p-3">
-            <p className="text-xs text-muted-foreground">
-              Este es el <strong>único canal válido</strong> para quejas y denuncias.
-              No se tramitan por correo, por teléfono ni de palabra: solo lo que entra
-              aquí queda registrado y lo revisa siempre Recursos Humanos.
-            </p>
-          </div>
-
-          <p className="text-sm text-muted-foreground">
-            Elige cómo quieres presentarla. La diferencia es importante:
-          </p>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setModalidad("nominal")}
-              className="rounded-lg border-2 p-4 text-left transition-colors hover:border-primary"
-            >
-              <UserRound className="h-6 w-6 text-primary" />
-              <p className="mt-2 font-semibold">En mi nombre</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Consta quién la presenta. Permite investigar a fondo, escuchar a las dos
-                partes y, si se confirma, <strong>tomar medidas disciplinarias</strong>.
-                Tu identidad se trata de forma confidencial: solo accede Recursos Humanos.
-              </p>
-              <p className="mt-2 text-xs font-medium text-emerald-700">
-                Es la vía que permite resolver de verdad la situación.
-              </p>
+          <div className="grid gap-3 py-2">
+            <button type="button" onClick={() => setModalidad("nominal")} className={TARJETA}>
+              <div className="font-semibold">En mi nombre</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Tu nombre solo lo ve RRHH. Es la única vía que permite sancionar.
+              </div>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setModalidad("anonima")}
-              className="rounded-lg border-2 p-4 text-left transition-colors hover:border-amber-400"
-            >
-              <VenetianMask className="h-6 w-6 text-amber-600" />
-              <p className="mt-2 font-semibold">De forma anónima</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Recursos Humanos la recibe sin tu nombre: ve la queja, no quién la
-                puso. La tienes en tu lista de quejas para seguir cómo va.
-              </p>
-              <p className="mt-2 text-xs font-medium text-amber-800">
-                Vale solo como estadística y señal de alerta: no permite sancionar.
-              </p>
+            <button type="button" onClick={() => setModalidad("anonima")} className={TARJETA}>
+              <div className="font-semibold">Anónima</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                RRHH ve la queja, no quién la puso. No permite sancionar: sirve de
+                aviso.
+              </div>
             </button>
-          </div>
-
-          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
-            <p className="flex gap-2 text-xs text-amber-900">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>
-                <strong>Por qué la anónima no permite sancionar:</strong> para tomar
-                medidas contra alguien hay que darle la oportunidad de defenderse frente
-                a lo que se le imputa. Si no hay una persona identificada al otro lado,
-                no puede haber contradicción entre ambas partes, y una sanción impuesta
-                así sería nula. Por eso las anónimas se registran, se estudian y sirven
-                para detectar problemas, pero no pueden fundamentar un expediente.
-              </span>
-            </p>
           </div>
         </DialogContent>
       </Dialog>
@@ -159,30 +142,36 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={cerrar}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {esAnonima ? <VenetianMask className="h-5 w-5 text-amber-600" /> : <ShieldCheck className="h-5 w-5 text-primary" />}
-            {esAnonima ? "Comunicación anónima" : "Comunicación en mi nombre"}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setModalidad(null)}
+              aria-label="Volver"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            Queja o denuncia
           </DialogTitle>
-        </DialogHeader>
-
-        <div
-          className={`rounded-lg border p-3 ${esAnonima ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}`}
-        >
-          <p className={`text-xs ${esAnonima ? "text-amber-900" : "text-emerald-900"}`}>
+          <DialogDescription>
+            <span className="font-medium text-foreground">
+              {esAnonima ? "Anónima" : "En mi nombre"}
+            </span>
             {esAnonima
-              ? "Recursos Humanos no verá tu nombre en ningún momento. Al no poder darse audiencia a la otra parte, esta comunicación no podrá dar lugar a sanciones: se usará como señal de alerta y para estadística."
-              : "Tu nombre queda registrado y solo lo ve Recursos Humanos. Esto permite investigar con garantías y, si se confirman los hechos, adoptar medidas. No se admiten represalias por presentar una comunicación."}
-          </p>
+              ? " · RRHH no verá tu nombre. Sin una persona a la que dar audiencia no se puede sancionar, así que sirve de aviso."
+              : " · tu nombre solo lo ve RRHH. Permite investigar y, si se confirma, tomar medidas. No se admiten represalias."}
+          </DialogDescription>
           <button
             type="button"
             onClick={() => setModalidad(esAnonima ? "nominal" : "anonima")}
-            className="mt-2 text-xs font-medium underline"
+            className="self-start text-xs font-medium text-muted-foreground underline"
           >
             {esAnonima ? "Prefiero presentarla en mi nombre" : "Prefiero presentarla de forma anónima"}
           </button>
-        </div>
+        </DialogHeader>
 
         <div className="space-y-4 mt-2">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -235,16 +224,19 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={() => setModalidad(null)}>Atrás</Button>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={cerrar}>
+            Cancelar
+          </Button>
           <Button
-            variant="primary"
             onClick={enviar}
             disabled={!asunto.trim() || !relato.trim() || enviando}
+            className="active:bg-blue-600"
           >
-            {enviando ? "Enviando…" : "Presentar"}
+            {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Enviar queja
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

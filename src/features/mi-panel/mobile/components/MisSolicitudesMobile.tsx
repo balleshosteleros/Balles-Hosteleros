@@ -27,6 +27,7 @@ import {
 import { SolicitudModal } from "@/features/mi-panel/components/SolicitudModal";
 import {
   CATEGORIA_LABEL,
+  DENUNCIA_ESTADO_LABEL,
   DenunciaModal,
 } from "@/features/mi-panel/components/DenunciaModal";
 import {
@@ -64,16 +65,9 @@ const ESTADO_DOT: Record<string, string> = {
 
 /**
  * Una queja sigue su propio ciclo (recibida → investigación → resuelta), así
- * que no se traduce al estado de una solicitud: se muestra el suyo.
+ * que no se traduce al estado de una solicitud: se muestra el suyo. Los
+ * nombres salen de `DENUNCIA_ESTADO_LABEL`, comunes con el panel.
  */
-const DENUNCIA_ESTADO_LABEL: Record<EstadoDenuncia, string> = {
-  recibida: "Recibida",
-  en_investigacion: "En investigación",
-  informacion_solicitada: "Información solicitada",
-  resuelta: "Resuelta",
-  archivada: "Archivada",
-};
-
 const DENUNCIA_ESTADO_DOT: Record<EstadoDenuncia, string> = {
   recibida: "bg-blue-500",
   en_investigacion: "bg-amber-500",
@@ -214,7 +208,7 @@ export function MisSolicitudesMobile() {
                       {d.respuesta && (
                         <p className="mt-1.5 rounded-lg bg-muted/60 p-2 text-xs text-muted-foreground">
                           <span className="font-medium text-foreground">
-                            Respuesta de recursos humanos:
+                            Respuesta de RRHH:
                           </span>{" "}
                           {d.respuesta}
                         </p>
