@@ -60,7 +60,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -76,11 +76,12 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   CalendarDays, MoreHorizontal, Eye, Clock, Archive,
-  Trash2, FileText, Users, ArrowLeft, Send, Upload, X, AlertTriangle, Bell, Mail, Paperclip,
-  ChevronLeft, ChevronRight, Settings, ShieldAlert, Link as LinkIcon, Copy,
+  Trash2, FileText, Users, ArrowLeft, Send, Upload, X, Bell, Mail, Paperclip,
+  ChevronLeft, ChevronRight, ChevronDown, Settings, ShieldAlert, Link as LinkIcon, Copy,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -100,6 +101,11 @@ import { ValidacionFaltantesDialog } from "@/features/ajustes/components/Validac
 import { SancionDisciplinariaView } from "@/features/gerencia/components/SancionDisciplinariaView";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { getOpcionesSegmento } from "@/features/notificaciones/actions/aviso-manual-actions";
+import { ComunicadoTarjeta } from "@/features/gerencia/components/ComunicadoTarjeta";
+
+/** Letra y trazo del menú de acciones: los mismos en todas sus opciones. */
+const ITEM_MENU = "cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold tracking-tight";
+const ICONO_MENU = "h-4 w-4";
 
 function EstadoBadge({ estado }: { estado: EstadoComunicado }) {
   const colors: Record<EstadoComunicado, string> = {
@@ -199,8 +205,39 @@ function formFromComunicado(c: Comunicado, tz: string): EditorForm {
   };
 }
 
+/**
+ * Foto de lo que hay escrito en la ficha, para saber si se ha tocado algo.
+ *
+ * Abrir un comunicado para LEERLO y volver atrás no debe escribir nada: antes
+ * cualquier salida lo guardaba otra vez y a un comunicado programado le quitaba
+ * la fecha y lo bajaba a borrador, así que dejaba de salir el día que tocaba.
+ *
+ * Se queda fuera lo que no escribe el usuario (`creadorId`, `textoNotificacion`).
+ */
+function firmaForm(f: EditorForm): string {
+  return JSON.stringify({
+    titulo: f.titulo,
+    cuerpo: f.cuerpo,
+    estado: f.estado,
+    tipo: f.tipo,
+    recurrencia: f.recurrencia,
+    todaEmpresa: f.todaEmpresa,
+    departamentos: [...f.departamentosDestinatarios].sort(),
+    empleados: [...f.empleadosDestinatarios].sort(),
+    programado: f.programado,
+    envioFecha: f.envioFecha,
+    envioHora: f.envioHora,
+    adjuntos: f.adjuntos.map(a => a.path).sort(),
+    archivosNuevos: f.archivosNuevos.map(a => `${a.name}:${a.size}`),
+    enviarEmail: f.enviarEmail,
+    enlace: f.enlace,
+    enlaceTexto: f.enlaceTexto,
+    observaciones: f.observaciones,
+  });
+}
+
 function ComunicadoEditor({
-  comunicado, onBack, onSave, empleadosReales, departamentosReales, empresaNombre, empresaColor, tz,
+  comunicado, onBack, onSave, empleadosReales, departamentosReales, empresaNombre, empresaColor, empresaIsotipo, tz,
 }: {
   comunicado: Comunicado | null;
   onBack: () => void;
@@ -212,12 +249,20 @@ function ComunicadoEditor({
   /** Color de marca de la empresa (Ajustes → Imagen de marca). La cabecera del
    *  comunicado se monta sola con él, igual que el correo: nada que configurar. */
   empresaColor: string;
+  /** Isotipo de la empresa: es el que sale en el comunicado del trabajador. */
+  empresaIsotipo: string;
   /** Zona horaria de la empresa: la fecha de envío se elige en SU hora. */
   tz: string;
 }) {
   const isEdit = !!comunicado;
-  const { user } = useAuth();
-  const [form, setForm] = useState<EditorForm>(comunicado ? formFromComunicado(comunicado, tz) : emptyForm);
+  const { user, profile } = useAuth();
+  const formInicial = useMemo(
+    () => (comunicado ? formFromComunicado(comunicado, tz) : emptyForm),
+    [comunicado, tz],
+  );
+  const [form, setForm] = useState<EditorForm>(formInicial);
+  /** Cómo estaba la ficha al abrirla. Sirve para no guardar lo que no se ha tocado. */
+  const firmaInicial = useMemo(() => firmaForm(formInicial), [formInicial]);
   const [preview, setPreview] = useState(false);
   const [empleadoFilter, setEmpleadoFilter] = useState("");
   const inputArchivos = useRef<HTMLInputElement>(null);
@@ -250,15 +295,13 @@ function ComunicadoEditor({
     u({ archivosNuevos: [...form.archivosNuevos, ...nuevos.slice(0, hueco)] });
   };
 
-  // Al crear (no editar), preseleccionar como creador al usuario de la sesión
-  // (es quien redacta el comunicado). El value del select es el userId, que
-  // coincide directamente con user.id de auth.
-  useEffect(() => {
-    if (comunicado || !user?.id) return;
-    if (empleadosReales.some((e) => e.userId === user.id)) {
-      setForm((f) => (f.creadorId ? f : { ...f, creadorId: user.id }));
-    }
-  }, [comunicado, user?.id, empleadosReales]);
+  /**
+   * EL CREADOR ES QUIEN LO ESCRIBE. No se elige —no había nada que elegir— y
+   * se resuelve al guardar con el usuario de la sesión. No se exige tener ficha
+   * de empleado: dirección puede no tenerla y el comunicado quedaba sin autor.
+   */
+  const guardar = (intencion: IntencionGuardado) =>
+    onSave({ ...form, creadorId: form.creadorId || user?.id || "" }, intencion);
 
 
   /** ¿Hay algo escrito? Salir de una ficha en blanco no debe dejar borradores vacíos. */
@@ -269,11 +312,20 @@ function ComunicadoEditor({
     form.archivosNuevos.length > 0;
 
   /**
-   * Salir de la ficha sin publicar. Lo escrito NO se pierde: se guarda como
-   * borrador y se puede publicar más tarde desde el listado.
+   * Salir de la ficha sin publicar.
+   *
+   * · Si no se ha tocado nada, volver NO guarda: el comunicado se queda tal
+   *   cual estaba. Entrar a leerlo y salir no lo cambia.
+   * · Si se ha escrito algo, lo escrito NO se pierde: se guarda y se puede
+   *   publicar más tarde desde el listado.
    */
   const salir = async () => {
-    if (tieneContenido) await onSave(form, "borrador");
+    const hayCambios = firmaForm(form) !== firmaInicial;
+    if (!hayCambios) {
+      onBack();
+      return;
+    }
+    if (isEdit || tieneContenido) await onSave(form, "borrador");
     else onBack();
   };
 
@@ -307,49 +359,59 @@ function ComunicadoEditor({
     );
   });
 
+  /**
+   * LA PREVISUALIZACIÓN ES LO QUE VE EL TRABAJADOR, no una maqueta aparte.
+   * Se pinta con la misma pieza que Mi panel: si cambia allí, cambia aquí.
+   */
   if (preview) {
     return (
-      <div className="p-6 space-y-6 max-w-3xl mx-auto">
+      <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">Vista previa del comunicado</h2>
-          <Button variant="outline" size="sm" onClick={() => setPreview(false)}><ArrowLeft className="h-4 w-4 mr-1" />Volver al editor</Button>
+          <div>
+            <h2 className="text-base font-semibold tracking-tight">Así lo verá el equipo</h2>
+            <p className="text-xs text-muted-foreground">Es la misma vista de Mi panel.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setPreview(false)}>
+            <ArrowLeft className="h-4 w-4 mr-1" />Volver al editor
+          </Button>
         </div>
-        <Card className="overflow-hidden">
-          <div className="h-32 flex items-end p-6" style={{ background: empresaColor }}>
-            <h1 className="text-2xl font-bold text-white drop-shadow-sm">{form.titulo || "Sin título"}</h1>
-          </div>
-          <CardContent className="p-6 space-y-4">
-            <div className="whitespace-pre-wrap text-sm leading-relaxed">{form.cuerpo || "Sin contenido"}</div>
-            {form.enlace.trim() && (
-              <a
-                href={form.enlace.trim()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white"
-                style={{ background: empresaColor }}
-              >
-                <LinkIcon className="h-4 w-4" />
-                {form.enlaceTexto.trim() || "Abrir enlace"}
-              </a>
-            )}
-            {(form.adjuntos.length > 0 || form.archivosNuevos.length > 0) && (
-              <div className="pt-2 border-t">
-                <p className="text-xs text-muted-foreground mb-1">Adjuntos:</p>
-                {form.adjuntos.map(a => <Badge key={a.path} variant="outline" className="mr-1">{a.name}</Badge>)}
-                {form.archivosNuevos.map((f, i) => <Badge key={`nuevo-${i}`} variant="outline" className="mr-1">{f.name}</Badge>)}
-              </div>
-            )}
-          </CardContent>
-          <div className="px-6 pb-4 text-xs text-muted-foreground border-t pt-3">
-            <span>{empresaNombre}</span> · <span>{form.todaEmpresa ? "Toda la plantilla" : form.departamentosDestinatarios.join(", ") || "Sin destinatarios"}</span>
-          </div>
-        </Card>
+        <div className="flex items-center gap-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Hoy</h3>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+        <ComunicadoTarjeta
+          datos={{
+            titulo: form.titulo,
+            tipo: form.tipo,
+            contenido: form.cuerpo,
+            enlace: form.enlace.trim(),
+            enlaceTexto: form.enlaceTexto,
+            adjuntos: form.adjuntos,
+            adjuntosPendientes: form.archivosNuevos.map(f => ({ name: f.name, size: f.size })),
+            empresaNombre,
+            isotipoUrl: empresaIsotipo,
+            fechaTexto: formatFechaHoraEnZona(new Date().toISOString(), tz, { month: "long" }),
+            nuevo: true,
+          }}
+        />
       </div>
     );
   }
 
+  const creador =
+    empleadosReales.find(e => e.userId === (form.creadorId || user?.id)) ?? null;
+  const creadorNombre = creador
+    ? `${creador.nombre} ${creador.apellidos}`.trim()
+    : [profile?.nombre, profile?.apellidos].filter(Boolean).join(" ").trim();
+
+  const totalDocumentos = form.adjuntos.length + form.archivosNuevos.length;
+
   return (
-    <div className="flex flex-col h-full">
+    /* `h-[calc(100%+7rem)] -mb-28` anula el aire que el armazón del software
+       deja debajo de toda pantalla para el botón "Guardar": aquí se publica
+       desde arriba, así que esos 7rem solo eran una franja muerta que se comía
+       el final de la ficha (Iván, 11-09-2026). */
+    <div className="flex flex-col h-[calc(100%+7rem)] -mb-28">
       <div className="flex items-center justify-between px-6 py-3 border-b bg-card shrink-0">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={salir}><ArrowLeft className="h-4 w-4 mr-1" />Volver</Button>
@@ -359,7 +421,7 @@ function ComunicadoEditor({
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setPreview(true)}><Eye className="h-4 w-4 mr-1" />Previsualizar</Button>
-          <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => onSave(form, "publicar")}>
+          <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => guardar("publicar")}>
             <Send className="h-4 w-4 mr-1" />{vaProgramado ? "Programar" : "Publicar"}
           </Button>
         </div>
@@ -367,29 +429,29 @@ function ComunicadoEditor({
 
       <div className="flex-1 flex overflow-hidden">
         <ScrollArea className="flex-1">
-          <div className="p-6 pb-28 max-w-3xl space-y-6">
+          <div className="p-5 max-w-3xl space-y-4">
             {/* El comunicado se escribe sobre la hoja tal y como se recibe: la
                 franja de marca de la empresa arriba y el texto dentro. No hay
                 nada que montar ni colores que elegir. */}
             <Card className="overflow-hidden shadow-sm">
               <div className="h-2" style={{ background: empresaColor }} />
-              <CardContent className="p-8 space-y-7">
-                <div className="space-y-1.5">
+              <CardContent className="p-6 space-y-4">
+                <div className="space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">Título</Label>
                   <Input
                     value={form.titulo}
                     onChange={e => u({ titulo: e.target.value })}
                     placeholder="Cambio de horario de invierno"
-                    className="text-2xl font-bold border-0 rounded-none px-0 h-auto py-1 focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/40 placeholder:font-normal"
+                    className="text-xl font-bold border-0 rounded-none px-0 h-auto py-1 focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/40 placeholder:font-normal"
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">Mensaje</Label>
                   <Textarea
                     value={form.cuerpo}
                     onChange={e => u({ cuerpo: e.target.value })}
                     placeholder="Escribe aquí lo que quieres contarle al equipo…"
-                    className="border-0 px-0 focus-visible:ring-0 shadow-none min-h-[320px] resize-y text-base leading-7 placeholder:text-muted-foreground/40"
+                    className="border-0 px-0 focus-visible:ring-0 shadow-none min-h-[200px] resize-y text-base leading-7 placeholder:text-muted-foreground/40"
                   />
                 </div>
               </CardContent>
@@ -398,222 +460,255 @@ function ComunicadoEditor({
             {/* Un enlace no se pega dentro del texto: ahí no se puede pulsar
                 desde el aviso y se pierde entre el mensaje. Puesto aquí, sale
                 como un botón en el aviso, en el comunicado y en el correo. */}
-            <div className="space-y-3 rounded-xl border p-4">
+            <div className="space-y-2 rounded-xl border p-3">
               <div className="flex items-center gap-2">
-                <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Enlace
                 </Label>
+                <span className="text-[11px] text-muted-foreground/70">
+                  Sale como un botón al final del comunicado.
+                </span>
               </div>
-              <p className="text-xs text-muted-foreground/70">
-                Sale como un botón al final del comunicado. Se abre en otra pestaña.
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Dirección</Label>
-                  <Input
-                    value={form.enlace}
-                    onChange={e => u({ enlace: e.target.value })}
-                    placeholder="www.ejemplo.com/carta"
-                    inputMode="url"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Texto del botón</Label>
-                  <Input
-                    value={form.enlaceTexto}
-                    onChange={e => u({ enlaceTexto: e.target.value })}
-                    placeholder="Abrir enlace"
-                  />
-                </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input
+                  value={form.enlace}
+                  onChange={e => u({ enlace: e.target.value })}
+                  placeholder="www.ejemplo.com/carta"
+                  inputMode="url"
+                  className="h-9"
+                />
+                <Input
+                  value={form.enlaceTexto}
+                  onChange={e => u({ enlaceTexto: e.target.value })}
+                  placeholder="Texto del botón"
+                  className="h-9"
+                />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">Notas internas</Label>
-              <p className="text-xs text-muted-foreground/70">No salen en el comunicado; solo las ves tú.</p>
-              <Textarea value={form.observaciones} onChange={e => u({ observaciones: e.target.value })} rows={2} className="resize-y" />
-            </div>
+            {/* Las notas no salen en el comunicado, así que van plegadas: no
+                tienen por qué robar sitio a lo que sí se manda. */}
+            <Collapsible>
+              <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left hover:bg-muted/40">
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Notas internas
+                </span>
+                <span className="text-[11px] text-muted-foreground/70">Solo las ves tú.</span>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-2">
+                <Textarea value={form.observaciones} onChange={e => u({ observaciones: e.target.value })} rows={3} className="resize-y" />
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         </ScrollArea>
 
+        {/* AJUSTES DEL ENVÍO. Toda la columna tiene que caber de una sola
+            mirada: lo que es una lista larga (departamentos, empleados,
+            documentos) va plegado y dice cuántos llevas elegidos. */}
         <ScrollArea className="w-80 xl:w-96 border-l bg-muted/20 shrink-0">
-          <div className="p-4 pb-28 space-y-5">
-            <div>
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1"><Users className="h-3.5 w-3.5" />Destinatarios</Label>
-              <div className="mt-2 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Switch checked={form.todaEmpresa} onCheckedChange={v => u({ todaEmpresa: v })} id="sw-toda" />
-                  <Label htmlFor="sw-toda" className="text-sm">Toda la empresa</Label>
-                </div>
-                {!form.todaEmpresa && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Por departamento:</p>
+          <div className="p-4 space-y-3">
+            <div className="space-y-2">
+              <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5" />Destinatarios
+              </Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="sw-toda" className="text-sm font-normal">Toda la empresa</Label>
+                <Switch checked={form.todaEmpresa} onCheckedChange={v => u({ todaEmpresa: v })} id="sw-toda" />
+              </div>
+              {!form.todaEmpresa && (
+                <div className="space-y-2">
+                  <Collapsible>
+                    <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2 text-left hover:bg-muted/40">
+                      <span className="text-sm">Departamentos</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">
+                          {form.departamentosDestinatarios.length || "ninguno"}
+                        </span>
+                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      </span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-1.5">
                       {departamentosReales.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="px-1 text-xs text-muted-foreground">
                           Esta empresa no tiene departamentos activos.
                         </p>
                       ) : (
-                        <div className="grid grid-cols-2 gap-1.5">
+                        <div className="grid grid-cols-2 gap-1 rounded-lg border bg-card p-2">
                           {departamentosReales.map(d => (
                             <label key={d.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
                               <Checkbox
                                 checked={form.departamentosDestinatarios.includes(d.nombre)}
                                 onCheckedChange={() => toggleDepartamento(d.nombre)}
                               />
-                              {d.nombre}
+                              <span className="truncate">{d.nombre}</span>
                             </label>
                           ))}
                         </div>
                       )}
-                    </div>
+                    </CollapsibleContent>
+                  </Collapsible>
 
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground">Por empleado:</p>
+                  <Collapsible>
+                    <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2 text-left hover:bg-muted/40">
+                      <span className="text-sm">Empleados</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">
+                          {form.empleadosDestinatarios.length || "ninguno"}
+                        </span>
+                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      </span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-1.5 pt-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={empleadoFilter}
+                          onChange={e => setEmpleadoFilter(e.target.value)}
+                          placeholder="Buscar empleado…"
+                          className="h-8 text-xs"
+                        />
                         {form.empleadosDestinatarios.length > 0 && (
                           <button
                             type="button"
-                            className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                            className="shrink-0 text-[11px] text-muted-foreground underline hover:text-foreground"
                             onClick={() => u({ empleadosDestinatarios: [] })}
                           >
-                            Limpiar ({form.empleadosDestinatarios.length})
+                            Quitar todos
                           </button>
                         )}
                       </div>
-                      <Input
-                        value={empleadoFilter}
-                        onChange={e => setEmpleadoFilter(e.target.value)}
-                        placeholder="Buscar empleado…"
-                        className="h-8 text-xs"
-                      />
-                      <div className="border rounded-md max-h-56 overflow-y-auto bg-card">
+                      <div className="max-h-48 overflow-y-auto rounded-lg border bg-card">
                         {empleadosFiltrados.length === 0 ? (
-                          <p className="text-[11px] text-muted-foreground p-2 text-center">
+                          <p className="p-2 text-center text-[11px] text-muted-foreground">
                             {empleadosReales.length === 0 ? "Sin empleados en BD" : "Sin resultados"}
                           </p>
                         ) : (
-                          empleadosFiltrados.map(emp => {
-                            const checked = form.empleadosDestinatarios.includes(emp.userId);
-                            return (
-                              <label
-                                key={emp.userId}
-                                className="flex items-center gap-2 px-2 py-1.5 text-xs cursor-pointer hover:bg-muted/40 border-b last:border-b-0"
-                              >
-                                <Checkbox checked={checked} onCheckedChange={() => toggleEmpleado(emp.userId)} />
-                                <div className="flex-1 min-w-0">
-                                  <p className="truncate font-medium">{emp.nombre} {emp.apellidos}</p>
-                                  <p className="text-[10px] text-muted-foreground truncate">
-                                    {[emp.puesto ?? emp.rolLabel, emp.departamento].filter(Boolean).join(" · ") || "Sin rol"}
-                                  </p>
-                                </div>
-                              </label>
-                            );
-                          })
+                          empleadosFiltrados.map(emp => (
+                            <label
+                              key={emp.userId}
+                              className="flex cursor-pointer items-center gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 hover:bg-muted/40"
+                            >
+                              <Checkbox
+                                checked={form.empleadosDestinatarios.includes(emp.userId)}
+                                onCheckedChange={() => toggleEmpleado(emp.userId)}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium">{emp.nombre} {emp.apellidos}</p>
+                                <p className="truncate text-[10px] text-muted-foreground">
+                                  {[emp.puesto ?? emp.rolLabel, emp.departamento].filter(Boolean).join(" · ") || "Sin rol"}
+                                </p>
+                              </div>
+                            </label>
+                          ))
                         )}
                       </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <Separator />
-
-            <div>
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1"><Clock className="h-3.5 w-3.5" />Programación</Label>
-              <div className="mt-2 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Switch checked={form.programado} onCheckedChange={v => u({ programado: v })} id="sw-prog" />
-                  <Label htmlFor="sw-prog" className="text-sm">{form.programado ? "Programar envío" : "Enviar ahora"}</Label>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </div>
-                {form.programado && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><Label className="text-xs">Fecha</Label><Input type="date" value={form.envioFecha} onChange={e => u({ envioFecha: e.target.value })} /></div>
-                    <div><Label className="text-xs">Hora</Label><Input type="time" value={form.envioHora} onChange={e => u({ envioHora: e.target.value })} /></div>
-                  </div>
-                )}
-                {/* Etiqueta y valor en la MISMA línea: partido en dos ocupaba
-                    el doble y se leía como si fueran dos cosas. */}
-                <div className="flex items-center justify-between gap-2">
-                  <Label className="text-xs shrink-0">Recurrencia</Label>
-                  <Select value={form.recurrencia} onValueChange={v => u({ recurrencia: v as Recurrencia })}>
-                    <SelectTrigger className="h-8 w-[150px] text-xs whitespace-nowrap"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sin_repeticion">Sin repetición</SelectItem>
-                      <SelectItem value="diaria">Diaria</SelectItem>
-                      <SelectItem value="semanal">Semanal</SelectItem>
-                      <SelectItem value="mensual">Mensual</SelectItem>
-                      <SelectItem value="anual">Anual</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* CUÁNDO SE MANDA. Un solo botón: apagado sale al publicar,
+                encendido pide día y hora. La recurrencia sobraba —un
+                comunicado se manda una vez— y solo añadía un desplegable. */}
+            <div className="space-y-2">
+              <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />Cuándo se manda
+              </Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="sw-prog" className="text-sm font-normal">Dejarlo programado</Label>
+                <Switch checked={form.programado} onCheckedChange={v => u({ programado: v })} id="sw-prog" />
               </div>
+              {form.programado ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input type="date" className="h-8 text-xs" value={form.envioFecha} onChange={e => u({ envioFecha: e.target.value })} />
+                  <Input type="time" className="h-8 text-xs" value={form.envioHora} onChange={e => u({ envioHora: e.target.value })} />
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">Sale en cuanto pulses «Publicar».</p>
+              )}
             </div>
 
             <Separator />
 
-            <div>
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1"><Bell className="h-3.5 w-3.5" />Texto de notificación</Label>
-              <Textarea value={form.textoNotificacion} onChange={e => u({ textoNotificacion: e.target.value })} rows={2} className="mt-2 text-sm" placeholder="Texto corto que recibirá el usuario como aviso..." />
-              <p className="text-[11px] text-muted-foreground mt-1">Este texto se mostrará como notificación en la app.</p>
+            <div className="space-y-2">
+              <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Bell className="h-3.5 w-3.5" />Aviso en el móvil
+              </Label>
+              <Textarea
+                value={form.textoNotificacion}
+                onChange={e => u({ textoNotificacion: e.target.value })}
+                rows={2}
+                className="text-xs"
+                placeholder="Texto corto que le salta al equipo…"
+              />
             </div>
 
             <Separator />
 
-            <div>
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1"><Mail className="h-3.5 w-3.5" />Enviar por correo</Label>
-              <div className="mt-2 flex items-center gap-2">
+            <div className="space-y-2">
+              <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5" />Correo
+              </Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="sw-email" className="text-sm font-normal">Mandarlo también por correo</Label>
                 <Switch checked={form.enviarEmail} onCheckedChange={v => u({ enviarEmail: v })} id="sw-email" />
-                <Label htmlFor="sw-email" className="text-sm">
-                  {form.enviarEmail ? "También por correo" : "Solo aviso en la app"}
-                </Label>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-1">
+              <p className="text-[11px] text-muted-foreground">
                 {form.enviarEmail
-                  ? "Al publicarlo saldrá un correo a los destinatarios con el comunicado y sus documentos. Se manda una sola vez."
-                  : "El comunicado llegará al móvil y a Mi panel, pero no al correo."}
+                  ? "Al publicarlo sale un correo con el comunicado y sus documentos. Se manda una sola vez."
+                  : "Llega al móvil y a Mi panel, pero no al correo."}
               </p>
             </div>
 
             <Separator />
 
-            <div>
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1"><Upload className="h-3.5 w-3.5" />Documentos adjuntos</Label>
-              <div className="mt-2 space-y-2">
+            <Collapsible>
+              <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 text-left">
+                <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Upload className="h-3.5 w-3.5" />Documentos
+                </Label>
+                <span className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">{totalDocumentos || "ninguno"}</span>
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                </span>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-1.5 pt-2">
                 {form.adjuntos.map(a => (
-                  <div key={a.path} className="flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm bg-card">
+                  <div key={a.path} className="flex items-center justify-between gap-2 rounded-md border bg-card px-2.5 py-1.5 text-xs">
                     <a
                       href={urlAdjuntoComunicado(a.path)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2 min-w-0 hover:underline"
+                      className="flex min-w-0 items-center gap-2 hover:underline"
                     >
                       <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate">{a.name}</span>
-                      {a.size > 0 && <span className="text-xs text-muted-foreground shrink-0">{tamanoLegible(a.size)}</span>}
+                      {a.size > 0 && <span className="shrink-0 text-[10px] text-muted-foreground">{tamanoLegible(a.size)}</span>}
                     </a>
                     <button
                       type="button"
                       aria-label={`Quitar ${a.name}`}
                       onClick={() => u({ adjuntos: form.adjuntos.filter(x => x.path !== a.path) })}
-                      className="text-muted-foreground hover:text-destructive shrink-0"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
                     ><X className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
                 {form.archivosNuevos.map((f, i) => (
-                  <div key={`nuevo-${i}-${f.name}`} className="flex items-center justify-between gap-2 rounded-md border border-dashed px-3 py-1.5 text-sm bg-card">
-                    <span className="flex items-center gap-2 min-w-0">
+                  <div key={`nuevo-${i}-${f.name}`} className="flex items-center justify-between gap-2 rounded-md border border-dashed bg-card px-2.5 py-1.5 text-xs">
+                    <span className="flex min-w-0 items-center gap-2">
                       <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate">{f.name}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">{tamanoLegible(f.size)}</span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{tamanoLegible(f.size)}</span>
                     </span>
                     <button
                       type="button"
                       aria-label={`Quitar ${f.name}`}
                       onClick={() => u({ archivosNuevos: form.archivosNuevos.filter((_, idx) => idx !== i) })}
-                      className="text-muted-foreground hover:text-destructive shrink-0"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
                     ><X className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
@@ -624,55 +719,33 @@ function ComunicadoEditor({
                   className="hidden"
                   onChange={e => { anadirArchivos(e.target.files); e.target.value = ""; }}
                 />
-                <Button variant="outline" size="sm" className="w-full" onClick={() => inputArchivos.current?.click()}>
-                  <Upload className="h-4 w-4 mr-1" />Adjuntar documento
+                <Button variant="outline" size="sm" className="h-8 w-full text-xs" onClick={() => inputArchivos.current?.click()}>
+                  <Upload className="h-3.5 w-3.5 mr-1" />Adjuntar documento
                 </Button>
                 <p className="text-[11px] text-muted-foreground">
                   Hasta {MAX_ADJUNTOS_COMUNICADO} documentos, máx. {MAX_DOCUMENTO_MB} MB cada uno.
                 </p>
-              </div>
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             <Separator />
 
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs">Tipo</Label>
-                <Select value={form.tipo} onValueChange={v => u({ tipo: v as TipoComunicado })}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TIPOS_COMUNICADO.map((t) => (
-                      <SelectItem key={t} value={t}>{TIPO_COMUNICADO_LABEL[t]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">Creador</Label>
-                <Select value={form.creadorId} onValueChange={v => u({ creadorId: v })}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Seleccionar empleado..." /></SelectTrigger>
-                  <SelectContent>{empleadosReales.map(e => (
-                    <SelectItem key={e.userId} value={e.userId}>
-                      {e.nombre} {e.apellidos}
-                      {((e.puesto ?? e.rolLabel) || e.departamento) && (
-                        <span className="text-muted-foreground">
-                          {" — "}{[e.puesto ?? e.rolLabel, e.departamento].filter(Boolean).join(" · ")}
-                        </span>
-                      )}
-                    </SelectItem>
-                  ))}</SelectContent>
-                </Select>
-              </div>
+            {/* El tipo pinta el recuadro del comunicado. El creador NO se
+                elige: es quien lo escribe, y solo se deja ver. */}
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm font-normal">Tipo</Label>
+              <Select value={form.tipo} onValueChange={v => u({ tipo: v as TipoComunicado })}>
+                <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TIPOS_COMUNICADO.map((t) => (
+                    <SelectItem key={t} value={t}>{TIPO_COMUNICADO_LABEL[t]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-
-            <Separator />
-
-            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 flex gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-                Una vez publicado, los destinatarios y el contenido principal del comunicado no podrán modificarse. Solo podrá archivarse.
-              </p>
-            </div>
+            {creadorNombre && (
+              <p className="text-[11px] text-muted-foreground">Lo firma {creadorNombre}.</p>
+            )}
           </div>
         </ScrollArea>
       </div>
@@ -921,7 +994,7 @@ function normalizarAdjuntosFila(raw: unknown): ComunicadoAdjunto[] {
 export function ComunicadosView() {
   // `empresaResuelta` evita enseñar el nombre de la empresa por defecto mientras
   // aún se está resolviendo cuál es la activa del usuario.
-  const { empresaActual, empresaResuelta } = useEmpresa();
+  const { empresaActual, empresaResuelta, getIsotipoUrl } = useEmpresa();
   const { confirm, dialog: dialogoConfirmar } = useConfirmDelete();
   // Las fechas guardadas son instantes: se leen en la hora de la EMPRESA, no en
   // la del navegador de quien mira la pantalla.
@@ -1128,16 +1201,18 @@ export function ComunicadosView() {
      * · Publicar con fecha puesta → queda programado y sale solo ese día.
      * · Publicar sin fecha → sale ahora.
      * · Salir sin publicar → borrador, para no perder lo escrito. Un comunicado
-     *   ya publicado o archivado NO se degrada a borrador por irse de la ficha.
+     *   que YA tiene estado (programado, publicado o archivado) no se degrada a
+     *   borrador por irse de la ficha: a un programado eso le quitaba la fecha y
+     *   dejaba de salir el día que tocaba.
      */
     const estadoFinal: EstadoComunicado =
       intencion === "publicar"
         ? form.programado && form.envioFecha
           ? "programado"
           : "publicado"
-        : form.estado === "publicado" || form.estado === "archivado"
-          ? form.estado
-          : "borrador";
+        : form.estado === "borrador"
+          ? "borrador"
+          : form.estado;
 
     // Los campos obligatorios se exigen al publicar. Un borrador a medias es
     // justo lo que se guarda al salir, así que ahí no se valida nada.
@@ -1162,7 +1237,9 @@ export function ComunicadosView() {
     const envio = form.programado && form.envioFecha
       ? zonaLocalAUtcISO(form.envioFecha, form.envioHora || "00:00", tz)
       : estadoFinal === "publicado" && form.recurrencia === "sin_repeticion"
-        ? new Date().toISOString()
+        // El que ya salió conserva el día que salió: volver a guardarlo le
+        // ponía la fecha de hoy y parecía recién enviado.
+        ? (editingComunicado?.envio ?? new Date().toISOString())
         : null;
 
     // Los documentos suben DIRECTOS al almacén con una URL firmada. Si pasaran
@@ -1257,6 +1334,7 @@ export function ComunicadosView() {
           departamentosReales={departamentosReales}
           empresaNombre={empresaResuelta ? empresaActual?.nombre ?? "" : ""}
           empresaColor={empresaActual?.color ?? "hsl(var(--primary))"}
+          empresaIsotipo={empresaActual ? getIsotipoUrl(empresaActual.id) : ""}
           tz={tz}
         />
         <ValidacionFaltantesDialog
@@ -1434,17 +1512,38 @@ export function ComunicadosView() {
                           </Button>
                         )}
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEdit(c)}><Eye className="h-4 w-4 mr-2" />Ver / editar</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => duplicar(c)}><Copy className="h-4 w-4 mr-2" />Duplicar</DropdownMenuItem>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground">
+                            <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        {/* Menú con la letra del software: 13 px, semibold y
+                            trazo fino en los iconos. Con la tipografía por
+                            defecto cantaba frente al resto de la pantalla. */}
+                        <DropdownMenuContent align="end" className="w-52 rounded-xl p-1.5 shadow-lg">
+                          <DropdownMenuItem className={ITEM_MENU} onClick={() => openEdit(c)}>
+                            <Eye className={ICONO_MENU} strokeWidth={1.75} />Ver / editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className={ITEM_MENU} onClick={() => duplicar(c)}>
+                            <Copy className={ICONO_MENU} strokeWidth={1.75} />Duplicar
+                          </DropdownMenuItem>
                           {c.estado === "publicado" && (
-                            <DropdownMenuItem onClick={() => mandarPorCorreo(c)}><Mail className="h-4 w-4 mr-2" />Mandar por correo</DropdownMenuItem>
+                            <DropdownMenuItem className={ITEM_MENU} onClick={() => mandarPorCorreo(c)}>
+                              <Mail className={ICONO_MENU} strokeWidth={1.75} />Mandar por correo
+                            </DropdownMenuItem>
                           )}
                           {c.estado !== "archivado" && (
-                            <DropdownMenuItem onClick={() => archivar(c)}><Archive className="h-4 w-4 mr-2" />Archivar</DropdownMenuItem>
+                            <DropdownMenuItem className={ITEM_MENU} onClick={() => archivar(c)}>
+                              <Archive className={ICONO_MENU} strokeWidth={1.75} />Archivar
+                            </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem className="text-destructive" onClick={() => eliminar(c)}><Trash2 className="h-4 w-4 mr-2" />Eliminar</DropdownMenuItem>
+                          <DropdownMenuSeparator className="my-1" />
+                          <DropdownMenuItem
+                            className={`${ITEM_MENU} text-destructive focus:text-destructive`}
+                            onClick={() => eliminar(c)}
+                          >
+                            <Trash2 className={ICONO_MENU} strokeWidth={1.75} />Eliminar
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                       </div>
@@ -1484,15 +1583,22 @@ export function ComunicadosView() {
               «{publicando.titulo}» se enviará{" "}
               {publicando.todaEmpresa ? "a toda la plantilla" : "a sus destinatarios"}.
             </p>
-            <div className="flex items-center gap-3 rounded-lg border p-3">
-              <Switch
-                id="pub-email"
-                checked={publicarConEmail}
-                onCheckedChange={setPublicarConEmail}
-              />
-              <Label htmlFor="pub-email" className="text-sm font-normal">
-                {publicarConEmail ? "También por correo" : "Solo aviso en la app"}
-              </Label>
+            <div className="space-y-1 rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="pub-email" className="text-sm font-normal">
+                  Mandarlo también por correo
+                </Label>
+                <Switch
+                  id="pub-email"
+                  checked={publicarConEmail}
+                  onCheckedChange={setPublicarConEmail}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {publicarConEmail
+                  ? "Sale un correo con el comunicado y sus documentos."
+                  : "Llega al móvil y a Mi panel, pero no al correo."}
+              </p>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setPublicando(null)} disabled={publicandoBusy}>

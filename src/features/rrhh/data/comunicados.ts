@@ -9,7 +9,7 @@ export const ESTADO_COMUNICADO_LABELS: Record<EstadoComunicado, string> = {
 };
 
 export const RECURRENCIA_LABELS: Record<Recurrencia, string> = {
-  sin_repeticion: "Sin repetición",
+  sin_repeticion: "No",
   diaria: "Diaria",
   semanal: "Semanal",
   mensual: "Mensual",
