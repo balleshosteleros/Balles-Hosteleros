@@ -10,7 +10,7 @@ import {
   CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound, Heart, UserPlus,
   Apple, CreditCard, Presentation, QrCode, Link2, Globe, Send, Wallet, Fingerprint,
   Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard, FileQuestion,
-  LayoutGrid, CalendarClock, AlertTriangle, HelpCircle, MessageSquareWarning,
+  LayoutGrid, CalendarClock, AlertTriangle, HelpCircle,
   Video, Mail, MessageSquare, Banknote, Building2, Smartphone, Trash2,
   Bell, ArrowLeftRight, PackageCheck, Handshake, Boxes, KanbanSquare,
 } from "lucide-react";
@@ -77,9 +77,11 @@ export type Section = {
 
 // ─── Submenús (fuente única — los consume el sidebar y el header) ─────────
 
+// POINTS ya no sale aquí: el juego se lleva en la píldora de arriba (nivel +
+// saldo, y el «+10» cuando gana). Desde ahí se entra a la pantalla, que sigue
+// viva en `/mi-panel/points` — ver EXTRA_ROUTES (Iván, 12-09-2026).
 export const miPanelSubs: SubItem[] = [
   { title: "PERFIL", url: "/mi-panel/datos-personales", icon: UserCircle },
-  { title: "POINTS", url: "/mi-panel/points", icon: Trophy },
   { title: "CALENDARIO", url: "/mi-panel/calendario", icon: CalendarDays },
   { title: "CRONOGRAMA", url: "/mi-panel/cronograma", icon: CalendarClock },
   { title: "HORARIO", url: "/mi-panel/horario", icon: Timer },
@@ -253,7 +255,6 @@ const MODULE_META: Record<string, ModuleMeta> = {
   "/ajustes": { label: "AJUSTES", icon: Settings },
   "/ayuda": { label: "AYUDA", icon: HelpCircle },
   "/accesos": { label: "ACCESOS", icon: KeyRound },
-  "/consultas-pendientes": { label: "CONSULTAS", icon: MessageSquareWarning },
   "/formacion": { label: "FORMACIÓN", icon: GraduationCap },
   "/reuniones": { label: "REUNIONES", icon: Video },
   "/agenda": { label: "AGENDA", icon: ContactRound },
@@ -263,6 +264,8 @@ const MODULE_META: Record<string, ModuleMeta> = {
 
 const EXTRA_ROUTES: Record<string, { title: string; icon?: IconType }> = {
   "/onboarding": { title: "PUESTA EN MARCHA", icon: Sparkles },
+  // Se entra por la píldora de Points de la barra de arriba, no por el menú.
+  "/mi-panel/points": { title: "POINTS", icon: Trophy },
   "/mi-panel/formacion/curso": { title: "CURSO", icon: GraduationCap },
   "/rrhh/formacion/curso": { title: "CURSO", icon: GraduationCap },
   "/direccion/cronogramas/productividad": { title: "PRODUCTIVIDAD", icon: TrendingUp },
@@ -401,7 +404,7 @@ const SUB_URLS = new Set<string>(ALL_SUBS.map((s) => s.url));
  */
 const RUTAS_NEUTRAS = new Set<string>([
   "/", "/mi-panel", "/mis-departamentos", "/ajustes", "/ayuda",
-  "/accesos", "/consultas-pendientes", "/formacion", "/reuniones", "/agenda",
+  "/accesos", "/formacion", "/reuniones", "/agenda",
 ]);
 
 /**

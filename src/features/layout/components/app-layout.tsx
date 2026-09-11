@@ -53,6 +53,8 @@ import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigge
 import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
 import { FichajePill } from "@/features/mi-panel/components/FichajePill";
 import { TablasConsultaMovil } from "@/shared/components/TablasConsultaMovil";
+import { PointsPill } from "@/features/toques/components/PointsPill";
+import type { PointsResumen } from "@/features/toques/lib/points-resumen";
 import { PushEscritorioAviso } from "@/features/notificaciones/components/PushEscritorioAviso";
 import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
 import { CountdownOverlay } from "@/features/recorder/components/CountdownOverlay";
@@ -105,17 +107,30 @@ function NavBadge({ count, color }: { count: number; color: ToolColorKey }) {
  * porque necesita leer el estado del menú lateral (`useSidebar`) y el modo
  * inmersivo para decidir si la barra superior se repliega.
  */
-export function AppLayout({ children }: { children: React.ReactNode }) {
+export function AppLayout({
+  children,
+  pointsInicial = null,
+}: {
+  children: React.ReactNode;
+  /** Nivel + saldo resueltos en el servidor: la píldora sale pintada de una vez. */
+  pointsInicial?: PointsResumen | null;
+}) {
   return (
     <SidebarProvider>
       <ModoInmersivoProvider>
-        <AppLayoutInterno>{children}</AppLayoutInterno>
+        <AppLayoutInterno pointsInicial={pointsInicial}>{children}</AppLayoutInterno>
       </ModoInmersivoProvider>
     </SidebarProvider>
   );
 }
 
-function AppLayoutInterno({ children }: { children: React.ReactNode }) {
+function AppLayoutInterno({
+  children,
+  pointsInicial,
+}: {
+  children: React.ReactNode;
+  pointsInicial?: PointsResumen | null;
+}) {
   const pathname = usePathname();
   const auth = useContext(AuthContext);
   
@@ -517,6 +532,15 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                       )}
                     </div>
                   </TooltipProvider>
+
+                  {/* Marcador de Points: nivel + saldo, y el «+10» cuando gana.
+                      Es el único acceso al juego desde que se quitó del menú de
+                      Mis Paneles (Iván, 12-sep). */}
+                  <PointsPill
+                    inicial={pointsInicial}
+                    href="/mi-panel/points"
+                    className="mr-1"
+                  />
 
                   {/* Bloque final: empresa + nombre + ajustes + avatar — todo en un pill */}
                   <div className="flex items-center gap-0.5 rounded-full border bg-muted/40 py-1 px-1.5">

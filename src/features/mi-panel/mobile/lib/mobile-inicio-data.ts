@@ -8,6 +8,7 @@ import {
   getMobileIdentidad,
   type InicioEmpresa,
 } from "./mobile-identidad-data";
+import { getPointsResumen, type PointsResumen } from "@/features/toques/lib/points-resumen";
 
 // La identidad (nombre, rol, foto, empresa activa y empresas accesibles) vive en
 // `mobile-identidad-data`: la cabecera de TODAS las pantallas móviles la usa,
@@ -28,6 +29,8 @@ export interface MobileInicioData {
   empresaActual: InicioEmpresa | null;
   empresas: InicioEmpresa[];
   jornadaHoy: JornadaHoy;
+  /** Marcador de Points de la cabecera. Null si aún no juega en esta empresa. */
+  points: PointsResumen | null;
 }
 
 function todayISO(tz: string): string {
@@ -48,7 +51,7 @@ export async function getMobileInicioData(): Promise<MobileInicioData> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ...identidad, jornadaHoy: { tipo: "desconocida" } };
+  if (!user) return { ...identidad, jornadaHoy: { tipo: "desconocida" }, points: null };
 
   const admin = createAdminClient();
 
@@ -80,5 +83,17 @@ export async function getMobileInicioData(): Promise<MobileInicioData> {
     }
   }
 
-  return { ...identidad, jornadaHoy };
+  // Marcador de Points (nivel + saldo) de la empresa activa, resuelto aquí para
+  // que la cabecera salga pintada de una vez y no aparezca a medio segundo.
+  let points: PointsResumen | null = null;
+  if (empresaParaHorario) {
+    try {
+      points = await getPointsResumen(admin, user.id, empresaParaHorario);
+    } catch (err) {
+      // Sin points no se cae la portada: la píldora se pinta luego en el móvil.
+      console.error("[mobile-inicio] points", err);
+    }
+  }
+
+  return { ...identidad, jornadaHoy, points };
 }

@@ -52,10 +52,21 @@ const EMPTY_BALANCE: Balance = {
   ultimoMovimientoAt: null,
 };
 
-export function ToquesView() {
+interface ToquesViewProps {
+  /**
+   * Empresa activa resuelta EN EL SERVIDOR (la de la cookie). En el móvil el
+   * contexto de empresa del navegador no siempre llega a tener el id de base de
+   * datos, y sin él esta pantalla decía «No estás asignado a una empresa» aunque
+   * lo estuviera. El contexto manda cuando lo tiene: así el cambio de empresa
+   * sigue funcionando sin recargar.
+   */
+  empresaIdInicial?: string | null;
+}
+
+export function ToquesView({ empresaIdInicial = null }: ToquesViewProps = {}) {
   const supabase = useMemo(() => createClient(), []);
   const { empresaActual } = useEmpresa();
-  const empresaActualDbId = empresaActual.dbId ?? null;
+  const empresaActualDbId = empresaActual.dbId ?? empresaIdInicial;
   const [userId, setUserId] = useState<string | null>(null);
   const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [balance, setBalance] = useState<Balance>(EMPTY_BALANCE);
@@ -114,7 +125,7 @@ export function ToquesView() {
         canjesPendRes,
         reglasRes,
       ] = await Promise.all([
-        getMiBalance(supabase, user.id),
+        getMiBalance(supabase, user.id, eId),
         getNiveles(supabase, eId),
         getRecompensas(supabase, eId),
         getMiTimeline(supabase, user.id, 30),

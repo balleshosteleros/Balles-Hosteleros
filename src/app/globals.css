@@ -541,3 +541,31 @@
     white-space: normal;
   }
 }
+
+/* El «+10» que sube y se apaga sobre la píldora de Points: el aviso de que
+   acabas de ganar, sin robar sitio ni pedir nada. */
+@keyframes points-sube {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.8);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-22px) scale(1);
+  }
+}
+
+.points-sube {
+  animation: points-sube 1.4s ease-out forwards;
+}
+
+/* Quien haya pedido menos movimiento en su teléfono, ve el número y ya. */
+@media (prefers-reduced-motion: reduce) {
+  .points-sube {
+    animation-duration: 0.01ms;
+  }
+}

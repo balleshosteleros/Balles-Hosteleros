@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   UserCircle,
-  Trophy,
   CalendarDays,
   CalendarClock,
   Timer,
@@ -30,9 +29,11 @@ type Item = { href: string; label: string; icon: LucideIcon };
 // MISMO ORDEN que en el menú del ordenador (`miPanelSubs`), con Perfil el
 // primero (Iván, 11-sep): quien usa las dos pantallas encuentra cada panel en
 // el mismo sitio.
+//
+// POINTS no está: el juego vive en la píldora de la cabecera (nivel + saldo, y
+// el «+10» al ganar), y desde ella se entra a `/m/points` (Iván, 12-sep).
 const ITEMS: Item[] = [
   { href: "/m/perfil", label: "Perfil", icon: UserCircle },
-  { href: "/m/points", label: "Points", icon: Trophy },
   { href: "/m/calendario", label: "Calendario", icon: CalendarDays },
   { href: "/m/cronograma", label: "Cronograma", icon: CalendarClock },
   { href: "/m/horario", label: "Horario", icon: Timer },

@@ -4084,7 +4084,9 @@ export async function getMiPanelResumen(): Promise<{
       solicitudes,
       comunicadosVisibles,
     ] = await Promise.all([
-      getMiBalance(supabase, user.id).catch(() => ({
+      // Con la empresa: los points son de cada empresa, y sin decir cuál la
+      // consulta fallaba en silencio y el panel enseñaba 0 points.
+      getMiBalance(supabase, user.id, empresaId).catch(() => ({
         empresaId: "",
         userId: user.id,
         toquesAcumulados: 0,

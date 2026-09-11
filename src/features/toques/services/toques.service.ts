@@ -190,12 +190,22 @@ export function calcularNivel(toquesAcumulados: number, niveles: Nivel[]): Nivel
 
 // ─── Lecturas ────────────────────────────────────────────────
 
-export async function getMiBalance(supabase: SupabaseClient, userId: string): Promise<Balance> {
-  const { data, error } = await supabase
+/**
+ * Saldo del trabajador EN UNA EMPRESA. Los points son de cada empresa, como el
+ * puesto: quien trabaja en dos tiene una fila por empresa, así que sin decir de
+ * cuál se pedían dos a la vez y la consulta reventaba.
+ */
+export async function getMiBalance(
+  supabase: SupabaseClient,
+  userId: string,
+  empresaId?: string | null,
+): Promise<Balance> {
+  let consulta = supabase
     .from("toques_balance")
     .select("empresa_id, user_id, toques_acumulados, toques_canjeables, ultimo_movimiento_at")
-    .eq("user_id", userId)
-    .maybeSingle();
+    .eq("user_id", userId);
+  if (empresaId) consulta = consulta.eq("empresa_id", empresaId);
+  const { data, error } = await consulta.maybeSingle();
   if (error) {
     console.error("[toques_balance:read]", error);
     throw new Error(`No se pudo leer el balance: ${error.message}`);

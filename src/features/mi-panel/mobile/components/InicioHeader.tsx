@@ -1,9 +1,10 @@
 import { PerfilPill } from "./PerfilPill";
+import { PointsPill } from "@/features/toques/components/PointsPill";
 import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
 import type { MobileInicioData } from "../lib/mobile-inicio-data";
 
 export function InicioHeader({ data }: { data: MobileInicioData }) {
-  const { nombre, avatarUrl, empresaActual, empresas } = data;
+  const { nombre, avatarUrl, empresaActual, empresas, points } = data;
 
   return (
     // OJO con el fondo: la columna de la app está centrada y limitada a 640px
@@ -26,10 +27,14 @@ export function InicioHeader({ data }: { data: MobileInicioData }) {
         <div className="absolute inset-x-0 -top-24 h-56 bg-gradient-to-b from-primary/15 via-primary/5 to-transparent blur-2xl" />
       </div>
 
-      {/* Fila superior: campana a la izquierda del todo; pill de perfil
-          (logo empresa + foto→menú) a la derecha. */}
+      {/* Fila superior: campana y marcador de Points a la izquierda; pill de
+          perfil (logo empresa + foto→menú) a la derecha. El marcador es el
+          único sitio desde el que se entra a Points (Iván, 12-sep). */}
       <div className="relative flex items-center justify-between gap-2">
-        <NotificacionBell />
+        <div className="flex min-w-0 items-center gap-2">
+          <NotificacionBell />
+          <PointsPill inicial={points} href="/m/points" />
+        </div>
         <PerfilPill
           nombre={nombre}
           avatarUrl={avatarUrl}
