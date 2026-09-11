@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Inbox, Plus, X, CalendarOff, Briefcase, PackageCheck } from "lucide-react";
+import {
+  Loader2,
+  Inbox,
+  Plus,
+  X,
+  CalendarOff,
+  Briefcase,
+  PackageCheck,
+  MessageSquareWarning,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   anularMiSolicitud,
@@ -9,8 +18,16 @@ import {
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { SolicitudPersonal } from "@/features/mi-panel/types";
 import { ESTADO_LABEL, SUBTIPO_LABEL } from "@/features/mi-panel/types";
+import {
+  listMisDenuncias,
+  type DenunciaRow,
+  type EstadoDenuncia,
+} from "@/features/mi-panel/actions/denuncias-actions";
 import { SolicitudModal } from "@/features/mi-panel/components/SolicitudModal";
-import { DenunciaModal } from "@/features/mi-panel/components/DenunciaModal";
+import {
+  CATEGORIA_LABEL,
+  DenunciaModal,
+} from "@/features/mi-panel/components/DenunciaModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,11 +40,18 @@ import {
 } from "@/shared/components/ui/alert-dialog";
 import { cn } from "@/shared/lib/utils";
 
-const TABS: Array<{ key: "todas" | "ausencias" | "trabajos" | "entregas"; label: string }> = [
-  { key: "todas", label: "Todas" },
+/**
+ * Los cuatro tipos que puede pedir un empleado, cada uno en su pestaña. No hay
+ * vista «todas» a propósito: mezclarlos no dice nada, se miran por tipo.
+ */
+const TABS: Array<{
+  key: "ausencias" | "trabajos" | "entregas" | "quejas";
+  label: string;
+}> = [
   { key: "ausencias", label: "Ausencias" },
   { key: "trabajos", label: "Trabajos" },
   { key: "entregas", label: "Entregas" },
+  { key: "quejas", label: "Quejas" },
 ];
 
 const ESTADO_DOT: Record<string, string> = {
@@ -35,6 +59,26 @@ const ESTADO_DOT: Record<string, string> = {
   aprobada: "bg-emerald-500",
   rechazada: "bg-rose-500",
   anulada: "bg-slate-400",
+};
+
+/**
+ * Una queja sigue su propio ciclo (recibida → investigación → resuelta), así
+ * que no se traduce al estado de una solicitud: se muestra el suyo.
+ */
+const DENUNCIA_ESTADO_LABEL: Record<EstadoDenuncia, string> = {
+  recibida: "Recibida",
+  en_investigacion: "En investigación",
+  informacion_solicitada: "Información solicitada",
+  resuelta: "Resuelta",
+  archivada: "Archivada",
+};
+
+const DENUNCIA_ESTADO_DOT: Record<EstadoDenuncia, string> = {
+  recibida: "bg-blue-500",
+  en_investigacion: "bg-amber-500",
+  informacion_solicitada: "bg-purple-500",
+  resuelta: "bg-emerald-500",
+  archivada: "bg-slate-400",
 };
 
 function formatFecha(s: string): string {
@@ -48,21 +92,27 @@ function formatFecha(s: string): string {
 
 export function MisSolicitudesMobile() {
   const [items, setItems] = useState<SolicitudPersonal[]>([]);
+  const [quejas, setQuejas] = useState<DenunciaRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [open, setOpen] = useState(false);
   const [denunciaOpen, setDenunciaOpen] = useState(false);
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("todas");
+  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("ausencias");
   const [aAnular, setAAnular] = useState<SolicitudPersonal | null>(null);
   const [anulando, setAnulando] = useState(false);
 
   useEffect(() => {
     let cancel = false;
-    listarMisSolicitudes(60).then((res) => {
-      if (cancel) return;
-      setItems(res.ok ? res.data : []);
-      setLoading(false);
-    });
+    // Las quejas viven en su propia tabla por confidencialidad; solo salen las
+    // presentadas a su nombre —las anónimas se consultan con su código.
+    Promise.all([listarMisSolicitudes(60), listMisDenuncias()]).then(
+      ([sol, den]) => {
+        if (cancel) return;
+        setItems(sol.ok ? sol.data : []);
+        setQuejas(den.ok ? den.data : []);
+        setLoading(false);
+      },
+    );
     return () => {
       cancel = true;
     };
@@ -72,7 +122,7 @@ export function MisSolicitudesMobile() {
     if (tab === "ausencias") return items.filter((s) => s.tipo === "ausencia");
     if (tab === "trabajos") return items.filter((s) => s.tipo === "trabajo");
     if (tab === "entregas") return items.filter((s) => s.tipo === "entrega");
-    return items;
+    return [];
   }, [items, tab]);
 
   async function handleAnular() {
@@ -123,6 +173,58 @@ export function MisSolicitudesMobile() {
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
+        ) : tab === "quejas" ? (
+          quejas.length === 0 ? (
+            <div className="flex flex-col items-center justify-center px-6 py-16 text-center text-muted-foreground">
+              <MessageSquareWarning className="mb-2 h-8 w-8" />
+              <p className="text-sm">No has presentado ninguna queja a tu nombre.</p>
+              <p className="mt-1 text-xs">
+                Las anónimas no aparecen aquí: se consultan con el código que
+                recibiste al presentarlas.
+              </p>
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {quejas.map((d) => (
+                <li
+                  key={d.id}
+                  className="rounded-2xl border border-border/60 bg-card p-3.5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 shrink-0 rounded-full",
+                            DENUNCIA_ESTADO_DOT[d.estado],
+                          )}
+                        />
+                        <p className="truncate text-sm font-medium">
+                          <MessageSquareWarning className="mr-1 inline h-3.5 w-3.5 -translate-y-px" />
+                          {d.asunto}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {CATEGORIA_LABEL[d.categoria]}
+                        {` · presentada el ${formatFecha(d.created_at.slice(0, 10))}`}
+                      </p>
+                      {d.respuesta && (
+                        <p className="mt-1.5 rounded-lg bg-muted/60 p-2 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            Respuesta de recursos humanos:
+                          </span>{" "}
+                          {d.respuesta}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-right text-[10px] font-medium tracking-wide text-muted-foreground">
+                      {DENUNCIA_ESTADO_LABEL[d.estado]}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Inbox className="mb-2 h-8 w-8" />
