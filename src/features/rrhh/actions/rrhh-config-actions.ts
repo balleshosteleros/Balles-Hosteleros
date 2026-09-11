@@ -10,6 +10,9 @@ import {
   PERMISO_REGLAS_DEFAULT,
 } from "@/features/mi-panel/lib/vacaciones-reglas";
 
+/** Lo que pidió el negocio: recordar cada 3 días hasta que la gestoría lo suba. */
+export const BAJA_MEDICA_RECORDATORIO_DIAS_DEFECTO = 3;
+
 export interface RrhhConfig {
   /** Departamento cuyos empleados validan a los empleados de área operativa. */
   validadorDeptoOperativaId: string | null;
@@ -36,6 +39,11 @@ export interface RrhhConfig {
    * ADEMÁS por él, y sin ello el coste de personal sale corto.
    */
   seguridadSocialEmpresaPct: number | null;
+  /**
+   * Cada cuántos días se le recuerda a la gestoría el comprobante de una baja
+   * médica que sigue sin subir. 0 = no recordar.
+   */
+  bajaMedicaRecordatorioDias: number;
 }
 
 /** Convierte a entero dentro de rango, o null si no es un valor usable. */
@@ -59,7 +67,7 @@ export async function getRrhhConfig(): Promise<{ ok: boolean; data?: RrhhConfig;
     const { data, error } = await admin
       .from("empresa_rrhh_config")
       .select(
-        "validador_depto_operativa_id, validador_depto_administrativa_id, tareas_validador_activo, vacaciones_dia_inicio, vacaciones_dias_min, vacaciones_dias_max, permiso_dias_min, permiso_dias_max, seguridad_social_empresa_pct",
+        "validador_depto_operativa_id, validador_depto_administrativa_id, tareas_validador_activo, vacaciones_dia_inicio, vacaciones_dias_min, vacaciones_dias_max, permiso_dias_min, permiso_dias_max, seguridad_social_empresa_pct, baja_medica_recordatorio_dias",
       )
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -93,6 +101,10 @@ export async function getRrhhConfig(): Promise<{ ok: boolean; data?: RrhhConfig;
           data?.seguridad_social_empresa_pct != null
             ? Number(data.seguridad_social_empresa_pct)
             : SS_EMPRESA_PCT_DEFECTO,
+        bajaMedicaRecordatorioDias:
+          data?.baja_medica_recordatorio_dias != null
+            ? Number(data.baja_medica_recordatorio_dias)
+            : BAJA_MEDICA_RECORDATORIO_DIAS_DEFECTO,
       },
     };
   } catch (err) {
@@ -113,6 +125,7 @@ export async function saveRrhhConfig(input: {
   permisoDiasMin: number | null;
   permisoDiasMax: number | null;
   seguridadSocialEmpresaPct: number | null;
+  bajaMedicaRecordatorioDias?: number | null;
 }) {
   try {
     const { empresaId } = await getAppContext();
@@ -165,6 +178,16 @@ export async function saveRrhhConfig(input: {
       ssPct = Math.round(n * 100) / 100;
     }
 
+    // Días del recordatorio a la gestoría: 0 apaga el aviso, 90 es el techo.
+    let recordatorioDias = BAJA_MEDICA_RECORDATORIO_DIAS_DEFECTO;
+    if (input.bajaMedicaRecordatorioDias != null) {
+      const n = enteroEnRango(input.bajaMedicaRecordatorioDias, 0, 90);
+      if (n == null) {
+        return { ok: false, error: "El recordatorio a la gestoría debe estar entre 0 y 90 días." };
+      }
+      recordatorioDias = n;
+    }
+
     let admin;
     try { admin = createAdminClient(); }
     catch { return { ok: false, error: "Supabase admin no configurado." }; }
@@ -183,6 +206,7 @@ export async function saveRrhhConfig(input: {
           permiso_dias_min: permisoMin,
           permiso_dias_max: permisoMax,
           seguridad_social_empresa_pct: ssPct,
+          baja_medica_recordatorio_dias: recordatorioDias,
         },
         { onConflict: "empresa_id" },
       );

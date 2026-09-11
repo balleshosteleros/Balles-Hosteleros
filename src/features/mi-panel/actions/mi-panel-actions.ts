@@ -3127,29 +3127,11 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       fechaFin: input.fechaFin ?? null,
     });
 
-    // BAJA MÉDICA: avisa automáticamente a gestoría (para tramitarla) y a
-    // gerencia (aviso informativo). Side-effect no bloqueante: si el email
-    // falla, la solicitud queda creada igual y RRHH la ve en pendientes.
-    if (input.tipo === "ausencia" && input.subtipo === "baja_medica") {
-      try {
-        await onBajaMedicaCreada({
-          solicitudId: (data as { id: string }).id,
-          empresaId,
-          userId: user.id,
-          fechaSolicitud: todayISO(),
-          fechaInicio: input.fechaInicio,
-          fechaFin: input.fechaFin ?? null,
-          motivo: input.motivo?.trim() ? input.motivo.trim() : null,
-          nombreFallback: nombre || "",
-          justificantePath: input.justificantePath ?? null,
-        });
-      } catch (e) {
-        console.error(
-          "[mi-panel] baja_medica side-effects:",
-          extractErrorMessage(e),
-        );
-      }
-    }
+    // BAJA MÉDICA: aquí NO sale nada hacia fuera. Antes se avisaba a gestoría y
+    // gerencia en este mismo momento, así que la gestoría se enteraba de una baja
+    // que nadie había revisado — y si luego se rechazaba, ya la había recibido.
+    // El aviso sale al APROBARLA, y quien aprueba decide si lo manda:
+    // ver `aprobarSolicitud` → `enviarBajaMedicaGestoria`.
 
     return { ok: true, data: mapSolicitud(data as Record<string, unknown>) };
   } catch (err: unknown) {
@@ -3287,7 +3269,19 @@ export async function listarSolicitudesEmpresa(filtro: "pendientes" | "todas" = 
   }
 }
 
-export async function aprobarSolicitud(id: string, notasRevision?: string) {
+/**
+ * Aprueba una solicitud.
+ *
+ * `avisarGestoria` solo pinta en las BAJAS MÉDICAS: quien aprueba decide en ese
+ * momento si se comunica a la gestoría. Viene marcado de entrada desde la
+ * pantalla, porque lo normal es avisar; desmarcarlo es la excepción, y entonces
+ * la solicitud queda como «gestoría sin avisar» con un botón para mandarlo luego.
+ */
+export async function aprobarSolicitud(
+  id: string,
+  notasRevision?: string,
+  opciones?: { avisarGestoria?: boolean },
+) {
   try {
     const { supabase, user, nombre } = await getContext();
     if (!user) return { ok: false, error: "No autenticado" };
@@ -3524,6 +3518,26 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
       resultado: "aprobada",
       notas: notasRevision ?? null,
     });
+
+    // BAJA MÉDICA: el aviso a la gestoría sale AQUÍ, no al pedirla, y solo si
+    // quien aprueba lo pidió. La baja queda aprobada pase lo que pase con el
+    // correo: nadie se queda sin su baja registrada porque falle un envío.
+    if (solicitud.subtipo === "baja_medica" && opciones?.avisarGestoria !== false) {
+      try {
+        const { enviarBajaMedicaGestoria } = await import(
+          "@/features/rrhh/services/gestoria/baja-medica-gestoria"
+        );
+        await enviarBajaMedicaGestoria({
+          solicitudId: solicitud.id as string,
+          quien: { userId: user.id, nombre: nombre || "Recursos Humanos" },
+        });
+      } catch (e) {
+        console.error(
+          "[mi-panel] aprobarSolicitud → aviso gestoría baja_medica:",
+          extractErrorMessage(e),
+        );
+      }
+    }
 
     // Push PWA al solicitante. No bloqueamos si el envío falla.
     try {
@@ -3787,199 +3801,6 @@ async function onBajaContratoCreada(args: {
       "[mi-panel] baja_contrato: sin correo de RRHH/general en Datos generales para empresa",
       args.empresaId,
     );
-  }
-}
-
-// ─── Baja médica: side-effects al crear la solicitud ─────────
-//
-// Una baja médica es CRÍTICA: tiene que llegar a la gestoría sí o sí. El
-// trabajador enfermo nunca se bloquea (la baja se registra siempre), pero
-// garantizamos que la comunicación NO se pierde en silencio:
-//   1) GESTORÍA (correoGestoria) — email para que la tramite.
-//   2) GERENCIA (correoGerencia) — email de aviso informativo.
-//   3) RED DE SEGURIDAD: si CUALQUIERA de esos dos emails no se pudo enviar
-//      (destino sin configurar en Ajustes o fallo de SMTP), se emite una
-//      ALERTA INTERNA al área administrativa (dirección/RRHH/gerencia) con el
-//      detalle de la baja y qué destino quedó sin avisar, para que la
-//      comuniquen a mano. Así nadie se entera tarde.
-// Los correos son fuente única de Ajustes → Empresa → «Correos electrónicos».
-async function onBajaMedicaCreada(args: {
-  solicitudId: string;
-  empresaId: string;
-  userId: string;
-  fechaSolicitud: string; // ISO — cuándo se registró (hoy)
-  fechaInicio: string; // ISO — inicio de la baja
-  fechaFin: string | null; // ISO — fin estimado (opcional)
-  motivo: string | null;
-  nombreFallback: string;
-  justificantePath: string | null; // PDF del parte en el bucket bajas-medicas
-}): Promise<void> {
-  const admin = createAdminClient();
-
-  const [empleadoRes, empresaRes] = await Promise.all([
-    admin
-      .from("empleados")
-      .select("nombre, apellidos, dni_nie, local_id, puesto")
-      .eq("empresa_id", args.empresaId)
-      .eq("user_id", args.userId)
-      .maybeSingle(),
-    admin
-      .from("empresas")
-      .select("nombre")
-      .eq("id", args.empresaId)
-      .maybeSingle(),
-  ]);
-
-  const emp = empleadoRes.data as
-    | {
-        nombre: string | null;
-        apellidos: string | null;
-        dni_nie: string | null;
-        local_id: string | null;
-        puesto: string | null;
-      }
-    | null;
-
-  const empleadoNombre =
-    (emp ? `${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim() : "") ||
-    args.nombreFallback ||
-    "Empleado/a";
-  const empresaNombre =
-    (empresaRes.data?.nombre as string | undefined) ?? "Tu empresa";
-
-  // Nombre del local (best-effort) para dar contexto en el correo.
-  let local: string | null = null;
-  if (emp?.local_id) {
-    const { data: loc } = await admin
-      .from("locales")
-      .select("nombre")
-      .eq("id", emp.local_id)
-      .maybeSingle();
-    local = (loc?.nombre as string | null) ?? null;
-  }
-
-  const { bajaMedicaNotificacionEmail } = await import(
-    "@/lib/email/templates/baja-medica-notificacion"
-  );
-
-  // Descarga el PDF del parte (si el trabajador lo adjuntó) para adjuntarlo a
-  // los correos. Best-effort: si falla la descarga, el correo sale sin adjunto.
-  let adjuntoParte:
-    | { filename: string; content: Buffer; contentType: string }
-    | null = null;
-  if (args.justificantePath) {
-    try {
-      const dl = await admin.storage.from("bajas-medicas").download(args.justificantePath);
-      if (!dl.error && dl.data) {
-        adjuntoParte = {
-          filename: `Parte-baja-${empleadoNombre.replace(/\s+/g, "-")}.pdf`,
-          content: Buffer.from(await dl.data.arrayBuffer()),
-          contentType: "application/pdf",
-        };
-      }
-    } catch (e) {
-      console.error("[mi-panel] baja_medica: no se pudo descargar el parte:", extractErrorMessage(e));
-    }
-  }
-
-  const datosComunes = {
-    empleadoNombre,
-    empresaNombre,
-    dniNie: emp?.dni_nie ?? null,
-    local,
-    puesto: emp?.puesto ?? null,
-    fechaSolicitud: formatFechaEs(args.fechaSolicitud),
-    fechaInicio: formatFechaEs(args.fechaInicio),
-    fechaFin: args.fechaFin ? formatFechaEs(args.fechaFin) : null,
-    motivo: args.motivo,
-    tieneParte: !!adjuntoParte,
-  } as const;
-
-  // Correos de gestoría y gerencia (fuente única: Ajustes → Empresa).
-  const [gestoria, gerencia] = await Promise.all([
-    resolverDestinatario(admin, args.empresaId, "departamento", "correoGestoria", null),
-    resolverDestinatario(admin, args.empresaId, "departamento", "correoGerencia", null),
-  ]);
-
-  // Envía a un destino y devuelve si LLEGÓ de verdad (email enviado con éxito).
-  const avisar = async (
-    destinatario: "gestoria" | "gerencia",
-    to: string,
-  ): Promise<boolean> => {
-    if (!to) return false;
-    const { subject, html, text } = bajaMedicaNotificacionEmail({
-      destinatario,
-      ...datosComunes,
-    });
-    const res = await sendEmail({
-      to,
-      subject,
-      html,
-      text,
-      empresaId: args.empresaId,
-      attachments: adjuntoParte ? [adjuntoParte] : undefined,
-    });
-    if (!res.ok) {
-      console.error(
-        `[mi-panel] baja_medica: email a ${destinatario} NO enviado (empresa ${args.empresaId}):`,
-        res.configured === false ? "SMTP no configurado" : res.error,
-      );
-    }
-    return res.ok;
-  };
-
-  // 1) Gestoría — para que tramite la baja (crítico).
-  const gestoriaOk = await avisar("gestoria", gestoria.to);
-
-  // 2) Gerencia — aviso informativo. Se omite (contando como "ya avisado") si
-  //    comparte buzón con gestoría, para no duplicar el mismo correo.
-  const gerenciaMismoBuzon =
-    !!gerencia.to && gerencia.to.toLowerCase() === gestoria.to.toLowerCase();
-  const gerenciaOk = gerenciaMismoBuzon
-    ? gestoriaOk
-    : await avisar("gerencia", gerencia.to);
-
-  // 3) RED DE SEGURIDAD: si algún destino crítico no recibió el aviso por email,
-  //    lo escalamos por notificación interna (bandeja + push) al área
-  //    administrativa, para que lo comuniquen a la gestoría manualmente.
-  const fallidos: string[] = [];
-  if (!gestoriaOk) fallidos.push(gestoria.to ? "gestoría (fallo de envío)" : "gestoría (sin correo configurado)");
-  if (!gerenciaMismoBuzon && !gerenciaOk)
-    fallidos.push(gerencia.to ? "gerencia (fallo de envío)" : "gerencia (sin correo configurado)");
-
-  if (fallidos.length > 0) {
-    try {
-      const { emitirNotificacion } = await import(
-        "@/features/notificaciones/actions/notificaciones-actions"
-      );
-      const detalleFecha = args.fechaFin
-        ? `del ${formatFechaEs(args.fechaInicio)} al ${formatFechaEs(args.fechaFin)}`
-        : `desde el ${formatFechaEs(args.fechaInicio)}`;
-      await emitirNotificacion({
-        system: true,
-        empresaId: args.empresaId,
-        // Área administrativa = dirección / RRHH / gerencia (quien administra).
-        segmento: { tipo: "area", area: "ADMINISTRATIVA" },
-        tipo: "alerta",
-        titulo: "Baja médica SIN avisar a la gestoría",
-        mensaje:
-          `${empleadoNombre} ha comunicado una baja médica (${detalleFecha}), pero no se pudo ` +
-          `avisar por email a: ${fallidos.join(" y ")}. ` +
-          `Comunícalo a la gestoría a mano y revisa los correos en Ajustes → Empresa.`,
-        accionUrl: "/rrhh/solicitudes",
-        accionLabel: "Ver solicitud",
-        requiereAccion: true,
-        refTabla: "solicitudes_personal",
-        refId: args.solicitudId,
-        // Una sola alerta por solicitud aunque se reintente el side-effect.
-        dedupeKey: `baja_medica_email_fallido:${args.solicitudId}`,
-      });
-    } catch (e) {
-      console.error(
-        "[mi-panel] baja_medica: no se pudo emitir alerta interna de respaldo:",
-        extractErrorMessage(e),
-      );
-    }
   }
 }
 

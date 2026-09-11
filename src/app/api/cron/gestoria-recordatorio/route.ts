@@ -162,10 +162,24 @@ export async function GET(request: Request) {
     console.error("[cron/gestoria] recordatorios de documentos de baja:", e);
   }
 
+  // Comprobantes de BAJAS MÉDICAS pendientes. Cada empresa decide cada cuántos
+  // días se insiste (Ajustes → Solicitudes). Mismo cron por el límite de Vercel.
+  let bajasMedicasRecordadas = 0;
+  try {
+    const { procesarRecordatoriosComprobante } = await import(
+      "@/features/rrhh/services/gestoria/baja-medica-documentos"
+    );
+    const r = await procesarRecordatoriosComprobante(admin);
+    bajasMedicasRecordadas = r.enviados;
+  } catch (e) {
+    console.error("[cron/gestoria] recordatorios de baja médica:", e);
+  }
+
   return NextResponse.json({
     ok: true,
     ejecutadoEn: new Date().toISOString(),
     recordatoriosEnviados: enviados,
     bajasRecordadas,
+    bajasMedicasRecordadas,
   });
 }

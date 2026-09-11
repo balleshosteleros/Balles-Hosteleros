@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Save, ShieldCheck, Palmtree, Coins } from "lucide-react";
+import { Loader2, Save, ShieldCheck, Palmtree, Coins, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,6 +58,9 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
   const [permisoMax, setPermisoMax] = useState<string>("");
   // Seguridad Social a cargo de la empresa: lo que se paga POR ENCIMA del bruto.
   const [ssPct, setSsPct] = useState<string>(String(SS_EMPRESA_PCT_DEFECTO));
+  // Cada cuántos días se insiste a la gestoría con el comprobante de una baja
+  // médica. 0 = no recordar.
+  const [recordatorioBaja, setRecordatorioBaja] = useState<number>(3);
 
   useEffect(() => {
     let activo = true;
@@ -82,6 +85,7 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
             ? String(cfgRes.data.seguridadSocialEmpresaPct)
             : String(SS_EMPRESA_PCT_DEFECTO),
         );
+        setRecordatorioBaja(cfgRes.data.bajaMedicaRecordatorioDias ?? 3);
       }
       setCargando(false);
     });
@@ -162,6 +166,7 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
       permisoDiasMax:
         permisoMaxNum != null && Number.isFinite(permisoMaxNum) ? permisoMaxNum : null,
       seguridadSocialEmpresaPct: ssNum,
+      bajaMedicaRecordatorioDias: recordatorioBaja,
     });
     setGuardando(false);
     if (!res.ok) {
@@ -357,6 +362,37 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
                 día de vacaciones, permiso o baja, para que los ratios de gerencia reflejen lo que
                 cuesta de verdad la plantilla. Por defecto {SS_EMPRESA_PCT_DEFECTO} %, que es lo que
                 sale de las nóminas ya cargadas.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-lg border bg-card p-4">
+            <div className="flex items-center gap-2">
+              <Stethoscope className="h-4 w-4" />
+              <h3 className="text-sm font-semibold">Bajas médicas</h3>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="recordatorio-baja">
+                Recordar a la gestoría el comprobante cada
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="recordatorio-baja"
+                  inputMode="numeric"
+                  value={String(recordatorioBaja)}
+                  onChange={(e) => {
+                    const n = Number(e.target.value.replace(/[^0-9]/g, ""));
+                    setRecordatorioBaja(Number.isFinite(n) ? Math.min(90, n) : 0);
+                  }}
+                  className="max-w-[90px]"
+                />
+                <span className="text-sm text-muted-foreground">días</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Si tras aprobar una baja médica la gestoría no sube el comprobante de haberla
+                tramitado, se le vuelve a escribir cada tantos días hasta que lo suba. Cada
+                recordatorio queda apuntado en la solicitud. En 0 se apaga el aviso.
               </p>
             </div>
           </div>

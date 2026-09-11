@@ -26,7 +26,8 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { MOTIVO_MIN_CARACTERES } from "@/features/mi-panel/types";
-import { CheckCircle2, XCircle, Loader2, Inbox, Lock } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Inbox, Lock, Check, History } from "lucide-react";
+import { ComunicacionesSolicitud } from "./ComunicacionesSolicitud";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -101,6 +102,11 @@ export function SolicitudesView() {
   const [modo, setModo] = useState<Modo>("aprobar");
   const [notas, setNotas] = useState("");
   const [working, setWorking] = useState(false);
+  // Solo pinta en las bajas médicas. Marcada de entrada: lo normal es avisar a
+  // la gestoría, y desmarcarlo es la excepción.
+  const [avisarGestoria, setAvisarGestoria] = useState(true);
+  // Qué solicitud tiene abierto su historial de comunicaciones.
+  const [historialDe, setHistorialDe] = useState<SolicitudPersonal | null>(null);
 
   // Guarda la empresa con la que se lanzó la carga: si el usuario cambia de
   // empresa mientras vuelven los datos, la respuesta vieja se descarta.
@@ -187,6 +193,7 @@ export function SolicitudesView() {
     setRevisando(sol);
     setModo(m);
     setNotas("");
+    setAvisarGestoria(true);
   }
 
   // Rechazar una salida anticipada obliga a explicarse: ese texto es el que le
@@ -194,6 +201,10 @@ export function SolicitudesView() {
   // también; esto solo evita que se llegue a pulsar en balde.
   const motivoRechazoObligatorio =
     modo === "rechazar" && revisando?.tipo === "salida_anticipada";
+
+  // La pregunta de avisar a la gestoría solo tiene sentido aquí: en vacaciones o
+  // permisos no sale ningún correo fuera de la empresa.
+  const esBajaMedica = modo === "aprobar" && revisando?.subtipo === "baja_medica";
 
   async function confirmar() {
     if (!revisando) return;
@@ -205,10 +216,11 @@ export function SolicitudesView() {
           modo === "aprobar",
           notas.trim() || undefined,
         )
-      : await (modo === "aprobar" ? aprobarSolicitud : rechazarSolicitud)(
-          revisando.id,
-          notas.trim() || undefined,
-        );
+      : modo === "aprobar"
+        ? await aprobarSolicitud(revisando.id, notas.trim() || undefined, {
+            avisarGestoria: esBajaMedica ? avisarGestoria : false,
+          })
+        : await rechazarSolicitud(revisando.id, notas.trim() || undefined);
     setWorking(false);
     if (!res.ok) {
       toast.error(res.error || "No se pudo procesar la solicitud");
@@ -431,7 +443,7 @@ export function SolicitudesView() {
                   : "No hay solicitudes que mostrar."}
               </div>
             ) : (
-              <Table>
+              <Table data-tabla-consulta>
                 <TableHeader>
                   <TableRow>
                     {columnasRender.map((c) => columnDefs[c.campo]?.th)}
@@ -471,7 +483,18 @@ export function SolicitudesView() {
                             </div>
                           )
                         ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          // Ya resuelta: lo que queda por mirar es qué se mandó.
+                          <div className="flex justify-end">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-muted-foreground"
+                              onClick={() => setHistorialDe(s)}
+                            >
+                              <History className="mr-1 h-4 w-4" />
+                              Comunicaciones
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
@@ -482,6 +505,28 @@ export function SolicitudesView() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Qué se ha mandado sobre esta solicitud */}
+      <Dialog open={!!historialDe} onOpenChange={(v) => !v && setHistorialDe(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Comunicaciones</DialogTitle>
+            <DialogDescription>
+              {historialDe && (
+                <>
+                  <span className="font-medium text-foreground">
+                    {historialDe.empleadoNombre}
+                  </span>{" "}
+                  · {SUBTIPO_LABEL[historialDe.subtipo]}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {historialDe && (
+            <ComunicacionesSolicitud solicitudId={historialDe.id} defaultAbierto />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo de aprobación / rechazo */}
       <Dialog
@@ -527,6 +572,40 @@ export function SolicitudesView() {
               )}
             </DialogDescription>
           </DialogHeader>
+          {/* La decisión de avisar a la gestoría, en el momento de aprobar. */}
+          {esBajaMedica && (
+            <button
+              type="button"
+              onClick={() => setAvisarGestoria((v) => !v)}
+              aria-pressed={avisarGestoria}
+              className={`mt-2 flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
+                avisarGestoria
+                  ? "border-emerald-200 bg-emerald-50/60"
+                  : "border-border bg-background"
+              }`}
+            >
+              <span
+                className={`mt-0.5 grid h-[18px] w-[18px] shrink-0 place-items-center rounded border transition-colors ${
+                  avisarGestoria
+                    ? "border-emerald-600 bg-emerald-600"
+                    : "border-input bg-background"
+                }`}
+              >
+                {avisarGestoria && <Check className="h-3 w-3 text-white" strokeWidth={3.5} />}
+              </span>
+              <span>
+                <span className="block text-sm font-semibold leading-snug">
+                  Avisar a la gestoría de esta baja
+                </span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                  {avisarGestoria
+                    ? "Se le envían los datos de la baja y el parte adjunto. Gerencia recibe copia."
+                    : "No se enviará ningún correo. Podrás hacerlo cuando quieras desde la propia solicitud."}
+                </span>
+              </span>
+            </button>
+          )}
+
           <div className="py-2 space-y-2">
             <label className="text-sm font-medium">
               {motivoRechazoObligatorio ? "Explica por qué la rechazas" : "Notas"}{" "}
@@ -581,7 +660,11 @@ export function SolicitudesView() {
               }
             >
               {working && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {modo === "aprobar" ? "Aprobar" : "Rechazar"}
+              {modo === "aprobar"
+                ? esBajaMedica && avisarGestoria
+                  ? "Aprobar y avisar"
+                  : "Aprobar"
+                : "Rechazar"}
             </Button>
           </DialogFooter>
         </DialogContent>
