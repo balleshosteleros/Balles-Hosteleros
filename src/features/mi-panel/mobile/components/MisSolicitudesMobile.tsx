@@ -10,6 +10,7 @@ import {
   Briefcase,
   PackageCheck,
   MessageSquareWarning,
+  VenetianMask,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -20,8 +21,8 @@ import type { SolicitudPersonal } from "@/features/mi-panel/types";
 import { ESTADO_LABEL, SUBTIPO_LABEL } from "@/features/mi-panel/types";
 import {
   listMisDenuncias,
-  type DenunciaRow,
   type EstadoDenuncia,
+  type MiDenuncia,
 } from "@/features/mi-panel/actions/denuncias-actions";
 import { SolicitudModal } from "@/features/mi-panel/components/SolicitudModal";
 import {
@@ -92,7 +93,7 @@ function formatFecha(s: string): string {
 
 export function MisSolicitudesMobile() {
   const [items, setItems] = useState<SolicitudPersonal[]>([]);
-  const [quejas, setQuejas] = useState<DenunciaRow[]>([]);
+  const [quejas, setQuejas] = useState<MiDenuncia[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [open, setOpen] = useState(false);
@@ -103,8 +104,8 @@ export function MisSolicitudesMobile() {
 
   useEffect(() => {
     let cancel = false;
-    // Las quejas viven en su propia tabla por confidencialidad; solo salen las
-    // presentadas a su nombre —las anónimas se consultan con su código.
+    // Las quejas viven en su propia tabla por confidencialidad. Salen todas
+    // las suyas, anónimas incluidas: de esas la empresa no ve quién las puso.
     Promise.all([listarMisSolicitudes(60), listMisDenuncias()]).then(
       ([sol, den]) => {
         if (cancel) return;
@@ -177,11 +178,7 @@ export function MisSolicitudesMobile() {
           quejas.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-6 py-16 text-center text-muted-foreground">
               <MessageSquareWarning className="mb-2 h-8 w-8" />
-              <p className="text-sm">No has presentado ninguna queja a tu nombre.</p>
-              <p className="mt-1 text-xs">
-                Las anónimas no aparecen aquí: se consultan con el código que
-                recibiste al presentarlas.
-              </p>
+              <p className="text-sm">No has presentado ninguna queja.</p>
             </div>
           ) : (
             <ul className="space-y-2">
@@ -208,6 +205,12 @@ export function MisSolicitudesMobile() {
                         {CATEGORIA_LABEL[d.categoria]}
                         {` · presentada el ${formatFecha(d.created_at.slice(0, 10))}`}
                       </p>
+                      {d.modalidad === "anonima" && (
+                        <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                          <VenetianMask className="h-3 w-3" />
+                          Anónima
+                        </span>
+                      )}
                       {d.respuesta && (
                         <p className="mt-1.5 rounded-lg bg-muted/60 p-2 text-xs text-muted-foreground">
                           <span className="font-medium text-foreground">

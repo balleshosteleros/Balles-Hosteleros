@@ -1,6 +1,5 @@
 "use server";
 
-import { createHash, randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
@@ -50,23 +49,6 @@ async function ctx() {
   return { supabase, user, empresaId };
 }
 
-/** El código se entrega al denunciante; en BD solo se guarda su hash. */
-function hashCodigo(codigo: string): string {
-  return createHash("sha256").update(codigo.trim().toUpperCase()).digest("hex");
-}
-
-/** Código legible, sin caracteres que se confundan al copiarlo a mano. */
-function generarCodigo(): string {
-  const alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = randomBytes(12);
-  let out = "";
-  for (let i = 0; i < 12; i++) {
-    out += alfabeto[bytes[i] % alfabeto.length];
-    if (i === 3 || i === 7) out += "-";
-  }
-  return out;
-}
-
 export interface PresentarDenunciaInput {
   modalidad: ModalidadDenuncia;
   categoria: CategoriaDenuncia;
@@ -81,13 +63,14 @@ export interface PresentarDenunciaInput {
 /**
  * Presenta una denuncia por el canal interno.
  *
- * En la modalidad anónima se inserta con el cliente admin y sin `user_id`:
- * no queda ningún vínculo entre la denuncia y quien la presenta. A cambio se
- * devuelve un código de seguimiento (solo esta vez) para poder consultarla.
+ * La anónima se inserta con el cliente admin y sin `user_id`: su fila —la que
+ * lee RRHH— no lleva identidad. Quién la puso se guarda aparte, en
+ * `denuncias_autor_anonimo`, que solo puede leer su propio autor: así la ve en
+ * su lista de quejas sin que la empresa sepa de quién es.
  */
 export async function presentarDenuncia(
   input: PresentarDenunciaInput,
-): Promise<{ ok: boolean; codigoSeguimiento?: string; error?: string }> {
+): Promise<{ ok: boolean; error?: string }> {
   try {
     const { supabase, user, empresaId } = await ctx();
     if (!user || !empresaId) return { ok: false, error: "No autenticado" };
@@ -107,18 +90,35 @@ export async function presentarDenuncia(
     };
 
     if (input.modalidad === "anonima") {
-      const codigo = generarCodigo();
       // Cliente admin: la fila no se asocia a la sesión de quien la presenta.
       const admin = createAdminClient();
-      const { error } = await admin.from("denuncias").insert({
-        ...comun,
-        modalidad: "anonima",
-        user_id: null,
-        denunciante_nombre: null,
-        seguimiento_hash: hashCodigo(codigo),
-      });
+      const { data: creada, error } = await admin
+        .from("denuncias")
+        .insert({
+          ...comun,
+          modalidad: "anonima",
+          user_id: null,
+          denunciante_nombre: null,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
-      return { ok: true, codigoSeguimiento: codigo };
+
+      // El vínculo con su autor, en la tabla que solo él puede leer. Si esto
+      // fallara la queja ya está presentada y RRHH la tramita igual; lo único
+      // que pierde el trabajador es verla en su lista, así que no se rompe el
+      // envío por ello, pero queda constancia en el log.
+      const { error: errAutor } = await admin
+        .from("denuncias_autor_anonimo")
+        .insert({
+          denuncia_id: creada.id,
+          user_id: user.id,
+          empresa_id: empresaId,
+        });
+      if (errAutor) {
+        console.error("[denuncias] vínculo de la anónima con su autor:", errAutor);
+      }
+      return { ok: true };
     }
 
     const { data: perfil } = await supabase
@@ -142,57 +142,65 @@ export async function presentarDenuncia(
   }
 }
 
-/** Denuncias que el empleado presentó a su nombre. Las anónimas no salen aquí. */
-export async function listMisDenuncias(): Promise<{ ok: boolean; data: DenunciaRow[]; error?: string }> {
-  try {
-    const { supabase, user, empresaId } = await ctx();
-    if (!user || !empresaId) return { ok: true, data: [] };
-    const { data, error } = await supabase
-      .from("denuncias")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .eq("modalidad", "nominal")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return { ok: true, data: (data ?? []) as DenunciaRow[] };
-  } catch (err) {
-    console.error("[denuncias] listMisDenuncias:", err);
-    return { ok: false, data: [], error: friendlyError(err, "listMisDenuncias") };
-  }
-}
-
-export interface SeguimientoAnonimo {
-  categoria: string;
+/**
+ * Una queja tal como la ve quien la presentó. No lleva las notas internas de
+ * RRHH: de la tramitación solo le corresponde la respuesta.
+ */
+export interface MiDenuncia {
+  id: string;
+  modalidad: ModalidadDenuncia;
+  categoria: CategoriaDenuncia;
   asunto: string;
   estado: EstadoDenuncia;
   respuesta: string | null;
   created_at: string;
-  revisado_at: string | null;
-  cerrado_at: string | null;
 }
 
-/** Consulta de una denuncia anónima con su código. No revela identidad alguna. */
-export async function consultarPorCodigo(
-  codigo: string,
-): Promise<{ ok: boolean; data?: SeguimientoAnonimo; error?: string }> {
-  try {
-    const { supabase, user } = await ctx();
-    if (!user) return { ok: false, error: "No autenticado" };
-    if (!codigo.trim()) return { ok: false, error: "Introduce el código" };
+const COLUMNAS_MI_DENUNCIA = "id, modalidad, categoria, asunto, estado, respuesta, created_at";
 
-    const { data, error } = await supabase.rpc("consultar_denuncia_por_codigo", {
-      p_hash: hashCodigo(codigo),
-    });
+/**
+ * Todas las quejas del empleado: las que puso a su nombre y también las
+ * anónimas, que reconoce por su `modalidad`. Las anónimas no se localizan por
+ * `user_id` —su fila no lo lleva— sino por `denuncias_autor_anonimo`.
+ */
+export async function listMisDenuncias(): Promise<{ ok: boolean; data: MiDenuncia[]; error?: string }> {
+  try {
+    const { supabase, user, empresaId } = await ctx();
+    if (!user || !empresaId) return { ok: true, data: [] };
+
+    const { data: nominales, error } = await supabase
+      .from("denuncias")
+      .select(COLUMNAS_MI_DENUNCIA)
+      .eq("empresa_id", empresaId)
+      .eq("modalidad", "nominal")
+      .eq("user_id", user.id);
     if (error) throw error;
 
-    const fila = Array.isArray(data) ? data[0] : null;
-    if (!fila) return { ok: false, error: "No hay ninguna denuncia con ese código" };
-    return { ok: true, data: fila as SeguimientoAnonimo };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[denuncias] consultarPorCodigo:", msg);
-    return { ok: false, error: msg };
+    const { data: enlaces, error: errEnlaces } = await supabase
+      .from("denuncias_autor_anonimo")
+      .select("denuncia_id")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", user.id);
+    if (errEnlaces) throw errEnlaces;
+
+    const ids = (enlaces ?? []).map((e) => e.denuncia_id as string);
+    let anonimas: unknown[] = [];
+    if (ids.length > 0) {
+      const { data, error: errAnon } = await supabase
+        .from("denuncias")
+        .select(COLUMNAS_MI_DENUNCIA)
+        .in("id", ids);
+      if (errAnon) throw errAnon;
+      anonimas = data ?? [];
+    }
+
+    // La última que presentó, arriba.
+    const data = [...(nominales ?? []), ...anonimas] as MiDenuncia[];
+    data.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[denuncias] listMisDenuncias:", err);
+    return { ok: false, data: [], error: friendlyError(err, "listMisDenuncias") };
   }
 }
 

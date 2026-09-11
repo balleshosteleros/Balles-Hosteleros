@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Check, Copy, ShieldCheck, UserRound, VenetianMask } from "lucide-react";
+import { AlertTriangle, ShieldCheck, UserRound, VenetianMask } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,7 +44,6 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
   const [implicadas, setImplicadas] = useState("");
   const [testigos, setTestigos] = useState("");
   const [enviando, setEnviando] = useState(false);
-  const [codigo, setCodigo] = useState<string | null>(null);
 
   function cerrar() {
     onOpenChange(false);
@@ -54,7 +53,6 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
       setCategoria("queja_general");
       setAsunto(""); setRelato(""); setFechaHechos("");
       setLugar(""); setImplicadas(""); setTestigos("");
-      setCodigo(null);
     }, 200);
   }
 
@@ -78,64 +76,8 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
       return;
     }
     onCreated?.();
-
-    if (res.codigoSeguimiento) {
-      // Se muestra una sola vez: no se puede recuperar después.
-      setCodigo(res.codigoSeguimiento);
-      return;
-    }
     toast.success("Comunicación presentada. Recursos Humanos la revisará.");
     cerrar();
-  }
-
-  // ─── Pantalla final del código anónimo ──────────────────────────────────
-  if (codigo) {
-    return (
-      <Dialog open={open} onOpenChange={cerrar}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Check className="h-5 w-5 text-emerald-600" />
-              Comunicación anónima presentada
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Guarda este código. Es la única forma de consultar el estado de tu
-              comunicación, y <strong>no se puede volver a mostrar</strong>: no queda
-              guardado en ningún sitio que permita recuperarlo.
-            </p>
-            {/* El código no debe desbordar en pantallas estrechas: se permite
-                partir y el tamaño sube solo a partir de sm. */}
-            <div className="rounded-lg border-2 border-dashed p-4 text-center">
-              <p className="break-all font-mono text-lg font-bold tracking-wider sm:text-xl">
-                {codigo}
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                navigator.clipboard.writeText(codigo);
-                toast.success("Código copiado");
-              }}
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              Copiar código
-            </Button>
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
-              <p className="text-xs text-amber-900">
-                Recuerda: al ser anónima, esta comunicación sirve como señal de alerta y
-                para estadística, pero no permite abrir un expediente sancionador.
-              </p>
-            </div>
-          </div>
-          <div className="flex justify-end mt-2">
-            <Button variant="primary" onClick={cerrar}>Ya lo he guardado</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
   }
 
   // ─── Paso 1: elegir modalidad ───────────────────────────────────────────
@@ -185,7 +127,8 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
               <VenetianMask className="h-6 w-6 text-amber-600" />
               <p className="mt-2 font-semibold">De forma anónima</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                No queda ningún dato tuyo. Recibirás un código para consultar el estado.
+                Recursos Humanos la recibe sin tu nombre: ve la queja, no quién la
+                puso. La tienes en tu lista de quejas para seguir cómo va.
               </p>
               <p className="mt-2 text-xs font-medium text-amber-800">
                 Vale solo como estadística y señal de alerta: no permite sancionar.
@@ -229,7 +172,7 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
         >
           <p className={`text-xs ${esAnonima ? "text-amber-900" : "text-emerald-900"}`}>
             {esAnonima
-              ? "No se guardará ningún dato que permita identificarte. Al no poder darse audiencia a la otra parte, esta comunicación no podrá dar lugar a sanciones: se usará como señal de alerta y para estadística."
+              ? "Recursos Humanos no verá tu nombre en ningún momento. Al no poder darse audiencia a la otra parte, esta comunicación no podrá dar lugar a sanciones: se usará como señal de alerta y para estadística."
               : "Tu nombre queda registrado y solo lo ve Recursos Humanos. Esto permite investigar con garantías y, si se confirman los hechos, adoptar medidas. No se admiten represalias por presentar una comunicación."}
           </p>
           <button
