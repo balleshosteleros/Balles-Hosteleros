@@ -1,25 +1,27 @@
 # Comunicado — reestructuración de cocina, BACANAL
 
 **Asunto:** Cocina: cierre del fin de semana, ajuste de jornada de los jefes y puesto de cocinero 1
-**Fecha:** 10/09/2026
-**En vigor:** desde el lunes 14/09/2026
+**Fecha:** 11/09/2026
+**En vigor:** el salario desde el 1 de septiembre · los horarios desde el lunes 14/09/2026
 
 ---
 
 Buenos días,
 
 Dentro de la reestructuración que estamos haciendo en toda la casa, os
-comunicamos dos decisiones que afectan al departamento de cocina de BACANAL.
-Son dos puestos distintos: por un lado los **jefes de cocina**, que siguen los
-dos; por otro el puesto de **cocinero 1**, que es de fin de semana.
+comunicamos los cambios que afectan al departamento de cocina de BACANAL: el
+horario de los jefes de cocina, sus condiciones y el puesto de cocinero 1. Son
+puestos distintos y conviene no confundirlos: **los dos jefes de cocina siguen**;
+el que sale del cuadrante es el **cocinero 1**, que es el refuerzo de fin de
+semana.
 
 ## 1. La jornada de los jefes de cocina baja a 40 horas
 
 Ajustamos el cuadrante para dejarlo en **40 horas semanales por jefe**. Son
 **1,5 horas menos por persona y semana** respecto al horario que había.
 
-**Entra en vigor el lunes 14/09/2026.** El día que toque quedará actualizado en
-la app, y todo cuenta desde ese lunes.
+**Los horarios entran en vigor el lunes 14/09/2026.** Ya están cargados en la
+app: hasta el domingo 13 sigue el horario de antes.
 
 | Día | Jefe de Cocina 1 | Jefe de Cocina 2 |
 |---|---|---|
@@ -73,7 +75,40 @@ horario no se toca por esto.
 - **Ningún servicio se queda sin jefe de cocina**, y el viernes y el sábado
   siguen cubiertos al completo por los dos.
 
-## 2. Se propone la salida del cocinero 1
+## 2. Las condiciones
+
+### 1. Se libra más
+
+Se recortan **1,5 horas a la semana** a cada jefe de cocina, que **libran de
+más**.
+
+Y además, **los sábados**: si ese día el servicio de comidas va **por debajo de
+25 personas** y **no hay elaboraciones que hacer**, se permite que **uno de los
+dos jefes de cocina pida esas horas sin trabajar**.
+
+- **Apalabrado entre ellos dos** y consensuado con gerencia.
+- **Se alternan**, cada semana en que realmente se den las dos cosas.
+- La idea es no estar ahí sin hacer nada. **Si hay elaboración que hacer, se
+  omite** y se trabaja el turno completo.
+
+### 2. Se recortan 150 € del salario
+
+A cada uno de los dos jefes de cocina se le recortan **150 € del salario**.
+
+### 3. Para octubre, mejoras
+
+Para octubre **se está negociando hacer mejoras**: **subir las nóminas** y
+**reducir o eliminar los complementos salariales**, lo que **beneficia al
+trabajador en todos los sentidos**.
+
+---
+
+**Cuándo se aplica cada cosa:**
+
+- **El salario, ya:** a todo el mes de septiembre, desde el día 1.
+- **Los horarios, el lunes 14/09/2026:** empiezan a contar ese lunes.
+
+## 3. Se propone la salida del cocinero 1
 
 Por **volumen de reservas y por costes**, y en la misma línea que el resto de la
 reestructuración, se propone la salida del **cocinero 1**. Es el puesto de

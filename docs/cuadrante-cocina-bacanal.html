@@ -1,0 +1,553 @@
+<title>Cuadrante de cocina BACANAL</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+  :root{
+    --ground:#EDF0F2;
+    --surface:#FFFFFF;
+    --surface-2:#F4F6F8;
+    --line:#D2DBE0;
+    --line-soft:#E3E9EC;
+    --ink:#0F191F;
+    --ink-2:#3F535E;
+    --muted:#6D7F8A;
+    --j1:#1B5F7B;
+    --j1-soft:#DBEAF1;
+    --j2:#2E6B4E;
+    --j2-soft:#DBEDE2;
+    --alert:#9E3B3B;
+    --alert-soft:#F5E2E2;
+    --off:#B9C4CB;
+    --off-soft:#E7ECEF;
+    --shadow:0 1px 2px rgba(15,25,31,.06), 0 8px 24px -16px rgba(15,25,31,.30);
+
+    --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --f-body:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0D1418;
+      --surface:#151F25;
+      --surface-2:#1B262D;
+      --line:#2A3B45;
+      --line-soft:#22313A;
+      --ink:#E7EEF1;
+      --ink-2:#A9BAC4;
+      --muted:#8195A0;
+      --j1:#63B4D6;
+      --j1-soft:#123441;
+      --j2:#74C39A;
+      --j2-soft:#123326;
+      --alert:#E38A8A;
+      --alert-soft:#3B1F1F;
+      --off:#42555F;
+      --off-soft:#1F2C34;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0D1418;
+    --surface:#151F25;
+    --surface-2:#1B262D;
+    --line:#2A3B45;
+    --line-soft:#22313A;
+    --ink:#E7EEF1;
+    --ink-2:#A9BAC4;
+    --muted:#8195A0;
+    --j1:#63B4D6;
+    --j1-soft:#123441;
+    --j2:#74C39A;
+    --j2-soft:#123326;
+    --alert:#E38A8A;
+    --alert-soft:#3B1F1F;
+    --off:#42555F;
+    --off-soft:#1F2C34;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--ground);
+    color:var(--ink);
+    font-family:var(--f-body);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:32px 20px 72px;display:flex;flex-direction:column;gap:32px}
+
+  h1,h2,h3,.eyebrow,.chip,.stat__k,.tick,.horas,.dia__nombre,th,.sello,.plan__h,.badge{font-family:var(--f-display)}
+  h1{
+    font-size:clamp(28px,5vw,42px);font-weight:700;line-height:1.08;
+    letter-spacing:-.02em;margin:0;text-wrap:balance;
+  }
+  h2{font-size:clamp(19px,2.6vw,23px);font-weight:600;letter-spacing:-.01em;margin:0;text-wrap:balance}
+  h3{font-size:15px;font-weight:600;margin:0}
+  p{margin:0}
+  .eyebrow{
+    font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin:0;
+  }
+  .lede{font-size:17px;color:var(--ink-2);max-width:60ch}
+  .note{font-size:14px;color:var(--muted);max-width:64ch}
+
+  /* ---------- cabecera ---------- */
+  .head{display:flex;flex-direction:column;gap:14px;padding-top:8px}
+  .vigencia{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;padding:11px 14px;
+    border:1px solid var(--j2);border-left-width:4px;border-radius:8px;background:var(--j2-soft)}
+  .vigencia b{font-family:var(--f-display);font-size:13.5px;font-weight:700;color:var(--j2);
+    letter-spacing:.01em;font-variant-numeric:tabular-nums}
+  .vigencia span{font-size:14px;color:var(--ink-2)}
+  .vigencias{display:flex;flex-direction:column;gap:8px}
+  .vigencia--cut{border-color:var(--alert);background:var(--alert-soft)}
+  .vigencia--cut b{color:var(--alert)}
+  .rule{height:3px;background:var(--ink);width:56px;border-radius:2px}
+
+  /* ---------- los tres puntos ---------- */
+  .puntos{display:flex;flex-direction:column;gap:14px}
+  .punto{background:var(--surface);border:1px solid var(--line);border-left-width:4px;
+    border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow)}
+  .punto--ok{border-left-color:var(--j2)}
+  .punto--cut{border-left-color:var(--alert);background:var(--alert-soft);border-color:var(--alert)}
+  .punto__h{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap}
+  .punto__n{font-family:var(--f-mono);font-size:12px;font-weight:600;color:var(--muted);
+    font-variant-numeric:tabular-nums}
+  .punto h3{font-size:17.5px;letter-spacing:-.01em}
+  .punto--ok h3{color:var(--j2)}
+  .punto--cut h3{color:var(--alert)}
+  .punto p{font-size:15px;color:var(--ink-2);max-width:66ch}
+  .punto strong{color:var(--ink);font-weight:600}
+  .punto ul{margin:0;padding-left:19px;display:flex;flex-direction:column;gap:7px;
+    font-size:14.5px;color:var(--ink-2)}
+  .cond{font-family:var(--f-mono);font-size:12.5px;font-weight:600;background:var(--surface-2);
+    border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--ink);white-space:nowrap}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;margin:8px 0 0;
+    background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  dl,dd{margin:0}
+  .stat{background:var(--surface);padding:14px 16px;display:flex;flex-direction:column-reverse;gap:2px}
+  .stat__k{font-family:var(--f-mono);font-size:26px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stat__l{font-size:13px;color:var(--muted);line-height:1.35}
+  .stat--cut .stat__k{color:var(--alert)}
+
+  /* ---------- secciones ---------- */
+  section{display:flex;flex-direction:column;gap:14px}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
+  .panel__pad{padding:18px}
+
+  /* ---------- leyenda ---------- */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+  .chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
+    letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2)}
+  .swatch{width:14px;height:14px;border-radius:3px;border-left:3px solid currentColor;background:var(--surface-2)}
+  .sw-j1{color:var(--j1);background:var(--j1-soft)}
+  .sw-j2{color:var(--j2);background:var(--j2-soft)}
+  .sw-libre{color:var(--off);background:
+    repeating-linear-gradient(135deg,var(--off-soft) 0 4px,transparent 4px 8px)}
+
+  /* ---------- cuadrante ---------- */
+  .scroller{overflow-x:auto;padding-bottom:4px}
+  .grid{min-width:620px}
+  .row{display:grid;grid-template-columns:104px 1fr;gap:14px;align-items:center}
+  .lane{display:grid;grid-template-columns:56px 1fr 56px;gap:10px;align-items:center}
+  .escala{padding:0 0 6px}
+  .escala .lane{align-items:end}
+  .ticks{position:relative;height:16px}
+  .tick{position:absolute;top:0;font-family:var(--f-mono);font-size:10px;color:var(--muted);
+    transform:translateX(-50%);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .tick::after{content:"";position:absolute;left:50%;top:15px;width:1px;height:5px;background:var(--line)}
+
+  .dia{border-top:1px solid var(--line-soft);padding:11px 0}
+  .dia:first-of-type{border-top:0}
+  .dia--fuerte{background:linear-gradient(90deg,var(--surface-2),transparent 70%)}
+  .dia__nombre{display:flex;flex-direction:column;gap:3px;font-size:14px;font-weight:600}
+  .badge--srv{color:var(--muted);background:var(--surface-2);border:1px solid var(--line)}
+  .badge{align-self:flex-start;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--alert);background:var(--alert-soft);border-radius:3px;padding:2px 5px;font-variant-numeric:tabular-nums}
+  .carriles{display:flex;flex-direction:column;gap:5px}
+  .quien{font-family:var(--f-display);font-size:11px;font-weight:600;letter-spacing:.05em;
+    text-transform:uppercase;text-align:right}
+  .q1{color:var(--j1)} .q2{color:var(--j2)} .qc{color:var(--off)}
+  .track{position:relative;height:26px;background:var(--surface-2);border-radius:5px;
+    border:1px solid var(--line-soft)}
+  .blk{position:absolute;top:0;bottom:0;border-radius:4px;display:flex;align-items:center;
+    justify-content:center;font-family:var(--f-mono);font-size:10.5px;font-weight:500;
+    letter-spacing:-.01em;overflow:hidden;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .blk--j1{background:var(--j1-soft);color:var(--j1);border-left:3px solid var(--j1)}
+  .blk--j2{background:var(--j2-soft);color:var(--j2);border-left:3px solid var(--j2)}
+  .blk--off{background:
+      repeating-linear-gradient(135deg,var(--off-soft) 0 5px,transparent 5px 10px);
+    color:var(--muted);border-left:3px solid var(--off);text-decoration:line-through;
+    text-decoration-color:var(--alert);text-decoration-thickness:1.5px}
+  .libre{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:var(--f-display);font-size:10px;font-weight:600;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--muted);
+    background:repeating-linear-gradient(135deg,var(--off-soft) 0 5px,transparent 5px 10px);
+    border-radius:4px}
+  .marca{position:absolute;top:-5px;bottom:-5px;width:0;border-left:1.5px dashed var(--alert);z-index:2}
+  .sw-cierre{width:0;height:16px;border-left:1.5px dashed var(--alert);background:none;border-radius:0}
+  .destacado{background:var(--alert-soft);border:1px solid var(--alert);border-left-width:4px;
+    border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px}
+  .destacado h3{font-size:17px;color:var(--ink)}
+  .destacado p{font-size:15px;color:var(--ink-2);max-width:66ch}
+  .destacado strong{color:var(--ink);font-weight:600}
+  .destacado .lista{display:flex;flex-direction:column;gap:8px;margin:2px 0 0}
+  .destacado .lista div{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:baseline}
+  .destacado .hora{font-family:var(--f-mono);font-size:13px;font-weight:600;color:var(--alert);
+    font-variant-numeric:tabular-nums;white-space:nowrap}
+  .horas{font-family:var(--f-mono);font-size:12px;font-weight:600;color:var(--ink-2);
+    text-align:right;font-variant-numeric:tabular-nums}
+  .horas--cut{color:var(--alert)}
+  .horas--off{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--alert)}
+  .totales{display:flex;gap:10px;flex-wrap:wrap;border-top:2px solid var(--ink);padding-top:12px;margin-top:4px}
+  .total{flex:1 1 200px;display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    padding:10px 12px;border-radius:7px;background:var(--surface-2)}
+  .total__n{font-family:var(--f-display);font-size:13px;font-weight:600}
+  .total__v{font-family:var(--f-mono);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+  .t1 .total__n,.t1 .total__v{color:var(--j1)}
+  .t2 .total__n,.t2 .total__v{color:var(--j2)}
+
+  /* ---------- cambios ---------- */
+  .cambios{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+  .cambios li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 18px;
+    padding:12px 0;border-top:1px solid var(--line-soft);align-items:baseline}
+  .cambios li:first-child{border-top:0;padding-top:0}
+  .cambios p{font-size:15px;color:var(--ink-2)}
+  .cambios strong{color:var(--ink);font-weight:600}
+  .swap{font-family:var(--f-mono);font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .swap .antes{color:var(--muted);text-decoration:line-through}
+  .swap .flecha{color:var(--muted);padding:0 4px}
+  .swap .desp{color:var(--ink);font-weight:600}
+
+  /* ---------- tabla cobertura ---------- */
+  table{border-collapse:collapse;width:100%;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-soft)}
+  th{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  td:first-child{font-family:var(--f-display);font-weight:600;font-size:13px}
+  tr:last-child td{border-bottom:0}
+  .dos{font-family:var(--f-display);font-weight:600;font-size:12px;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--ink);background:var(--surface-2);
+    padding:2px 7px;border-radius:3px;display:inline-block}
+  .p1{color:var(--j1);font-weight:600}
+  .p2{color:var(--j2);font-weight:600}
+
+  /* ---------- cocinero ---------- */
+  .sale{border-color:var(--alert)}
+  .sale__head{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;
+    padding:16px 18px;border-bottom:1px solid var(--line);background:var(--alert-soft);border-radius:9px 9px 0 0}
+  .sello{display:inline-block;border:2px solid var(--alert);color:var(--alert);border-radius:5px;
+    padding:6px 12px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    transform:rotate(-1.8deg);line-height:1.1;text-align:center}
+  .sale__t{display:flex;flex-direction:column;gap:2px}
+  .sale__t strong{font-family:var(--f-display);font-size:17px;font-weight:700}
+  .sale__t span{font-size:13.5px;color:var(--ink-2)}
+
+  /* ---------- plan ---------- */
+  .plan{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+  .plan__c{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;
+    display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow)}
+  .plan__c--alta{border-top:3px solid var(--j2)}
+  .plan__c--baja{border-top:3px solid var(--off)}
+  .plan__h{font-size:11px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+  .plan__c h3{font-size:18px}
+  .plan__c ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px;font-size:14.5px;color:var(--ink-2)}
+  .plan__c p{font-size:14.5px;color:var(--ink-2)}
+
+  .cierre{border-left:3px solid var(--ink);padding:4px 0 4px 18px;display:flex;flex-direction:column;gap:10px}
+  .cierre p{font-size:16px;color:var(--ink-2);max-width:62ch}
+  .cierre strong{color:var(--ink)}
+
+  footer{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:8px}
+  .pend{display:flex;gap:9px;align-items:flex-start;font-size:14px;color:var(--ink-2)}
+  .pend b{font-family:var(--f-display);font-size:11px;font-weight:600;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--alert);background:var(--alert-soft);padding:2px 6px;
+    border-radius:3px;white-space:nowrap;margin-top:2px}
+
+  a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--j1);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  @media (max-width:600px){
+    .wrap{padding:24px 14px 56px;gap:26px}
+    .cambios li{grid-template-columns:1fr}
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="head">
+    <p class="eyebrow">BACANAL · Departamento de cocina</p>
+    <h1>El cuadrante nuevo de cocina</h1>
+    <div class="rule"></div>
+    <p class="lede">Dos decisiones y dos puestos distintos: los <strong>jefes de cocina</strong> siguen los dos, con la jornada ajustada a 40 horas; el <strong>cocinero&nbsp;1</strong>, que es el refuerzo de fin de semana, sale del cuadrante.</p>
+    <dl class="stats">
+      <div class="stat"><dt class="stat__l">Jornada de cada jefe de cocina</dt><dd class="stat__k">40 h</dd></div>
+      <div class="stat stat--cut"><dt class="stat__l">Lo que se recorta a cada uno por semana</dt><dd class="stat__k">−1,5 h</dd></div>
+      <div class="stat stat--cut"><dt class="stat__l">Las horas del cocinero 1 que salen</dt><dd class="stat__k">22 h</dd></div>
+    </dl>
+    <div class="vigencias">
+      <p class="vigencia vigencia--cut"><b>Salario · desde el 1 de septiembre</b><span>El cambio de salario se aplica ya, a todo el mes de septiembre entero.</span></p>
+      <p class="vigencia"><b>Horarios · desde el lunes 14/09/2026</b><span>Ya está cargado en la app. Hasta el domingo 13 sigue el horario de antes.</span></p>
+    </div>
+  </header>
+
+  <section>
+    <h2>1. Los jefes de cocina, a 40 horas</h2>
+    <p class="note">Cada barra es un turno real sobre el reloj del servicio, de las 12:00 a la 1:00. El hueco del centro es el descanso entre la comida y la noche.</p>
+    <div class="legend">
+      <span class="chip"><span class="swatch sw-j1"></span>Jefe de cocina 1</span>
+      <span class="chip"><span class="swatch sw-j2"></span>Jefe de cocina 2</span>
+      <span class="chip"><span class="swatch sw-libre"></span>Libra</span>
+      <span class="chip"><span class="swatch sw-cierre"></span>La cocina deja de servir</span>
+    </div>
+    <div class="panel panel__pad">
+      <div class="scroller"><div class="grid" id="grid-jefes"></div></div>
+      <div class="totales">
+        <div class="total t1"><span class="total__n">Jefe de cocina 1</span><span class="total__v">40 h</span></div>
+        <div class="total t2"><span class="total__n">Jefe de cocina 2</span><span class="total__v">40 h</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>El cierre del fin de semana</h2>
+    <div class="destacado">
+      <h3>Se acorta el servicio, no la salida de cocina</h3>
+      <p>Se ha mirado la venta real de la última franja del viernes y el sábado y <strong>no la hay</strong>: era local abierto sin caja. Así que se acorta el servicio de cara al cliente. El orden queda así:</p>
+      <div class="lista">
+        <div><span class="hora">23:00</span><span><strong>La última reserva del día</strong>, como máximo. No se sienta a nadie más tarde.</span></div>
+        <div><span class="hora">23:30</span><span><strong>La cocina deja de servir</strong> a los clientes.</span></div>
+        <div><span class="hora">00:00</span><span><strong>El local cierra al público</strong>, y el equipo de cocina sale — media hora después de la última comanda, para dejarlo cerrado.</span></div>
+      </div>
+      <p><strong>Que quede claro para todos:</strong> la cocina cierra <em>de cara al cliente</em> a las 23:30. La gente de cocina no sale a esa hora, sale a las 00:00 como siempre. Su horario no se toca por esto.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Qué cambia respecto al horario que tenían</h2>
+    <div class="panel panel__pad">
+      <ul class="cambios">
+        <li>
+          <p><strong>Cada uno mantiene su día de libranza.</strong> El jefe 1 sigue librando el miércoles y el jefe 2 el jueves.</p>
+          <span class="swap"><span class="desp">Sin cambios</span></span>
+        </li>
+        <li>
+          <p><strong>El lunes vuelve a su hora normal.</strong> Se deshace el recorte que se había hecho ahí.</p>
+          <span class="swap"><span class="antes">16:30</span><span class="flecha">→</span><span class="desp">17:00</span></span>
+        </li>
+        <li>
+          <p><strong>El viernes y el sábado salen a las 00:00</strong>, media hora antes que hasta ahora.</p>
+          <span class="swap"><span class="antes">00:30</span><span class="flecha">→</span><span class="desp">00:00</span></span>
+        </li>
+        <li>
+          <p><strong>La media hora que falta se recorta en el partido entre diario</strong>, que es el día más flojo de los dos: el jueves para el jefe 1 y el miércoles para el jefe 2.</p>
+          <span class="swap"><span class="antes">00:00</span><span class="flecha">→</span><span class="desp">23:30</span></span>
+        </li>
+        <li>
+          <p><strong>Los dos jefes están en la comida del viernes</strong>, que es donde más falta hacen. A cambio, el domingo al mediodía se queda uno solo.</p>
+          <span class="swap"><span class="antes">Domingo</span><span class="flecha">→</span><span class="desp">Viernes</span></span>
+        </li>
+        <li>
+          <p><strong>La jornada baja de 41,5 a 40 horas</strong> para cada uno.</p>
+          <span class="swap"><span class="antes">41,5 h</span><span class="flecha">→</span><span class="desp">40 h</span></span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Quién está en cada servicio</h2>
+    <div class="panel panel__pad">
+      <div class="scroller">
+        <table>
+          <thead><tr><th>Día</th><th>Comida</th><th>Noche</th></tr></thead>
+          <tbody id="tabla-cobertura"></tbody>
+        </table>
+      </div>
+    </div>
+    <p class="note">Ningún servicio se queda sin jefe de cocina. El viernes y el sábado, los dos días fuertes, están los dos al completo.</p>
+  </section>
+
+  <section>
+    <h2>2. Las condiciones</h2>
+    <div class="puntos">
+
+      <div class="punto punto--ok">
+        <div class="punto__h"><span class="punto__n">1</span><h3>Se libra más</h3></div>
+        <p>Se recortan <strong>1,5 horas a la semana</strong> a cada jefe de cocina, que <strong>libran de más</strong>.</p>
+        <p>Y además, <strong>los sábados</strong>: si ese día el servicio de comidas va <span class="cond">por debajo de 25 personas</span> y <strong>no hay elaboraciones que hacer</strong>, se permite que <strong>uno de los dos jefes de cocina pida esas horas sin trabajar</strong>.</p>
+        <ul>
+          <li><strong>Apalabrado entre ellos dos</strong> y consensuado con gerencia.</li>
+          <li><strong>Se alternan</strong>, cada semana en que realmente se den las dos cosas.</li>
+          <li>La idea es no estar ahí sin hacer nada. <strong>Si hay elaboración que hacer, se omite</strong> y se trabaja el turno completo.</li>
+        </ul>
+      </div>
+
+      <div class="punto punto--cut">
+        <div class="punto__h"><span class="punto__n">2</span><h3>Se recortan 150 € del salario</h3></div>
+        <p>A cada uno de los dos jefes de cocina se le recortan <strong>150 € del salario</strong>.</p>
+      </div>
+
+      <div class="punto punto--ok">
+        <div class="punto__h"><span class="punto__n">3</span><h3>Para octubre, mejoras</h3></div>
+        <p>Para octubre <strong>se está negociando hacer mejoras</strong>: <strong>subir las nóminas</strong> y <strong>reducir o eliminar los complementos salariales</strong>, lo que <strong>beneficia al trabajador en todos los sentidos</strong>.</p>
+      </div>
+
+    </div>
+    <p class="note">Lo del salario se aplica ya, a todo el mes de septiembre desde el día 1. Los horarios empiezan a contar el lunes que viene.</p>
+  </section>
+
+  <section>
+    <h2>3. El cocinero 1</h2>
+    <div class="panel sale">
+      <div class="sale__head">
+        <span class="sale__t">
+          <strong>Cocinero 1 — refuerzo de fin de semana</strong>
+          <span>Viernes, sábado y domingo · 22 h semanales</span>
+        </span>
+        <span class="sello">Sale del cuadrante</span>
+      </div>
+      <div class="panel__pad">
+        <div class="scroller"><div class="grid" id="grid-cocinero"></div></div>
+        <p class="note" style="margin-top:14px">De lunes a jueves no trabaja. Tiene turno propio y por eso no aparecía en el cuadrante de los jefes: es un puesto aparte, montado sobre el fin de semana. Estas son las 22 horas que dejan de cubrirse.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>El plan</h2>
+    <div class="plan">
+      <div class="plan__c plan__c--baja">
+        <span class="plan__h">Meses flojos</span>
+        <h3>Septiembre y octubre</h3>
+        <p>Se aguanta sin el puesto. El servicio se sostiene con los dos jefes de cocina y el resto del equipo.</p>
+        <p><strong>No es que el puesto no haga falta.</strong> El puesto hace falta. Lo que ocurre es que hay que recortar tanto que se puede sobrevivir sin él justo en los meses de menos volumen.</p>
+      </div>
+      <div class="plan__c plan__c--alta">
+        <span class="plan__h">Temporada fuerte</span>
+        <h3>Navidad</h3>
+        <ul>
+          <li>Primera opción: <strong>volver a contar con él</strong>.</li>
+          <li>Si no, <strong>alguien nuevo de confianza</strong> que no altere el servicio.</li>
+          <li>Si hiciera falta, <strong>incluso una persona más</strong>: en Navidad hay ventas y ahí no se escatima.</li>
+          <li><strong>Iván al frente</strong> durante la temporada, reforzando los fines de semana las horas que haga falta, que es justo donde caen esas 22 horas.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="cierre">
+    <h2>Por qué lo hacemos</h2>
+    <p>El foco del problema son <strong>las ventas</strong>. Mientras no remonten, hay que ajustar el coste al volumen real que entra por la puerta: se recorta donde no hay ventas y se pone gente donde sí las hay.</p>
+    <p>Por eso el ajuste cae en los meses flojos y no en la temporada fuerte, por eso el plan contempla recuperar el puesto en cuanto el volumen lo justifique, y por eso Iván se pone al frente en persona: para que el recorte lo absorba la dirección y no la calidad del servicio.</p>
+  </section>
+
+  <footer>
+    <p class="eyebrow">Pendiente de decidir</p>
+    <p class="pend"><b>Fecha</b><span>Fecha de efecto de la baja del cocinero 1, para tramitarla con la gestoría.</span></p>
+    <p class="pend"><b>Reservas</b><span>Cerrar el horario de reservas a las 23:00 para que el sistema deje de dar huecos más tarde.</span></p>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  var T0 = 720, T1 = 1500;           // 12:00 → 01:00
+  var SPAN = T1 - T0;
+
+  function min(hhmm){
+    var p = hhmm.split(":");
+    return (+p[0]) * 60 + (+p[1]);
+  }
+  function tramoMin(t){
+    var a = min(t[0]), b = min(t[1]);
+    if (b <= a) b += 1440;
+    return { a: a, b: b, dur: b - a };
+  }
+  function pct(v){ return ((v - T0) / SPAN) * 100; }
+  function horasTxt(h){
+    var v = h / 60;
+    return (Math.round(v * 10) / 10).toString().replace(".", ",") + " h";
+  }
+
+  var TICKS = ["12:00","14:00","16:00","18:00","20:00","22:00","00:00"];
+
+  function escala(){
+    var t = TICKS.map(function(h){
+      return '<span class="tick" style="left:' + pct(min(h) < T0 ? min(h) + 1440 : min(h)).toFixed(2) + '%">' + h + "</span>";
+    }).join("");
+    return '<div class="row escala"><div></div><div class="lane"><div></div><div class="ticks">' + t + "</div><div></div></div></div>";
+  }
+
+  function carril(nombre, clase, tramos, blkClase, horasClase, marca){
+    var inner, horas;
+    if (!tramos) {
+      inner = '<span class="libre">Libra</span>';
+      horas = "—";
+    } else {
+      inner = tramos.map(function(t){
+        var m = tramoMin(t);
+        return '<span class="blk ' + blkClase + '" style="left:' + pct(m.a).toFixed(2) +
+               "%;width:" + ((m.dur / SPAN) * 100).toFixed(2) + '%">' + t[0] + "–" + t[1] + "</span>";
+      }).join("");
+      horas = horasTxt(tramos.reduce(function(s, t){ return s + tramoMin(t).dur; }, 0));
+      if (marca) {
+        inner += '<span class="marca" style="left:' + pct(1410).toFixed(2) + '%" title="La cocina deja de servir"></span>';
+      }
+    }
+    return '<div class="lane"><span class="quien ' + clase + '">' + nombre + '</span>' +
+           '<div class="track">' + inner + "</div>" +
+           '<span class="horas ' + (tramos ? (horasClase || "") : "") + '">' + horas + "</span></div>";
+  }
+
+  // ---- cuadrante de los jefes ----
+  var DIAS = [
+    { d:"Lunes",     j1:[["12:30","17:00"]],                      j2:[["19:30","00:00"]] },
+    { d:"Martes",    j1:[["12:30","17:00"]],                      j2:[["19:30","00:00"]] },
+    { d:"Miércoles", j1:null,                                     j2:[["12:30","17:00"],["19:30","23:30"]], cut:2 },
+    { d:"Jueves",    j1:[["12:30","17:00"],["19:30","23:30"]],    j2:null, cut:1 },
+    { d:"Viernes",   j1:[["12:30","17:00"],["19:30","00:00"]],    j2:[["12:30","17:00"],["19:30","00:00"]], fuerte:true, srv:true },
+    { d:"Sábado",    j1:[["12:30","17:00"],["19:30","00:00"]],    j2:[["12:30","17:00"],["19:30","00:00"]], fuerte:true, srv:true },
+    { d:"Domingo",   j1:[["12:30","17:00"]],                      j2:[["19:30","00:00"]] }
+  ];
+
+  var html = escala();
+  DIAS.forEach(function(x){
+    var badge = x.cut ? '<span class="badge">−30 min</span>'
+              : x.srv ? '<span class="badge badge--srv">Cocina 23:30</span>' : "";
+    html += '<div class="row dia' + (x.fuerte ? " dia--fuerte" : "") + '">' +
+              '<div class="dia__nombre">' + x.d + badge + "</div>" +
+              '<div class="carriles">' +
+                carril("Jefe 1", "q1", x.j1, "blk--j1", x.cut === 1 ? "horas--cut" : "", !!x.srv) +
+                carril("Jefe 2", "q2", x.j2, "blk--j2", x.cut === 2 ? "horas--cut" : "", !!x.srv) +
+              "</div></div>";
+  });
+  document.getElementById("grid-jefes").innerHTML = html;
+
+  // ---- cobertura por servicio ----
+  var COB = [
+    ["Lunes","1","2"], ["Martes","1","2"], ["Miércoles","2","2"], ["Jueves","1","1"],
+    ["Viernes","dos","dos"], ["Sábado","dos","dos"], ["Domingo","1","2"]
+  ];
+  document.getElementById("tabla-cobertura").innerHTML = COB.map(function(r){
+    function cel(v){
+      if (v === "dos") return '<span class="dos">Los dos</span>';
+      return '<span class="p' + v + '">Jefe ' + v + "</span>";
+    }
+    return "<tr><td>" + r[0] + "</td><td>" + cel(r[1]) + "</td><td>" + cel(r[2]) + "</td></tr>";
+  }).join("");
+
+  // ---- cocinero 1 ----
+  var COC = [
+    { d:"Viernes", t:[["18:00","00:30"]] },
+    { d:"Sábado",  t:[["12:30","17:00"],["18:00","00:30"]] },
+    { d:"Domingo", t:[["12:30","17:00"]] }
+  ];
+  var h2 = escala();
+  COC.forEach(function(x){
+    h2 += '<div class="row dia"><div class="dia__nombre">' + x.d + "</div>" +
+          '<div class="carriles">' +
+            carril("Cocinero", "qc", x.t, "blk--off", "horas--off") +
+          "</div></div>";
+  });
+  document.getElementById("grid-cocinero").innerHTML = h2;
+})();
+</script>

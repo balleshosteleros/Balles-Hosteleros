@@ -1,7 +1,7 @@
 # Reestructuración de cocina — BACANAL
 
 **Fecha:** 10/09/2026
-**En vigor:** desde el lunes 14/09/2026
+**En vigor:** el salario desde el 1 de septiembre · los horarios desde el lunes 14/09/2026
 **Ámbito:** Departamento de cocina, BACANAL
 **Afecta a:** Jefe de Cocina 1, Jefe de Cocina 2 y Cocinero 1
 
@@ -15,7 +15,9 @@ decisiones sobre la cocina. Son puestos distintos y no hay que confundirlos:
 1. **Los dos jefes de cocina siguen**, y se les ajusta el cuadrante a
    **40 horas semanales**. Se recortan **1,5 horas por jefe y semana** sobre el
    horario que había.
-2. **Se propone la salida del Cocinero 1**, que es el refuerzo de cocina de fin
+2. **Cambian las condiciones de los dos jefes:** libran más, se les recortan
+   150 € del salario y para octubre se negocian mejoras.
+3. **Se propone la salida del Cocinero 1**, que es el refuerzo de cocina de fin
    de semana (22 h). El puesto queda sin cubrir en **septiembre y octubre**.
 
 Las dos van juntas: el objetivo es ajustar el coste de personal de cocina al
@@ -79,7 +81,42 @@ días fuertes— están los dos al completo.
 
 ---
 
-## 3. La salida del Cocinero 1
+## 3. Las condiciones de los jefes de cocina
+
+### 1. Se libra más
+
+Se recortan **1,5 horas a la semana** a cada jefe de cocina, que **libran de
+más**.
+
+Y además, **los sábados**: si ese día el servicio de comidas va **por debajo de
+25 personas** y **no hay elaboraciones que hacer**, se permite que **uno de los
+dos jefes de cocina pida esas horas sin trabajar**.
+
+- **Apalabrado entre ellos dos** y consensuado con gerencia.
+- **Se alternan**, cada semana en que realmente se den las dos cosas.
+- La idea es no estar ahí sin hacer nada. **Si hay elaboración que hacer, se
+  omite** y se trabaja el turno completo.
+
+### 2. Se recortan 150 € del salario
+
+A cada uno de los dos jefes de cocina se le recortan **150 € del salario**.
+
+### 3. Para octubre, mejoras
+
+Para octubre **se está negociando hacer mejoras**: **subir las nóminas** y
+**reducir o eliminar los complementos salariales**, lo que **beneficia al
+trabajador en todos los sentidos**.
+
+---
+
+**Cuándo se aplica cada cosa:**
+
+- **El salario, ya:** a todo el mes de septiembre, desde el día 1.
+- **Los horarios, el lunes 14/09/2026:** empiezan a contar ese lunes.
+
+---
+
+## 4. La salida del Cocinero 1
 
 Se propone la salida del **Cocinero 1** por **volumen de reservas y por costes**,
 en la misma línea que el resto de la reestructuración.
@@ -114,7 +151,7 @@ volumen.
 
 ---
 
-## 4. Por qué lo hacemos
+## 5. Por qué lo hacemos
 
 El foco del problema son **las ventas**. Mientras no remonten, hay que ajustar el
 coste al volumen real que entra por la puerta: se recorta donde no hay ventas y
@@ -127,11 +164,34 @@ no la calidad del servicio.
 
 ---
 
-## 5. Pendiente de decidir
+## 6. Pendiente de decidir
 
 - **Fecha de efecto de la baja del Cocinero 1**, para tramitarla con la gestoría.
 
-## 6. Decidido
+## 7. Qué queda por montar en el sistema
 
-- **El cuadrante de 40 h entra en vigor el lunes 14/09/2026.** Queda
-  actualizado en la app y todo cuenta desde ese lunes.
+Lo acordado está escrito, pero no todo está cargado en la app. Falta esto:
+
+- **El recorte de 150 €.** Los dos jefes tienen la ficha **sin condiciones
+  guardadas** (`empleado_condiciones` vacía, como casi todas las fichas), así que
+  no hay salario del que restar y la cifra no sale en nóminas. Para dejarlo
+  hecho hay que **crearles la línea de condiciones con su salario actual** y el
+  recorte ya aplicado, vigente desde el 01/09/2026.
+  Ver [[condiciones_empleado_fuentes]] y [[empleados_sin_condiciones_en_ficha]].
+- **El sábado por debajo de 25 personas.** Es un acuerdo escrito: el cuadrante no
+  lo contempla por sí solo. Cuando toque, esa ausencia hay que **meterla a mano**
+  como día no trabajado. Que el sistema cruce las reservas del sábado y lo avise
+  solo es un desarrollo aparte, sin hacer.
+- **La última reserva a las 23:00.** El horario de cocina ya está, pero hay que
+  **cerrar el horario de reservas a las 23:00** para que el sistema deje de dar
+  huecos más tarde el viernes y el sábado.
+- **Aviso suelto:** la función `rrhh_crear_version_turno` escribe una columna
+  `color` que ya no existe en `rrhh_turnos`, así que **cambiar las horas de un
+  turno desde la pantalla de Horarios falla**. Por eso este cambio se hizo por
+  migración. Arreglo de dos líneas, sin hacer.
+
+## 8. Decidido
+
+- **El cuadrante de 40 h entra en vigor el lunes 14/09/2026.** Ya está aplicado
+  en la app (migración `20260910200000_cocina_bacanal_cuadrante_40h.sql`).
+- **El recorte de 150 € se aplica a todo septiembre, desde el día 1.**
