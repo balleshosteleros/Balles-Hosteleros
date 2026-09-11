@@ -226,7 +226,7 @@ export function BibliotecaView() {
 
       {/* Tabla */}
       <Card>
-        <Table>
+        <Table data-tabla-consulta>
           <TableHeader>
             <TableRow>
               {columnasRender.map((c) => columnDefs[c.campo]?.th)}

@@ -257,7 +257,7 @@ export function TransaccionesView() {
       <div className="flex-1 overflow-auto px-6 pb-4">
         <div className="text-[10px] text-muted-foreground mb-2">{filtradas.length} resultados</div>
         <div className="bg-card rounded-lg border overflow-x-auto">
-          <table className="w-full text-sm">
+          <table data-tabla-consulta className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase tracking-wider">
                 <th className="px-3 py-3 w-8"></th>

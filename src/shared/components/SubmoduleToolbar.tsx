@@ -159,6 +159,14 @@ interface SubmoduleToolbarProps {
   extraIzquierda?: ReactNode;
   extraDerecha?: ReactNode;
 
+  /**
+   * Escotilla para las POCAS pantallas que en el teléfono sí son de trabajo
+   * (apuntar una merma, una temperatura, un desperfecto). Con `true` se
+   * mantiene el botón de crear en móvil; sin ella, el móvil es de CONSULTA y
+   * la barra solo lleva buscar, filtrar y ordenar.
+   */
+  accionEnMovil?: boolean;
+
   className?: string;
 }
 
@@ -184,6 +192,7 @@ export function SubmoduleToolbar({
   viewKey,
   extraIzquierda,
   extraDerecha,
+  accionEnMovil = false,
   className,
 }: SubmoduleToolbarProps) {
   const tieneBusqueda = !!onBusquedaChange;
@@ -197,11 +206,15 @@ export function SubmoduleToolbar({
       : filtros.filter((f) => !filtrosDefault.some((d) => filtrosEquivalentes(f, d)));
   const tieneOrden = ordenOpciones.length > 0 && !!onOrdenChange;
   const esMovil = useIsMobile();
-  // NORMA: en movil no aparece ningun boton de configuracion (columnas, ajustes
-  // de vista, engranaje de configuracion base). Configurar es tarea de
-  // escritorio; en el movil se trabaja sobre la marcha y esos botones solo
-  // ocupan sitio y se pulsan sin querer. Buscar, filtrar y crear SI se quedan.
+  // NORMA: el telefono es de CONSULTA. No sale ningun boton de gestion —ni
+  // configuracion (columnas, ajustes de vista, engranaje), ni importar o
+  // exportar, ni crear— salvo en las pocas pantallas que se usan de pie en el
+  // local, que lo piden con `accionEnMovil`. Gestionar es tarea de escritorio;
+  // en el movil esos botones solo ocupan sitio y se pulsan sin querer.
+  // Lo que SI se queda: buscar, filtrar y ordenar.
   const tieneColumnas = !esMovil && columnas.length > 0 && !!onColumnasVisiblesChange;
+  const verNuevo = !ocultarNuevo && !!onNuevo && (!esMovil || accionEnMovil);
+  const verExtras = !esMovil;
 
   // Persistencia de visibilidad de columnas por usuario × empresa × vista.
   // El viewKey por defecto es el pathname (sin slashes laterales) — cada
@@ -269,8 +282,8 @@ export function SubmoduleToolbar({
         className,
       )}
     >
-      <div className="flex items-center gap-2 shrink-0">
-        {!ocultarNuevo && onNuevo && (
+      <div className={cn("items-center gap-2 shrink-0", verNuevo || verExtras ? "flex" : "hidden")}>
+        {verNuevo && (
           <Button
             variant="primary"
             size="sm"
@@ -281,7 +294,7 @@ export function SubmoduleToolbar({
             {textoNuevo}
           </Button>
         )}
-        {extraIzquierda}
+        {verExtras && extraIzquierda}
       </div>
 
       <div className="ml-auto flex flex-nowrap md:flex-wrap items-center gap-1.5 md:gap-2 flex-1 md:flex-none min-w-0">
@@ -328,7 +341,7 @@ export function SubmoduleToolbar({
           />
         )}
 
-        {!esMovil && extraDerecha}
+        {verExtras && extraDerecha}
       </div>
 
       {filtrosVisibles.length > 0 && !!onFiltrosChange && (

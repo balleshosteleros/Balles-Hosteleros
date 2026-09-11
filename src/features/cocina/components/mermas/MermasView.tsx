@@ -205,6 +205,8 @@ export function MermasView() {
         placeholderBusqueda="Buscar"
         textoNuevo="Nueva merma"
         onNuevo={abrirNueva}
+        // Apuntar una merma se hace en la cocina, de pie y con el movil.
+        accionEnMovil
         columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
@@ -213,7 +215,7 @@ export function MermasView() {
       />
 
       <Card>
-        <Table>
+        <Table data-tabla-consulta>
           <TableHeader>
             <TableRow>{columnasRender.map((c) => columnDefs[c.campo]?.th)}</TableRow>
           </TableHeader>

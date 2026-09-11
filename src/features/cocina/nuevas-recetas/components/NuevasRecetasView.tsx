@@ -219,7 +219,7 @@ export function NuevasRecetasView() {
           <ResizableColumnsProvider storageKey="cocina-nuevas-recetas">
             <Card>
               <CardContent className="p-0">
-                <table className="w-full text-sm">
+                <table data-tabla-consulta className="w-full text-sm">
                   <thead className="border-b bg-muted/30">
                     <tr className="text-left">
                       {columnasRender.map((c) => columnDefs[c.campo]?.th)}

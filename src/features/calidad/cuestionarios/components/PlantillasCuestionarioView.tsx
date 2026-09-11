@@ -123,7 +123,7 @@ export function PlantillasCuestionarioView({ onVolver }: Props) {
 
       <ResizableColumnsProvider storageKey="calidad-cuestionarios-plantillas">
         <div className="bg-card rounded-lg border overflow-x-auto">
-          <table className="w-full text-sm">
+          <table data-tabla-consulta className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
                 {columnasRender.map((c) => (

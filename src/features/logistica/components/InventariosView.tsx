@@ -540,7 +540,7 @@ export function InventariosView() {
       {/* Table */}
       <ResizableColumnsProvider storageKey="logistica-inventarios">
       <div className="bg-card rounded-lg border overflow-x-auto">
-        <table className="w-full text-sm">
+        <table data-tabla-consulta className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="px-3 py-3 w-10">

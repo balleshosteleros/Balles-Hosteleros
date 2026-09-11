@@ -458,7 +458,7 @@ export function PartidasView() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as "lista" | "config")}>
         <TabsContent value="lista" className="space-y-4 mt-4">
           <Card>
-            <Table>
+            <Table data-tabla-consulta>
               <TableHeader>
                 <TableRow>
                   {columnasRender.map((c) => columnDefs[c.campo]?.th)}

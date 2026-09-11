@@ -321,6 +321,8 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar"
         onNuevo={() => setShowNuevoRegistro(true)}
+        // La temperatura se toma delante de la camara, con el movil.
+        accionEnMovil
         filtros={filtros}
         onFiltrosChange={setFiltros}
         columnas={columnasDef}
@@ -356,7 +358,7 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
       <ResizableColumnsProvider storageKey="cocina-temperaturas">
         <Card>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
+            <table data-tabla-consulta className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/40">
                   {columnasRender.map((c) => columnDefs[c.campo]?.th)}

@@ -144,7 +144,7 @@ export function NotificacionesRegistroView() {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table data-tabla-consulta>
               <TableHeader>
                 <TableRow className="bg-muted/40">
                   {columnasRender.map((c) => (

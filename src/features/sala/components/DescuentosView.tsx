@@ -248,7 +248,7 @@ export function DescuentosView() {
 
             <Card>
               <CardContent className="p-0">
-                <Table>
+                <Table data-tabla-consulta>
                   <TableHeader>
                     <TableRow>
                       {columnasRender.map((c) => columnDefs[c.campo]?.th)}

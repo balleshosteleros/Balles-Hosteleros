@@ -52,6 +52,7 @@ import { CamarasDrawer } from "@/features/camaras/components/CamarasDrawer";
 import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";
 import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
 import { FichajePill } from "@/features/mi-panel/components/FichajePill";
+import { TablasConsultaMovil } from "@/shared/components/TablasConsultaMovil";
 import { PushEscritorioAviso } from "@/features/notificaciones/components/PushEscritorioAviso";
 import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
 import { CountdownOverlay } from "@/features/recorder/components/CountdownOverlay";
@@ -649,6 +650,10 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
               inmersivo ? "overflow-y-hidden" : "overflow-y-auto pb-28",
             )}
           >
+            {/* En el telefono los listados se leen como fichas, no como una
+                tabla que se sale por el lado. Solo pone los rotulos; el
+                apilado lo hace globals.css. */}
+            <TablasConsultaMovil />
             <AvatarRequiredGuard>{children}</AvatarRequiredGuard>
           </main>
         </div>

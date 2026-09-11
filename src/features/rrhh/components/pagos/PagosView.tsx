@@ -1911,7 +1911,7 @@ export function PagosView() {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table className="[&_th]:h-9 [&_th]:px-2 [&_td]:px-2 [&_td]:py-1.5 text-[13px]">
+            <Table data-tabla-consulta className="[&_th]:h-9 [&_th]:px-2 [&_td]:px-2 [&_td]:py-1.5 text-[13px]">
               <TableHeader>
                 <TableRow className="bg-muted/40">
                   <TableColumnHeader

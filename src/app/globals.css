@@ -454,3 +454,90 @@
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
+
+/* ── EL TELÉFONO LEE LAS TABLAS COMO FICHAS ──────────────────────────────────
+
+   En móvil, un listado de diez columnas no cabe: se salía por el lado derecho
+   y había que arrastrar a ciegas para ver el resto, sin saber ya de qué
+   columna era cada dato. Como el teléfono es de CONSULTA, cada fila se apila
+   en una tarjeta con "etiqueta → valor" y así se ve TODO de una pasada.
+
+   Solo afecta a las tablas marcadas `data-tabla-consulta` (los listados). Los
+   cuadrantes y calendarios se quedan como están: allí la cuadrícula ES el dato.
+   El rótulo de cada celda lo copia `TablasConsultaMovil` desde la cabecera. */
+@media (max-width: 767px) {
+  table[data-tabla-consulta] {
+    display: block;
+    width: 100%;
+  }
+
+  table[data-tabla-consulta] > thead {
+    display: none;
+  }
+
+  table[data-tabla-consulta] > tbody {
+    display: block;
+  }
+
+  table[data-tabla-consulta] > tbody > tr {
+    display: block;
+    margin: 0 0 0.5rem;
+    padding: 0.25rem 0.625rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.75rem;
+    background-color: hsl(var(--card));
+  }
+
+  table[data-tabla-consulta] > tbody > tr > td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: auto;
+    min-width: 0;
+    padding: 0.4375rem 0 !important;
+    text-align: right;
+    white-space: normal;
+    border-bottom: 1px solid hsl(var(--border) / 0.55);
+  }
+
+  table[data-tabla-consulta] > tbody > tr > td:last-child,
+  table[data-tabla-consulta] > tbody > tr > td[data-ultima] {
+    border-bottom: 0;
+  }
+
+  /* El rótulo de la columna, a la izquierda de su valor. */
+  table[data-tabla-consulta] > tbody > tr > td[data-columna]:not([data-columna=""])::before {
+    content: attr(data-columna);
+    flex: 0 0 38%;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Celda sin dato y sin rótulo: fuera, para que la ficha no tenga huecos.
+     La columna de acciones (botones sueltos sin título) tampoco sale: el
+     teléfono es de consulta. */
+  table[data-tabla-consulta] > tbody > tr > td[data-vacia],
+  table[data-tabla-consulta] > tbody > tr > td[data-acciones] {
+    display: none;
+  }
+
+  /* El "no hay resultados" ocupa la ficha entera, centrado. */
+  table[data-tabla-consulta] > tbody > tr > td[colspan]:not([colspan="1"]) {
+    justify-content: center;
+    text-align: center;
+  }
+
+  /* Lo que iba apretado en una celda estrecha ahora tiene sitio: se deja
+     respirar en vez de recortarse con puntos suspensivos. */
+  table[data-tabla-consulta] > tbody > tr > td .truncate {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+}

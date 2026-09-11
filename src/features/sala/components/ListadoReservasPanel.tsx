@@ -1265,7 +1265,7 @@ export function ListadoReservasPanel({
 
       <Card>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table data-tabla-consulta className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
                 {columnasRender.map((col) => {

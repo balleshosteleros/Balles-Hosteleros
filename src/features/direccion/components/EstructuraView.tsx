@@ -707,7 +707,10 @@ export function EstructuraView() {
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-4 py-3 border-b bg-card shrink-0">
-        {/* Botón principal: alterna entre ver (bloqueado) y editar (mover/crear) */}
+        {/* Botón principal: alterna entre ver (bloqueado) y editar (mover/crear).
+            En el telefono no sale: el organigrama alli se MIRA. Recolocar cajas
+            arrastrando con el dedo en una pantalla de 6 pulgadas no sale bien, y
+            un toque sin querer movia el organigrama de la empresa. */}
         <Button
           variant={modoEdicion ? "default" : "primary"}
           size="sm"
@@ -722,6 +725,7 @@ export function EstructuraView() {
             }
           }}
           disabled={loading || saving}
+          className="hidden md:inline-flex"
         >
           {modoEdicion ? (
             saving ? (

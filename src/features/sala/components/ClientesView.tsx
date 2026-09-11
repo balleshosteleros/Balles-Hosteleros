@@ -1086,7 +1086,7 @@ export function ClientesView() {
 
       <Card>
         <CardContent className="p-0">
-          <table className="w-full text-sm">
+          <table data-tabla-consulta className="w-full text-sm">
             <thead><tr className="border-b bg-muted/40">
               {columnasRender.map((c) => columnDefs[c.campo]?.th)}
             </tr></thead>

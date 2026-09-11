@@ -504,7 +504,7 @@ export function FirmasView() {
             No hay documentos para firmar todavía. Pulsa <strong>+ Nuevo</strong> para enviar uno.
           </div>
         ) : (
-          <Table>
+          <Table data-tabla-consulta>
             <TableHeader>
               <TableRow>
                 {columnasRender.map((c) => columnDefs[c.campo]?.th)}

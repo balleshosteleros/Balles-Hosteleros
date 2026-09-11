@@ -5,7 +5,9 @@ import { SoporteDrawer } from "./soporte-drawer";
 
 export function FloatingSoporteButton() {
   return (
-    <div className="fixed bottom-6 right-6 z-40">
+    // En el telefono no sale: tapaba la esquina de un software que alli solo
+    // se consulta, y para pedir ayuda ya esta el chat. Es de ordenador.
+    <div className="fixed bottom-6 right-6 z-40 hidden md:block">
       <SoporteDrawer>
         <button
           type="button"

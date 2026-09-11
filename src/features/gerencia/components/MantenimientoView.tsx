@@ -548,6 +548,8 @@ export function MantenimientoView() {
         onBusquedaChange={setSearch}
         placeholderBusqueda="Buscar"
         onNuevo={() => { setEditItem(null); setModalOpen(true); }}
+        // Un desperfecto se apunta donde se ve, con el movil en la mano.
+        accionEnMovil
         filtros={filtros}
         onFiltrosChange={setFiltros}
         campos={esMovil ? camposFiltroMovil : undefined}
@@ -573,7 +575,7 @@ export function MantenimientoView() {
       ) : (
       <ResizableColumnsProvider storageKey="gerencia-mantenimiento">
       <div className="bg-card rounded-lg border overflow-x-auto">
-        <table className="w-full text-sm">
+        <table data-tabla-consulta className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
               {columnasRender.map((c) => columnDefs[c.campo]?.th)}

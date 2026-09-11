@@ -560,7 +560,7 @@ export function EmpleadosView() {
 
       <ResizableColumnsProvider storageKey="rrhh-empleados">
         <div className="rounded-lg border bg-card overflow-x-auto">
-          <table className="w-full text-sm">
+          <table data-tabla-consulta className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/30">
                 {columnasRender.map((c) => columnDefs[c.campo]?.th)}

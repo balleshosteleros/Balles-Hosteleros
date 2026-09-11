@@ -1198,7 +1198,7 @@ export function CierresView() {
         <TabsContent value="resumen" className="mt-4 space-y-6">
           {/* Tabla completa */}
           <Card>
-            <Table>
+            <Table data-tabla-consulta>
               <TableHeader>
                 <TableRow>
                   {columnasRender.map((c) => headDe[c.campo])}
