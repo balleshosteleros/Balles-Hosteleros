@@ -13,7 +13,11 @@
  * cambiar la hora del `schedule` en `vercel.json` sin que el cron se quede mudo.
  *
  * Autorización: Bearer ${CRON_SECRET}, como el resto de crons.
- * Acepta `?empresa=<uuid>` para probar una sola empresa.
+ *
+ * Para comprobar cosas sin molestar a nadie:
+ *   ?dry=1              calcula y enseña los mensajes, sin escribir ni avisar
+ *   ?fecha=YYYY-MM-DD   finge que hoy es ese día (pruebas y repesca)
+ *   ?empresa=<uuid>     una sola empresa
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -36,7 +40,13 @@ export async function GET(req: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const soloEmpresa = new URL(req.url).searchParams.get("empresa");
+  const params = new URL(req.url).searchParams;
+  const soloEmpresa = params.get("empresa");
+  const dry = params.get("dry") === "1";
+  const fecha = params.get("fecha") ?? undefined;
+  if (fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return NextResponse.json({ ok: false, error: "fecha inválida (YYYY-MM-DD)" }, { status: 400 });
+  }
 
   let query = admin.from("empresas").select("id, nombre").eq("estado", "Activa");
   if (soloEmpresa) query = query.eq("id", soloEmpresa);
@@ -45,10 +55,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
+  // Se comparte entre empresas: quien trabaja en dos solo cumple años una vez.
+  const atendidos = new Set<string>();
   const resultados = [];
   for (const empresa of empresas ?? []) {
     try {
-      const r = await procesarCumpleanosDeEmpresa(admin, empresa.id as string);
+      const r = await procesarCumpleanosDeEmpresa(admin, empresa.id as string, {
+        dry,
+        fecha,
+        atendidos,
+      });
       resultados.push({ empresa: empresa.nombre as string, ...r });
     } catch (err) {
       // Una empresa que falla no puede dejar sin felicitación a las demás.
@@ -59,7 +75,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, ejecutadoEn: new Date().toISOString(), resultados });
+  return NextResponse.json({
+    ok: true,
+    modoPrueba: dry,
+    ejecutadoEn: new Date().toISOString(),
+    resultados,
+  });
 }
 
 export async function POST(req: NextRequest) {

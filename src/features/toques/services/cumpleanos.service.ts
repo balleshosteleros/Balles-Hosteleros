@@ -66,6 +66,8 @@ export interface ResumenCumpleanosEmpleados {
   yaAtendidos: number;
   /** Points que regala la regla ahora mismo. */
   pointsPorCabeza: number;
+  /** Solo en modo prueba: los mensajes tal cual saldrían. */
+  previsualizacion: Array<{ nombre: string; titulo: string; mensaje: string }>;
   errores: string[];
 }
 
@@ -209,10 +211,24 @@ async function yaAtendidosEsteAno(
   return out;
 }
 
+export interface OpcionesPasada {
+  /** Forzar el día (YYYY-MM-DD) en vez del de hoy en la empresa. Pruebas y repesca. */
+  fecha?: string;
+  /** Calcular y contar, sin escribir ni felicitar a nadie. */
+  dry?: boolean;
+  /**
+   * Personas ya atendidas en esta misma tanda. Lo aporta el cron para que quien
+   * trabaja en dos empresas no reciba dos felicitaciones, sin depender de que la
+   * escritura de la empresa anterior ya se vea al leer la siguiente.
+   */
+  atendidos?: Set<string>;
+}
+
 /** Una pasada de cumpleaños para una empresa. */
 export async function procesarCumpleanosDeEmpresa(
   admin: SupabaseClient,
   empresaId: string,
+  opciones: OpcionesPasada = {},
 ): Promise<ResumenCumpleanosEmpleados> {
   const resumen: ResumenCumpleanosEmpleados = {
     empresaId,
@@ -223,6 +239,7 @@ export async function procesarCumpleanosDeEmpresa(
     conPoints: 0,
     yaAtendidos: 0,
     pointsPorCabeza: 0,
+    previsualizacion: [],
     errores: [],
   };
 
@@ -242,7 +259,7 @@ export async function procesarCumpleanosDeEmpresa(
   resumen.pointsPorCabeza = Number(regla.toques ?? 0);
 
   const tz = await getZonaHorariaEmpresa(admin, empresaId);
-  const hoy = hoyEnZona(tz);
+  const hoy = opciones.fecha ?? hoyEnZona(tz);
   resumen.fecha = hoy;
 
   // ── Quién cumple años hoy ───────────────────────────────────────────────
@@ -280,12 +297,15 @@ export async function procesarCumpleanosDeEmpresa(
     cumpleaneros.map((c) => c.empleadoId),
   );
   const ano = Number(hoy.slice(0, 4));
-  const atendidos = await yaAtendidosEsteAno(
+  const atendidos = opciones.atendidos ?? new Set<string>();
+  for (const u of await yaAtendidosEsteAno(
     admin,
     cumpleaneros.map((c) => c.userId),
     hoy,
     ano,
-  );
+  )) {
+    atendidos.add(u);
+  }
 
   for (const c of cumpleaneros) {
     // Su otra empresa ya le felicitó (o ya lo hizo una pasada anterior de hoy).
@@ -296,8 +316,12 @@ export async function procesarCumpleanosDeEmpresa(
     atendidos.add(c.userId);
 
     // ── 1. Los points, antes que el mensaje ───────────────────────────────
+    const leTocanPoints = resumen.pointsPorCabeza > 0 && !enPrueba.has(c.empleadoId);
     let pointsDados = 0;
-    if (resumen.pointsPorCabeza > 0 && !enPrueba.has(c.empleadoId)) {
+    if (leTocanPoints && opciones.dry) {
+      pointsDados = resumen.pointsPorCabeza;
+      resumen.conPoints += 1;
+    } else if (leTocanPoints) {
       const { error } = await admin.from("toques_movimientos").insert({
         empresa_id: empresaId,
         user_id: c.userId,
@@ -328,6 +352,12 @@ export async function procesarCumpleanosDeEmpresa(
       pointsDados > 0
         ? `${texto} Ah, y te dejamos ${pointsDados} points en el bolsillo, por la cara. 🎂`
         : `${texto} 🎂`;
+
+    if (opciones.dry) {
+      resumen.felicitados += 1;
+      resumen.previsualizacion.push({ nombre: c.nombreCompleto, titulo: saludo, mensaje: conPoints });
+      continue;
+    }
 
     const res = await emitirNotificacion({
       empresaId,

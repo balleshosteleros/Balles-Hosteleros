@@ -36,6 +36,10 @@
       "schedule": "5 22 * * *"
     },
     {
+      "path": "/api/points/cron/cumpleanos",
+      "schedule": "0 8 * * *"
+    },
+    {
       "path": "/api/cron/psd2-sync",
       "schedule": "30 4 * * *"
     },
