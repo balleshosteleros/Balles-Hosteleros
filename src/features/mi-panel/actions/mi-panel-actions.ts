@@ -2000,11 +2000,11 @@ export async function getMiCalendarioMes(
     const hoyISO = todayISO();
     for (const s of solicitudesRes.data ?? []) {
       const ini = new Date((s.fecha_inicio as string) + "T00:00:00Z");
-      // Una BAJA MÉDICA puede venir SIN fecha de fin: el médico da la baja y no
-      // dice cuándo se vuelve. Antes se tomaba el inicio como fin y el trabajador
+      // Las bajas médicas ANTERIORES a que la fecha de vuelta fuera obligatoria
+      // pueden no tenerla. Se tomaba entonces el inicio como fin, y el trabajador
       // veía un único día en rojo mientras el resto le seguía saliendo "TRABAJAR".
-      // Se pinta hasta HOY y se va extendiendo sola: así nunca se afirma un día
-      // futuro que nadie sabe, y el cuadrante conserva el turno que le tocaría.
+      // Se pintan hasta HOY, extendiéndose solas: nunca se afirma un día futuro
+      // que nadie sabe, y el cuadrante conserva el turno que le tocaría.
       const finEfectivo =
         (s.fecha_fin as string | null) ??
         (s.subtipo === "baja_medica" ? hoyISO : (s.fecha_inicio as string));
@@ -2591,7 +2591,20 @@ export async function crearBajaMedicaConParte(
     const fechaFinRaw = String(formData.get("fechaFin") ?? "").trim();
     const motivo = String(formData.get("motivo") ?? "").trim();
     if (!fechaInicio) return { ok: false, error: "Indica la fecha de inicio de la baja" };
-    const fechaFin = fechaFinRaw || null;
+    // La fecha de fin es PROVISIONAL pero obligatoria: sin ella el calendario no
+    // sabía hasta cuándo pintar la baja y el cuadrante no podía cubrir el hueco.
+    // No pasa nada si no se acierta — se corrige sola al comunicar el alta.
+    if (!fechaFinRaw) {
+      return {
+        ok: false,
+        error:
+          "Indica una fecha aproximada de vuelta. No hace falta acertar: cuando te den el alta la corriges y el calendario se ajusta solo.",
+      };
+    }
+    if (fechaFinRaw < fechaInicio) {
+      return { ok: false, error: "La fecha de vuelta no puede ser anterior al inicio de la baja." };
+    }
+    const fechaFin = fechaFinRaw;
 
     // Ficheros del parte (0–3). El input se llama "partes".
     const ficheros = formData
@@ -3559,7 +3572,12 @@ export async function aprobarSolicitud(
         eventType: "solicitud_resuelta",
         payload: {
           title: "Solicitud aprobada",
-          body: `Tu solicitud (${solicitud.subtipo ?? "petición"}) ha sido aprobada.`,
+          // En la baja médica el aviso lleva ya el encargo: el día que le den el
+          // alta tiene que comunicarla, y es el momento en que se acuerda de esto.
+          body:
+            solicitud.subtipo === "baja_medica"
+              ? "Tu baja médica está aprobada. El día que te den el alta, comunícala desde aquí."
+              : `Tu solicitud (${solicitud.subtipo ?? "petición"}) ha sido aprobada.`,
           url: "/m/solicitudes",
           tag: `solicitud-${solicitud.id}`,
           data: { url: "/m/solicitudes" },
@@ -3567,6 +3585,35 @@ export async function aprobarSolicitud(
       });
     } catch (e) {
       console.error("[mi-panel] aprobarSolicitud → push:", extractErrorMessage(e));
+    }
+
+    // BAJA MÉDICA: el encargo de comunicar el alta se le deja por escrito en su
+    // bandeja, no solo en el push, que se borra de un manotazo. Es lo que cierra
+    // el circuito: sin alta, la baja se queda abierta para siempre.
+    if (solicitud.subtipo === "baja_medica") {
+      try {
+        const { emitirNotificacion } = await import(
+          "@/features/notificaciones/actions/notificaciones-actions"
+        );
+        await emitirNotificacion({
+          system: true,
+          empresaId: solicitud.empresa_id as string,
+          segmento: { tipo: "usuarios", usuarioIds: [solicitud.user_id as string] },
+          tipo: "info",
+          titulo: "Tu baja médica está aprobada",
+          mensaje:
+            "Cuídate. El día que te den el alta, comunícala desde Mi Panel: el botón ya te espera ahí. " +
+            "Te diremos el primer día que te toca turno.",
+          refTabla: "solicitudes_personal",
+          refId: solicitud.id as string,
+          dedupeKey: `baja_medica_aprobada:${solicitud.id}`,
+        });
+      } catch (e) {
+        console.error(
+          "[mi-panel] aprobarSolicitud → aviso de alta al trabajador:",
+          extractErrorMessage(e),
+        );
+      }
     }
 
     return { ok: true };

@@ -389,6 +389,10 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
 
     // Baja médica: ruta propia con FormData (permite adjuntar hasta 3 partes).
     if (subtipo === "baja_medica") {
+      if (!fechaFin) {
+        toast.error("Indica una fecha aproximada de vuelta. Podrás corregirla al darte el alta.");
+        return;
+      }
       setEnviando(true);
       const fd = new FormData();
       fd.set("fechaInicio", fechaInicio);
@@ -968,7 +972,9 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                 </div>
                 {subtipo !== "horas_extras" && subtipo !== "dia_trabajado" && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="fechaFin">Hasta</Label>
+                    <Label htmlFor="fechaFin">
+                      {subtipo === "baja_medica" ? "Vuelta aproximada" : "Hasta"}
+                    </Label>
                     <Input
                       id="fechaFin"
                       type="date"
@@ -976,6 +982,12 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                       onChange={(e) => setFechaFin(e.target.value)}
                       min={fechaInicio || undefined}
                     />
+                    {subtipo === "baja_medica" && (
+                      <p className="text-xs text-muted-foreground">
+                        No hace falta acertar. Es para cubrir tu turno mientras tanto; cuando
+                        te den el alta la corriges y el calendario se ajusta solo.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

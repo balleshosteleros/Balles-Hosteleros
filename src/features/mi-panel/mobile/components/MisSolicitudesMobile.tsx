@@ -5,6 +5,7 @@ import {
   Loader2,
   Inbox,
   Plus,
+  HeartPulse,
   X,
   CalendarOff,
   Briefcase,
@@ -25,6 +26,11 @@ import {
   type MiDenuncia,
 } from "@/features/mi-panel/actions/denuncias-actions";
 import { SolicitudModal } from "@/features/mi-panel/components/SolicitudModal";
+import { AltaMedicaModal } from "@/features/mi-panel/components/AltaMedicaModal";
+import {
+  getMiBajaMedicaAbierta,
+  type BajaMedicaAbierta,
+} from "@/features/mi-panel/actions/comunicaciones-actions";
 import {
   CATEGORIA_LABEL,
   DENUNCIA_ESTADO_LABEL,
@@ -135,16 +141,42 @@ export function MisSolicitudesMobile() {
     setRefreshKey((k) => k + 1);
   }
 
+  // Con una baja médica abierta, lo que toca no es pedir nada más: es decir que
+  // ya está bien. El botón principal cambia, igual que en el ordenador.
+  const [bajaAbierta, setBajaAbierta] = useState<BajaMedicaAbierta | null>(null);
+  const [altaOpen, setAltaOpen] = useState(false);
+
+  useEffect(() => {
+    let activo = true;
+    getMiBajaMedicaAbierta().then((res) => {
+      if (activo) setBajaAbierta(res.data);
+    });
+    return () => {
+      activo = false;
+    };
+  }, [refreshKey]);
+
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-4 text-base font-semibold text-white shadow-md active:scale-[0.98] active:bg-emerald-600"
-      >
-        <Plus className="h-5 w-5" />
-        Nueva solicitud
-      </button>
+      {bajaAbierta ? (
+        <button
+          type="button"
+          onClick={() => setAltaOpen(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-500 py-4 text-base font-semibold text-white shadow-md active:scale-[0.98] active:bg-rose-600"
+        >
+          <HeartPulse className="h-5 w-5" />
+          Comunicar mi alta médica
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-4 text-base font-semibold text-white shadow-md active:scale-[0.98] active:bg-emerald-600"
+        >
+          <Plus className="h-5 w-5" />
+          Nueva solicitud
+        </button>
+      )}
 
       <div className="mt-4 flex gap-1.5 rounded-full bg-muted p-1">
         {TABS.map((t) => (
@@ -312,6 +344,16 @@ export function MisSolicitudesMobile() {
           </ul>
         )}
       </div>
+
+      {bajaAbierta && (
+        <AltaMedicaModal
+          open={altaOpen}
+          onOpenChange={setAltaOpen}
+          solicitudId={bajaAbierta.solicitudId}
+          fechaInicioBaja={bajaAbierta.fechaInicio}
+          onComunicada={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
 
       <SolicitudModal
         open={open}

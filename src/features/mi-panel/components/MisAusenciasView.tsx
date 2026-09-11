@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Inbox, Plus, X, CalendarOff, Briefcase } from "lucide-react";
+import { Loader2, Inbox, Plus, X, CalendarOff, Briefcase, HeartPulse } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,11 @@ import {
 import type { SolicitudPersonal } from "@/features/mi-panel/types";
 import { ESTADO_COLOR, ESTADO_LABEL, SUBTIPO_LABEL } from "@/features/mi-panel/types";
 import { SolicitudModal } from "./SolicitudModal";
+import { AltaMedicaModal } from "./AltaMedicaModal";
+import {
+  getMiBajaMedicaAbierta,
+  type BajaMedicaAbierta,
+} from "@/features/mi-panel/actions/comunicaciones-actions";
 import { DenunciaModal } from "./DenunciaModal";
 import { MisDenunciasCard } from "./MisDenunciasCard";
 
@@ -121,6 +126,21 @@ export function MisAusenciasView() {
   const ausencias = useMemo(() => items.filter((s) => s.tipo === "ausencia"), [items]);
   const trabajos = useMemo(() => items.filter((s) => s.tipo === "trabajo"), [items]);
 
+  // Mientras tenga una baja médica sin alta, el botón principal deja de ser
+  // "Solicitar": lo que le toca es decir que ya está bien.
+  const [bajaAbierta, setBajaAbierta] = useState<BajaMedicaAbierta | null>(null);
+  const [altaOpen, setAltaOpen] = useState(false);
+
+  useEffect(() => {
+    let activo = true;
+    getMiBajaMedicaAbierta().then((res) => {
+      if (activo) setBajaAbierta(res.data);
+    });
+    return () => {
+      activo = false;
+    };
+  }, [refreshKey]);
+
   async function handleAnular(id: string) {
     const res = await anularMiSolicitud(id);
     if (!res.ok) {
@@ -134,10 +154,17 @@ export function MisAusenciasView() {
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-5">
       <div className="flex justify-end">
-        <Button variant="primary" size="lg" onClick={() => setOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Solicitar
-        </Button>
+        {bajaAbierta ? (
+          <Button variant="primary" size="lg" onClick={() => setAltaOpen(true)}>
+            <HeartPulse className="mr-2 h-4 w-4" />
+            Comunicar mi alta médica
+          </Button>
+        ) : (
+          <Button variant="primary" size="lg" onClick={() => setOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Solicitar
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
@@ -167,6 +194,16 @@ export function MisAusenciasView() {
         onCreated={() => setRefreshKey((k) => k + 1)}
         onElegirDenuncia={() => setDenunciaOpen(true)}
       />
+
+      {bajaAbierta && (
+        <AltaMedicaModal
+          open={altaOpen}
+          onOpenChange={setAltaOpen}
+          solicitudId={bajaAbierta.solicitudId}
+          fechaInicioBaja={bajaAbierta.fechaInicio}
+          onComunicada={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
 
       <DenunciaModal
         open={denunciaOpen}

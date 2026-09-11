@@ -118,3 +118,94 @@ export async function reenviarBajaMedicaGestoria(
     return { ok: false, error: msg };
   }
 }
+
+// ─── Alta médica ────────────────────────────────────────────────────────────
+
+export interface BajaMedicaAbierta {
+  solicitudId: string;
+  fechaInicio: string;
+  /** Fecha aproximada que puso al pedirla. Solo orienta; no cierra nada. */
+  fechaFinPrevista: string | null;
+}
+
+/**
+ * ¿Tengo una baja médica abierta?
+ *
+ * Es lo que hace que el botón de Mi Panel cambie: mientras haya una baja
+ * aprobada sin su alta, lo que toca no es pedir otra cosa, es comunicar el alta.
+ */
+export async function getMiBajaMedicaAbierta(): Promise<{
+  ok: boolean;
+  data: BajaMedicaAbierta | null;
+}> {
+  try {
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId || !empresaId) return { ok: true, data: null };
+
+    const { data } = await supabase
+      .from("solicitudes_personal")
+      .select("id, fecha_inicio, fecha_fin")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", userId)
+      .eq("subtipo", "baja_medica")
+      .eq("estado", "aprobada")
+      .is("alta_medica_comunicada_en", null)
+      .order("fecha_inicio", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!data) return { ok: true, data: null };
+    return {
+      ok: true,
+      data: {
+        solicitudId: data.id as string,
+        fechaInicio: data.fecha_inicio as string,
+        fechaFinPrevista: (data.fecha_fin as string | null) ?? null,
+      },
+    };
+  } catch (err) {
+    console.error(
+      "[comunicaciones] getMiBajaMedicaAbierta:",
+      err instanceof Error ? err.message : err,
+    );
+    return { ok: true, data: null };
+  }
+}
+
+/**
+ * El trabajador comunica su alta médica: cierra la baja, se calcula cuándo
+ * vuelve según su horario, y se avisa a RRHH (programa y correo) y a la gestoría.
+ */
+export async function comunicarMiAltaMedica(
+  solicitudId: string,
+  fechaAltaIso: string,
+): Promise<{ ok: boolean; error?: string; reincorporacion?: string | null }> {
+  try {
+    const { supabase, userId } = await getAppContext();
+    if (!userId) return { ok: false, error: "No autenticado" };
+    if (!fechaAltaIso) return { ok: false, error: "Indica la fecha en que te han dado el alta." };
+
+    const { data: yo } = await supabase
+      .from("usuarios")
+      .select("nombre, apellidos")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const nombre = `${yo?.nombre ?? ""} ${yo?.apellidos ?? ""}`.trim() || "Trabajador";
+
+    const { comunicarAltaMedica } = await import(
+      "@/features/rrhh/services/gestoria/alta-medica"
+    );
+    const res = await comunicarAltaMedica({
+      solicitudId,
+      altaIso: fechaAltaIso,
+      quien: { userId, nombre },
+    });
+    return res.ok
+      ? { ok: true, reincorporacion: res.reincorporacion ?? null }
+      : { ok: false, error: res.error };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[comunicaciones] comunicarMiAltaMedica:", msg);
+    return { ok: false, error: msg };
+  }
+}
