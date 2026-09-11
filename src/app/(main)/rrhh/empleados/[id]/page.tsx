@@ -8,6 +8,7 @@ import {
   HorariosTab, SolicitudesEmpleadoTab,
 } from "@/features/rrhh/components/empleados/FichaTabsContent";
 import { FichajesTimelineMesEmpleado } from "@/features/rrhh/components/fichajes/FichajesTimelineMesEmpleado";
+import { EstadoAccesoCard } from "@/features/rrhh/components/empleados/EstadoAccesoCard";
 import {
   GestionEmpleadoCard,
   type GestionEmpleadoCardHandle,
@@ -81,6 +82,7 @@ type EmpleadoBD = {
   puesto: string | null;
   local_id: string | null;
   permite_teletrabajo: boolean | null;
+  fecha_alta: string | null;
   fecha_baja: string | null;
   estado: string;
   validador_departamento_id: string | null;
@@ -254,8 +256,6 @@ export default function FichaEmpleadoPage() {
                     puesto: empleadoRegistro.puesto,
                     localId: empleadoRegistro.local_id,
                     permiteTeletrabajo: empleadoRegistro.permite_teletrabajo,
-                    estado: empleadoRegistro.estado === "Activo" ? "Activo" : "Inactivo",
-                    fechaBaja: empleadoRegistro.fecha_baja,
                   }}
                   onUpdated={cargarFicha}
                   onDeleted={() => router.push("/rrhh/empleados")}
@@ -267,6 +267,15 @@ export default function FichaEmpleadoPage() {
                   docDniReversoPath={empleadoRegistro.doc_dni_reverso_path}
                   docIbanPath={empleadoRegistro.doc_iban_path}
                   docSsPath={empleadoRegistro.doc_ss_path}
+                />
+                {/* El recuadro rojo va el ÚLTIMO de la ficha: es lo que menos se
+                    toca y lo que más pesa si se pulsa por error. */}
+                <EstadoAccesoCard
+                  empleadoId={empleadoRegistro.id}
+                  estadoActual={empleadoRegistro.estado === "Activo" ? "Activo" : "Inactivo"}
+                  fechaAlta={empleadoRegistro.fecha_alta}
+                  fechaBaja={empleadoRegistro.fecha_baja}
+                  onUpdated={cargarFicha}
                 />
               </div>
             </div>
