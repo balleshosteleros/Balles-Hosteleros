@@ -1234,13 +1234,19 @@ export function ComunicadosView() {
     // un comunicado publicado sin fecha salía con un guion.
     // En los que se repiten no se toca: ahí `envio` es la próxima vez y
     // pisarla haría que el cron lo volviera a mandar.
+    const envioGuardado = editingComunicado?.envio ?? null;
     const envio = form.programado && form.envioFecha
       ? zonaLocalAUtcISO(form.envioFecha, form.envioHora || "00:00", tz)
-      : estadoFinal === "publicado" && form.recurrencia === "sin_repeticion"
-        // El que ya salió conserva el día que salió: volver a guardarlo le
-        // ponía la fecha de hoy y parecía recién enviado.
-        ? (editingComunicado?.envio ?? new Date().toISOString())
-        : null;
+      : form.recurrencia !== "sin_repeticion" || estadoFinal === "programado"
+        // Los que se repiten llevan en `envio` la PRÓXIMA vez que salen, y un
+        // programado sin fecha no sale nunca: en los dos casos se respeta la
+        // fecha que ya tenía. Vaciarla los dejaba mudos para siempre.
+        ? envioGuardado
+        : estadoFinal === "publicado"
+          // El que ya salió conserva el día que salió: volver a guardarlo le
+          // ponía la fecha de hoy y parecía recién enviado.
+          ? (envioGuardado ?? new Date().toISOString())
+          : null;
 
     // Los documentos suben DIRECTOS al almacén con una URL firmada. Si pasaran
     // por la acción de guardado, cualquier PDF de más de 4,5 MB fallaría.
