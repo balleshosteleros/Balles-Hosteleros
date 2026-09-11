@@ -19,11 +19,12 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useModuloDisponible } from "@/features/empresa/contexts/catalogo-empresa-context";
+import { hueDeTile } from "@/features/mi-panel/mobile/lib/tile-hue";
 
 /**
  * Cuadraditos de "Mis Departamentos" (móvil). Mismo lenguaje visual que
  * `MasGrid` (Mis Paneles): rejilla plana de 3 columnas, tarjeta cuadrada con
- * tinte por `hue` e icono en recuadro con gradiente. Aquí cada cuadradito es un
+ * el tinte que le toca por su fila e icono en recuadro con gradiente. Aquí cada cuadradito es un
  * DEPARTAMENTO, no un acceso personal.
  *
  * De momento solo mostramos los departamentos; sus submódulos se irán abriendo
@@ -35,25 +36,23 @@ type Depto = {
   modulo: string;
   label: string;
   icon: LucideIcon;
-  hue: number;
 };
 
-// `hue` en el rango azul→violeta para mantener el aire de marca, agrupando por
-// afinidad: operativa de local (azul), personas/calidad (cian), gestión
-// económica/legal (índigo→violeta).
+// El tinte no va en el departamento: lo pone `hueDeTile` según la fila que
+// ocupe, igual que en «Mis paneles» (ver `tile-hue.ts`).
 const DEPARTAMENTOS: Depto[] = [
-  { key: "direccion", modulo: "DIRECCIÓN", label: "Dirección", icon: Crown, hue: 211 },
-  { key: "producto", modulo: "PRODUCTO", label: "Producto", icon: Boxes, hue: 252 },
-  { key: "sala", modulo: "SALA", label: "Sala", icon: UtensilsCrossed, hue: 211 },
-  { key: "cocina", modulo: "COCINA", label: "Cocina", icon: ChefHat, hue: 211 },
-  { key: "gerencia", modulo: "GERENCIA", label: "Gerencia", icon: Briefcase, hue: 211 },
-  { key: "calidad", modulo: "CALIDAD", label: "Calidad", icon: CheckCircle2, hue: 192 },
-  { key: "rrhh", modulo: "RECURSOS HUMANOS", label: "Recursos Humanos", icon: User, hue: 192 },
-  { key: "marketing", modulo: "MARKETING", label: "Marketing", icon: Camera, hue: 192 },
-  { key: "logistica", modulo: "LOGÍSTICA", label: "Logística", icon: Package, hue: 192 },
-  { key: "contabilidad", modulo: "CONTABILIDAD", label: "Contabilidad", icon: Calculator, hue: 231 },
-  { key: "gestoria", modulo: "GESTORÍA", label: "Gestoría", icon: FileText, hue: 231 },
-  { key: "juridico", modulo: "JURÍDICO", label: "Jurídico", icon: Scale, hue: 252 },
+  { key: "direccion", modulo: "DIRECCIÓN", label: "Dirección", icon: Crown },
+  { key: "producto", modulo: "PRODUCTO", label: "Producto", icon: Boxes },
+  { key: "sala", modulo: "SALA", label: "Sala", icon: UtensilsCrossed },
+  { key: "cocina", modulo: "COCINA", label: "Cocina", icon: ChefHat },
+  { key: "gerencia", modulo: "GERENCIA", label: "Gerencia", icon: Briefcase },
+  { key: "calidad", modulo: "CALIDAD", label: "Calidad", icon: CheckCircle2 },
+  { key: "rrhh", modulo: "RECURSOS HUMANOS", label: "Recursos Humanos", icon: User },
+  { key: "marketing", modulo: "MARKETING", label: "Marketing", icon: Camera },
+  { key: "logistica", modulo: "LOGÍSTICA", label: "Logística", icon: Package },
+  { key: "contabilidad", modulo: "CONTABILIDAD", label: "Contabilidad", icon: Calculator },
+  { key: "gestoria", modulo: "GESTORÍA", label: "Gestoría", icon: FileText },
+  { key: "juridico", modulo: "JURÍDICO", label: "Jurídico", icon: Scale },
 ];
 
 export function DepartamentosGrid() {
@@ -94,32 +93,33 @@ export function DepartamentosGrid() {
       className="grid grid-cols-3 gap-2.5 px-5 pt-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
       style={{ containerType: "inline-size" }}
     >
-      {tiles.map((d) => {
+      {tiles.map((d, i) => {
         const Icon = d.icon;
+        const hue = hueDeTile(i, tiles.length);
         return (
           <Link
             key={d.key}
             href={`/m/departamentos/${d.key}`}
             className="group relative flex aspect-square flex-col items-center justify-center gap-[4cqi] overflow-hidden rounded-2xl border text-center font-medium shadow-sm transition-all active:scale-[0.97]"
             style={{
-              borderColor: `hsl(${d.hue} 60% 60% / 0.25)`,
-              background: `linear-gradient(160deg, hsl(${d.hue} 70% 97%) 0%, hsl(${d.hue} 65% 92%) 100%)`,
-              boxShadow: `0 1px 8px -2px hsl(${d.hue} 60% 50% / 0.18)`,
+              borderColor: `hsl(${hue} 60% 60% / 0.25)`,
+              background: `linear-gradient(160deg, hsl(${hue} 70% 97%) 0%, hsl(${hue} 65% 92%) 100%)`,
+              boxShadow: `0 1px 8px -2px hsl(${hue} 60% 50% / 0.18)`,
             }}
           >
             {/* Brillo futurista superior */}
             <span
               aria-hidden
               className="pointer-events-none absolute -top-6 left-1/2 h-12 w-20 -translate-x-1/2 rounded-full blur-xl"
-              style={{ background: `hsl(${d.hue} 80% 70% / 0.35)` }}
+              style={{ background: `hsl(${hue} 80% 70% / 0.35)` }}
             />
             <span
               className="relative flex items-center justify-center rounded-xl text-white shadow-sm"
               style={{
                 width: "clamp(2.75rem, 12cqi, 4rem)",
                 height: "clamp(2.75rem, 12cqi, 4rem)",
-                background: `linear-gradient(145deg, hsl(${d.hue} 75% 58%) 0%, hsl(${d.hue} 70% 46%) 100%)`,
-                boxShadow: `0 3px 10px -2px hsl(${d.hue} 70% 45% / 0.5)`,
+                background: `linear-gradient(145deg, hsl(${hue} 75% 58%) 0%, hsl(${hue} 70% 46%) 100%)`,
+                boxShadow: `0 3px 10px -2px hsl(${hue} 70% 45% / 0.5)`,
               }}
             >
               <Icon className="h-1/2 w-1/2" strokeWidth={2.1} />
@@ -127,7 +127,7 @@ export function DepartamentosGrid() {
             <span
               className="relative px-1 leading-tight"
               style={{
-                color: `hsl(${d.hue} 45% 28%)`,
+                color: `hsl(${hue} 45% 28%)`,
                 fontSize: "clamp(0.75rem, 3.2cqi, 0.95rem)",
               }}
             >

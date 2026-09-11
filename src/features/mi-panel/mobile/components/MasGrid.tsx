@@ -18,35 +18,35 @@ import {
   PackageCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { hueDeTile } from "@/features/mi-panel/mobile/lib/tile-hue";
 
 /**
- * Tono azulado de marca. `hue` se usa para teñir el icono y el recuadro;
- * todos viven en el rango azul→violeta para mantener el aire futurista. El
- * color agrupa visualmente los accesos afines sin necesidad de títulos.
+ * El tinte NO va en el acceso: lo pone `hueDeTile` según la fila que ocupe, de
+ * forma que la rejilla se lea como un degradado de azul a violeta de arriba
+ * abajo (ver `tile-hue.ts`).
  */
-type Item = { href: string; label: string; icon: LucideIcon; hue: number };
+type Item = { href: string; label: string; icon: LucideIcon };
 
 // MISMO ORDEN que en el menú del ordenador (`miPanelSubs`), con Perfil el
 // primero (Iván, 11-sep): quien usa las dos pantallas encuentra cada panel en
-// el mismo sitio. El `hue` solo agrupa por color: día (azul), nómina (cian),
-// comunicación (índigo), persona y equipo (violeta).
+// el mismo sitio.
 const ITEMS: Item[] = [
-  { href: "/m/perfil", label: "Perfil", icon: UserCircle, hue: 252 },
-  { href: "/m/points", label: "Points", icon: Trophy, hue: 252 },
-  { href: "/m/calendario", label: "Calendario", icon: CalendarDays, hue: 211 },
-  { href: "/m/cronograma", label: "Cronograma", icon: CalendarClock, hue: 211 },
-  { href: "/m/horario", label: "Horario", icon: Timer, hue: 211 },
-  { href: "/m/fichajes", label: "Fichajes", icon: Fingerprint, hue: 211 },
-  { href: "/m/formacion", label: "Formación", icon: GraduationCap, hue: 252 },
-  { href: "/m/condiciones", label: "Condiciones", icon: ClipboardCheck, hue: 192 },
-  { href: "/m/pagos", label: "Pagos", icon: Euro, hue: 192 },
-  { href: "/m/cuestionarios", label: "Cuestionarios", icon: FileQuestion, hue: 231 },
-  { href: "/m/solicitudes", label: "Solicitudes", icon: Inbox, hue: 192 },
-  { href: "/m/comunicados", label: "Comunicados", icon: Megaphone, hue: 231 },
-  { href: "/m/entregas", label: "Entregas", icon: PackageCheck, hue: 192 },
-  { href: "/m/documentos", label: "Documentos", icon: Files, hue: 192 },
-  { href: "/m/inspecciones", label: "Inspecciones", icon: FileSearch, hue: 231 },
-  { href: "/m/equipo", label: "Equipo", icon: Network, hue: 252 },
+  { href: "/m/perfil", label: "Perfil", icon: UserCircle },
+  { href: "/m/points", label: "Points", icon: Trophy },
+  { href: "/m/calendario", label: "Calendario", icon: CalendarDays },
+  { href: "/m/cronograma", label: "Cronograma", icon: CalendarClock },
+  { href: "/m/horario", label: "Horario", icon: Timer },
+  { href: "/m/fichajes", label: "Fichajes", icon: Fingerprint },
+  { href: "/m/formacion", label: "Formación", icon: GraduationCap },
+  { href: "/m/condiciones", label: "Condiciones", icon: ClipboardCheck },
+  { href: "/m/pagos", label: "Pagos", icon: Euro },
+  { href: "/m/cuestionarios", label: "Cuestionarios", icon: FileQuestion },
+  { href: "/m/solicitudes", label: "Solicitudes", icon: Inbox },
+  { href: "/m/comunicados", label: "Comunicados", icon: Megaphone },
+  { href: "/m/entregas", label: "Entregas", icon: PackageCheck },
+  { href: "/m/documentos", label: "Documentos", icon: Files },
+  { href: "/m/inspecciones", label: "Inspecciones", icon: FileSearch },
+  { href: "/m/equipo", label: "Equipo", icon: Network },
 ];
 
 export function MasGrid() {
@@ -67,8 +67,9 @@ export function MasGrid() {
       className="grid grid-cols-3 gap-2.5 px-5 pt-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
       style={{ containerType: "inline-size" }}
     >
-      {ITEMS.map((it) => {
+      {ITEMS.map((it, i) => {
         const Icon = it.icon;
+        const hue = hueDeTile(i, ITEMS.length);
         return (
           <Link
             key={it.href}
@@ -84,16 +85,16 @@ export function MasGrid() {
             prefetch={false}
             className="group relative flex aspect-square flex-col items-center justify-center gap-[4cqi] overflow-hidden rounded-2xl border text-center font-medium shadow-sm transition-all active:scale-[0.97]"
             style={{
-              borderColor: `hsl(${it.hue} 60% 60% / 0.25)`,
-              background: `linear-gradient(160deg, hsl(${it.hue} 70% 97%) 0%, hsl(${it.hue} 65% 92%) 100%)`,
-              boxShadow: `0 1px 8px -2px hsl(${it.hue} 60% 50% / 0.18)`,
+              borderColor: `hsl(${hue} 60% 60% / 0.25)`,
+              background: `linear-gradient(160deg, hsl(${hue} 70% 97%) 0%, hsl(${hue} 65% 92%) 100%)`,
+              boxShadow: `0 1px 8px -2px hsl(${hue} 60% 50% / 0.18)`,
             }}
           >
             {/* Brillo futurista superior */}
             <span
               aria-hidden
               className="pointer-events-none absolute -top-6 left-1/2 h-12 w-20 -translate-x-1/2 rounded-full blur-xl"
-              style={{ background: `hsl(${it.hue} 80% 70% / 0.35)` }}
+              style={{ background: `hsl(${hue} 80% 70% / 0.35)` }}
             />
             {/* Medidas en `cqi` (proporcionales al ancho de la rejilla) con
                 `clamp` para que no se queden ridículas en pantallas estrechas
@@ -103,8 +104,8 @@ export function MasGrid() {
               style={{
                 width: "clamp(2.75rem, 12cqi, 4rem)",
                 height: "clamp(2.75rem, 12cqi, 4rem)",
-                background: `linear-gradient(145deg, hsl(${it.hue} 75% 58%) 0%, hsl(${it.hue} 70% 46%) 100%)`,
-                boxShadow: `0 3px 10px -2px hsl(${it.hue} 70% 45% / 0.5)`,
+                background: `linear-gradient(145deg, hsl(${hue} 75% 58%) 0%, hsl(${hue} 70% 46%) 100%)`,
+                boxShadow: `0 3px 10px -2px hsl(${hue} 70% 45% / 0.5)`,
               }}
             >
               <Icon
@@ -115,7 +116,7 @@ export function MasGrid() {
             <span
               className="relative px-1 leading-tight"
               style={{
-                color: `hsl(${it.hue} 45% 28%)`,
+                color: `hsl(${hue} 45% 28%)`,
                 fontSize: "clamp(0.75rem, 3.2cqi, 0.95rem)",
               }}
             >

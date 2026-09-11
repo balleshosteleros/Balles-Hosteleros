@@ -7,11 +7,13 @@ import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useModuloDisponible } from "@/features/empresa/contexts/catalogo-empresa-context";
 import { allSections, type SubItem } from "@/features/layout/data/nav-routes";
+import { hueDeTile } from "@/features/mi-panel/mobile/lib/tile-hue";
 
 /**
  * Cuadraditos de los SUBMÓDULOS de un departamento (móvil). Mismo lenguaje
  * visual que `DepartamentosGrid` / `MasGrid`: rejilla de 3 columnas, tarjeta
- * cuadrada con tinte por `hue` (el del departamento, para coherencia de color).
+ * cuadrada con el tinte que le toca por su fila, igual que las otras dos
+ * rejillas: azul arriba y subiendo hacia el violeta (ver `tile-hue.ts`).
  *
  * Fuente única: `allSections` de nav-routes (la misma que el sidebar de
  * escritorio), así los submódulos, su orden, sus iconos y sus rutas NO se
@@ -24,20 +26,6 @@ import { allSections, type SubItem } from "@/features/layout/data/nav-routes";
  * del móvil enseña los mismos submódulos que el ordenador, ni uno más.
  */
 
-/** Tinte del departamento (mismo `hue` que en DepartamentosGrid). */
-const HUE_POR_KEY: Record<string, number> = {
-  direccion: 211,
-  sala: 211,
-  cocina: 211,
-  gerencia: 211,
-  calidad: 192,
-  rrhh: 192,
-  marketing: 192,
-  logistica: 192,
-  contabilidad: 231,
-  gestoria: 231,
-  juridico: 252,
-};
 
 /**
  * Submódulos con pantalla propia de teléfono: misma entrada que en el ordenador
@@ -76,7 +64,6 @@ export function SubmodulosGrid({ deptoKey }: Props) {
   const moduloDisponible = useModuloDisponible();
 
   const section = allSections.find((s) => s.key === deptoKey);
-  const hue = HUE_POR_KEY[deptoKey] ?? 220;
 
   const items = useMemo<SubItem[]>(() => {
     if (!section) return [];
@@ -120,7 +107,8 @@ export function SubmodulosGrid({ deptoKey }: Props) {
       className="grid grid-cols-3 gap-2.5 px-5 pt-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
       style={{ containerType: "inline-size" }}
     >
-      {items.map((it) => {
+      {items.map((it, i) => {
+        const hue = hueDeTile(i, items.length);
         const Icon = it.icon as LucideIcon;
         return (
           <Link
