@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, Pencil, Trash2, Save, X, Sparkles, Video, Link2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Save, X, Sparkles, Video, Link2, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -49,6 +49,9 @@ export function ConocimientoAdminPanel({
 
   const manuales = initialChunks.filter((c) => c.fuente === "manual");
   const deFormacion = initialChunks.filter((c) => c.fuente === "formacion");
+  // El manual del software viaja con el código: se ve, pero no se edita aquí —
+  // el siguiente despliegue lo sobrescribiría.
+  const delManual = initialChunks.filter((c) => c.fuente === "software");
 
   function startNew() {
     setEditingId("new");
@@ -151,12 +154,13 @@ export function ConocimientoAdminPanel({
       </div>
 
       {/* Estado del índice */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <EstadoCard label="Total de artículos" valor={estado.total} />
+        <EstadoCard label="Del manual" valor={estado.porFuente.software ?? 0} />
         <EstadoCard label="Escritos a mano" valor={estado.porFuente.manual ?? 0} />
         <EstadoCard label="Desde Formación" valor={estado.porFuente.formacion ?? 0} />
         <EstadoCard
-          label="Sin indexar"
+          label="Sin preparar"
           valor={estado.sinEmbedding}
           alerta={estado.sinEmbedding > 0}
         />
@@ -351,6 +355,24 @@ export function ConocimientoAdminPanel({
           </ul>
         )}
       </section>
+
+      {/* Manual del software (solo lectura: viaja con el código) */}
+      {delManual.length > 0 && (
+        <section>
+          <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <BookOpen className="h-3.5 w-3.5" /> Manual del software ({delManual.length})
+          </h3>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Explica cada pantalla del software. Se actualiza solo con cada versión, así
+            que no se edita desde aquí.
+          </p>
+          <ul className="space-y-2">
+            {delManual.map((c) => (
+              <ChunkRow key={c.id} chunk={c} readOnly />
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Desde Formación (solo lectura) */}
       {deFormacion.length > 0 && (

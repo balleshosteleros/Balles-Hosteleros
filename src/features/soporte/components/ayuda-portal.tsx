@@ -1,38 +1,26 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, ChevronRight, UserRound, GraduationCap, Sparkles } from "lucide-react";
+import { Search, ChevronRight, UserRound, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { FaqAdminPanel } from "./faq-admin-panel";
-import { ConocimientoAdminPanel } from "./conocimiento-admin-panel";
 import { SoporteDrawer } from "./soporte-drawer";
 import { FormacionRolViewer } from "@/features/formacion/components/FormacionRolViewer";
-import type { Faq, FaqsByCategory, ConocimientoChunk } from "@/features/soporte/types";
+import type { FaqsByCategory } from "@/features/soporte/types";
 
-interface EstadoIndice {
-  total: number;
-  porFuente: Record<string, number>;
-  porModulo: Record<string, number>;
-  sinEmbedding: number;
-}
-
+/**
+ * Ayuda, para consultar.
+ *
+ * Las preguntas que salen aquí ya vienen filtradas por el servidor: son las de
+ * la empresa activa y las de los módulos que ve ese rol. Gestionarlas se hace
+ * desde Dirección → Ayuda.
+ */
 interface AyudaPortalProps {
   viewerData: FaqsByCategory[];
-  adminData: Faq[] | null; // null si el usuario no puede editar
-  conocimiento?: ConocimientoChunk[] | null; // base del asistente (solo admin)
-  estadoConocimiento?: EstadoIndice | null;
 }
 
-export function AyudaPortal({
-  viewerData,
-  adminData,
-  conocimiento = null,
-  estadoConocimiento = null,
-}: AyudaPortalProps) {
-  const canEdit = adminData !== null;
-
+export function AyudaPortal({ viewerData }: AyudaPortalProps) {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
       <Tabs defaultValue="ver" className="w-full">
@@ -42,15 +30,6 @@ export function AyudaPortal({
             <GraduationCap className="h-3.5 w-3.5" />
             Ver Formación Inicial de nuevo
           </TabsTrigger>
-          {canEdit && (
-            <TabsTrigger value="gestionar">Editar contenido</TabsTrigger>
-          )}
-          {canEdit && (
-            <TabsTrigger value="asistente" className="gap-1.5">
-              <Sparkles className="h-3.5 w-3.5" />
-              Base del asistente
-            </TabsTrigger>
-          )}
         </TabsList>
 
         <TabsContent value="ver" className="mt-0">
@@ -60,28 +39,6 @@ export function AyudaPortal({
         <TabsContent value="formacion" className="mt-0">
           <FormacionRolViewer />
         </TabsContent>
-
-        {canEdit && (
-          <TabsContent value="gestionar" className="mt-0">
-            <FaqAdminPanel initialFaqs={adminData!} />
-          </TabsContent>
-        )}
-
-        {canEdit && (
-          <TabsContent value="asistente" className="mt-0">
-            <ConocimientoAdminPanel
-              initialChunks={conocimiento ?? []}
-              estado={
-                estadoConocimiento ?? {
-                  total: 0,
-                  porFuente: {},
-                  porModulo: {},
-                  sinEmbedding: 0,
-                }
-              }
-            />
-          </TabsContent>
-        )}
       </Tabs>
     </div>
   );
@@ -113,10 +70,12 @@ function AyudaViewer({ data }: { data: FaqsByCategory[] }) {
       <div className="space-y-4">
         <div className="rounded-2xl border border-dashed bg-muted/30 p-10 text-center">
           <p className="text-base font-medium text-foreground">
-            Todavía no hay ayudas escritas.
+            Todavía no hay preguntas frecuentes.
           </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Mientras tanto, pulsa el botón verde de abajo a la derecha para hablar con una persona.
+          <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
+            Se escriben solas con lo que pregunta la gente, así que aparecerán en cuanto
+            una misma duda se repita. Mientras tanto, pregúntale al asistente con el
+            botón de abajo a la derecha.
           </p>
         </div>
       </div>

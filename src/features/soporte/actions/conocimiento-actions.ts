@@ -32,7 +32,7 @@ const manualSchema = z.object({
   activo: z.boolean().default(true),
 });
 
-/** Solo admin/director gestionan la base de conocimiento global. */
+/** La base del asistente se gestiona desde Dirección, no desde Ajustes. */
 async function requireAdminOrDirector() {
   const supabase = await createClient();
   const {
@@ -41,8 +41,8 @@ async function requireAdminOrDirector() {
   if (!user) throw new Error("No autenticado");
 
   const { permisos } = await getRolContext();
-  if (!puedeEditarModulo(permisos, "AJUSTES")) {
-    throw new Error("Sin permisos: necesitas Ajustes para gestionar la base de conocimiento");
+  if (!puedeEditarModulo(permisos, "DIRECCIÓN")) {
+    throw new Error("Sin permisos: la base del asistente se gestiona desde Dirección");
   }
   return user;
 }
@@ -86,23 +86,31 @@ export async function estadoIndice(): Promise<{
 }> {
   await requireAdminOrDirector();
   const admin = createAdminClient();
+  // Sin traer `embedding`: son 384 números por artículo y solo hacía falta
+  // saber cuántos están vacíos. Con el manual entero indexado eso eran varios
+  // megas por cada vez que se abre la pantalla, para pintar cinco cifras.
   const { data, error } = await admin
     .from("soporte_conocimiento")
-    .select("fuente,modulo,embedding");
+    .select("fuente,modulo");
 
   const porFuente: Record<string, number> = {};
   const porModulo: Record<string, number> = {};
-  let sinEmbedding = 0;
   if (error || !data) {
     if (error) console.error("[conocimiento] estado:", error);
-    return { total: 0, porFuente, porModulo, sinEmbedding };
+    return { total: 0, porFuente, porModulo, sinEmbedding: 0 };
   }
-  for (const row of data as { fuente: string; modulo: string; embedding: unknown }[]) {
+  for (const row of data as { fuente: string; modulo: string }[]) {
     porFuente[row.fuente] = (porFuente[row.fuente] ?? 0) + 1;
     porModulo[row.modulo] = (porModulo[row.modulo] ?? 0) + 1;
-    if (row.embedding == null) sinEmbedding += 1;
   }
-  return { total: data.length, porFuente, porModulo, sinEmbedding };
+
+  // Los que se quedaron sin preparar: el asistente no los encuentra nunca.
+  const { count } = await admin
+    .from("soporte_conocimiento")
+    .select("id", { count: "exact", head: true })
+    .is("embedding", null);
+
+  return { total: data.length, porFuente, porModulo, sinEmbedding: count ?? 0 };
 }
 
 export async function createConocimientoManual(
@@ -130,7 +138,7 @@ export async function createConocimientoManual(
     });
     if (error) return { error: error.message };
 
-    revalidatePath("/ajustes/ayuda");
+    revalidatePath("/direccion/ayuda");
     return { success: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Error desconocido" };
@@ -168,7 +176,7 @@ export async function updateConocimientoManual(
       .eq("fuente", "manual"); // no se editan a mano los chunks de Formación
     if (error) return { error: error.message };
 
-    revalidatePath("/ajustes/ayuda");
+    revalidatePath("/direccion/ayuda");
     return { success: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Error desconocido" };
@@ -188,8 +196,41 @@ export async function deleteConocimientoManual(
       .eq("fuente", "manual");
     if (error) return { error: error.message };
 
-    revalidatePath("/ajustes/ayuda");
+    revalidatePath("/direccion/ayuda");
     return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Error desconocido" };
+  }
+}
+
+/**
+ * Vuelve a meter el manual del software en la base del asistente.
+ *
+ * El manual viaja con el código, así que normalmente se actualiza solo al
+ * desplegar. Este botón existe para el caso en que haga falta forzarlo: por
+ * ejemplo si una pasada anterior se quedó a medias y hay artículos sin
+ * preparar, que son artículos que el asistente no encontraría nunca.
+ *
+ * Es idempotente: no duplica nada.
+ */
+export async function reindexarManual(): Promise<{
+  error?: string;
+  success?: boolean;
+  resumen?: string;
+}> {
+  try {
+    await requireAdminOrDirector();
+    const { indexarManualSoftware } = await import(
+      "@/features/soporte/services/indexar-manual"
+    );
+    const r = await indexarManualSoftware();
+
+    revalidatePath("/direccion/ayuda");
+    const partes = [`${r.total} artículos`];
+    if (r.insertados) partes.push(`${r.insertados} nuevos`);
+    if (r.actualizados) partes.push(`${r.actualizados} actualizados`);
+    if (r.sinEmbedding) partes.push(`${r.sinEmbedding} sin preparar`);
+    return { success: true, resumen: partes.join(", ") };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Error desconocido" };
   }

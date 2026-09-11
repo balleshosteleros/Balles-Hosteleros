@@ -105,6 +105,7 @@ export const direccionSubs: SubItem[] = [
   { title: "APERTURAS", url: "/direccion/aperturas", icon: TrendingUp },
   { title: "PRESENTACIONES", url: "/direccion/presentaciones", icon: Presentation },
   { title: "NOTIFICACIONES", url: "/direccion/notificaciones", icon: Bell },
+  { title: "AYUDA", url: "/direccion/ayuda", icon: HelpCircle },
 ];
 
 export const salaSubs: SubItem[] = [

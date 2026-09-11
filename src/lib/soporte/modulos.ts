@@ -17,6 +17,9 @@ export const MODULOS_CANONICOS = [
   "CONTABILIDAD",
   "GESTORÍA",
   "JURÍDICO",
+  // Interno del proveedor: solo existe en la empresa matriz. Faltaba, y por eso
+  // ni siquiera dirección recuperaba nada del módulo PRODUCTO.
+  "PRODUCTO",
   "AJUSTES",
 ] as const;
 

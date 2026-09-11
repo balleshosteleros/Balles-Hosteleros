@@ -1,33 +1,59 @@
 import { NextResponse } from "next/server";
 import { chatTexto, type ChatMsg } from "@/lib/ia/chat-texto";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { rateLimit } from "@/shared/lib/rate-limit-memory";
 import { getModulosVisibles } from "@/lib/soporte/modulos-visibles";
+import { UMBRAL_AJENO, UMBRAL_RELEVANTE } from "@/lib/soporte/umbrales";
 import {
-  buscarConocimiento,
+  recuperarConocimiento,
+  distanciaAlConocimiento,
   type ChunkRecuperado,
 } from "@/features/soporte/services/buscar-conocimiento";
+import { registrarConsulta } from "@/features/soporte/services/registrar-consulta";
+import { apuntarHueco } from "@/features/soporte/services/huecos";
 import type { RecursoRespuesta } from "@/features/soporte/types";
 
 type MensajeIn = { rol: "user" | "ai" | "humano"; texto: string };
 
-const SYSTEM = `Eres el asistente de soporte de Balles Hosteleros (un SaaS de gestión hostelera).
+/**
+ * El asistente SOLO sabe lo que hay escrito en el software.
+ *
+ * No es una promesa que se le pide al modelo y ya está: está montado para que no
+ * pueda hacer otra cosa. Si no hay conocimiento suficientemente cercano a la
+ * pregunta, ni siquiera se llama a la IA — se responde con el mensaje que toca.
+ * Y lo que sí se le pasa está filtrado por los módulos que ve ese rol.
+ */
+const SYSTEM = `Eres el asistente del software de gestión de Balles Hosteleros. Contestas a los trabajadores de la empresa.
 
-Reglas:
-- Hablas en español, lenguaje sencillo y cercano (los empleados no son técnicos).
-- Respondes ÚNICAMENTE con la información del CONTEXTO que te paso. No inventes funcionalidades ni pasos.
-- Eres muy resolutivo: explica paso a paso y, si el contexto trae vídeos o enlaces, invita a verlos.
-- NUNCA hables de módulos o temas que no estén en el contexto: ese empleado no tiene acceso a ellos.
-- Si la duda NO se puede responder con el contexto, o el empleado pide hablar con una persona, escala.
+Reglas que NO puedes saltarte:
+- Hablas en español, claro y cercano. Quien pregunta no es informático.
+- Respondes ÚNICA Y EXCLUSIVAMENTE con lo que venga en el CONTEXTO. El contexto es todo lo que sabes.
+- PROHIBIDO usar conocimiento general, tuyo o de internet. Si la respuesta no está en el contexto, NO la sabes, por evidente que te parezca.
+- PROHIBIDO inventarte pantallas, botones, menús o pasos que no estén escritos en el contexto.
+- No hables de módulos ni de temas que no salgan en el contexto: quien pregunta no tiene acceso a ellos.
+- Si el contexto no responde a lo que preguntan, o piden hablar con una persona, escala.
+- Ve al grano: explica los pasos, sin rodeos ni presentaciones.
 
 Responde SIEMPRE con un JSON válido y nada más:
-- Si resuelves: {"escalar": false, "respuesta": "<tu respuesta paso a paso>"}
-- Si no puedes o piden persona: {"escalar": true, "respuesta": "Voy a avisar a tu jefe directo, te contestará en cuanto pueda."}`;
+- Si lo resuelves con el contexto: {"escalar": false, "respuesta": "<los pasos>"}
+- Si no: {"escalar": true, "respuesta": "<una línea diciendo que eso no lo tienes>"}`;
 
 const PEDIR_PERSONA = ["persona", "humano", "jefe", "responsable", "hablar con alguien"];
 
-/** Junta los recursos (vídeos/enlaces) de los chunks usados, deduplicados por URL. */
+/** Lo que se contesta cuando la pregunta no es del software. */
+const RESPUESTA_AJENA =
+  "Eso no es información de la empresa, así que no te lo puedo contestar. " +
+  "Yo solo sé de lo que hay dentro del software. Pregúntame por tu horario, tus fichajes, " +
+  "tus nóminas o por cualquier pantalla que uses en tu trabajo.";
+
+/** Lo que se contesta cuando sí es del software pero todavía no está escrito. */
+const RESPUESTA_SIN_DATOS =
+  "Eso todavía no lo tengo explicado. Lo he apuntado y dirección lo revisará para añadirlo, " +
+  "así la próxima vez podré contestarte. Si lo necesitas ahora mismo, dime que quieres hablar " +
+  "con una persona y aviso a tu responsable.";
+
+/** Junta los recursos (vídeos/enlaces) de los chunks usados, sin repetir URL. */
 function recursosDeChunks(chunks: ChunkRecuperado[], max = 5): RecursoRespuesta[] {
   const out: RecursoRespuesta[] = [];
   const vistos = new Set<string>();
@@ -41,35 +67,11 @@ function recursosDeChunks(chunks: ChunkRecuperado[], max = 5): RecursoRespuesta[
     for (const e of c.enlaces ?? []) {
       if (e.url && !vistos.has(e.url)) {
         vistos.add(e.url);
-        out.push({ tipo: "enlace", titulo: e.titulo || "Más información", url: e.url });
+        out.push({ tipo: "enlace", titulo: e.titulo || "Ir a la pantalla", url: e.url });
       }
     }
   }
   return out.slice(0, max);
-}
-
-async function registrarConsulta(opts: {
-  empresaId: string | null;
-  userId: string;
-  pregunta: string;
-  modulos: string[];
-  chunks: ChunkRecuperado[];
-  escalo: boolean;
-}) {
-  if (!opts.empresaId) return; // la tabla exige empresa
-  try {
-    const admin = createAdminClient();
-    await admin.from("soporte_consultas").insert({
-      empresa_id: opts.empresaId,
-      user_id: opts.userId,
-      pregunta: opts.pregunta.slice(0, 2000),
-      modulos_permitidos: opts.modulos,
-      chunks_usados: opts.chunks.map((c) => c.id),
-      escalo: opts.escalo,
-    });
-  } catch (e) {
-    console.error("[soporte_consultas] insert", e);
-  }
 }
 
 export async function POST(request: Request) {
@@ -102,30 +104,62 @@ export async function POST(request: Request) {
   const ultimaUser = [...mensajes].reverse().find((m) => m.rol === "user");
   const pregunta = ultimaUser?.texto ?? "";
 
-  // Candado de rol: módulos visibles calculados en SERVIDOR (nunca desde el cliente).
-  const { modulos, empresaId } = await getModulosVisibles();
+  // Candado de rol: los módulos se calculan en SERVIDOR, nunca se aceptan del
+  // navegador. La empresa es la ACTIVA, la del selector de arriba.
+  const [{ modulos }, empresaId] = await Promise.all([
+    getModulosVisibles(),
+    getEmpresaActivaForUser(supabase, user.id),
+  ]);
 
-  // Petición explícita de hablar con una persona → escalar directo.
+  const base = { empresaId, userId: user.id, pregunta, modulos };
+
+  // Petición explícita de hablar con una persona → escalar directo, sin gastar IA.
   if (pregunta && PEDIR_PERSONA.some((k) => pregunta.toLowerCase().includes(k))) {
-    await registrarConsulta({ empresaId, userId: user.id, pregunta, modulos, chunks: [], escalo: true });
-    return NextResponse.json({
-      escalar: true,
-      respuesta:
-        "Sin problema, voy a avisar a tu jefe directo. Te contestará en cuanto pueda. Mientras tanto puedes seguir escribiendo aquí.",
+    const respuesta =
+      "Sin problema, voy a avisar a tu jefe directo. Te contestará en cuanto pueda. " +
+      "Mientras tanto puedes seguir escribiendo aquí.";
+    await registrarConsulta({
+      ...base,
+      respuesta,
+      chunksUsados: [],
+      embedding: null,
+      desenlace: "escalada",
     });
+    return NextResponse.json({ escalar: true, respuesta });
   }
 
-  // Búsqueda RAG filtrada por los módulos permitidos (candado dentro de la query).
-  const chunks = await buscarConocimiento(pregunta, modulos, 6);
+  // Búsqueda filtrada por los módulos permitidos (el filtro va dentro de la query).
+  const { embedding, chunks } = await recuperarConocimiento(pregunta, modulos, 6);
 
-  // Sin nada que el rol pueda ver sobre esto → escalar sin filtrar info.
-  if (chunks.length === 0) {
-    await registrarConsulta({ empresaId, userId: user.id, pregunta, modulos, chunks: [], escalo: true });
-    return NextResponse.json({
-      escalar: true,
-      respuesta:
-        "No tengo información sobre eso en tu manual. Voy a avisar a tu jefe directo para que te ayude.",
+  // ¿Hay algo que de verdad conteste? Si el más cercano queda lejos, no hay
+  // nada que contar: no se llama a la IA (ni se gasta) y se elige el mensaje.
+  const masCercano = chunks[0]?.distancia ?? 1;
+  if (chunks.length === 0 || masCercano > UMBRAL_RELEVANTE) {
+    const global = await distanciaAlConocimiento(embedding);
+    const esAjena = global.distancia > UMBRAL_AJENO;
+    const respuesta = esAjena ? RESPUESTA_AJENA : RESPUESTA_SIN_DATOS;
+
+    const consultaId = await registrarConsulta({
+      ...base,
+      respuesta,
+      chunksUsados: [],
+      embedding,
+      desenlace: esAjena ? "ajena" : "sin_datos",
     });
+
+    // Solo se apunta como hueco lo que parece del software. Lo de fuera no es
+    // trabajo pendiente de nadie.
+    if (!esAjena) {
+      await apuntarHueco({
+        empresaId,
+        pregunta,
+        embedding,
+        moduloProbable: global.modulo,
+        consultaId,
+      });
+    }
+
+    return NextResponse.json({ escalar: false, respuesta, recursos: [] });
   }
 
   const contexto = chunks
@@ -143,10 +177,17 @@ export async function POST(request: Request) {
 
   const aiRaw = await chatTexto(chat);
 
-  // Fallback sin IA: respondemos con el chunk más cercano + sus recursos.
+  // Sin IA disponible: se responde con el artículo más cercano tal cual. Es
+  // conocimiento real del software, así que sigue sin inventarse nada.
   if (!aiRaw) {
     const top = chunks[0];
-    await registrarConsulta({ empresaId, userId: user.id, pregunta, modulos, chunks: [top], escalo: false });
+    await registrarConsulta({
+      ...base,
+      respuesta: top.contenido,
+      chunksUsados: [top.id],
+      embedding,
+      desenlace: "resuelta",
+    });
     return NextResponse.json({ escalar: false, respuesta: top.contenido, recursos });
   }
 
@@ -158,19 +199,33 @@ export async function POST(request: Request) {
     parsed = { escalar: false, respuesta: aiRaw };
   }
 
+  // La IA ha leído el contexto y dice que no le sirve: eso es un hueco real,
+  // aunque la búsqueda hubiera traído algo cercano.
+  if (parsed.escalar) {
+    const consultaId = await registrarConsulta({
+      ...base,
+      respuesta: RESPUESTA_SIN_DATOS,
+      chunksUsados: [],
+      embedding,
+      desenlace: "sin_datos",
+    });
+    await apuntarHueco({
+      empresaId,
+      pregunta,
+      embedding,
+      moduloProbable: chunks[0]?.modulo ?? null,
+      consultaId,
+    });
+    return NextResponse.json({ escalar: false, respuesta: RESPUESTA_SIN_DATOS, recursos: [] });
+  }
+
   await registrarConsulta({
-    empresaId,
-    userId: user.id,
-    pregunta,
-    modulos,
-    chunks: parsed.escalar ? [] : chunks,
-    escalo: parsed.escalar,
+    ...base,
+    respuesta: parsed.respuesta,
+    chunksUsados: chunks.map((c) => c.id),
+    embedding,
+    desenlace: "resuelta",
   });
 
-  // Solo adjuntamos recursos si de verdad resolvimos la duda.
-  return NextResponse.json({
-    escalar: parsed.escalar,
-    respuesta: parsed.respuesta,
-    recursos: parsed.escalar ? [] : recursos,
-  });
+  return NextResponse.json({ escalar: false, respuesta: parsed.respuesta, recursos });
 }
