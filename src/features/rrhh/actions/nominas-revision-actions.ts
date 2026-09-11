@@ -886,6 +886,8 @@ export interface CuadreMesCotizadoUI {
   totalTc1: number | null;
   numNominas: number;
   numTc1: number;
+  /** Recibos cuyo líquido no se pudo leer: el total del mes está incompleto. */
+  numTc1SinImporte: number;
   /** No hay nóminas de ese mes todavía: no hay contra qué comparar. */
   sinNominas: boolean;
   /** Hay datos suficientes para afirmar si cuadra o no. */
@@ -1023,6 +1025,7 @@ export async function getEstadoSubidaMeses(periodos: string[]): Promise<EstadoSu
             totalTc1,
             numNominas,
             numTc1: lista.length,
+            numTc1SinImporte: lista.length - conImporte.length,
             sinNominas,
             comprobable,
             cuadra: !comprobable || Math.abs((totalTc1 ?? 0) - ssMes) < 0.005,

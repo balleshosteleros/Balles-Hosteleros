@@ -444,22 +444,52 @@ export function PagosView() {
   // concepto de cotización y las nóminas lo reparten por trabajador. Con varias
   // liquidaciones (ordinaria + complementaria de vacaciones) el total del mes es
   // la suma de todas.
-  const hayTc1 = estadoMes.tc1.length > 0;
-  // Recibos sin líquido legible: con uno solo, el total del mes está INCOMPLETO
-  // y no se puede afirmar que cuadre. Se dice en la tarjeta para revisarlo a mano.
-  const tc1SinImporte = estadoMes.tc1.filter((t) => t.importe == null).length;
-  // El cuadre se hace contra las nóminas del mes que COTIZAN los recibos, no
-  // contra las del mes que se está viendo: los seguros sociales van a mes
-  // vencido, así que con las nóminas de agosto llega el recibo de julio y
-  // compararlos entre sí daría un descuadre que no existe.
-  const cuadrePorMesVisto = estadoSubidaMeses[periodo]?.cuadrePorMesCotizado ?? [];
-  const mesesCotizadosVistos = cuadrePorMesVisto.map((c) => c.periodo);
+  // MES QUE COTIZA el recibo que toca en la pantalla del mes que se ve: siempre
+  // el anterior, porque la Seguridad Social se liquida a mes vencido. Es fijo a
+  // propósito: así cada mes enseña SU recibo y no el que casualmente llegó en su
+  // entrega.
+  const mesCotizadoPrincipal = mesAnterior(periodo);
 
-  // MES COTIZADO principal del recibo que llega con esta entrega. Si aún no hay
-  // recibo no hay nada que aprobar, pero la tarjeta debe seguir diciendo de qué
-  // mes se le espera: el anterior, que es lo que hace la gestoría siempre.
-  const mesCotizadoPrincipal = mesesCotizadosVistos[0] ?? mesAnterior(periodo);
-  const cuadreSs = cuadrePorMesVisto.find((c) => c.periodo === mesCotizadoPrincipal) ?? null;
+  // El recibo de ese mes cotizado, venga en la entrega que venga. Antes se
+  // buscaba solo dentro de la entrega del mes visto, y bastaba con que la
+  // gestoría lo adjuntara al mes equivocado para que la tarjeta dijera "sin
+  // documento" con el recibo ya subido. Si hay varias liquidaciones del mismo mes
+  // repartidas en entregas distintas (ordinaria + complementaria), se suman: son
+  // el mismo dinero en varios papeles.
+  const cuadreSs = useMemo(() => {
+    const trozos = Object.values(estadoSubidaMeses)
+      .flatMap((e) => e.cuadrePorMesCotizado)
+      .filter((c) => c.periodo === mesCotizadoPrincipal);
+    if (trozos.length === 0) return null;
+    if (trozos.length === 1) return trozos[0];
+    const numTc1 = trozos.reduce((a, c) => a + c.numTc1, 0);
+    const numTc1SinImporte = trozos.reduce((a, c) => a + c.numTc1SinImporte, 0);
+    // ssNominas y numNominas son del MES cotizado: iguales en todos los trozos.
+    const ssNominas = trozos[0].ssNominas;
+    const totalTc1 =
+      numTc1SinImporte === 0
+        ? Math.round(trozos.reduce((a, c) => a + (c.totalTc1 ?? 0), 0) * 100) / 100
+        : null;
+    const comprobable = trozos.every((c) => c.comprobable);
+    return {
+      periodo: mesCotizadoPrincipal,
+      ssNominas,
+      totalTc1,
+      numNominas: trozos[0].numNominas,
+      numTc1,
+      numTc1SinImporte,
+      sinNominas: trozos[0].sinNominas,
+      comprobable,
+      cuadra: !comprobable || Math.abs((totalTc1 ?? 0) - ssNominas) < 0.005,
+      aprobadoEn: trozos.find((c) => c.aprobadoEn)?.aprobadoEn ?? null,
+      rechazadoEn: trozos.find((c) => c.rechazadoEn)?.rechazadoEn ?? null,
+      rechazoMotivo: trozos.find((c) => c.rechazoMotivo)?.rechazoMotivo ?? null,
+    };
+  }, [estadoSubidaMeses, mesCotizadoPrincipal]);
+
+  // ¿Hay recibo de ESE mes cotizado? Lo que decide si se puede aprobar o si lo
+  // que falta es el papel de la gestoría.
+  const hayTc1 = (cuadreSs?.numTc1 ?? 0) > 0;
 
   const mesSubidaLabel = useMemo(() => nombreMesLargo(mesSubida), [mesSubida]);
   const estadoMesSubida = estadoSubidaMeses[mesSubida];
@@ -1562,7 +1592,7 @@ export function PagosView() {
         : cuadreSs?.sinNominas
           ? `Este recibo cotiza ${nombreMesLargo(mesCotizadoPrincipal)} y de ese mes no hay nóminas en el sistema.`
           : !cuadreSs?.comprobable
-            ? `${tc1SinImporte} de ${estadoMes.tc1.length} recibos sin importe legible: comprueba el cuadre a mano.`
+            ? `${cuadreSs?.numTc1SinImporte ?? 0} de ${cuadreSs?.numTc1 ?? 0} recibos sin importe legible: comprueba el cuadre a mano.`
             : !cuadreSs.cuadra
               ? "Revisa si falta alguna liquidación complementaria (vacaciones) o alguna nómina del mes."
               : cuadreSs.numTc1 > 1
@@ -1697,11 +1727,12 @@ export function PagosView() {
       </div>
 
       {/* CUADRE DE LA ENTREGA: los dos documentos que manda la gestoría, cada
-          uno contra las nóminas de SU mes. Va arriba a la derecha y se pinta
-          SIEMPRE —también en meses vacíos—, porque es donde se ve de un vistazo
-          si queda algo por aprobar. En trimestre/año no: sería mezclar meses. */}
+          uno contra las nóminas de SU mes. Va en una franja a todo el ancho,
+          sobre la tabla, y se pinta SIEMPRE —también en meses vacíos—, porque es
+          donde se ve de un vistazo si queda algo por aprobar. En trimestre/año
+          no: sería mezclar meses. */}
       {!esVistaAgregada && (
-        <div className="flex justify-end">
+        <div>
           <CuadreEntregaCard
             periodo={periodo}
             bloques={bloquesCuadre}

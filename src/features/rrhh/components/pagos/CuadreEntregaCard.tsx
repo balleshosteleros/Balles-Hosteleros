@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * El cuadre de la entrega mensual de la gestoría, en una tarjeta de esquina.
+ * El cuadre de la entrega mensual de la gestoría, en una franja sobre la tabla.
  *
  * La entrega de un mes son DOS documentos que se revisan por separado, y cada uno
  * cuadra contra las nóminas de SU mes:
@@ -16,7 +16,11 @@
  * (las nóminas volcadas) frente a lo que dice el papel de la gestoría. Ver los
  * dos números es lo que permite aprobar con criterio, y no solo un tick.
  *
- * La tarjeta se pinta en todos los meses, incluso vacíos: si desapareciera cuando
+ * Va en UNA LÍNEA por documento y ocupa todo el ancho. Antes era una tarjeta alta
+ * pegada a la derecha: se comía media pantalla y dejaba un hueco blanco enorme
+ * al lado, empujando la tabla —que es lo que se viene a mirar— fuera de la vista.
+ *
+ * La franja se pinta en todos los meses, incluso vacíos: si desapareciera cuando
  * no hay nada, no habría forma de ver de un vistazo que falta una entrega.
  */
 
@@ -27,7 +31,7 @@ import { CheckCircle2, XCircle, AlertTriangle, ChevronDown, Loader2 } from "luci
 import type { HistoricoEntrada } from "@/features/rrhh/actions/nominas-aprobacion-actions";
 import { HistoricoEntrega } from "./HistoricoEntrega";
 
-/** Un bloque de la tarjeta, ya resuelto por quien la usa. */
+/** Un bloque de la franja, ya resuelto por quien la usa. */
 export interface BloqueCuadre {
   clave: "nominas" | "seguros";
   titulo: string;
@@ -45,7 +49,7 @@ export interface BloqueCuadre {
   aprobadoPor: string | null;
   /** Aclaración bajo las cifras: qué falta, o por qué no se puede comprobar. */
   nota: string | null;
-  /** Sin permiso, la tarjeta informa pero no deja actuar. */
+  /** Sin permiso, la franja informa pero no deja actuar. */
   puedeGestionar: boolean;
 }
 
@@ -90,28 +94,31 @@ export function CuadreEntregaCard({
   const [verHistorico, setVerHistorico] = useState(false);
 
   return (
-    <div className="w-full sm:w-[420px] sm:shrink-0 rounded-xl border bg-card shadow-sm overflow-hidden">
-      {bloques.map((b, i) => (
-        <Bloque
-          key={b.clave}
-          b={b}
-          primero={i === 0}
-          ocupado={ocupado === b.clave}
-          onAprobar={() => onAprobar(b.clave)}
-          onRechazar={() => onRechazar(b.clave)}
-          onReabrir={() => onReabrir(b.clave)}
-          onVerDocumentos={onVerDocumentos}
-        />
-      ))}
+    <div className="w-full overflow-hidden rounded-xl border bg-card shadow-sm">
+      {/* Los dos documentos, uno al lado del otro: es la misma entrega. En
+          pantalla estrecha se apilan. */}
+      <div className="grid grid-cols-1 divide-y lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+        {bloques.map((b) => (
+          <Bloque
+            key={b.clave}
+            b={b}
+            ocupado={ocupado === b.clave}
+            onAprobar={() => onAprobar(b.clave)}
+            onRechazar={() => onRechazar(b.clave)}
+            onReabrir={() => onReabrir(b.clave)}
+            onVerDocumentos={onVerDocumentos}
+          />
+        ))}
+      </div>
 
       {/* Todo lo que le ha pasado al mes. Va plegado: es consulta, no algo que
           haya que mirar cada día. */}
       <button
         type="button"
         onClick={() => setVerHistorico((v) => !v)}
-        className="flex w-full items-center justify-center gap-1.5 border-t px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50"
+        className="flex w-full items-center justify-center gap-1.5 border-t px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted/50"
       >
-        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", verHistorico && "rotate-180")} />
+        <ChevronDown className={cn("h-3 w-3 transition-transform", verHistorico && "rotate-180")} />
         Ver histórico
       </button>
 
@@ -122,7 +129,6 @@ export function CuadreEntregaCard({
 
 function Bloque({
   b,
-  primero,
   ocupado,
   onAprobar,
   onRechazar,
@@ -130,7 +136,6 @@ function Bloque({
   onVerDocumentos,
 }: {
   b: BloqueCuadre;
-  primero: boolean;
   ocupado: boolean;
   onAprobar: () => void;
   onRechazar: () => void;
@@ -144,69 +149,75 @@ function Bloque({
   const resuelto = b.aprobadoEn != null || b.rechazadoEn != null;
 
   return (
-    <div className={cn("p-3.5", !primero && "border-t")}>
-      <div className="mb-2.5 flex items-center justify-between gap-2">
+    <div className="px-3.5 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex min-w-0 items-baseline gap-1.5">
-          <span className="truncate text-xs font-semibold uppercase tracking-wide">{b.titulo}</span>
-          <span className="shrink-0 text-xs text-muted-foreground">· {b.mesLabel}</span>
+          <span className="truncate text-[11px] font-semibold uppercase tracking-wide">
+            {b.titulo}
+          </span>
+          <span className="shrink-0 text-[11px] text-muted-foreground">· {b.mesLabel}</span>
         </div>
+
         <Estado b={b} cuadra={cuadra} hayDatos={hayDatos} diferencia={diferencia} />
-      </div>
 
-      {/* Los DOS importes, siempre: es la comparación lo que se aprueba. */}
-      <div className="mb-2.5 flex items-end gap-4">
-        <Cifra etiqueta="Sistema" valor={b.sistema} />
-        <span className="pb-1 text-[11px] text-muted-foreground">frente a</span>
-        <Cifra etiqueta="Gestoría" valor={b.gestoria} mal={hayDatos && !cuadra} />
-      </div>
+        {/* Los DOS importes, siempre: es la comparación lo que se aprueba. */}
+        <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+          <Cifra etiqueta="Sistema" valor={b.sistema} />
+          <span className="text-[11px] text-muted-foreground">frente a</span>
+          <Cifra etiqueta="Gestoría" valor={b.gestoria} mal={hayDatos && !cuadra} />
+        </div>
 
-      <div className="flex items-center gap-2">
-        {b.aprobadoEn ? (
-          <>
-            <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-              <b className="font-semibold text-emerald-600">Aprobado</b> · {fmtFecha(b.aprobadoEn)}
-              {b.aprobadoPor ? ` por ${b.aprobadoPor}` : ""}
-            </p>
-            {b.puedeGestionar && (
-              <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={onReabrir} disabled={ocupado}>
-                {ocupado ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Reabrir"}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {b.aprobadoEn ? (
+            <>
+              <span className="text-[11px] text-muted-foreground">
+                {fmtFecha(b.aprobadoEn)}
+                {b.aprobadoPor ? ` · ${b.aprobadoPor}` : ""}
+              </span>
+              {b.puedeGestionar && (
+                <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={onReabrir} disabled={ocupado}>
+                  {ocupado ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Reabrir"}
+                </Button>
+              )}
+            </>
+          ) : b.rechazadoEn ? (
+            <span className="text-[11px] text-muted-foreground">
+              {fmtFecha(b.rechazadoEn)} · esperando la corrección
+            </span>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                className="h-7 bg-emerald-600 px-2.5 text-xs text-white hover:bg-emerald-700"
+                onClick={onAprobar}
+                disabled={!hayDatos || !b.puedeGestionar || ocupado}
+                title={!hayDatos ? "Falta el documento de la gestoría" : undefined}
+              >
+                {ocupado ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Aprobar"}
               </Button>
-            )}
-          </>
-        ) : b.rechazadoEn ? (
-          <p className="text-xs text-muted-foreground">
-            <b className="font-semibold text-destructive">Devuelto</b> · {fmtFecha(b.rechazadoEn)},
-            esperando la corrección
-          </p>
-        ) : (
-          <>
-            <Button
-              size="sm"
-              className="h-8 flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
-              onClick={onAprobar}
-              disabled={!hayDatos || !b.puedeGestionar || ocupado}
-              title={!hayDatos ? "Falta el documento de la gestoría" : undefined}
-            >
-              {ocupado ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Aprobar"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 flex-1 border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
-              onClick={onRechazar}
-              disabled={!hayDatos || !b.puedeGestionar || ocupado}
-            >
-              Rechazar
-            </Button>
-            <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={onVerDocumentos}>
-              {hayDatos ? "Ver" : "Subir"}
-            </Button>
-          </>
-        )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 border-destructive/40 px-2.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive"
+                onClick={onRechazar}
+                disabled={!hayDatos || !b.puedeGestionar || ocupado}
+              >
+                Rechazar
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={onVerDocumentos}>
+                {hayDatos ? "Ver" : "Subir"}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
+      {/* La aclaración no puede crecer la franja: una línea, y el resto al pasar
+          el ratón por encima. */}
       {b.nota && !resuelto && (
-        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{b.nota}</p>
+        <p className="mt-1.5 truncate text-[11px] text-muted-foreground" title={b.nota}>
+          {b.nota}
+        </p>
       )}
     </div>
   );
@@ -214,12 +225,14 @@ function Bloque({
 
 function Cifra({ etiqueta, valor, mal }: { etiqueta: string; valor: number | null; mal?: boolean }) {
   return (
-    <div className="min-w-0">
-      <p className="mb-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">{etiqueta}</p>
-      <p className={cn("whitespace-nowrap text-base font-semibold tabular-nums", mal && "text-destructive")}>
+    <span className="whitespace-nowrap">
+      <span className="mr-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+        {etiqueta}
+      </span>
+      <span className={cn("text-sm font-semibold tabular-nums", mal && "text-destructive")}>
         {valor == null ? "—" : fmt(valor)}
-      </p>
-    </div>
+      </span>
+    </span>
   );
 }
 
