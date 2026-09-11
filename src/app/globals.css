@@ -569,3 +569,35 @@
     animation-duration: 0.01ms;
   }
 }
+
+/* Subir de nivel: la insignia da un latido y suelta un halo de su color. Es la
+   recompensa del juego, y tiene que notarse aunque no estés mirando. */
+@keyframes points-nivel-nuevo {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0));
+  }
+  15% {
+    transform: scale(1.25);
+    filter: drop-shadow(0 0 8px rgba(255, 214, 102, 0.95));
+  }
+  40% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px rgba(255, 214, 102, 0.6));
+  }
+  60% {
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 8px rgba(255, 214, 102, 0.9));
+  }
+}
+
+.points-nivel-nuevo {
+  animation: points-nivel-nuevo 1.25s ease-in-out 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .points-nivel-nuevo {
+    animation: none;
+  }
+}

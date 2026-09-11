@@ -1,17 +1,43 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { calcularNivel, getMiBalance, getNiveles } from "@/features/toques/services/toques.service";
+import {
+  calcularNivel,
+  getMiBalance,
+  getNiveles,
+  getRecompensas,
+} from "@/features/toques/services/toques.service";
 import { COLOR_NIVEL_POR_DEFECTO } from "@/features/toques/lib/nivel-icono";
+
+/** Un peldaño de la escalera de niveles, para enseñar a dónde puede llegar. */
+export interface PointsNivelPaso {
+  nombre: string;
+  icono: string | null;
+  color: string;
+  toquesMin: number;
+  /** Ya lo tiene. */
+  alcanzado: boolean;
+  /** Es el que lleva puesto ahora. */
+  actual: boolean;
+}
 
 /** Lo que enseña la píldora de Points: en qué nivel va y cuántos points tiene. */
 export interface PointsResumen {
   userId: string;
   /** Saldo: los points que tiene ahora mismo para gastar. */
   saldo: number;
+  /** Acumulados de siempre: son los que mandan en el nivel. */
+  acumulados: number;
   nivelNombre: string;
   nivelIcono: string | null;
   nivelColor: string;
   /** Cuánto lleva del camino al siguiente nivel (0-100). */
   progresoPct: number;
+  siguienteNombre: string | null;
+  /** Points que le faltan para el siguiente nivel. */
+  faltan: number;
+  /** Los niveles del juego, en orden, con el suyo marcado. */
+  escalera: PointsNivelPaso[];
+  /** Le llega para algún premio: es lo que engancha, así que se avisa. */
+  puedeCanjear: boolean;
 }
 
 /**
@@ -27,11 +53,39 @@ export async function getPointsResumen(
   userId: string,
   empresaId: string,
 ): Promise<PointsResumen> {
-  const [balance, niveles, enPruebas] = await Promise.all([
+  const [balance, niveles, recompensas, enPruebas] = await Promise.all([
     getMiBalance(supabase, userId, empresaId),
     getNiveles(supabase, empresaId),
+    getRecompensas(supabase, empresaId).catch(() => []),
     estaEnPeriodoDePrueba(supabase, userId, empresaId),
   ]);
+
+  const nivel = calcularNivel(balance.toquesAcumulados, niveles);
+  // El nivel 0 («Pruebas») no es un peldaño del juego: es la sala de espera.
+  const peldanos = [...niveles]
+    .filter((n) => n.orden > 0)
+    .sort((a, b) => a.toquesMin - b.toquesMin);
+
+  const masBarato = recompensas
+    .filter((r) => r.activa)
+    .reduce((min, r) => (min === null || r.costeToques < min ? r.costeToques : min), null as number | null);
+
+  const escalera: PointsNivelPaso[] = peldanos.map((n) => ({
+    nombre: n.nombre,
+    icono: n.badgeIcon,
+    color: n.badgeColor || COLOR_NIVEL_POR_DEFECTO,
+    toquesMin: n.toquesMin,
+    alcanzado: !enPruebas && balance.toquesAcumulados >= n.toquesMin,
+    actual: !enPruebas && nivel.actual?.id === n.id,
+  }));
+
+  const comun = {
+    userId,
+    saldo: balance.toquesCanjeables,
+    acumulados: balance.toquesAcumulados,
+    escalera,
+    puedeCanjear: masBarato !== null && balance.toquesCanjeables >= masBarato,
+  };
 
   // En periodo de prueba todavía no juega: su insignia es «Pruebas» (el nivel
   // de orden 0) y el camino al siguiente aún no ha empezado. Es lo mismo que
@@ -39,23 +93,25 @@ export async function getPointsResumen(
   if (enPruebas) {
     const pruebas = niveles.find((n) => n.orden === 0) ?? null;
     return {
-      userId,
-      saldo: balance.toquesCanjeables,
+      ...comun,
       nivelNombre: pruebas?.nombre ?? "Pruebas",
       nivelIcono: pruebas?.badgeIcon ?? "Hourglass",
       nivelColor: pruebas?.badgeColor ?? COLOR_NIVEL_POR_DEFECTO,
       progresoPct: 0,
+      siguienteNombre: peldanos[0]?.nombre ?? null,
+      faltan: 0,
+      puedeCanjear: false,
     };
   }
 
-  const nivel = calcularNivel(balance.toquesAcumulados, niveles);
   return {
-    userId,
-    saldo: balance.toquesCanjeables,
+    ...comun,
     nivelNombre: nivel.actual?.nombre ?? "Aprendiz",
     nivelIcono: nivel.actual?.badgeIcon ?? null,
     nivelColor: nivel.actual?.badgeColor ?? COLOR_NIVEL_POR_DEFECTO,
     progresoPct: nivel.progresoPct,
+    siguienteNombre: nivel.siguiente?.nombre ?? null,
+    faltan: nivel.toquesParaSiguiente,
   };
 }
 
