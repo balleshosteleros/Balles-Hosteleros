@@ -197,6 +197,16 @@ function pasoOffboarding(estado: string | null | undefined): number {
   return ORDEN_PIPELINE.indexOf((estado ?? "") as (typeof ORDEN_PIPELINE)[number]);
 }
 
+/**
+ * Lo que se dice cuando alguien intenta llevar una ficha a «Preaviso».
+ *
+ * No es una cuestion de orden ni de rol: la columna es el hueco del trabajador
+ * que ha avisado de que se va, y solo el puede abrirlo. Ponerle ahi a mano
+ * dejaria una baja sin solicitud detras, que luego no se puede tramitar.
+ */
+const AVISO_PREAVISO_NO_SE_MUEVE =
+  "A «Preaviso» no se mueve a nadie: esa casilla se llena sola cuando el trabajador solicita su baja desde su panel y RRHH se la aprueba. Si la baja la decide la empresa, abre su ficha y pulsa «Baja contrato».";
+
 /** Nombre de la casilla tal y como se lee en el tablero. */
 function etiquetaEstado(estado: string): string {
   const cfg = (ESTADOS_CONFIG as Record<string, { label: string } | undefined>)[estado];
@@ -229,7 +239,9 @@ function destinosPermitidos(origen: string): string[] {
   // Recuperar a alguien descartado le devuelve al principio.
   if (ESTADOS_DESCARTE.includes(origen) || origen === "suspenso_formacion") permitidos.push("nuevo");
 
-  return [...new Set(permitidos)];
+  // «Preaviso» NUNCA se ofrece: esa casilla no la mueve la empresa, se llena
+  // sola cuando el trabajador pide su baja desde su panel y RRHH se la aprueba.
+  return [...new Set(permitidos)].filter((e) => e !== "preaviso");
 }
 
 /**
@@ -272,6 +284,11 @@ function revisarOrdenOffboarding(
 
   if (org === destino) return { ok: true };
 
+  // A «Preaviso» no se entra a mano NUNCA, ni avanzando desde «Empleado»: esa
+  // casilla la abre el propio trabajador al solicitar su baja desde su panel,
+  // cuando RRHH se la aprueba. La baja que decide la empresa no pasa por aquí.
+  if (destino === "preaviso") return { ok: false, error: AVISO_PREAVISO_NO_SE_MUEVE };
+
   const permitido = destinosPermitidos(org).includes(destino);
   if (permitido) return { ok: true };
 
@@ -288,6 +305,37 @@ function revisarOrdenOffboarding(
   if (hasta === desde + 1 && desde >= 0) return { ok: true };
 
   return { ok: false, error: avisoDestinos(org) };
+}
+
+/**
+ * ¿Este empleado ha pedido él mismo su baja y se la han aprobado?
+ *
+ * Es lo único que abre la casilla «Preaviso». Se pregunta por la solicitud, no
+ * por el rol de quien mueve: la solicitud o está o no está.
+ */
+async function tienePreavisoDelTrabajador(
+  supabase: Awaited<ReturnType<typeof getContext>>["supabase"],
+  empresaId: string,
+  empleadoId: string | null,
+): Promise<boolean> {
+  if (!empleadoId) return false;
+  const { data: emp } = await supabase
+    .from("empleados")
+    .select("user_id")
+    .eq("id", empleadoId)
+    .maybeSingle();
+  const userId = (emp?.user_id as string | null) ?? null;
+  if (!userId) return false;
+  const { data: sol } = await supabase
+    .from("solicitudes_personal")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .eq("user_id", userId)
+    .eq("subtipo", "baja_contrato")
+    .eq("estado", "aprobada")
+    .limit(1)
+    .maybeSingle();
+  return !!sol?.id;
 }
 
 export async function moverCandidatoFase(
@@ -312,6 +360,23 @@ export async function moverCandidatoFase(
         error: "YA_EMPLEADO",
         empleadoId: cand.empleado_id,
       } as const;
+    }
+
+    // «PREAVISO» NO LO ABRE LA EMPRESA. La casilla es el hueco del trabajador
+    // que ha avisado de que se va, y a ella solo se llega por un camino: él pide
+    // su baja desde su panel y RRHH se la aprueba —esa aprobación es la que
+    // mueve la ficha aquí—. Por eso no se comprueba quién mueve, sino si esa
+    // solicitud existe: sin ella, la ficha quedaría en preaviso sin baja que
+    // tramitar. NI SIQUIERA DIRECCIÓN se lo salta; para la baja que decide la
+    // empresa está «Baja contrato» en la ficha, que pregunta el tipo y los
+    // hechos.
+    if (estado === "preaviso" && cand?.estado !== "preaviso") {
+      const tiene = await tienePreavisoDelTrabajador(
+        supabase,
+        empresaId,
+        (cand?.empleado_id as string | null) ?? null,
+      );
+      if (!tiene) return { ok: false, error: AVISO_PREAVISO_NO_SE_MUEVE } as const;
     }
 
     // ORDEN DE LA SALIDA: ni saltos ni marcha atrás (salvo desde Preaviso).
@@ -641,6 +706,12 @@ export async function moverCandidatoAVacante(
 
     if (cand?.promovido_at) {
       return { ok: false, error: "Este candidato ya es empleado; no se puede cambiar de vacante." };
+    }
+
+    // Cambiar de vacante tampoco es una puerta trasera a «Preaviso»: esa casilla
+    // solo la abre el trabajador pidiendo su baja.
+    if (estado === "preaviso") {
+      return { ok: false, error: AVISO_PREAVISO_NO_SE_MUEVE };
     }
 
     // Verifica que la vacante destino pertenece a la empresa.

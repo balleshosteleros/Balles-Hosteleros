@@ -47,6 +47,7 @@ import {
   DecisionPreavisoDialog,
   type ModoDecisionPreaviso,
 } from "@/features/rrhh/components/reclutamiento/DecisionPreavisoDialog";
+import { BajaContratoEmpresaDialog } from "@/features/rrhh/components/reclutamiento/BajaContratoEmpresaDialog";
 import {
   getReclutamientoConfigGeneral,
   type ReclutamientoConfigGeneral,
@@ -698,6 +699,9 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     candidato: Candidato;
     modo: ModoDecisionPreaviso;
   } | null>(null);
+  // Baja que decide la EMPRESA (despido, fin de contrato, no supera la prueba):
+  // pide el tipo de baja y los hechos, y de ahí salen la gestoría y su carta.
+  const [bajaEmpresa, setBajaEmpresa] = useState<Candidato | null>(null);
 
   const handleDragStart = useCallback((_e: React.DragEvent, c: Candidato) => {
     draggedCandidato.current = c;
@@ -814,7 +818,28 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
         );
         return;
       }
-      setDecisionPreaviso({ candidato: c, modo: "baja" });
+      // Dos bajas distintas, y la casilla de origen dice cuál es. Viene de
+      // «Preaviso» = la pidió él: se cierra el preaviso (qué se hizo, si nos
+      // interesaba retenerle) y se tramita con lo que él firmó. Viene de
+      // «Empleado» o «Prueba» = la decide la empresa: hay que preguntar el tipo
+      // de baja y los hechos. Antes salía siempre el cierre de preaviso, y al
+      // despedir te hacía rellenar un preaviso que no existía para acabar
+      // rechazando el movimiento.
+      if (c.fase === "preaviso") {
+        setDecisionPreaviso({ candidato: c, modo: "baja" });
+      } else {
+        setBajaEmpresa(c);
+      }
+      return;
+    }
+    // «Preaviso» no se arrastra: la casilla es del trabajador que ha avisado de
+    // que se va, y solo la abre su solicitud de baja aprobada. Se dice aquí para
+    // no mover la tarjeta y que el servidor la devuelva.
+    if (estadoDestino === "preaviso") {
+      toast.error("A «Preaviso» no se mueve a nadie", {
+        description:
+          "Esa casilla se llena sola cuando el trabajador solicita su baja desde su panel y RRHH se la aprueba. Si la baja la decide la empresa, arrástrale a «Baja contrato» o pulsa «Baja contrato» en su ficha.",
+      });
       return;
     }
     // Vuelta de «Preaviso» a «Empleado»: se negoció y se queda. Tampoco es un
@@ -1009,6 +1034,22 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
           }
         />
       )}
+
+      {/* Baja que decide la EMPRESA, al arrastrar desde «Empleado» o «Prueba». */}
+      <BajaContratoEmpresaDialog
+        open={!!bajaEmpresa}
+        onOpenChange={(o) => !o && setBajaEmpresa(null)}
+        candidatoId={bajaEmpresa?.id ?? null}
+        empleadoNombre={
+          bajaEmpresa
+            ? `${bajaEmpresa.nombre} ${bajaEmpresa.apellidos ?? ""}`.trim()
+            : ""
+        }
+        onDone={() => {
+          setBajaEmpresa(null);
+          onMoved?.();
+        }}
+      />
 
       {/* Confirmación al pasar a EX-EMPLEADOS: es la baja definitiva. */}
       <Dialog open={!!exEmpleadoConfirm} onOpenChange={(o) => !o && setExEmpleadoConfirm(null)}>

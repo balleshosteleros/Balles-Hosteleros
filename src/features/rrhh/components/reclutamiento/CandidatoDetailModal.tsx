@@ -600,12 +600,16 @@ export function CandidatoDetailModal({
                   <SelectValue placeholder="Fase de destino" />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* «Preaviso» no se ofrece: esa casilla solo la abre el
+                      trabajador al solicitar su baja desde su panel. */}
                   {FASES_PRINCIPALES_ORDER.flatMap((fp) =>
-                    FASES_PRINCIPALES[fp].estados.map((est) => (
-                      <SelectItem key={est} value={est} className="text-xs">
-                        {FASES_PRINCIPALES[fp].label} · {ESTADOS_CONFIG[est].label}
-                      </SelectItem>
-                    )),
+                    FASES_PRINCIPALES[fp].estados
+                      .filter((est) => est !== "preaviso")
+                      .map((est) => (
+                        <SelectItem key={est} value={est} className="text-xs">
+                          {FASES_PRINCIPALES[fp].label} · {ESTADOS_CONFIG[est].label}
+                        </SelectItem>
+                      )),
                   )}
                 </SelectContent>
               </Select>
