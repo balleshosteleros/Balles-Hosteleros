@@ -26,8 +26,8 @@ import {
   CronogramaEmpleadoTab,
   FormacionEmpleadoTab,
   ComunicadosEmpleadoTab,
-  DocumentosEmpleadoTab,
 } from "@/features/rrhh/components/empleados/PanelesEmpleadoTabs";
+import { MisDocumentosView } from "@/features/mi-panel/components/MisDocumentosView";
 import { EquipoOrganigramaView } from "@/features/mi-panel/components/EquipoOrganigramaView";
 import {
   DatosPersonalesForm,
@@ -306,7 +306,11 @@ export default function FichaEmpleadoPage() {
           </div>
         );
       case "horarios":
-        return <div className="p-6"><HorariosTab horario={horarioActual} /></div>;
+        return (
+          <div className="p-6">
+            <HorariosTab empleadoId={empleadoRegistro.id} horario={horarioActual} />
+          </div>
+        );
       case "solicitudes":
         return (
           <div className="p-6">
@@ -349,7 +353,9 @@ export default function FichaEmpleadoPage() {
       case "comunicados":
         return <ComunicadosEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "documentos":
-        return <DocumentosEmpleadoTab empleadoId={empleadoRegistro.id} />;
+        // Sus carpetas, la misma pieza que él abre en su panel: las ocho
+        // carpetas, con lo que hay dentro de cada una.
+        return <MisDocumentosView empleadoId={empleadoRegistro.id} />;
       case "equipo":
         // El organigrama de su empresa, el mismo que él abre en su panel.
         return <div className="h-full min-h-[32rem]"><EquipoOrganigramaView /></div>;

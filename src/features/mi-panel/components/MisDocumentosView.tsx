@@ -30,6 +30,12 @@ import {
   listMisNominas,
   getMiNominaUrl,
 } from "@/features/rrhh/actions/nominas-archivo-actions";
+import {
+  getDocumentosEmpleado,
+  listNominasEmpleado,
+  getDocumentoEmpleadoUrlFicha,
+  getNominaEmpleadoUrlFicha,
+} from "@/features/rrhh/actions/ficha-paneles-actions";
 import { formatearFechaEs } from "@/shared/lib/fecha";
 
 /** Una nómina publicada, para la carpeta "Nóminas". */
@@ -75,12 +81,14 @@ function tamanoLegible(bytes: number | null): string {
  * `rrhh_pagos_nominas`, que es donde la deja la gestoría. Si el mes tiene varias
  * (finiquito + nómina), se descargan combinadas en un solo PDF.
  */
-function FilaNomina({ nomina }: { nomina: MiNomina }) {
+function FilaNomina({ nomina, empleadoId }: { nomina: MiNomina; empleadoId?: string }) {
   const [bajando, setBajando] = useState(false);
 
   const descargar = async () => {
     setBajando(true);
-    const res = await getMiNominaUrl(nomina.periodo);
+    const res = empleadoId
+      ? await getNominaEmpleadoUrlFicha(empleadoId, nomina.periodo)
+      : await getMiNominaUrl(nomina.periodo);
     setBajando(false);
     if (res.ok) window.open(res.url, "_blank", "noopener,noreferrer");
     else toast.error(res.error);
@@ -107,12 +115,14 @@ function FilaNomina({ nomina }: { nomina: MiNomina }) {
   );
 }
 
-function FilaDocumento({ doc }: { doc: DocumentoEmpleado }) {
+function FilaDocumento({ doc, empleadoId }: { doc: DocumentoEmpleado; empleadoId?: string }) {
   const [bajando, setBajando] = useState(false);
 
   const descargar = async () => {
     setBajando(true);
-    const res = await getDocumentoEmpleadoUrl(doc.id);
+    const res = empleadoId
+      ? await getDocumentoEmpleadoUrlFicha(empleadoId, doc.id)
+      : await getDocumentoEmpleadoUrl(doc.id);
     setBajando(false);
     if (res.ok && res.url) {
       window.open(res.url, "_blank", "noopener,noreferrer");
@@ -143,16 +153,26 @@ function FilaDocumento({ doc }: { doc: DocumentoEmpleado }) {
   );
 }
 
-export function MisDocumentosView() {
+/**
+ * Las carpetas personales del trabajador.
+ *
+ * Sin `empleadoId` son las suyas, tal y como las abre él en el móvil o en el
+ * ordenador. Con `empleadoId`, las de ese trabajador vistas desde su ficha: las
+ * MISMAS carpetas, los mismos documentos y las mismas nóminas publicadas, para
+ * que la empresa vea exactamente lo que él tiene delante.
+ */
+export function MisDocumentosView({ empleadoId }: { empleadoId?: string } = {}) {
   const [carpetaActiva, setCarpetaActiva] = useState<Carpeta | null>(null);
   const [docs, setDocs] = useState<Record<CategoriaDocumento, DocumentoEmpleado[]> | null>(null);
   const [nominas, setNominas] = useState<MiNomina[]>([]);
 
   const cargar = useCallback(async () => {
-    const [res, nom] = await Promise.all([listMisDocumentos(), listMisNominas()]);
+    const [res, nom] = empleadoId
+      ? await Promise.all([getDocumentosEmpleado(empleadoId), listNominasEmpleado(empleadoId)])
+      : await Promise.all([listMisDocumentos(), listMisNominas()]);
     setDocs(res.ok ? res.data : null);
     setNominas(nom.ok ? nom.data : []);
-  }, []);
+  }, [empleadoId]);
 
   useEffect(() => {
     void cargar();
@@ -182,7 +202,7 @@ export function MisDocumentosView() {
             className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Mis documentos
+            {empleadoId ? "Documentos" : "Mis documentos"}
           </button>
           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-medium">{carpetaActiva.nombre}</span>
@@ -205,17 +225,18 @@ export function MisDocumentosView() {
             <Inbox className="h-8 w-8 mb-2" />
             <p className="text-sm font-medium">Esta carpeta está vacía</p>
             <p className="text-xs mt-1 max-w-sm">
-              Cuando RRHH publique documentos en {carpetaActiva.nombre.toLowerCase()},
-              aparecerán aquí para descarga.
+              {empleadoId
+                ? `Cuando se publiquen documentos en ${carpetaActiva.nombre.toLowerCase()}, aparecerán aquí.`
+                : `Cuando RRHH publique documentos en ${carpetaActiva.nombre.toLowerCase()}, aparecerán aquí para descarga.`}
             </p>
           </Card>
         ) : (
           <div className="space-y-2">
             {nominasCarpeta.map((n) => (
-              <FilaNomina key={n.periodo} nomina={n} />
+              <FilaNomina key={n.periodo} nomina={n} empleadoId={empleadoId} />
             ))}
             {lista.map((d) => (
-              <FilaDocumento key={d.id} doc={d} />
+              <FilaDocumento key={d.id} doc={d} empleadoId={empleadoId} />
             ))}
           </div>
         )}
@@ -228,10 +249,12 @@ export function MisDocumentosView() {
       <div>
         <h2 className="text-xl font-semibold flex items-center gap-2">
           <Folder className="h-5 w-5 text-primary" />
-          Mis documentos
+          {empleadoId ? "Documentos" : "Mis documentos"}
         </h2>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Accede a tus carpetas personales publicadas por RRHH.
+          {empleadoId
+            ? "Sus carpetas personales, tal y como las ve él."
+            : "Accede a tus carpetas personales publicadas por RRHH."}
         </p>
       </div>
 

@@ -72,10 +72,61 @@ function sumarDias(fechaISO: string, n: number): string {
 }
 
 /**
- * Horario semanal del empleado autenticado (lunes→domingo) resuelto desde
- * planificación, turnos directos y patrones. `offsetSemanas` desplaza la semana
- * (0 = actual, -1 = anterior, +1 = siguiente). Lee con el cliente admin igual
- * que el resto del Inicio móvil porque consulta el propio dato del usuario.
+ * Horario semanal de UN empleado (lunes→domingo) resuelto desde planificación,
+ * turnos directos y patrones. `offsetSemanas` desplaza la semana (0 = actual,
+ * -1 = anterior, +1 = siguiente).
+ *
+ * Es la misma semana que ve el trabajador en su móvil, en su panel de ordenador
+ * y la que RRHH ve en su ficha: una sola lectura para los tres sitios.
+ */
+export async function getHorarioSemanaDeEmpleado(
+  empleadoId: string,
+  empresaId: string,
+  offsetSemanas = 0,
+): Promise<HorarioSemana> {
+  const admin = createAdminClient();
+  const tz = await getZonaHorariaEmpresa(admin, empresaId || null);
+  const { fecha: hoy } = ahoraEnZona(tz);
+  const fechaBase = sumarDias(hoy, offsetSemanas * 7);
+  const { lunes, domingo } = semanaDeFecha(fechaBase);
+  const diasVacios = semanaVacia(lunes, hoy);
+
+  if (!empleadoId || !empresaId) {
+    return { disponible: false, lunes, domingo, dias: diasVacios, totalHoras: 0 };
+  }
+
+  const dias: DiaHorario[] = await Promise.all(
+    diasVacios.map(async (d) => {
+      try {
+        const horario = await getHorarioDia(admin, empresaId, empleadoId, d.fecha);
+        return { ...d, horario };
+      } catch {
+        return d;
+      }
+    }),
+  );
+
+  return { disponible: true, lunes, domingo, dias, totalHoras: totalHorasSemana(dias) };
+}
+
+/** Los siete días de la semana sin horario todavía resuelto. */
+function semanaVacia(lunes: string, hoy: string): DiaHorario[] {
+  return DIAS_SEMANA.map((nombre, i) => {
+    const fecha = sumarDias(lunes, i);
+    return {
+      fecha,
+      diaSemana: nombre,
+      diaNum: Number(fecha.slice(8, 10)),
+      esHoy: fecha === hoy,
+      horario: { tipo: "ninguno" as const },
+    };
+  });
+}
+
+/**
+ * La semana del trabajador que está mirando su propio horario. Resuelve su
+ * ficha en la empresa ACTIVA: quien trabaja en las dos tiene una ficha en cada
+ * una, y sin ese filtro salía la que quisiera la base de datos.
  */
 export async function getMobileHorarioSemana(
   offsetSemanas = 0,
@@ -93,49 +144,23 @@ export async function getMobileHorarioSemana(
   const fechaBase = sumarDias(hoy, offsetSemanas * 7);
   const { lunes, domingo } = semanaDeFecha(fechaBase);
 
-  const diasVacios: DiaHorario[] = DIAS_SEMANA.map((nombre, i) => {
-    const fecha = sumarDias(lunes, i);
-    return {
-      fecha,
-      diaSemana: nombre,
-      diaNum: Number(fecha.slice(8, 10)),
-      esHoy: fecha === hoy,
-      horario: { tipo: "ninguno" as const },
-    };
-  });
-
   const noDisponible: HorarioSemana = {
     disponible: false,
     lunes,
     domingo,
-    dias: diasVacios,
+    dias: semanaVacia(lunes, hoy),
     totalHoras: 0,
   };
-  if (!user) return noDisponible;
+  if (!user || !empresaActivaId) return noDisponible;
 
   const { data: empleado } = await admin
     .from("empleados")
     .select("id")
     .eq("user_id", user.id)
+    .eq("empresa_id", empresaActivaId)
     .maybeSingle();
 
-  if (!empleado?.id || !empresaActivaId) return noDisponible;
+  if (!empleado?.id) return noDisponible;
 
-  const dias: DiaHorario[] = await Promise.all(
-    diasVacios.map(async (d) => {
-      try {
-        const horario = await getHorarioDia(
-          admin,
-          empresaActivaId,
-          empleado.id as string,
-          d.fecha,
-        );
-        return { ...d, horario };
-      } catch {
-        return d;
-      }
-    }),
-  );
-
-  return { disponible: true, lunes, domingo, dias, totalHoras: totalHorasSemana(dias) };
+  return getHorarioSemanaDeEmpleado(empleado.id as string, empresaActivaId, offsetSemanas);
 }

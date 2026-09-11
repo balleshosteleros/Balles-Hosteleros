@@ -15,6 +15,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { urlNominasDeMes } from "@/features/rrhh/services/nominas/nomina-url";
 import type { CategoriaDocumento, DocumentoEmpleado } from "@/features/mi-panel/actions/mis-documentos-actions";
 
 /** Empleado de la ficha, atado a la empresa activa. Null si no es de ella. */
@@ -142,8 +143,9 @@ export async function getFormacionEmpleado(
     const ctx = await resolverEmpleado(empleadoId);
     if (!ctx) return { ok: false, data: [], error: "Empleado no encontrado" };
 
-    // Sus cursos son los de los PUESTOS que ocupa: el cronograma y la formación
-    // cuelgan del puesto, no del rol.
+    // Ve lo mismo que él en su portal: los cursos GENERALES de la empresa y,
+    // además, los de los PUESTOS que ocupa. Solo publicados; la Escuela es otro
+    // portal (el de los alumnos) y no cuenta como su formación.
     const { data: filas } = await ctx.admin
       .from("empleado_puestos")
       .select("puesto_id, puesto_nombre, es_principal")
@@ -152,20 +154,29 @@ export async function getFormacionEmpleado(
     const puestoIds = (filas ?? [])
       .map((f) => f.puesto_id as string | null)
       .filter((id): id is string => !!id);
-    if (puestoIds.length === 0) return { ok: true, data: [] };
 
-    const [cursosR, puestosR] = await Promise.all([
+    const [generalesR, dePuestoR, puestosR] = await Promise.all([
       ctx.admin
         .from("formacion_cursos")
         .select("id, titulo, puesto_id")
         .eq("empresa_id", ctx.empresaId)
-        .neq("ambito", "escuela")
-        .in("puesto_id", puestoIds)
+        .eq("ambito", "general")
+        .eq("publicado", true)
         .order("orden", { ascending: true }),
+      puestoIds.length > 0
+        ? ctx.admin
+            .from("formacion_cursos")
+            .select("id, titulo, puesto_id")
+            .eq("empresa_id", ctx.empresaId)
+            .eq("ambito", "puesto")
+            .eq("publicado", true)
+            .in("puesto_id", puestoIds)
+            .order("orden", { ascending: true })
+        : Promise.resolve({ data: [] as { id: string; titulo: string; puesto_id: string | null }[] }),
       ctx.admin.from("puestos").select("id, nombre").eq("empresa_id", ctx.empresaId),
     ]);
 
-    const cursos = cursosR.data ?? [];
+    const cursos = [...(generalesR.data ?? []), ...(dePuestoR.data ?? [])];
     if (cursos.length === 0) return { ok: true, data: [] };
     const cursoIds = cursos.map((c) => c.id as string);
 
@@ -313,11 +324,11 @@ const MESES_ES = [
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
 
-/** "2026-07" → "julio 2026". */
+/** "2026-07" → "Julio 2026". */
 function nombreMesPeriodo(periodo: string): string {
   const [y, m] = (periodo ?? "").split("-");
   const mes = MESES_ES[Number(m) - 1];
-  return mes ? `${mes} ${y}` : periodo;
+  return mes ? `${mes.charAt(0).toUpperCase()}${mes.slice(1)} ${y}` : periodo;
 }
 
 function grupoVacio(): Record<CategoriaDocumento, DocumentoEmpleado[]> {
@@ -333,7 +344,7 @@ function grupoVacio(): Record<CategoriaDocumento, DocumentoEmpleado[]> {
   };
 }
 
-/** Su carpeta de documentos, igual que la ve él (documentos + nóminas). */
+/** Los documentos de su expediente, los mismos que él abre en su carpeta. */
 export async function getDocumentosEmpleado(
   empleadoId: string,
 ): Promise<{ ok: boolean; data: Record<CategoriaDocumento, DocumentoEmpleado[]>; error?: string }> {
@@ -341,26 +352,15 @@ export async function getDocumentosEmpleado(
     const ctx = await resolverEmpleado(empleadoId);
     if (!ctx) return { ok: false, data: grupoVacio(), error: "Empleado no encontrado" };
 
-    const [docsR, nominasR] = await Promise.all([
-      ctx.admin
-        .from("documentos_empleado")
-        .select("id, categoria, nombre, tipo_mime, tamano_bytes, created_at")
-        .eq("empresa_id", ctx.empresaId)
-        .eq("empleado_id", ctx.empleadoId)
-        .order("created_at", { ascending: false }),
-      ctx.admin
-        .from("rrhh_pagos_nominas")
-        .select("id, periodo, orden, created_at, nomina_path")
-        .eq("empresa_id", ctx.empresaId)
-        .eq("empleado_id", ctx.empleadoId)
-        .not("nomina_path", "is", null)
-        .neq("revision_estado", "denegada")
-        .order("periodo", { ascending: false })
-        .order("orden", { ascending: true }),
-    ]);
+    const { data: filas } = await ctx.admin
+      .from("documentos_empleado")
+      .select("id, categoria, nombre, tipo_mime, tamano_bytes, created_at")
+      .eq("empresa_id", ctx.empresaId)
+      .eq("empleado_id", ctx.empleadoId)
+      .order("created_at", { ascending: false });
 
     const grupos = grupoVacio();
-    for (const row of docsR.data ?? []) {
+    for (const row of filas ?? []) {
       const r = row as {
         id: string; categoria: CategoriaDocumento; nombre: string;
         tipo_mime: string | null; tamano_bytes: number | null; created_at: string;
@@ -376,25 +376,95 @@ export async function getDocumentosEmpleado(
       });
     }
 
-    const nominas = nominasR.data ?? [];
-    for (const row of nominas) {
-      const r = row as { id: string; periodo: string; orden: number; created_at: string };
-      const total = nominas.filter((x) => (x as { periodo: string }).periodo === r.periodo).length;
-      const sufijo = total > 1 ? ` (${(r.orden ?? 0) + 1} de ${total})` : "";
-      grupos.nominas.push({
-        id: `nom:${r.id}`,
-        categoria: "nominas",
-        nombre: `Nómina ${nombreMesPeriodo(r.periodo)}${sufijo}`,
-        tipoMime: "application/pdf",
-        tamanoBytes: null,
-        fecha: (r.created_at ?? "").slice(0, 10),
-      });
-    }
-
     return { ok: true, data: grupos };
   } catch (err) {
     console.error("[ficha-paneles] getDocumentosEmpleado:", err);
     return { ok: false, data: grupoVacio(), error: friendlyError(err, "documentos") };
+  }
+}
+
+/**
+ * Sus nóminas, agrupadas por mes igual que en su carpeta.
+ *
+ * Solo salen las de meses YA CONFIRMADOS por RRHH, que son las únicas que él
+ * ve: mientras el mes está en borrador la nómina existe, pero no se le ha
+ * publicado, y la ficha no debe enseñar algo que él todavía no tiene.
+ */
+export async function listNominasEmpleado(
+  empleadoId: string,
+): Promise<{ ok: boolean; data: { periodo: string; periodoLabel: string; documentos: number }[]; error?: string }> {
+  try {
+    const ctx = await resolverEmpleado(empleadoId);
+    if (!ctx) return { ok: false, data: [], error: "Empleado no encontrado" };
+
+    const [filasR, mesesR] = await Promise.all([
+      ctx.admin
+        .from("rrhh_pagos_nominas")
+        .select("periodo")
+        .eq("empresa_id", ctx.empresaId)
+        .eq("empleado_id", ctx.empleadoId)
+        .not("nomina_path", "is", null),
+      ctx.admin
+        .from("rrhh_nominas_mes")
+        .select("periodo, confirmado_en")
+        .eq("empresa_id", ctx.empresaId)
+        .not("confirmado_en", "is", null),
+    ]);
+
+    const confirmados = new Set(
+      (mesesR.data ?? []).map((m) => (m as { periodo: string }).periodo),
+    );
+
+    const porMes = new Map<string, number>();
+    for (const f of filasR.data ?? []) {
+      const p = (f as { periodo: string }).periodo;
+      if (!confirmados.has(p)) continue;
+      porMes.set(p, (porMes.get(p) ?? 0) + 1);
+    }
+
+    const data = [...porMes.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([periodo, documentos]) => ({
+        periodo,
+        periodoLabel: nombreMesPeriodo(periodo),
+        documentos,
+      }));
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[ficha-paneles] listNominasEmpleado:", err);
+    return { ok: false, data: [], error: friendlyError(err, "nóminas") };
+  }
+}
+
+/** El PDF de la nómina de un mes (combinado si ese mes tiene varias). */
+export async function getNominaEmpleadoUrlFicha(
+  empleadoId: string,
+  periodo: string,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const ctx = await resolverEmpleado(empleadoId);
+    if (!ctx) return { ok: false, error: "Empleado no encontrado" };
+
+    const { data: filas } = await ctx.admin
+      .from("rrhh_pagos_nominas")
+      .select("nomina_path, orden")
+      .eq("empresa_id", ctx.empresaId)
+      .eq("empleado_id", ctx.empleadoId)
+      .eq("periodo", periodo)
+      .order("orden", { ascending: true });
+    const paths = (filas ?? [])
+      .map((r) => (r as { nomina_path: string | null }).nomina_path)
+      .filter((p): p is string => !!p);
+
+    return await urlNominasDeMes({
+      empresaId: ctx.empresaId,
+      empleadoId: ctx.empleadoId,
+      periodo,
+      paths,
+    });
+  } catch (err) {
+    console.error("[ficha-paneles] getNominaEmpleadoUrlFicha:", err);
+    return { ok: false, error: friendlyError(err, "nómina") };
   }
 }
 
@@ -410,23 +480,6 @@ export async function getDocumentoEmpleadoUrlFicha(
   try {
     const ctx = await resolverEmpleado(empleadoId);
     if (!ctx) return { ok: false, error: "Empleado no encontrado" };
-
-    if (documentoId.startsWith("nom:")) {
-      const { data: nom } = await ctx.admin
-        .from("rrhh_pagos_nominas")
-        .select("nomina_path")
-        .eq("id", documentoId.slice(4))
-        .eq("empresa_id", ctx.empresaId)
-        .eq("empleado_id", ctx.empleadoId)
-        .maybeSingle();
-      const path = (nom as { nomina_path: string | null } | null)?.nomina_path ?? null;
-      if (!path) return { ok: false, error: "Nómina no disponible" };
-      const { data: signed, error } = await ctx.admin.storage
-        .from("rrhh-nominas")
-        .createSignedUrl(path, 60 * 60);
-      if (error) throw error;
-      return { ok: true, url: signed?.signedUrl };
-    }
 
     const { data: doc } = await ctx.admin
       .from("documentos_empleado")

@@ -22,6 +22,7 @@ import {
 } from "@/features/rrhh/services/nominas/procesar-nominas";
 import { registrarSubidaHistorico } from "@/features/rrhh/services/nominas/nominas-gestoria";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { urlNominasDeMes } from "@/features/rrhh/services/nominas/nomina-url";
 
 const BUCKET = "rrhh-nominas";
 const SIGNED_URL_TTL = 60 * 10; // 10 min para verla
@@ -266,7 +267,6 @@ export async function getNominaArchivoUrl(
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autorizado" };
-    const admin = createAdminClient();
 
     // Todas las nóminas individuales de ese empleado/mes, en orden.
     const { data: indiv } = await supabase
@@ -289,60 +289,8 @@ export async function getNominaArchivoUrl(
       const p = pago?.nomina_path as string | null | undefined;
       if (p) paths = [p];
     }
-    if (paths.length === 0) return { ok: false, error: "Sin nómina adjunta" };
 
-    // Una sola: URL directa.
-    if (paths.length === 1) {
-      const signed = await admin.storage.from(BUCKET).createSignedUrl(paths[0], SIGNED_URL_TTL);
-      if (signed.error || !signed.data?.signedUrl) {
-        return { ok: false, error: signed.error?.message ?? "No se pudo generar el enlace" };
-      }
-      return { ok: true, url: signed.data.signedUrl };
-    }
-
-    // Varias: combinar los PDFs en uno (páginas de imágenes se incrustan también).
-    const { PDFDocument } = await import("pdf-lib");
-    const combinado = await PDFDocument.create();
-    for (const path of paths) {
-      const dl = await admin.storage.from(BUCKET).download(path);
-      if (dl.error || !dl.data) continue;
-      const bytes = new Uint8Array(await dl.data.arrayBuffer());
-      const esPdf = path.toLowerCase().endsWith(".pdf");
-      try {
-        if (esPdf) {
-          const src = await PDFDocument.load(bytes, { ignoreEncryption: true });
-          const pgs = await combinado.copyPages(src, src.getPageIndices());
-          pgs.forEach((pg) => combinado.addPage(pg));
-        } else {
-          // Imagen (jpg/png): una página con la imagen a tamaño A4.
-          const img = path.toLowerCase().endsWith(".png")
-            ? await combinado.embedPng(bytes)
-            : await combinado.embedJpg(bytes);
-          const page = combinado.addPage([595, 842]);
-          const s = Math.min(595 / img.width, 842 / img.height);
-          page.drawImage(img, {
-            x: (595 - img.width * s) / 2,
-            y: (842 - img.height * s) / 2,
-            width: img.width * s,
-            height: img.height * s,
-          });
-        }
-      } catch (e) {
-        console.error("[rrhh] combinar nómina:", path, e);
-      }
-    }
-    const combinadoBytes = await combinado.save();
-    // Subir el combinado con un nombre efímero y firmar su URL.
-    const combinadoPath = `${empresaId}/${periodo}/${empleadoId}-combinado.pdf`;
-    const up = await admin.storage
-      .from(BUCKET)
-      .upload(combinadoPath, Buffer.from(combinadoBytes), { upsert: true, contentType: "application/pdf" });
-    if (up.error) return { ok: false, error: up.error.message };
-    const signed = await admin.storage.from(BUCKET).createSignedUrl(combinadoPath, SIGNED_URL_TTL);
-    if (signed.error || !signed.data?.signedUrl) {
-      return { ok: false, error: signed.error?.message ?? "No se pudo generar el enlace" };
-    }
-    return { ok: true, url: signed.data.signedUrl };
+    return await urlNominasDeMes({ empresaId, empleadoId, periodo, paths });
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Error" };
   }

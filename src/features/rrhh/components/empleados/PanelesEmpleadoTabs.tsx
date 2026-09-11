@@ -9,13 +9,12 @@
  * Points, cursos en Formación, comunicados en Gerencia…).
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  Trophy, GraduationCap, Megaphone, Files, CalendarClock,
-  Download, CheckCircle2, Circle, Inbox,
+  Trophy, GraduationCap, Megaphone, CalendarClock,
+  CheckCircle2, Circle, Inbox,
 } from "lucide-react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
@@ -25,13 +24,10 @@ import {
   getPointsEmpleado,
   getFormacionEmpleado,
   getComunicadosEmpleado,
-  getDocumentosEmpleado,
-  getDocumentoEmpleadoUrlFicha,
   type PointsEmpleado,
   type CursoEmpleado,
   type ComunicadoEmpleado,
 } from "@/features/rrhh/actions/ficha-paneles-actions";
-import type { CategoriaDocumento, DocumentoEmpleado } from "@/features/mi-panel/actions/mis-documentos-actions";
 import {
   getMiCronograma,
   type MiCronogramaDepartamento,
@@ -207,7 +203,7 @@ export function FormacionEmpleadoTab({ empleadoId }: { empleadoId: string }) {
   }, [empleadoId]);
 
   if (cargando) return <LoadingSpinner className="py-16" />;
-  if (cursos.length === 0) return <Vacio texto="Sus puestos no tienen formación asignada." />;
+  if (cursos.length === 0) return <Vacio texto="No tiene ningún curso publicado." />;
 
   return (
     <Marco>
@@ -279,84 +275,6 @@ export function ComunicadosEmpleadoTab({ empleadoId }: { empleadoId: string }) {
           </div>
         ))}
       </Card>
-    </Marco>
-  );
-}
-
-/* ─── DOCUMENTOS ──────────────────────────────────────────────────────── */
-
-const CARPETAS: { clave: CategoriaDocumento; nombre: string }[] = [
-  { clave: "nominas", nombre: "Nóminas" },
-  { clave: "contratos", nombre: "Contratos" },
-  { clave: "justificantes", nombre: "Justificantes" },
-  { clave: "registros-jornada", nombre: "Registros de jornada" },
-  { clave: "entregas", nombre: "Entregas" },
-  { clave: "sanciones", nombre: "Sanciones" },
-  { clave: "bajas-medicas", nombre: "Bajas médicas" },
-  { clave: "otros", nombre: "Otros" },
-];
-
-export function DocumentosEmpleadoTab({ empleadoId }: { empleadoId: string }) {
-  const { empresaActual } = useEmpresa();
-  const [docs, setDocs] = useState<Record<CategoriaDocumento, DocumentoEmpleado[]> | null>(null);
-  const [cargando, setCargando] = useState(true);
-  const [abriendo, setAbriendo] = useState<string | null>(null);
-  useGlobalLoadingSync(cargando);
-
-  useEffect(() => {
-    let activo = true;
-    setCargando(true);
-    getDocumentosEmpleado(empleadoId)
-      .then((r) => { if (activo) setDocs(r.ok ? r.data : null); })
-      .finally(() => { if (activo) setCargando(false); });
-    return () => { activo = false; };
-  }, [empleadoId]);
-
-  const abrir = useCallback(async (documentoId: string) => {
-    setAbriendo(documentoId);
-    const r = await getDocumentoEmpleadoUrlFicha(empleadoId, documentoId);
-    setAbriendo(null);
-    // Los documentos se abren en una pestaña aparte: la ficha no se pierde.
-    if (r.ok && r.url) window.open(r.url, "_blank", "noopener,noreferrer");
-  }, [empleadoId]);
-
-  if (cargando) return <LoadingSpinner className="py-16" />;
-  const conDocs = CARPETAS.filter((c) => (docs?.[c.clave]?.length ?? 0) > 0);
-  if (conDocs.length === 0) return <Vacio texto="Todavía no tiene documentos." />;
-
-  return (
-    <Marco>
-      {conDocs.map((carpeta) => (
-        <Card key={carpeta.clave} className="p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <Files className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-base font-semibold">{carpeta.nombre}</h2>
-            <span className="ml-auto text-xs text-muted-foreground">
-              {docs?.[carpeta.clave].length}
-            </span>
-          </div>
-          <ul className="divide-y">
-            {(docs?.[carpeta.clave] ?? []).map((d) => (
-              <li key={d.id} className="flex items-center gap-3 py-2 text-sm">
-                <span className="min-w-0 flex-1 truncate">{d.nombre}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {formatFechaEnZona(d.fecha, empresaActual.zonaHoraria)}
-                </span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="shrink-0 gap-1.5"
-                  disabled={abriendo === d.id}
-                  onClick={() => void abrir(d.id)}
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Abrir
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ))}
     </Marco>
   );
 }
