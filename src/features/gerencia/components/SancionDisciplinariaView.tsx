@@ -184,11 +184,7 @@ interface SancionForm {
   gravedad: GravedadSancion;
   fechaHechos: string;
   hechos: string;
-  normaInfringida: string;
-  medida: string;
   fechaEmision: string;
-  cumplimientoDesde: string;
-  cumplimientoHasta: string;
   plazoDias: number;
 }
 
@@ -197,11 +193,7 @@ const emptyForm: SancionForm = {
   gravedad: "grave",
   fechaHechos: "",
   hechos: "",
-  normaInfringida: "",
-  medida: "",
   fechaEmision: hoyISO(),
-  cumplimientoDesde: "",
-  cumplimientoHasta: "",
   plazoDias: 15,
 };
 
@@ -250,23 +242,11 @@ function PrototipoSancion({ form, empleado, empresa }: {
         <Campo label="Calificación de la falta" value={gravLabel} />
         <Campo label="Fecha de los hechos" value={fmtFechaCorta(form.fechaHechos || null)} />
         <CampoParrafo label="Hechos que motivan la sanción" value={form.hechos} />
-        {form.normaInfringida.trim() && <CampoParrafo label="Norma / convenio infringido" value={form.normaInfringida} />}
-        <CampoParrafo label="Medida disciplinaria adoptada" value={form.medida} />
-        {form.cumplimientoDesde && (
-          <Campo
-            label="Cumplimiento de la medida"
-            value={
-              !form.cumplimientoHasta || form.cumplimientoHasta === form.cumplimientoDesde
-                ? `El día ${fmtFechaCorta(form.cumplimientoDesde)}`
-                : `Del ${fmtFechaCorta(form.cumplimientoDesde)} al ${fmtFechaCorta(form.cumplimientoHasta)}, ambos inclusive`
-            }
-          />
-        )}
         <Separator />
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Mediante la firma de este documento, el trabajador/a declara haber sido <strong>informado/a</strong> y
           haber recibido la presente comunicación. La firma constituye únicamente <strong>acuse de recibo y de
-          lectura</strong>; NO implica conformidad ni aceptación de los hechos ni de la medida adoptada. El
+          lectura</strong>; NO implica conformidad ni aceptación de los hechos. El
           trabajador/a puede impugnar esta sanción ante el Juzgado de lo Social en el plazo de veinte días
           hábiles desde su notificación (art. 114 de la Ley Reguladora de la Jurisdicción Social), previa
           presentación de la papeleta de conciliación cuando proceda.
@@ -325,8 +305,7 @@ function SancionEditor({ empleados, empresa, onVolver, onEnviada }: {
   );
 
   const puedeEnviar =
-    !!form.empleadoId && !!form.hechos.trim() && !!form.medida.trim() &&
-    !!form.fechaHechos && !!form.fechaEmision && !enviando;
+    !!form.empleadoId && !!form.hechos.trim() && !!form.fechaHechos && !!form.fechaEmision && !enviando;
 
   /**
    * Aviso de PRESCRIPCIÓN (art. 60.2 ET). No bloquea: el plazo corre desde que
@@ -352,7 +331,7 @@ function SancionEditor({ empleados, empresa, onVolver, onEnviada }: {
 
   const enviar = async () => {
     if (!puedeEnviar) {
-      toast.error("Completa trabajador, fecha de los hechos, hechos y medida disciplinaria");
+      toast.error("Completa trabajador, fecha de los hechos y los hechos");
       return;
     }
     setEnviando(true);
@@ -362,11 +341,7 @@ function SancionEditor({ empleados, empresa, onVolver, onEnviada }: {
         gravedad: form.gravedad,
         fechaHechos: form.fechaHechos,
         hechos: form.hechos,
-        normaInfringida: form.normaInfringida || null,
-        medida: form.medida,
         fechaEmision: form.fechaEmision,
-        cumplimientoDesde: form.cumplimientoDesde || null,
-        cumplimientoHasta: form.cumplimientoHasta || null,
         plazoDias: form.plazoDias,
       });
       if (res.ok) {
@@ -445,42 +420,6 @@ function SancionEditor({ empleados, empresa, onVolver, onEnviada }: {
                 className="mt-1"
               />
             </div>
-
-            <div>
-              <Label className="text-xs text-muted-foreground">Norma / convenio infringido (opcional)</Label>
-              <Input
-                value={form.normaInfringida}
-                onChange={e => u({ normaInfringida: e.target.value })}
-                placeholder="Art. X del Convenio de Hostelería / Estatuto de los Trabajadores…"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label className="text-xs text-muted-foreground">Medida disciplinaria adoptada</Label>
-              <Textarea
-                value={form.medida}
-                onChange={e => u({ medida: e.target.value })}
-                rows={3}
-                placeholder="Amonestación por escrito / Suspensión de empleo y sueldo de N días…"
-                className="mt-1"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">Cumplimiento desde (opcional)</Label>
-                <Input type="date" value={form.cumplimientoDesde} onChange={e => u({ cumplimientoDesde: e.target.value })} className="mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Cumplimiento hasta (opcional)</Label>
-                <Input type="date" value={form.cumplimientoHasta} onChange={e => u({ cumplimientoHasta: e.target.value })} className="mt-1" />
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground -mt-1">
-              Si la medida son días de suspensión, di qué días se cumplen: el trabajador tiene que saber
-              exactamente cuándo no acude.
-            </p>
 
             <div className="grid grid-cols-2 gap-3">
               <div>

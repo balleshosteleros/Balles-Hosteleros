@@ -52,16 +52,8 @@ export type DatosSancion = {
   fechaHechos: string;
   /** Descripción de los hechos que motivan la sanción. */
   hechos: string;
-  /** Norma/convenio/artículo infringido (opcional). */
-  normaInfringida?: string | null;
-  /** Medida disciplinaria adoptada (p. ej. amonestación por escrito, suspensión…). */
-  medida: string;
   /** Fecha de emisión (YYYY-MM-DD). */
   fechaEmision: string;
-  /** Primer día de cumplimiento de la medida (YYYY-MM-DD), si tiene fechas. */
-  cumplimientoDesde?: string | null;
-  /** Último día de cumplimiento de la medida (YYYY-MM-DD). */
-  cumplimientoHasta?: string | null;
 };
 
 const GRAVEDAD_COLOR: Record<GravedadSancion, ReturnType<typeof rgb>> = {
@@ -228,21 +220,6 @@ export async function generarSancionPdf(
   drawField("Fecha de los hechos", fmtFecha(datos.fechaHechos));
 
   drawParrafo("Hechos que motivan la sanción", datos.hechos);
-  if (datos.normaInfringida?.trim()) {
-    drawParrafo("Norma / convenio infringido", datos.normaInfringida);
-  }
-  drawParrafo("Medida disciplinaria adoptada", datos.medida);
-  // Una suspensión de empleo y sueldo tiene que decir QUÉ DÍAS se cumple: el
-  // trabajador debe saber exactamente cuándo no acude a trabajar.
-  if (datos.cumplimientoDesde) {
-    const hasta = datos.cumplimientoHasta || datos.cumplimientoDesde;
-    drawField(
-      "Cumplimiento de la medida",
-      hasta === datos.cumplimientoDesde
-        ? `El día ${fmtFecha(datos.cumplimientoDesde)}`
-        : `Del ${fmtFecha(datos.cumplimientoDesde)} al ${fmtFecha(hasta)}, ambos inclusive`,
-    );
-  }
 
   // Cláusula de acuse de recibo (leído, no conforme).
   nuevaPaginaSiHaceFalta(120);
@@ -257,8 +234,8 @@ export async function generarSancionPdf(
   const clausula =
     "Mediante la firma de este documento, el trabajador/a declara haber sido informado/a y haber " +
     "recibido la presente comunicación de sanción disciplinaria. La firma constituye únicamente acuse " +
-    "de recibo y de lectura; NO implica conformidad ni aceptación de los hechos ni de la medida " +
-    "adoptada. El trabajador/a puede impugnar esta sanción ante el Juzgado de lo Social en el plazo " +
+    "de recibo y de lectura; NO implica conformidad ni aceptación de los hechos. " +
+    "El trabajador/a puede impugnar esta sanción ante el Juzgado de lo Social en el plazo " +
     "de veinte días hábiles desde su notificación (art. 114 de la Ley Reguladora de la Jurisdicción " +
     "Social), previa presentación de la papeleta de conciliación cuando proceda.";
   for (const ln of wrap(clausula, font, 9.5, contentWidth)) {

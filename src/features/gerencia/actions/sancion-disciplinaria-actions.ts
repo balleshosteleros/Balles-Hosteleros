@@ -53,8 +53,6 @@ async function requireAdmin(): Promise<{ userId: string; empresaId: string }> {
 function resumenSancion(input: SancionInput): string {
   const partes = [GRAVEDAD_LABEL[input.gravedad]];
   if (input.fechaHechos) partes.push(`hechos del ${fmtFechaEs(input.fechaHechos)}`);
-  const medida = input.medida.trim().replace(/\s+/g, " ");
-  if (medida) partes.push(medida.length > 120 ? `${medida.slice(0, 117)}…` : medida);
   return partes.join(" · ");
 }
 
@@ -69,12 +67,7 @@ export interface SancionInput {
   /** Obligatoria: el art. 58.2 ET exige hacer constar la fecha de los hechos. */
   fechaHechos: string;
   hechos: string;
-  normaInfringida?: string | null;
-  medida: string;
   fechaEmision: string;
-  /** Primer y último día de cumplimiento de la medida, si los tiene. */
-  cumplimientoDesde?: string | null;
-  cumplimientoHasta?: string | null;
   /** Días de plazo para firmar el acuse de recibo. */
   plazoDias?: number;
 }
@@ -103,11 +96,6 @@ export async function crearSancionDisciplinaria(
     if (!input.hechos?.trim()) return { ok: false, error: "Describe los hechos que motivan la sanción" };
     // Sin fecha de los hechos la comunicación no cumple el art. 58.2 ET.
     if (!input.fechaHechos) return { ok: false, error: "Falta la fecha de los hechos" };
-    if (input.cumplimientoDesde && input.cumplimientoHasta &&
-        input.cumplimientoHasta < input.cumplimientoDesde) {
-      return { ok: false, error: "El cumplimiento de la medida no puede acabar antes de empezar" };
-    }
-    if (!input.medida?.trim()) return { ok: false, error: "Indica la medida disciplinaria adoptada" };
     if (!input.fechaEmision) return { ok: false, error: "Falta la fecha de emisión" };
 
     const plazoDias = Math.max(1, Math.min(60, Number(input.plazoDias ?? 15) || 15));
@@ -170,11 +158,7 @@ export async function crearSancionDisciplinaria(
       gravedad: input.gravedad,
       fechaHechos: input.fechaHechos,
       hechos: input.hechos.trim(),
-      normaInfringida: input.normaInfringida?.trim() || null,
-      medida: input.medida.trim(),
       fechaEmision: input.fechaEmision,
-      cumplimientoDesde: input.cumplimientoDesde ?? null,
-      cumplimientoHasta: input.cumplimientoHasta ?? null,
     });
     const pdfBuffer = Buffer.from(pdfBytes);
     const sha256Original = sha256(pdfBuffer);
@@ -337,7 +321,7 @@ export interface SancionResumen {
   departamento: string;
   /** Calificación de la falta, si se puede leer del resumen guardado. */
   gravedad: GravedadSancion | null;
-  /** Resumen de una línea: calificación · fecha de los hechos · medida. */
+  /** Resumen de una línea: calificación · fecha de los hechos. */
   resumen: string;
   estado: string;
   enviadoEn: string;
