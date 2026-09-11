@@ -659,7 +659,7 @@ function ComunicadoEditor({
               </div>
               <p className="text-[11px] text-muted-foreground">
                 {form.enviarEmail
-                  ? "Al publicarlo sale un correo con el comunicado y sus documentos. Se manda una sola vez."
+                  ? "Al publicarlo sale un correo con el comunicado y sus documentos."
                   : "Llega al móvil y a Mi panel, pero no al correo."}
               </p>
             </div>
