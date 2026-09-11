@@ -1,9 +1,9 @@
 /**
  * /api/points/cron/cumpleanos
  *
- * Una pasada al día por cada empresa activa: felicita a quien cumple años hoy y
- * le apunta sus points. Todo lo manda la regla «Cumpleaños» de Points; aquí solo
- * se recorre la lista de empresas.
+ * Una pasada al día: felicita a quien cumple años hoy y le apunta sus points en
+ * cada una de sus empresas. Todo lo manda la regla «Cumpleaños» de Points, que
+ * cada empresa enciende y dosifica por su cuenta.
  *
  * Va aparte del devengo diario (que corre de madrugada, a las 23:55 de Madrid)
  * porque una felicitación de cumpleaños a las doce menos cinco de la noche no es
@@ -21,7 +21,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { procesarCumpleanosDeEmpresa } from "@/features/toques/services/cumpleanos.service";
+import { procesarCumpleanosDelDia } from "@/features/toques/services/cumpleanos.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,48 +39,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "No autorizado" }, { status: 401 });
   }
 
-  const admin = createAdminClient();
   const params = new URL(req.url).searchParams;
-  const soloEmpresa = params.get("empresa");
   const dry = params.get("dry") === "1";
   const fecha = params.get("fecha") ?? undefined;
+  const empresaId = params.get("empresa") ?? undefined;
   if (fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
     return NextResponse.json({ ok: false, error: "fecha inválida (YYYY-MM-DD)" }, { status: 400 });
   }
 
-  let query = admin.from("empresas").select("id, nombre").eq("estado", "Activa");
-  if (soloEmpresa) query = query.eq("id", soloEmpresa);
-  const { data: empresas, error } = await query;
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  try {
+    const resumen = await procesarCumpleanosDelDia(createAdminClient(), { dry, fecha, empresaId });
+    return NextResponse.json({
+      ok: true,
+      modoPrueba: dry,
+      ejecutadoEn: new Date().toISOString(),
+      ...resumen,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[points:cron:cumpleanos]", msg);
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
-
-  // Se comparte entre empresas: quien trabaja en dos solo cumple años una vez.
-  const atendidos = new Set<string>();
-  const resultados = [];
-  for (const empresa of empresas ?? []) {
-    try {
-      const r = await procesarCumpleanosDeEmpresa(admin, empresa.id as string, {
-        dry,
-        fecha,
-        atendidos,
-      });
-      resultados.push({ empresa: empresa.nombre as string, ...r });
-    } catch (err) {
-      // Una empresa que falla no puede dejar sin felicitación a las demás.
-      resultados.push({
-        empresa: empresa.nombre as string,
-        error: err instanceof Error ? err.message : "Error",
-      });
-    }
-  }
-
-  return NextResponse.json({
-    ok: true,
-    modoPrueba: dry,
-    ejecutadoEn: new Date().toISOString(),
-    resultados,
-  });
 }
 
 export async function POST(req: NextRequest) {
