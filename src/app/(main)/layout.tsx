@@ -9,17 +9,18 @@ import { getEmpresaActivaForUser, getCatalogoEmpresa } from "@/features/empresa/
 import { CatalogoEmpresaProvider } from "@/features/empresa/contexts/catalogo-empresa-context";
 import { EmpresaActivaSeed } from "@/features/empresa/components/EmpresaActivaSeed";
 import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate";
+import { getPointsResumen, type PointsResumen } from "@/features/toques/lib/points-resumen";
 
 export const dynamic = "force-dynamic";
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
-  const { shouldShowWizard, hasUser, modo, bloquea } = await getEmpleadoGuardStatus();
+  const { shouldShowWizard, hasUser, modo, bloquea, pendientes } = await getEmpleadoGuardStatus();
   // Sin sesión → login. Refuerza al middleware, que en producción deja pasar
   // las rutas de módulo sin sesión (fail-open). ?auth=1 evita el rebote móvil.
   if (!hasUser) {
     redirect("/?auth=1");
   }
-  // Quien deba documentación se tapa con `GateDocumentacion`, NO con un
+  // Quien tenga la ficha a medias se tapa con `GateDocumentacion`, NO con un
   // redirect: el layout no sabe en qué pantalla está y mandaba al asistente
   // hasta cuando la persona iba a fichar. Ver el comentario del componente.
 
@@ -44,6 +45,20 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   // servidor, junto a los permisos, para que el menú se pinte de una sola vez.
   // No es lo mismo que los permisos del rol — ver catalogo-empresa-context.
   const catalogoEmpresa = await getCatalogoEmpresa(empresaActivaKey);
+
+  // Marcador de Points (nivel + saldo) de la barra de arriba. Se resuelve aquí,
+  // con la empresa que manda la cookie, para que salga pintado en el primer
+  // paint: el contexto de empresa del navegador tarda en hidratarse y la
+  // píldora aparecía tarde o no aparecía.
+  let pointsInicial: PointsResumen | null = null;
+  if (user && empresaActivaKey) {
+    try {
+      pointsInicial = await getPointsResumen(supabase, user.id, empresaActivaKey);
+    } catch (err) {
+      // Sin points el software entra igual; la píldora se pinta luego.
+      console.error("[layout] points", err);
+    }
+  }
 
   let seed: React.ReactNode = null;
   if (user) {
@@ -88,7 +103,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       departamentos={catalogoEmpresa.departamentos}
       esMatriz={catalogoEmpresa.esMatriz}
     >
-      <AppLayout>
+      <AppLayout pointsInicial={pointsInicial}>
         {seed}
         {/* Con qué empresa ha respondido el servidor. Mientras no coincida con
             la que se acaba de elegir, el logotipo de arriba no cambia y la
@@ -102,7 +117,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         {/* key = empresa activa → remonta la página al cambiar de empresa, para
             que los client components recarguen sus datos con la nueva empresa. */}
         <div key={empresaActivaKey ?? "sin-empresa"} className="contents">
-          <GateDocumentacion activo={shouldShowWizard} modo={modo} bloquea={bloquea}>
+          <GateDocumentacion activo={shouldShowWizard} modo={modo} bloquea={bloquea} pendientes={pendientes}>
             {children}
           </GateDocumentacion>
         </div>

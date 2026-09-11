@@ -19,6 +19,7 @@ import {
   type TipoDocPropio,
 } from "@/features/primer-acceso/actions/perfil-actions";
 import type { ModoPrimerAcceso } from "@/features/primer-acceso/data/empleado-status";
+import type { PasoFicha } from "@/features/primer-acceso/lib/ficha-incompleta";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 
 interface Prefilled {
@@ -59,17 +60,18 @@ interface Prefilled {
  * - `documentos` (repesca): ya completó su perfil hace tiempo, así que NO se le
  *   vuelve a pedir emergencia ni datos que ya dio — solo los papeles que faltan.
  */
-const PASO_DOCUMENTOS = { id: "documentos", label: "Documentos", icon: FileText } as const;
+const CATALOGO_PASOS: Record<PasoFicha, { id: PasoFicha; label: string; icon: typeof User }> = {
+  identidad: { id: "identidad", label: "Identidad", icon: User },
+  domicilio: { id: "domicilio", label: "Domicilio", icon: Home },
+  emergencia: { id: "emergencia", label: "Emergencia", icon: Heart },
+  ropa: { id: "ropa", label: "Uniforme", icon: Shirt },
+  documentos: { id: "documentos", label: "Documentos", icon: FileText },
+};
 
-const PASOS_ALTA = [
-  { id: "identidad", label: "Identidad", icon: User },
-  { id: "domicilio", label: "Domicilio", icon: Home },
-  { id: "emergencia", label: "Emergencia", icon: Heart },
-  { id: "ropa", label: "Uniforme", icon: Shirt },
-  PASO_DOCUMENTOS,
-] as const;
-
-const PASOS_DOCUMENTOS = [PASO_DOCUMENTOS] as const;
+/** Todos los pasos, en orden. Es la red de seguridad: si el servidor rechaza el
+ *  guardado por un dato que no se estaba enseñando, se abren todos para que la
+ *  persona pueda corregirlo en vez de quedarse encerrada. */
+const TODOS_LOS_PASOS: PasoFicha[] = ["identidad", "domicilio", "emergencia", "ropa", "documentos"];
 
 /** De la S a la XXXL, pasando por todas. Es la talla del UNIFORME de trabajo. */
 const TALLAS = ["S", "M", "L", "XL", "XXL", "XXXL"];
@@ -111,15 +113,23 @@ type FormState = PerfilCompletoInput & { nacionalidad?: string | null };
 export function WizardPrimerAcceso({
   prefilled,
   modo,
+  pasos,
 }: {
   prefilled: Prefilled;
   modo: ModoPrimerAcceso;
+  /** Solo los pasos donde le falta algo. Ver `pasosNecesarios`. */
+  pasos: PasoFicha[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [paso, setPaso] = useState(0);
 
-  const PASOS = modo === "alta" ? PASOS_ALTA : PASOS_DOCUMENTOS;
+  // Si el servidor rechaza algo que no estaba a la vista, se abre el asistente
+  // entero: nadie puede quedarse atascado por un campo que no le enseñamos.
+  const [verTodo, setVerTodo] = useState(false);
+  const idsPasos: PasoFicha[] =
+    verTodo || pasos.length === 0 ? TODOS_LOS_PASOS : pasos;
+  const PASOS = idsPasos.map((id) => CATALOGO_PASOS[id]);
 
   // Documentos ya subidos (los que ya estuvieran en su ficha salen marcados).
   const [subidos, setSubidos] = useState<Record<string, boolean>>({
@@ -220,6 +230,14 @@ export function WizardPrimerAcceso({
     const id = PASOS[p]?.id;
 
     if (id === "identidad") {
+      if (!form.telefono?.trim()) return "Tu teléfono es obligatorio";
+      if (!/^(\+?\d{1,3})?\d{9,12}$/.test(form.telefono.replace(/[\s.-]/g, ""))) {
+        return "Tu teléfono no tiene un formato válido";
+      }
+      if (!form.numero_ss?.trim()) return "El número de la Seguridad Social es obligatorio";
+      if (!/^\d{11,12}$/.test(form.numero_ss.replace(/\D/g, ""))) {
+        return "El número de la Seguridad Social debe tener 12 dígitos";
+      }
       if (!form.tipo_documento?.trim()) return "Elige el tipo de documento";
       if (!form.genero?.trim()) return "Elige el género";
       if (!form.estado_civil?.trim()) return "Elige el estado civil";
@@ -238,12 +256,21 @@ export function WizardPrimerAcceso({
       if (!form.contacto_emergencia_nombre?.trim() || !form.contacto_emergencia_telefono?.trim()) {
         return "El contacto de emergencia es obligatorio";
       }
+      if (!form.contacto_emergencia_relacion?.trim()) {
+        return "Di quién es esa persona (madre, pareja, hermano/a…)";
+      }
+    }
+    if (id === "ropa") {
+      if (!form.talla_uniforme?.trim()) return "Elige tu talla de uniforme";
     }
     if (id === "documentos") {
       const falta = DOCUMENTOS.find((d) => !subidos[d.tipo]);
       if (falta) return `Falta subir: ${falta.label}`;
       if (!leidos.dni_nie.trim()) return "Revisa el número de tu DNI o NIE";
       if (!leidos.iban.trim()) return "Revisa tu número de cuenta (IBAN)";
+      // La fecha de nacimiento la tenía menos de la mitad de la plantilla: sin
+      // ella no salen ni el contrato ni la edad en el alta de la gestoría.
+      if (!leidos.fecha_nacimiento.trim()) return "Falta tu fecha de nacimiento";
     }
     return null;
   }
@@ -324,6 +351,7 @@ export function WizardPrimerAcceso({
       if (!resDocs.ok) {
         setError(resDocs.error ?? "Error al guardar tus datos");
         toast.error(resDocs.error ?? "Error al guardar tus datos");
+        setVerTodo(true);
         return;
       }
 
@@ -335,6 +363,10 @@ export function WizardPrimerAcceso({
       } else {
         setError(res.error ?? "Error al guardar");
         toast.error(res.error ?? "Error al guardar");
+        // El servidor ha rechazado un dato que quizá no estaba a la vista (a
+        // esta persona solo se le pedía lo que le faltaba). Se abren todos los
+        // pasos para que pueda llegar a él.
+        setVerTodo(true);
       }
     });
   }
@@ -473,6 +505,33 @@ export function WizardPrimerAcceso({
                 </div>
               </div>
 
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Teléfono *</Label>
+                  <Input
+                    type="tel"
+                    value={form.telefono ?? ""}
+                    onChange={(e) => update("telefono", e.target.value)}
+                    placeholder="600 00 00 00"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Es por donde te avisamos de un cambio de turno.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Número de la Seguridad Social *</Label>
+                  <Input
+                    value={form.numero_ss ?? ""}
+                    onChange={(e) => update("numero_ss", e.target.value)}
+                    inputMode="numeric"
+                    placeholder="12 dígitos"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Está en tu vida laboral y en tu nómina.
+                  </p>
+                </div>
+              </div>
+
               <div className="space-y-1.5">
                 <Label>Nacionalidad</Label>
                 <Input
@@ -567,7 +626,7 @@ export function WizardPrimerAcceso({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Relación</Label>
+                <Label>Relación *</Label>
                 <Input
                   value={form.contacto_emergencia_relacion}
                   onChange={(e) => update("contacto_emergencia_relacion", e.target.value)}
@@ -581,7 +640,7 @@ export function WizardPrimerAcceso({
           {pasoId === "ropa" && (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label>Talla de uniforme</Label>
+                <Label>Talla de uniforme *</Label>
                 <Select
                   value={form.talla_uniforme ?? ""}
                   onValueChange={(v) => update("talla_uniforme", v)}
@@ -594,7 +653,7 @@ export function WizardPrimerAcceso({
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">
-                  Es la talla del uniforme de trabajo. Puedes cambiarla más adelante.
+                  Es la talla del uniforme de trabajo. Puedes cambiarla más adelante en tu ficha.
                 </p>
               </div>
             </div>
@@ -607,6 +666,16 @@ export function WizardPrimerAcceso({
                   foto, y los botones ya dicen qué hacer. Tampoco se nombra lo que
                   ya está entregado — como no se nombra el resto de lo que consta
                   en su ficha: si no se le pide, no se menciona. */}
+
+              {/* A quien ya entregó los tres papeles y entra aquí solo por un dato
+                  suelto (la fecha de nacimiento, por ejemplo) hay que decírselo:
+                  si no, ve una pantalla titulada «Documentos» sin un solo
+                  documento y cree que algo se ha perdido. */}
+              {documentosQueFaltan.length === 0 && (
+                <p className="text-[12px] text-muted-foreground">
+                  No nos falta ningún documento tuyo. Solo confirma los datos de abajo.
+                </p>
+              )}
 
               <ul className="space-y-2">
                 {documentosQueFaltan.map((d) => {
@@ -723,7 +792,7 @@ export function WizardPrimerAcceso({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Fecha de nacimiento</Label>
+                    <Label>Fecha de nacimiento *</Label>
                     <Input
                       type="date"
                       value={leidos.fecha_nacimiento}
@@ -814,7 +883,7 @@ export function WizardPrimerAcceso({
         </div>
 
         <p className="text-center text-[11px] text-muted-foreground mt-3">
-          No podrás acceder al sistema hasta completar este formulario.
+          No podrás usar el sistema hasta completar esto. Fichar sí puedes, siempre.
         </p>
       </div>
     </div>

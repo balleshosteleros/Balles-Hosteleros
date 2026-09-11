@@ -63,7 +63,7 @@ export default async function MobileLayout({ children }: { children: React.React
   // Guardia de sesión: en producción el middleware deja pasar /m sin sesión
   // (fail-open), así que un usuario sin sesión (o caducada) veía un panel vacío
   // en vez de ir al login. ?auth=1 evita el rebote del redirect móvil "/"→"/m".
-  const { shouldShowWizard, hasUser, modo, bloquea } = await getEmpleadoGuardStatus();
+  const { shouldShowWizard, hasUser, modo, bloquea, pendientes } = await getEmpleadoGuardStatus();
   if (!hasUser) {
     // `?auth=1` es OBLIGATORIO: sin él, la regla de `next.config.ts` devolvería
     // "/" → "/m" por user-agent móvil y entraríamos en un rebote infinito.
@@ -73,8 +73,9 @@ export default async function MobileLayout({ children }: { children: React.React
   }
   // Mismo guard de primer acceso que desktop, y por el mismo motivo NO es un
   // redirect: aquí es donde ficha la gente, y mandarles al asistente les dejaba
-  // sin poder registrar su jornada. Lo tapa `GateDocumentacion`, que deja
-  // pasar SIEMPRE las pantallas de fichaje.
+  // sin poder registrar su jornada. Lo tapa `GateDocumentacion`, que desde el
+  // 12-sep-2026 tapa también el fichaje —para que el aviso se lea— pero deja
+  // una salida hacia el botón de fichar y solo hacia ahí.
 
   // Identidad (quién eres + en qué empresa estás) una sola vez para toda la
   // app móvil: la cabecera de CUALQUIER pantalla pinta el icono de empresa
@@ -119,7 +120,7 @@ export default async function MobileLayout({ children }: { children: React.React
             por tramos hasta 1100px, que es donde la rejilla deja de estirarse.
       */}
       <main className="mx-auto w-full max-w-screen-sm flex-1 bg-transparent md:max-w-3xl lg:max-w-5xl xl:max-w-[1100px]">
-        <GateDocumentacion activo={shouldShowWizard} modo={modo} bloquea={bloquea}>
+        <GateDocumentacion activo={shouldShowWizard} modo={modo} bloquea={bloquea} pendientes={pendientes}>
           {children}
         </GateDocumentacion>
       </main>

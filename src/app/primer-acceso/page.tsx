@@ -11,12 +11,16 @@ export default async function PrimerAccesoPage() {
     // No es empleado o no autenticado
     redirect("/mi-panel");
   }
-  // Tener el perfil completo ya NO basta para saltarse esto: quien lo completó
-  // antes de que se pidiera la documentación vuelve aquí (modo "documentos")
-  // hasta que suba sus papeles. `shouldShowWizard` decide por los dos motivos.
+  // `perfil_completado` ya NO decide nada: estaba a true en fichas a las que les
+  // faltaba el teléfono, la fecha de nacimiento o la cuenta. Lo que manda es lo
+  // que falta DE VERDAD, campo a campo (ver `ficha-incompleta.ts`).
   if (!status.shouldShowWizard) {
     redirect("/mi-panel");
   }
 
-  return <WizardPrimerAcceso prefilled={status.prefilled} modo={status.modo} />;
+  // `pasos` = solo donde le falta algo. A quien únicamente le falta el teléfono
+  // no se le hacen recorrer cinco pantallas de datos que ya dio.
+  return (
+    <WizardPrimerAcceso prefilled={status.prefilled} modo={status.modo} pasos={status.pasos} />
+  );
 }

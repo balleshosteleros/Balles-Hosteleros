@@ -21,10 +21,16 @@ export interface PerfilCompletoInput {
   dni_nie?: string | null;
   fecha_nacimiento?: string | null;
   iban?: string | null;
-  numero_ss?: string | null;
-  telefono?: string | null;
   avatar_url?: string | null;
   dni_archivo_url?: string | null;
+
+  // Estos DOS sí se guardan desde aquí, pero solo si están vacíos en la ficha
+  // (ver `guardarPerfilCompleto`). Faltaban en media plantilla y no había forma
+  // de que los aportara el propio trabajador: el teléfono es por donde se le
+  // avisa de un cambio de turno, y el número de la Seguridad Social es lo que la
+  // gestoría necesita para su nómina.
+  telefono?: string | null;
+  numero_ss?: string | null;
 
   // Lo que este asistente pide a los empleados ANTIGUOS. Quien entra hoy por
   // reclutamiento ya lo aportó allí y no llega a ver el asistente.
@@ -53,6 +59,17 @@ function validarPerfil(p: PerfilCompletoInput): string | null {
   // la Seguridad Social, la dirección y la fecha de nacimiento se aportaron y se
   // validaron en el proceso de selección (`/api/documentacion`), y no se vuelven
   // a pedir: exigirlos aquí bloquearía a quien no puede ya corregirlos.
+  if (!p.telefono?.trim()) return "Tu teléfono es obligatorio";
+  const tel = p.telefono.replace(/[\s.-]/g, "");
+  if (!/^(\+?\d{1,3})?\d{9,12}$/.test(tel)) {
+    return "Tu teléfono no tiene un formato válido";
+  }
+  if (!p.numero_ss?.trim()) return "El número de la Seguridad Social es obligatorio";
+  // 12 dígitos (2 de provincia + 8 + 2 de control). Se admiten 11 por los
+  // números antiguos, y se ignoran barras, guiones y espacios al comprobarlo.
+  if (!/^\d{11,12}$/.test(p.numero_ss.replace(/\D/g, ""))) {
+    return "El número de la Seguridad Social debe tener 12 dígitos";
+  }
   if (!p.tipo_documento?.trim()) return "Elige el tipo de documento";
   if (!p.genero?.trim()) return "Elige el género";
   if (!p.estado_civil?.trim()) return "Elige el estado civil";
@@ -73,6 +90,13 @@ function validarPerfil(p: PerfilCompletoInput): string | null {
   if (!/^(\+?\d{1,3})?\d{9,12}$/.test(telEmg)) {
     return "El teléfono del contacto de emergencia no tiene un formato válido";
   }
+  // El parentesco también: un nombre y un número sin saber quién es no sirven
+  // de nada el día que haya que llamar.
+  if (!p.contacto_emergencia_relacion?.trim()) {
+    return "Di quién es esa persona (madre, pareja, hermano/a…)";
+  }
+
+  if (!p.talla_uniforme?.trim()) return "Elige tu talla de uniforme";
 
   return null;
 }
@@ -91,10 +115,26 @@ export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
   // imposible completar el perfil.
   const { data: fichas } = await supabase
     .from("empleados")
-    .select("id, empresa_id")
+    .select("id, empresa_id, telefono, numero_ss")
     .eq("user_id", user.id);
 
   if (!fichas || fichas.length === 0) return { ok: false, error: "No se encontró tu ficha de empleado" };
+
+  // Teléfono y Seguridad Social: SOLO se rellenan si están vacíos, igual que en
+  // `confirmarDatosDocumentacion` y por lo mismo. El número de la Seguridad
+  // Social es con el que la gestoría da de alta y paga: si se pudiera reescribir
+  // desde aquí, un error de tecleo tumbaría una nómina ya comprobada.
+  const sinValor = (v: unknown) => v === null || v === undefined || String(v).trim() === "";
+  const yaTiene = (campo: "telefono" | "numero_ss") =>
+    fichas.some((f) => !sinValor((f as Record<string, unknown>)[campo]));
+
+  const huecos: Record<string, string> = {};
+  if (!yaTiene("telefono") && input.telefono?.trim()) {
+    huecos.telefono = input.telefono.trim();
+  }
+  if (!yaTiene("numero_ss") && input.numero_ss?.trim()) {
+    huecos.numero_ss = input.numero_ss.replace(/\D/g, "");
+  }
 
   // Se escribe SOLO lo que este asistente pide. Todo lo que llega del proceso de
   // selección —DNI, IBAN, SS, dirección, fecha de nacimiento, teléfono, género,
@@ -102,6 +142,7 @@ export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
   const { error } = await supabase
     .from("empleados")
     .update({
+      ...huecos,
       nacionalidad: input.nacionalidad?.trim() || null,
       direccion: input.direccion?.trim() || null,
       tipo_documento: input.tipo_documento?.trim() || null,

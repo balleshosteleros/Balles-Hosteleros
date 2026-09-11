@@ -1,30 +1,34 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import {
+  COLUMNAS_REVISION,
+  fundirFichas,
+  loQueFalta,
+  pasosNecesarios,
+  type CampoPendiente,
+  type PasoFicha,
+} from "@/features/primer-acceso/lib/ficha-incompleta";
 
 /**
  * En qué situación entra la persona al asistente:
  *
- * - `alta`: nunca completó su perfil. Es un onboarding entero y se le pide TODO,
- *   contacto de emergencia incluido.
- * - `documentos`: ya completó el perfil en su día, pero le falta documentación
- *   identificativa. Se le reabre el asistente SOLO para que la suba — nada de
- *   volver a pedirle emergencia ni datos que ya dio.
+ * - `alta`: le faltan datos de su ficha (además, quizá, de los papeles).
+ * - `documentos`: solo le faltan los papeles; los datos ya los tiene todos.
+ *
+ * El modo hoy solo decide QUÉ SE LE DICE. Los pasos que ve salen de
+ * `pasosNecesarios`: se le enseña únicamente donde le falta algo.
  */
 export type ModoPrimerAcceso = "alta" | "documentos";
 
 /**
- * ⏳ REPESCA TEMPORAL (9-sep-2026) — BORRAR CUANDO TODOS HAYAN SUBIDO LO SUYO.
+ * Interruptor general de la recogida (12-sep-2026).
  *
- * Los empleados que ya estaban antes completaron su perfil sin que se les
- * pidiera la documentación, así que 18 de 19 fichas están sin DNI. En vez de
- * perseguirles por correo, se les reabre el asistente al entrar y no pasan sin
- * subirlo.
- *
- * Se apaga SOLO: en cuanto una persona tiene sus tres documentos deja de verlo,
- * y cuando no quede nadie el asistente no salta a nadie. Para retirar la repesca
- * del todo basta con poner esto en `false` y borrar luego el modo "documentos".
+ * Mientras esté encendido, a quien le falte CUALQUIER dato de los que dependen
+ * de él se le tapa la app —fichaje incluido, con salida— hasta que lo rellene.
+ * Ponerlo en `false` lo apaga entero sin tocar nada más: es la marcha atrás si
+ * un día se lía en plena apertura.
  */
-const REPESCA_DOCUMENTOS_ACTIVA = true;
+const EXIGENCIA_FICHA_ACTIVA = true;
 
 /** Documentos que solo puede aportar el propio empleado. El de la Seguridad
  *  Social NO está: lo genera RRHH del recorte de su nómina. */
@@ -40,6 +44,10 @@ export interface EmpleadoStatus {
   perfilCompletado: boolean;
   modo: ModoPrimerAcceso;
   empresaId: string | null;
+  /** Qué le falta exactamente, para pedirle solo eso. */
+  pendientes: CampoPendiente[];
+  /** Pasos que verá en el asistente. */
+  pasos: PasoFicha[];
   prefilled: {
     doc_dni_anverso_path?: string | null;
     doc_dni_reverso_path?: string | null;
@@ -50,6 +58,7 @@ export interface EmpleadoStatus {
     telefono?: string | null;
     dni_nie?: string | null;
     fecha_nacimiento?: string | null;
+    nacionalidad?: string | null;
     direccion?: string | null;
     iban?: string | null;
     numero_ss?: string | null;
@@ -68,6 +77,10 @@ export interface EmpleadoStatus {
     dni_archivo_url?: string | null;
   };
 }
+
+type FilaFicha = Record<string, unknown>;
+
+const vacio = (v: unknown) => v === null || v === undefined || String(v).trim() === "";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -98,16 +111,25 @@ export const getEmpleadoGuardStatus = cache(
      * activarlo, atrapado en su propia pantalla.
      */
     bloquea: boolean;
+    /** Lo que le falta, para decírselo por su nombre en el propio aviso. */
+    pendientes: CampoPendiente[];
   }> => {
+    const vacia = {
+      shouldShowWizard: false,
+      hasUser: false,
+      modo: "alta" as const,
+      bloquea: false,
+      pendientes: [] as CampoPendiente[],
+    };
     const { supabase, user } = await getCtx();
-    if (!user) return { shouldShowWizard: false, hasUser: false, modo: "alta", bloquea: false };
+    if (!user) return vacia;
+    if (!EXIGENCIA_FICHA_ACTIVA) return { ...vacia, hasUser: true };
 
     // Un trabajador en VARIAS empresas tiene una ficha por empresa, así que aquí
     // pueden venir 2+ filas. Con `.maybeSingle()` la consulta fallaba y devolvía
     // null: el asistente NO se mostraba nunca y esas personas se quedaban sin
-    // rellenar sus datos indefinidamente. Se piden todas y basta con que UNA esté
-    // pendiente (los datos personales son de la persona, no de la empresa: al
-    // guardarlos se reflejan en sus fichas espejo).
+    // rellenar sus datos indefinidamente. Se piden todas y se funden.
+    //
     // Blindaje: esto lo llama el LAYOUT (escritorio y móvil), por encima de
     // cualquier boundary. Si la consulta revienta —timeout de Supabase, red, el
     // pool ocupado— la excepción sube sin que nada la recoja y tumba la app
@@ -119,11 +141,11 @@ export const getEmpleadoGuardStatus = cache(
     try {
       const { data: fichas } = await supabase
         .from("empleados")
-        .select("perfil_completado, estado, doc_dni_anverso_path, doc_dni_reverso_path, doc_iban_path")
+        .select(`estado, ${COLUMNAS_REVISION}`)
         .eq("user_id", user.id);
 
       if (!fichas || fichas.length === 0) {
-        return { shouldShowWizard: false, hasUser: true, modo: "alta", bloquea: false };
+        return { ...vacia, hasUser: true };
       }
 
       // DIRECCIÓN (rol con `es_admin_plataforma`) recibe el aviso, no el bloqueo.
@@ -143,114 +165,116 @@ export const getEmpleadoGuardStatus = cache(
 
       // Una baja no tiene que rellenar nada: se le deja entrar a lo suyo sin
       // atascarlo en un asistente que ya no le corresponde.
-      const vigentes = fichas.filter((f) => f.estado === "Activo");
+      const vigentes = (fichas as unknown as FilaFicha[]).filter((f) => f.estado === "Activo");
       if (vigentes.length === 0) {
-        return { shouldShowWizard: false, hasUser: true, modo: "alta", bloquea: false };
+        return { ...vacia, hasUser: true };
       }
 
-      // Alta pendiente manda sobre todo lo demás: es un onboarding entero.
-      if (vigentes.some((f) => !f.perfil_completado)) {
-        return { shouldShowWizard: true, hasUser: true, modo: "alta", bloquea: !esDireccion };
+      const pendientes = loQueFalta(fundirFichas(vigentes));
+      if (pendientes.length === 0) {
+        return { ...vacia, hasUser: true };
       }
 
-      // Repesca: perfil hecho pero sin documentación. Los documentos viven en
-      // la ficha de CADA empresa (el bucket va por empresa), así que basta con
-      // que le falte en una para pedírselo.
-      if (REPESCA_DOCUMENTOS_ACTIVA) {
-        const faltaDoc = vigentes.some((f) =>
-          DOCS_OBLIGATORIOS.some((c) => !f[c as keyof typeof f]),
-        );
-        if (faltaDoc) return { shouldShowWizard: true, hasUser: true, modo: "documentos", bloquea: !esDireccion };
-      }
-
-      return { shouldShowWizard: false, hasUser: true, modo: "alta", bloquea: false };
+      const soloPapeles = pendientes.every((p) => p.paso === "documentos");
+      return {
+        shouldShowWizard: true,
+        hasUser: true,
+        modo: soloPapeles ? "documentos" : "alta",
+        bloquea: !esDireccion,
+        pendientes,
+      };
     } catch (e) {
       console.error("[guard] getEmpleadoGuardStatus falló — se deja entrar:", e);
-      return { shouldShowWizard: false, hasUser: true, modo: "alta", bloquea: false };
+      return { ...vacia, hasUser: true };
     }
   },
 );
 
 export const getEmpleadoStatus = cache(async (): Promise<EmpleadoStatus> => {
+  const completo: EmpleadoStatus = {
+    shouldShowWizard: false,
+    empleadoId: null,
+    perfilCompletado: true,
+    modo: "alta",
+    empresaId: null,
+    pendientes: [],
+    pasos: [],
+    prefilled: {},
+  };
+
   const { supabase, user } = await getCtx();
-  if (!user) {
-    return {
-      shouldShowWizard: false,
-      empleadoId: null,
-      perfilCompletado: true,
-      modo: "alta",
-      empresaId: null,
-      prefilled: {},
-    };
-  }
+  if (!user) return completo;
 
   // Varias empresas = varias fichas, y se traen TODAS a propósito. Este cálculo
   // tiene que dar exactamente lo mismo que `getEmpleadoGuardStatus`: si el guard
-  // mirase todas las fichas y esto solo una, con documentos en una empresa y no
-  // en la otra el layout mandaría al asistente y el asistente devolvería al
-  // panel — un rebote infinito del que la persona no podría salir.
-  const { data: fichas } = await supabase
-    .from("empleados")
-    .select(
-      "id, empresa_id, estado, perfil_completado, nombre, apellidos, email_personal, telefono, dni_nie, fecha_nacimiento, direccion, iban, numero_ss, contacto_emergencia_nombre, contacto_emergencia_telefono, contacto_emergencia_relacion, talla_uniforme, tipo_documento, genero, estado_civil, codigo_postal, ciudad, provincia, pais, avatar_url, dni_archivo_url, doc_dni_anverso_path, doc_dni_reverso_path, doc_iban_path"
-    )
-    .eq("user_id", user.id)
-    .order("perfil_completado", { ascending: true });
-
-  const activas = (fichas ?? []).filter((f) => f.estado === "Activo");
-  // La ficha que se muestra es la MENOS completa (el order ya la deja primera).
-  const empleado = activas[0] ?? null;
-
-  if (!empleado) {
-    return {
-      shouldShowWizard: false,
-      empleadoId: null,
-      perfilCompletado: true,
-      modo: "alta",
-      empresaId: null,
-      prefilled: {},
-    };
+  // mirase todas las fichas y esto solo una, con datos en una empresa y no en la
+  // otra el layout mandaría al asistente y el asistente devolvería al panel — un
+  // rebote infinito del que la persona no podría salir.
+  // Si esta consulta revienta, la persona se queda con la app tapada por el
+  // guard Y sin poder abrir el asistente que la destaparía: encerrada. Ante la
+  // duda se devuelve «ficha completa», que como mucho la deja entrar de más.
+  let fichas: FilaFicha[] | null = null;
+  try {
+    const { data } = await supabase
+      .from("empleados")
+      .select(
+        `id, empresa_id, estado, perfil_completado, nombre, apellidos, email_personal, nacionalidad, avatar_url, dni_archivo_url, ${COLUMNAS_REVISION}`,
+      )
+      .eq("user_id", user.id);
+    fichas = (data ?? []) as unknown as FilaFicha[];
+  } catch (e) {
+    console.error("[primer-acceso] no se pudo leer la ficha:", e);
+    return completo;
   }
 
-  // Mismo criterio que el guard, ficha a ficha: basta que falte en UNA empresa.
-  const perfilHecho = activas.every((f) => f.perfil_completado);
-  const faltaDoc = activas.some((f) =>
-    DOCS_OBLIGATORIOS.some((c) => !(f as Record<string, unknown>)[c]),
-  );
-  const modo: ModoPrimerAcceso = perfilHecho ? "documentos" : "alta";
+  const activas = (fichas ?? []).filter((f) => f.estado === "Activo");
+  if (activas.length === 0) return completo;
+
+  const fundida = fundirFichas(activas);
+  const pendientes = loQueFalta(fundida);
+  const pasos = pasosNecesarios(pendientes);
+  const soloPapeles = pendientes.length > 0 && pendientes.every((p) => p.paso === "documentos");
+
+  // Para el resto de campos (nombre, foto…) basta la primera ficha: son iguales
+  // en todas. Lo que se revisa ya viene fundido.
+  const base = activas[0];
+  const dato = (campo: string) => activas.find((f) => !vacio(f[campo]))?.[campo] ?? null;
 
   return {
-    shouldShowWizard: !perfilHecho || (REPESCA_DOCUMENTOS_ACTIVA && faltaDoc),
-    empleadoId: empleado.id,
-    perfilCompletado: perfilHecho,
-    modo,
-    empresaId: empleado.empresa_id,
+    shouldShowWizard: EXIGENCIA_FICHA_ACTIVA && pendientes.length > 0,
+    empleadoId: String(base.id),
+    perfilCompletado: pendientes.length === 0,
+    modo: soloPapeles ? "documentos" : "alta",
+    empresaId: String(base.empresa_id),
+    pendientes,
+    pasos,
     prefilled: {
-      doc_dni_anverso_path: empleado.doc_dni_anverso_path,
-      doc_dni_reverso_path: empleado.doc_dni_reverso_path,
-      doc_iban_path: empleado.doc_iban_path,
-      nombre: empleado.nombre,
-      apellidos: empleado.apellidos,
-      email: empleado.email_personal,
-      telefono: empleado.telefono,
-      dni_nie: empleado.dni_nie,
-      fecha_nacimiento: empleado.fecha_nacimiento,
-      direccion: empleado.direccion,
-      iban: empleado.iban,
-      numero_ss: empleado.numero_ss,
-      contacto_emergencia_nombre: empleado.contacto_emergencia_nombre,
-      contacto_emergencia_telefono: empleado.contacto_emergencia_telefono,
-      contacto_emergencia_relacion: empleado.contacto_emergencia_relacion,
-      talla_uniforme: empleado.talla_uniforme,
-      tipo_documento: empleado.tipo_documento,
-      genero: empleado.genero,
-      estado_civil: empleado.estado_civil,
-      codigo_postal: empleado.codigo_postal,
-      ciudad: empleado.ciudad,
-      provincia: empleado.provincia,
-      pais: empleado.pais,
-      avatar_url: empleado.avatar_url,
-      dni_archivo_url: empleado.dni_archivo_url,
+      doc_dni_anverso_path: fundida.doc_dni_anverso_path ?? null,
+      doc_dni_reverso_path: fundida.doc_dni_reverso_path ?? null,
+      doc_iban_path: fundida.doc_iban_path ?? null,
+      nombre: dato("nombre") as string | null,
+      apellidos: dato("apellidos") as string | null,
+      email: dato("email_personal") as string | null,
+      telefono: fundida.telefono ?? null,
+      dni_nie: fundida.dni_nie ?? null,
+      fecha_nacimiento: fundida.fecha_nacimiento ?? null,
+      nacionalidad: dato("nacionalidad") as string | null,
+      direccion: fundida.direccion ?? null,
+      iban: fundida.iban ?? null,
+      numero_ss: fundida.numero_ss ?? null,
+      contacto_emergencia_nombre: fundida.contacto_emergencia_nombre ?? null,
+      contacto_emergencia_telefono: fundida.contacto_emergencia_telefono ?? null,
+      contacto_emergencia_relacion: fundida.contacto_emergencia_relacion ?? null,
+      talla_uniforme: fundida.talla_uniforme ?? null,
+      tipo_documento: fundida.tipo_documento ?? null,
+      genero: fundida.genero ?? null,
+      estado_civil: fundida.estado_civil ?? null,
+      codigo_postal: fundida.codigo_postal ?? null,
+      ciudad: fundida.ciudad ?? null,
+      provincia: fundida.provincia ?? null,
+      pais: fundida.pais ?? null,
+      avatar_url: dato("avatar_url") as string | null,
+      dni_archivo_url: dato("dni_archivo_url") as string | null,
     },
   };
 });

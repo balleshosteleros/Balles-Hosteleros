@@ -1,12 +1,21 @@
 /**
- * Cron endpoint: parte diario de la RECOGIDA DE DOCUMENTACIÓN.
+ * Cron endpoint: parte diario de la RECOGIDA DE DATOS DE LA FICHA.
  *
- * Mientras la repesca está activa ([[repesca_documentacion_primer_acceso]]), a
- * quien le falte el DNI o el certificado bancario se le tapa la app hasta que lo
- * suba — salvo la pantalla de fichaje, que nunca se bloquea. Este correo cuenta
- * cómo va sin tener que entrar a mirar: quién lo ha entregado, y sobre todo
- * **quién ha entrado en la app y aun así no lo ha hecho**, que es la lista que
- * de verdad hace falta para poder reclamar.
+ * Desde el 12-sep-2026 no va solo de los tres papeles: cuenta TODO lo que le
+ * falta a cada ficha de lo que depende del trabajador —teléfono, fecha de
+ * nacimiento, Seguridad Social, cuenta, domicilio, contacto de emergencia,
+ * talla y documentos—, que es exactamente lo mismo que le tapa la app hasta que
+ * lo rellene. La lista sale de `ficha-incompleta.ts`, la MISMA que usa el
+ * bloqueo: si cada uno tuviera la suya, el correo reclamaría cosas que la app da
+ * por buenas.
+ *
+ * Lo que NO se le reclama a él y sí sale aparte, al final: las CONDICIONES
+ * (salario). Las pone la empresa ficha a ficha, así que es una lista de deberes
+ * nuestros, no suyos.
+ *
+ * El correo cuenta cómo va sin tener que entrar a mirar: quién lo ha entregado
+ * y, sobre todo, **quién ha entrado en la app y aun así no lo ha hecho**, que es
+ * la lista que de verdad hace falta para poder reclamar.
  *
  * «Ha entrado» sale del ÚLTIMO INICIO DE SESIÓN que guarda el propio Supabase
  * (`auth.users.last_sign_in_at`), no de `usuarios.ultima_actividad`: ese campo
@@ -24,6 +33,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email/send";
+import {
+  COLUMNAS_REVISION,
+  fundirFichas,
+  loQueFalta,
+} from "@/features/primer-acceso/lib/ficha-incompleta";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -35,27 +49,13 @@ const DESTINO = "balleshosteleros@gmail.com";
  * Día en que el aviso llegó DE VERDAD a producción (no en el que se escribió el
  * código). Quien entró antes de esta fecha no pudo verlo, y marcarlo como «ha
  * entrado y ha pasado del aviso» sería acusarle de ignorar algo que no existía.
+ *
+ * 12-sep-2026: el aviso pasa a pedir la ficha entera y a taparlo todo. La hora
+ * es la del despliegue, no la de medianoche: quien entró esta misma mañana lo
+ * hizo cuando todavía no se le pedía el teléfono, y sacarlo en la lista de «ha
+ * pasado del aviso» sería acusarle de ignorar algo que aún no existía.
  */
-const REPESCA_DESDE = "2026-09-10T00:00:00Z";
-
-interface FilaEmpleado {
-  nombre: string;
-  apellidos: string | null;
-  empresa: string;
-  user_id: string | null;
-  doc_dni_anverso_path: string | null;
-  doc_dni_reverso_path: string | null;
-  doc_iban_path: string | null;
-}
-
-/** Qué le falta a esta ficha, en palabras. */
-function faltantes(e: FilaEmpleado): string[] {
-  const f: string[] = [];
-  if (!e.doc_dni_anverso_path) f.push("DNI delante");
-  if (!e.doc_dni_reverso_path) f.push("DNI detrás");
-  if (!e.doc_iban_path) f.push("certificado bancario");
-  return f;
-}
+const AVISO_DESDE = "2026-09-11T16:39:08Z";
 
 function fila(nombre: string, empresa: string, detalle: string): string {
   return `<tr>
@@ -90,9 +90,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("empleados")
-    .select(
-      "nombre, apellidos, user_id, doc_dni_anverso_path, doc_dni_reverso_path, doc_iban_path, empresas(nombre)",
-    )
+    .select(`id, nombre, apellidos, user_id, empresas(nombre), ${COLUMNAS_REVISION}`)
     .eq("estado", "Activo");
 
   if (error) {
@@ -100,20 +98,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  const empleados: FilaEmpleado[] = (data ?? []).map((r) => {
-    const emp = r as unknown as Record<string, unknown>;
-    const rel = emp.empresas as { nombre?: string } | { nombre?: string }[] | null;
-    const nombreEmpresa = Array.isArray(rel) ? rel[0]?.nombre : rel?.nombre;
-    return {
-      nombre: String(emp.nombre ?? ""),
-      apellidos: (emp.apellidos as string | null) ?? null,
-      empresa: nombreEmpresa ?? "—",
-      user_id: (emp.user_id as string | null) ?? null,
-      doc_dni_anverso_path: (emp.doc_dni_anverso_path as string | null) ?? null,
-      doc_dni_reverso_path: (emp.doc_dni_reverso_path as string | null) ?? null,
-      doc_iban_path: (emp.doc_iban_path as string | null) ?? null,
-    };
-  });
+  const filas = (data ?? []) as unknown as Record<string, unknown>[];
+
+  /**
+   * Se agrupa POR PERSONA, no por ficha. Quien trabaja en las dos sociedades
+   * tiene dos fichas con los mismos datos personales: listarlo dos veces haría
+   * reclamar dos veces lo mismo, y contar 28 pendientes donde hay 19 personas.
+   */
+  const porPersona = new Map<
+    string,
+    { nombre: string; empresas: Set<string>; fichas: Record<string, unknown>[]; userId: string | null }
+  >();
+
+  for (const f of filas) {
+    const rel = f.empresas as { nombre?: string } | { nombre?: string }[] | null;
+    const empresa = (Array.isArray(rel) ? rel[0]?.nombre : rel?.nombre) ?? "—";
+    const userId = (f.user_id as string | null) ?? null;
+    // Sin `user_id` no hay con quién agruparla: la ficha va por su cuenta.
+    const clave = userId ?? `ficha:${String(f.id)}`;
+    const ya = porPersona.get(clave);
+    if (ya) {
+      ya.empresas.add(empresa);
+      ya.fichas.push(f);
+    } else {
+      porPersona.set(clave, {
+        nombre: `${String(f.nombre ?? "")} ${String(f.apellidos ?? "")}`.trim(),
+        empresas: new Set([empresa]),
+        fichas: [f],
+        userId,
+      });
+    }
+  }
 
   // Última vez que cada persona inició sesión, según el propio Supabase.
   const actividad = new Map<string, string | null>();
@@ -126,52 +141,78 @@ export async function GET(request: Request) {
   const vistoSinHacer: string[] = [];
   const sinEntrar: string[] = [];
 
-  for (const e of empleados) {
-    const nombre = `${e.nombre} ${e.apellidos ?? ""}`.trim();
-    const falta = faltantes(e);
+  for (const p of porPersona.values()) {
+    const empresas = [...p.empresas].sort().join(" · ");
+    const pendientes = loQueFalta(fundirFichas(p.fichas));
 
-    if (falta.length === 0) {
-      completos.push(fila(nombre, e.empresa, "todo entregado"));
+    if (pendientes.length === 0) {
+      completos.push(fila(p.nombre, empresas, "ficha completa"));
       continue;
     }
 
-    const ultima = e.user_id ? actividad.get(e.user_id) ?? null : null;
-    const haEntrado = Boolean(ultima && ultima > REPESCA_DESDE);
-    const detalle = `falta ${falta.join(", ")}`;
+    const ultima = p.userId ? actividad.get(p.userId) ?? null : null;
+    const haEntrado = Boolean(ultima && ultima > AVISO_DESDE);
+    const detalle = `falta ${pendientes.map((c) => c.etiqueta).join(", ")}`;
 
     if (haEntrado) {
       const dia = String(ultima).slice(0, 10).split("-").reverse().join("-");
-      vistoSinHacer.push(fila(nombre, e.empresa, `${detalle} · entró el ${dia}`));
+      vistoSinHacer.push(fila(p.nombre, empresas, `${detalle} · entró el ${dia}`));
     } else {
-      sinEntrar.push(fila(nombre, e.empresa, `${detalle} · no ha entrado`));
+      sinEntrar.push(fila(p.nombre, empresas, `${detalle} · no ha entrado`));
     }
   }
 
+  /**
+   * Lo que NO depende del trabajador: las condiciones (salario) las pone la
+   * empresa, y van por FICHA —una persona en dos sociedades cobra en cada una—,
+   * así que esta lista sí se cuenta ficha a ficha.
+   */
+  const { data: conCondiciones } = await supabase
+    .from("empleado_condiciones")
+    .select("empleado_id");
+  const tieneCondiciones = new Set((conCondiciones ?? []).map((c) => String(c.empleado_id)));
+
+  const sinCondiciones: string[] = [];
+  for (const f of filas) {
+    if (tieneCondiciones.has(String(f.id))) continue;
+    const rel = f.empresas as { nombre?: string } | { nombre?: string }[] | null;
+    const empresa = (Array.isArray(rel) ? rel[0]?.nombre : rel?.nombre) ?? "—";
+    const nombre = `${String(f.nombre ?? "")} ${String(f.apellidos ?? "")}`.trim();
+    sinCondiciones.push(fila(nombre, empresa, "sin salario en la ficha"));
+  }
+
   const pendientes = vistoSinHacer.length + sinEntrar.length;
-  const total = empleados.length;
+  const total = porPersona.size;
 
   const html = `
-    <p style="font-size:15px;margin:0 0 4px"><b>Documentación: ${completos.length} de ${total}</b></p>
+    <p style="font-size:15px;margin:0 0 4px"><b>Fichas completas: ${completos.length} de ${total}</b></p>
     <p style="margin:0;color:#666;font-size:13px">
       ${
         pendientes === 0
-          ? "Ya está todo. Este es el último correo: no queda nadie pendiente."
-          : `Quedan ${pendientes} por entregar.`
+          ? "Ya está todo lo que depende de ellos."
+          : `Quedan ${pendientes} personas por completar su ficha.`
       }
     </p>
-    ${tabla("Han entrado y NO lo han subido", "#b91c1c", vistoSinHacer)}
+    ${tabla("Han entrado y NO lo han rellenado", "#b91c1c", vistoSinHacer)}
     ${tabla("Todavía no han entrado", "#a16207", sinEntrar)}
-    ${tabla("Entregado", "#15803d", completos)}
+    ${tabla("Ficha completa", "#15803d", completos)}
+    ${tabla("Lo ponemos NOSOTROS: condiciones sin salario", "#1d4ed8", sinCondiciones)}
     <p style="margin:24px 0 0;color:#999;font-size:11px">
-      Los de arriba han visto el aviso en la app y han seguido sin subirlo.
+      Los de la primera lista han visto el aviso en la app y han seguido sin rellenarlo. El aviso
+      les tapa el software entero: solo pueden fichar.
     </p>`;
+
+  // El parte deja de mandarse cuando no queda NADA que reclamar, ni a ellos ni a
+  // nosotros: con condiciones pendientes sigue habiendo trabajo que recordar.
+  const hayAlgoQueContar = pendientes > 0 || sinCondiciones.length > 0;
 
   const envio = await sendEmail({
     to: DESTINO,
-    subject:
-      pendientes === 0
-        ? "Documentación: completada"
-        : `Documentación: faltan ${pendientes} de ${total}`,
+    subject: hayAlgoQueContar
+      ? `Fichas: faltan ${pendientes} de ${total}${
+          sinCondiciones.length > 0 ? ` · ${sinCondiciones.length} sin salario` : ""
+        }`
+      : "Fichas: completadas",
     html,
     fromName: "Balles Hosteleros",
   });
@@ -192,6 +233,7 @@ export async function GET(request: Request) {
       completos: completos.length,
       vistoSinHacer: vistoSinHacer.length,
       sinEntrar: sinEntrar.length,
+      sinCondiciones: sinCondiciones.length,
     },
     { status: envio.ok ? 200 : 502 },
   );
