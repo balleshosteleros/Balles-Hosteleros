@@ -5,9 +5,11 @@
 -- del LISTADO. Iván capturó el 11/09/2026 los 12 comunicados abiertos, y esta
 -- migración pone en cada uno su texto, su fecha, su hora y su recurrencia reales.
 --
+-- Los 12 quedan programados: salen solos el día y la hora que les toca.
+--
 -- Además de los cuerpos, se corrige lo que la siembra había cambiado:
 --   · las HORAS (todo estaba a las 10:00; en Sesame cada uno tenía la suya),
---   · el que faltaba ("Feliz Dia del Trabajador", el segundo, de las 12:41).
+--   · el duplicado del Día del Trabajador (Sesame tenía dos el mismo día).
 --
 -- Dos retoques deliberados sobre el original, por ser errores materiales:
 --   · "Grupo Bacanal" firmaba el Año Nuevo de HABANA -> firma la empresa correcta.
@@ -84,7 +86,7 @@ insert into tmp_com (clave, titulo, cuerpo, recurrencia, estado, envio_local, no
 <p>🔹 <strong>Ausencias en la fecha de reunion</strong><br>Si no puedes acudir en la fecha indicada, es necesario que lo comuniques previamente con tu gerente responsable, en caso de no avisar se dara por no presentado, y no sera valido la justificacion despues, lo que conlleva no presentarse.</p>
 <p>📩 <a href="mailto:rrhh.grupohabana@gmail.com">rrhh.grupohabana@gmail.com</a></p>
 <p>Agradezco tu colaboración y compromiso.</p>
-<p>Atentamente,<br><strong>Departamento de RRHH</strong><br><strong>Grupo Habana</strong></p>$c$, 'mensual', 'borrador', '2026-09-20 13:00', 'Texto original de Sesame (20/09/2026 13:00, cada mes, fin 31/12/2026). En Sesame iba a 2 DEPARTAMENTOS, no a toda la empresa: en borrador hasta saber cuáles.'),
+<p>Atentamente,<br><strong>Departamento de RRHH</strong><br><strong>Grupo Habana</strong></p>$c$, 'mensual', 'programado', '2026-09-20 13:00', 'Texto original de Sesame (20/09/2026 13:00, cada mes, fin 31/12/2026). Va a los ENCARGADOS: jefes de sala, jefes de cocina y gerencia.'),
 
 ('sesame:pagos', '📣 COMUNICADO MENSUAL - PAGOS 📣', $c$<p>Te informo sobre las fechas de pago correspondientes al año 2025:</p>
 <p>📅 <strong>Calendario de pagos</strong></p>
@@ -128,14 +130,6 @@ insert into tmp_com (clave, titulo, cuerpo, recurrencia, estado, envio_local, no
 <p>👏 Gracias por vuestro <strong>compromiso</strong>,<br>🔥 vuestra <strong>energía diaria</strong>,<br>💪 vuestro <strong>esfuerzo constante</strong>,<br>y sobre todo… por <strong>elegir ser parte de este equipo</strong>.</p>
 <p>Nada de lo que logramos sería posible sin vosotros.<br><strong>Sois el alma de Habana.</strong></p>
 <p>Con mucho cariño,<br>💛 <strong>Equipo Habana</strong></p>$c$, 'anual', 'programado', '2027-05-01 15:20', 'Texto original de Sesame (01/05/2027 15:20, cada año, sin fin).'),
-
-('sesame:trabajador_2', '📣 Feliz Dia del Trabajador', $c$<p>Hola equipo,</p>
-<p>Hoy celebramos el Día del Trabajador, ese día en el que recordamos lo importante que es vuestro esfuerzo diario… aunque algunos sigamos necesitando café para arrancar y otros tengamos una relación demasiado estrecha con el botón de “posponer alarma”.</p>
-<p>Queremos aprovechar esta ocasión para reconocer de corazón vuestra dedicación, vuestra actitud y todo lo que aportáis cada día. Cada persona, desde su puesto, hace que esto funcione, avance y tenga sentido.</p>
-<p>Y a quienes hoy les toca trabajar, solo podemos decirles una cosa: la culpa no es nuestra, es de los clientes, que han decidido venir justo hoy. A nosotros nos encantaría cerrar, daros el día libre y celebrarlo todos como se merece… pero también nos encanta poder pagar a todo el mundo cada mes, y si cerramos demasiado, la cosa se nos complica bastante.</p>
-<p>Así que, entre bromas y realidades, queremos que sepáis que valoramos muchísimo vuestro esfuerzo, especialmente en días como hoy. Detrás de cada tarea terminada, cada problema resuelto y cada “ahora lo miro” que acaba saliendo adelante, hay compromiso, compañerismo y mucho trabajo bien hecho.</p>
-<p>Esperamos que disfrutéis de este día con orgullo por todo lo que hacéis y, si os toca trabajarlo, al menos que venga acompañado de buen ambiente, paciencia y algún café salvador.</p>
-<p>¡Feliz Día del Trabajador!</p>$c$, 'anual', 'borrador', '2027-05-01 12:41', 'Texto original de Sesame (01/05/2027 12:41, cada año, sin fin). En Sesame había DOS del Día del Trabajador el mismo día: este queda en borrador para no mandar dos.'),
 
 ('sesame:padre', 'Feliz día del Padre 💙', $c$<p>Feliz día del Padre:</p>
 <p>Hoy es un día especial para todos aquellos que, de una u otra manera, han vivido la experiencia de la paternidad.</p>
@@ -267,3 +261,33 @@ where not exists (
   where c.empresa_id = p.empresa_id
     and (c.observaciones = p.clave or c.observaciones like p.clave || ' ·%')
 );
+
+-- 6) "Reunión de encargados" no va a toda la plantilla.
+--
+--    Encargados = jefes de sala y jefes de cocina, y nadie más, más gerencia
+--    (Iván, 11/09/2026). Los jefes salen de su PUESTO, no de una lista escrita a
+--    mano: así la migración dice el criterio y no un puñado de nombres. Gerencia
+--    va por departamento, que sí es un departamento de verdad.
+--
+--    OJO: la fila guarda los logins ya resueltos. Si mañana entra o sale un jefe
+--    de sala o de cocina, hay que volver a abrir el comunicado y ajustarlo: el
+--    envío no vuelve a mirar los puestos.
+update public.comunicados c set
+  toda_empresa                = false,
+  departamentos_destinatarios = array['GERENCIA'],
+  empleados_destinatarios     = coalesce((
+    select array_agg(distinct emp.user_id)
+    from public.empleados emp
+    join public.empleado_puestos ep on ep.empleado_id = emp.id
+    join public.puestos p           on p.id = ep.puesto_id
+    where emp.empresa_id = c.empresa_id
+      and emp.estado     = 'Activo'
+      and emp.user_id is not null
+      and (p.nombre ilike 'JEFE DE SALA%' or p.nombre ilike 'JEFE DE COCINA%')
+  ), '{}'::uuid[]),
+  updated_at = now()
+where c.observaciones like 'sesame:reunion_encargados%';
+
+-- 7) Del Día del Trabajador se queda UNO solo (Iván, 11/09/2026): el de los
+--    emoticonos, que nombra a la casa. El segundo, el largo de las 12:41, fuera.
+delete from public.comunicados where observaciones like 'sesame:trabajador_2%';
