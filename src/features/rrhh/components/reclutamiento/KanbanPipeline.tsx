@@ -48,6 +48,8 @@ import {
   type ModoDecisionPreaviso,
 } from "@/features/rrhh/components/reclutamiento/DecisionPreavisoDialog";
 import { BajaContratoEmpresaDialog } from "@/features/rrhh/components/reclutamiento/BajaContratoEmpresaDialog";
+import { QuienCausaBajaDialog } from "@/features/rrhh/components/reclutamiento/QuienCausaBajaDialog";
+import type { TipoBajaContrato } from "@/features/rrhh/data/campos-gestoria";
 import {
   getReclutamientoConfigGeneral,
   type ReclutamientoConfigGeneral,
@@ -701,7 +703,12 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
   } | null>(null);
   // Baja que decide la EMPRESA (despido, fin de contrato, no supera la prueba):
   // pide el tipo de baja y los hechos, y de ahí salen la gestoría y su carta.
-  const [bajaEmpresa, setBajaEmpresa] = useState<Candidato | null>(null);
+  const [bajaEmpresa, setBajaEmpresa] = useState<{
+    candidato: Candidato;
+    tipo: TipoBajaContrato;
+  } | null>(null);
+  // Primera pregunta al darle de baja: ¿la causa la empresa o él?
+  const [quienCausaBaja, setQuienCausaBaja] = useState<Candidato | null>(null);
 
   const handleDragStart = useCallback((_e: React.DragEvent, c: Candidato) => {
     draggedCandidato.current = c;
@@ -828,7 +835,7 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
       if (c.fase === "preaviso") {
         setDecisionPreaviso({ candidato: c, modo: "baja" });
       } else {
-        setBajaEmpresa(c);
+        setQuienCausaBaja(c);
       }
       return;
     }
@@ -1035,14 +1042,36 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
         />
       )}
 
-      {/* Baja que decide la EMPRESA, al arrastrar desde «Empleado» o «Prueba». */}
+      {/* ¿Quién causa la baja? La empresa la tramita aquí; la suya la pide él. */}
+      <QuienCausaBajaDialog
+        open={!!quienCausaBaja}
+        onOpenChange={(o) => !o && setQuienCausaBaja(null)}
+        nombre={
+          quienCausaBaja
+            ? `${quienCausaBaja.nombre} ${quienCausaBaja.apellidos ?? ""}`.trim()
+            : ""
+        }
+        onEmpresa={() => {
+          if (quienCausaBaja) setBajaEmpresa({ candidato: quienCausaBaja, tipo: "disciplinaria" });
+          setQuienCausaBaja(null);
+        }}
+        onSinPreaviso={() => {
+          // Se fue sin avisar: la tramita RRHH, pero es suya. Se abre la misma
+          // ventana con el tipo ya puesto en voluntaria.
+          if (quienCausaBaja) setBajaEmpresa({ candidato: quienCausaBaja, tipo: "voluntaria" });
+          setQuienCausaBaja(null);
+        }}
+      />
+
+      {/* Baja que tramita la empresa (la decida ella o se fuera él sin avisar). */}
       <BajaContratoEmpresaDialog
         open={!!bajaEmpresa}
         onOpenChange={(o) => !o && setBajaEmpresa(null)}
-        candidatoId={bajaEmpresa?.id ?? null}
+        candidatoId={bajaEmpresa?.candidato.id ?? null}
+        tipoBajaInicial={bajaEmpresa?.tipo ?? "disciplinaria"}
         empleadoNombre={
           bajaEmpresa
-            ? `${bajaEmpresa.nombre} ${bajaEmpresa.apellidos ?? ""}`.trim()
+            ? `${bajaEmpresa.candidato.nombre} ${bajaEmpresa.candidato.apellidos ?? ""}`.trim()
             : ""
         }
         onDone={() => {

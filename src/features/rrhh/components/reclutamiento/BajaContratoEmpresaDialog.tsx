@@ -68,14 +68,17 @@ export function BajaContratoEmpresaDialog({
   candidatoId,
   empleadoNombre,
   onDone,
+  tipoBajaInicial = "disciplinaria",
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   candidatoId: string | null;
   empleadoNombre: string;
   onDone?: () => void;
+  /** Tipo con el que se abre. «voluntaria» cuando se fue sin dar preaviso. */
+  tipoBajaInicial?: TipoBajaContrato;
 }) {
-  const [tipoBaja, setTipoBaja] = useState<TipoBajaContrato>("disciplinaria");
+  const [tipoBaja, setTipoBaja] = useState<TipoBajaContrato>(tipoBajaInicial);
   const [ultimoDia, setUltimoDia] = useState<string>(hoyIso());
   const [motivo, setMotivo] = useState("");
   const [hechos, setHechos] = useState("");
@@ -86,12 +89,12 @@ export function BajaContratoEmpresaDialog({
 
   useEffect(() => {
     if (!open) return;
-    setTipoBaja("disciplinaria");
+    setTipoBaja(tipoBajaInicial);
     setUltimoDia(hoyIso());
     setMotivo("");
     setHechos("");
     setHechosPrevios(null);
-  }, [open]);
+  }, [open, tipoBajaInicial]);
 
   /**
    * Pide a la IA que reescriba los hechos con el registro formal de una carta
