@@ -1997,9 +1997,18 @@ export async function getMiCalendarioMes(
       map.set(fecha, prev);
     }
 
+    const hoyISO = todayISO();
     for (const s of solicitudesRes.data ?? []) {
       const ini = new Date((s.fecha_inicio as string) + "T00:00:00Z");
-      const fin = new Date(((s.fecha_fin as string | null) ?? (s.fecha_inicio as string)) + "T00:00:00Z");
+      // Una BAJA MÉDICA puede venir SIN fecha de fin: el médico da la baja y no
+      // dice cuándo se vuelve. Antes se tomaba el inicio como fin y el trabajador
+      // veía un único día en rojo mientras el resto le seguía saliendo "TRABAJAR".
+      // Se pinta hasta HOY y se va extendiendo sola: así nunca se afirma un día
+      // futuro que nadie sabe, y el cuadrante conserva el turno que le tocaría.
+      const finEfectivo =
+        (s.fecha_fin as string | null) ??
+        (s.subtipo === "baja_medica" ? hoyISO : (s.fecha_inicio as string));
+      const fin = new Date(finEfectivo + "T00:00:00Z");
       const startBound = new Date(desde + "T00:00:00Z");
       const endBound = new Date(hasta + "T00:00:00Z");
       const cur = new Date(Math.max(ini.getTime(), startBound.getTime()));
