@@ -15,6 +15,7 @@ import { cancelarCitaEnGoogle } from "../services/google-calendar";
 import type {
   Cita,
   CitaCalendario,
+  CuentaGoogleElegible,
   CitaConDetalle,
   CitaDisponibilidad,
   CitaEstado,
@@ -63,6 +64,8 @@ const calendarioSchema = z.object({
   dias_vista: z.number().int().min(1).max(365),
   color: z.string().trim().max(20).nullable().optional(),
   activo: z.boolean(),
+  /** Cuenta de Google elegida en el engranaje. null = el calendario vive solo dentro del software. */
+  google_cuenta_email: z.string().trim().email().max(200).nullable().optional(),
 });
 
 export type CalendarioInput = z.infer<typeof calendarioSchema>;
@@ -73,10 +76,52 @@ export async function guardarCalendario(input: CalendarioInput): Promise<ActionR
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
     }
-    const { supabase, empresaId } = await getAppContext();
+    const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "Sin empresa." };
 
-    const fila = { ...parsed.data, empresa_id: empresaId, updated_at: new Date().toISOString() };
+    // Quién presta el permiso de Google. Los tokens de cada cuenta viven en la
+    // fila de SU usuario (`google_cuentas_usuario`, RLS: cada uno ve la suya),
+    // así que solo se puede designar una cuenta que uno mismo tenga conectada.
+    // Si el calendario ya apuntaba a la cuenta de otra persona y no se toca, se
+    // respeta tal cual: cambiarla a ciegas dejaría las citas sin apuntar.
+    const emailElegido = parsed.data.google_cuenta_email?.trim().toLowerCase() || null;
+    let googleUserId: string | null = null;
+    if (emailElegido) {
+      const { readAccounts } = await import("@/lib/google/accounts");
+      const propias = await readAccounts();
+      const mia = propias.find((c) => c.email?.toLowerCase() === emailElegido);
+      if (mia) {
+        googleUserId = userId;
+      } else {
+        const { data: previo } = parsed.data.id
+          ? await supabase
+              .from("citas_calendarios")
+              .select("google_cuenta_email, google_user_id")
+              .eq("id", parsed.data.id)
+              .eq("empresa_id", empresaId)
+              .maybeSingle()
+          : { data: null };
+        const fila = previo as
+          | { google_cuenta_email?: string | null; google_user_id?: string | null }
+          | null;
+        if (fila?.google_cuenta_email?.toLowerCase() === emailElegido && fila.google_user_id) {
+          googleUserId = fila.google_user_id;
+        } else {
+          return {
+            ok: false,
+            error: "Esa cuenta de Google no está conectada aquí. Conéctala arriba y vuelve a elegirla.",
+          };
+        }
+      }
+    }
+
+    const fila = {
+      ...parsed.data,
+      google_cuenta_email: emailElegido,
+      google_user_id: googleUserId,
+      empresa_id: empresaId,
+      updated_at: new Date().toISOString(),
+    };
 
     const { data, error } = parsed.data.id
       ? await supabase
@@ -159,6 +204,45 @@ export async function listarDisponibilidad(
   } catch (err) {
     console.error("[citas][listarDisponibilidad] fatal:", err);
     return { ok: false, error: friendlyError(err, "listarDisponibilidad") };
+  }
+}
+
+/**
+ * Cuentas de Google que se pueden poner en un calendario: las que tiene
+ * conectadas quien está mirando. Nunca sale de aquí el `refreshToken`.
+ *
+ * Si el calendario ya apunta a una cuenta que la conectó otra persona, se
+ * añade a la lista marcada como ajena, para que al guardar no se pierda.
+ */
+export async function cuentasGoogleElegibles(
+  calendarioId?: string,
+): Promise<ActionResult<CuentaGoogleElegible[]>> {
+  try {
+    const { readAccounts } = await import("@/lib/google/accounts");
+    const propias = await readAccounts();
+    const lista: CuentaGoogleElegible[] = propias
+      .filter((c) => c.email)
+      .map((c) => ({ email: c.email, nombre: c.name || c.email, propia: true }));
+
+    if (calendarioId) {
+      const { supabase, empresaId } = await getAppContext();
+      if (empresaId) {
+        const { data } = await supabase
+          .from("citas_calendarios")
+          .select("google_cuenta_email")
+          .eq("id", calendarioId)
+          .eq("empresa_id", empresaId)
+          .maybeSingle();
+        const puesta = (data as { google_cuenta_email?: string | null } | null)?.google_cuenta_email;
+        if (puesta && !lista.some((c) => c.email.toLowerCase() === puesta.toLowerCase())) {
+          lista.push({ email: puesta, nombre: puesta, propia: false });
+        }
+      }
+    }
+    return { ok: true, data: lista };
+  } catch (err) {
+    console.error("[citas][cuentasGoogleElegibles] fatal:", err);
+    return { ok: false, error: friendlyError(err, "cuentasGoogleElegibles") };
   }
 }
 
@@ -314,7 +398,8 @@ export async function listarCitas(
       .from("citas")
       .select(
         `id, empresa_id, calendario_id, empleado_id, cliente_id, inicio, fin, estado,
-         pagina_id, origen, notas, google_event_id, google_cuenta_email, created_at, updated_at,
+         pagina_id, origen, notas, google_event_id, google_cuenta_email, google_meet_url,
+         created_at, updated_at,
          citas_calendarios(nombre, color),
          empleados(nombre, apellidos),
          clientes_sala(nombre, apellidos, email, telefono)`,

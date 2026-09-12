@@ -67,10 +67,13 @@ export async function reservarCita(datos: DatosReserva): Promise<ResultadoReserv
 
   const { data: empRow } = await supabase
     .from("empresas")
-    .select("id, datos_generales")
+    .select("id, config_operativa")
     .eq("id", calendario.empresa_id)
     .maybeSingle();
-  const zonaHoraria = zonaHorariaDeConfig((empRow as { datos_generales?: unknown } | null)?.datos_generales);
+  // La zona vive en `config_operativa`, no en `datos_generales`: leyéndola del
+  // sitio equivocado, TODA empresa caía al valor por defecto (Madrid) y una que
+  // no esté en la península tendría la agenda corrida.
+  const zonaHoraria = zonaHorariaDeConfig((empRow as { config_operativa?: unknown } | null)?.config_operativa);
 
   // El hueco se recalcula aquí: el navegador pudo enseñar una lista de hace
   // diez minutos, o alguien pudo mandar una hora a mano.

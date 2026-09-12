@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { reservarCita } from "@/features/producto/citas/services/reservar";
 import { sincronizarCitaConGoogle } from "@/features/producto/citas/services/google-calendar";
+import { notificarCitaConfirmada } from "@/features/producto/citas/services/notificar-cita";
 import { rateLimit } from "@/shared/lib/rate-limit-memory";
 import { extraerIp } from "@/features/marketing/pagina-web/services/ip-hash";
 
@@ -48,11 +49,24 @@ export async function POST(req: NextRequest) {
     const res = await reservarCita(parsed.data);
     if (!res.ok) return NextResponse.json(res, { status: 409 });
 
-    // El evento en Google va DESPUÉS y aparte: si Google falla, la cita ya está
-    // guardada y nadie se queda sin su hueco por un problema de terceros.
-    void sincronizarCitaConGoogle(res.citaId).catch((err) =>
-      console.error("[api/citas/reservar] google:", err),
-    );
+    // Primero el espejo en Google —de ahí sale el enlace de la videollamada— y
+    // después la confirmación, que lo lleva dentro. Ninguna de las dos puede
+    // tumbar la reserva: la cita ya está guardada y nadie se queda sin su hueco
+    // por un problema de terceros.
+    //
+    // Se ESPERAN las dos. Dejarlas "en segundo plano" no funciona aquí: la
+    // función se apaga al responder y el trabajo pendiente se corta a medias
+    // —justo lo que dejaba a gente sin correo y sin rastro del fallo.
+    try {
+      await sincronizarCitaConGoogle(res.citaId);
+    } catch (err) {
+      console.error("[api/citas/reservar] google:", err);
+    }
+    try {
+      await notificarCitaConfirmada(res.citaId);
+    } catch (err) {
+      console.error("[api/citas/reservar] confirmación:", err);
+    }
 
     return NextResponse.json({ ok: true, citaId: res.citaId, inicio: res.inicioISO });
   } catch (err) {

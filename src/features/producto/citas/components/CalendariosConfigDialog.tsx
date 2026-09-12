@@ -36,8 +36,9 @@ import {
   asignarEmpleados,
   listarDisponibilidad,
   guardarDisponibilidad,
+  cuentasGoogleElegibles,
 } from "../actions/citas-actions";
-import type { CitaCalendario, EmpleadoDeCalendario } from "../types";
+import type { CitaCalendario, CuentaGoogleElegible, EmpleadoDeCalendario } from "../types";
 import { Desplegable } from "@/components/ui/desplegable";
 import { SelectorHora } from "@/components/ui/selector-hora";
 
@@ -68,6 +69,8 @@ const NUEVO: Omit<CitaCalendario, "id" | "empresa_id" | "created_at" | "updated_
   dias_vista: 30,
   color: COLORES[0],
   activo: true,
+  google_cuenta_email: null,
+  google_user_id: null,
 };
 
 interface Props {
@@ -82,6 +85,7 @@ export function CalendariosConfigDialog({ open, onOpenChange, onGuardado }: Prop
   const [editando, setEditando] = useState<Partial<CitaCalendario> | null>(null);
   const [equipo, setEquipo] = useState<string[]>([]);
   const [franjas, setFranjas] = useState<Franja[]>([]);
+  const [cuentas, setCuentas] = useState<CuentaGoogleElegible[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [aBorrar, setABorrar] = useState<CitaCalendario | null>(null);
 
@@ -96,19 +100,23 @@ export function CalendariosConfigDialog({ open, onOpenChange, onGuardado }: Prop
     if (open) void cargar();
   }, [open, cargar]);
 
-  const abrirNuevo = () => {
+  const abrirNuevo = async () => {
     setEditando({ ...NUEVO });
     setEquipo([]);
     setFranjas([{ dia_semana: 1, hora_inicio: "10:00", hora_fin: "14:00" }]);
+    const res = await cuentasGoogleElegibles();
+    setCuentas(res.ok ? res.data : []);
   };
 
   const abrirEdicion = async (cal: CitaCalendario) => {
     setEditando(cal);
-    const [resEq, resFr] = await Promise.all([
+    const [resEq, resFr, resCuentas] = await Promise.all([
       empleadosDelCalendario(cal.id),
       listarDisponibilidad(cal.id),
+      cuentasGoogleElegibles(cal.id),
     ]);
     setEquipo(resEq.ok ? resEq.data : []);
+    setCuentas(resCuentas.ok ? resCuentas.data : []);
     setFranjas(
       resFr.ok
         ? resFr.data.map((f) => ({
@@ -133,6 +141,7 @@ export function CalendariosConfigDialog({ open, onOpenChange, onGuardado }: Prop
       dias_vista: editando.dias_vista ?? 30,
       color: editando.color ?? COLORES[0],
       activo: editando.activo ?? true,
+      google_cuenta_email: editando.google_cuenta_email ?? null,
     });
     if (!res.ok) {
       setGuardando(false);
@@ -205,7 +214,7 @@ export function CalendariosConfigDialog({ open, onOpenChange, onGuardado }: Prop
                   </Button>
                 </Card>
               ))}
-              <Button variant="outline" className="w-full" onClick={abrirNuevo}>
+              <Button variant="outline" className="w-full" onClick={() => void abrirNuevo()}>
                 <Plus className="mr-1 h-4 w-4" /> Nuevo calendario
               </Button>
             </div>
@@ -279,6 +288,29 @@ export function CalendariosConfigDialog({ open, onOpenChange, onGuardado }: Prop
                   />
                   <Label htmlFor="cal-activo">Activo</Label>
                 </div>
+              </div>
+
+              <div>
+                <Label htmlFor="cal-google">Se apunta en el calendario de</Label>
+                <Desplegable
+                  id="cal-google"
+                  className="mt-1.5 h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  value={editando.google_cuenta_email ?? ""}
+                  onChange={(e) =>
+                    setEditando({ ...editando, google_cuenta_email: e.target.value || null })
+                  }
+                >
+                  <option value="">Solo dentro del software</option>
+                  {cuentas.map((c) => (
+                    <option key={c.email} value={c.email}>
+                      {c.propia ? c.email : `${c.email} (la conectó otra persona)`}
+                    </option>
+                  ))}
+                </Desplegable>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Las citas se apuntan en el Google Calendar de esa cuenta y se crea la
+                  videollamada. Aquí salen las cuentas que tienes conectadas tú.
+                </p>
               </div>
 
               <div>

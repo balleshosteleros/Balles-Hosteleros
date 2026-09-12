@@ -62,6 +62,21 @@ export function CitaDetalleDialog({ cita, zonaHoraria, onOpenChange, onCambiado 
               <Fila etiqueta="Correo" valor={cita.cliente_email} />
               <Fila etiqueta="Teléfono" valor={cita.cliente_telefono} />
               <Fila etiqueta="Viene de" valor={cita.origen} />
+              {cita.google_meet_url && (
+                <div className="flex gap-2">
+                  <dt className="w-24 shrink-0 text-muted-foreground">Videollamada</dt>
+                  <dd className="min-w-0 break-words">
+                    <a
+                      href={cita.google_meet_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline underline-offset-2"
+                    >
+                      Entrar
+                    </a>
+                  </dd>
+                </div>
+              )}
               {cita.notas && <Fila etiqueta="Notas" valor={cita.notas} />}
               <div className="flex items-center gap-2 pt-1">
                 <dt className="w-24 shrink-0 text-muted-foreground">Estado</dt>

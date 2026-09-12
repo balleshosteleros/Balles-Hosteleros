@@ -32,8 +32,24 @@ export interface CitaCalendario {
   dias_vista: number;
   color: string | null;
   activo: boolean;
+  /**
+   * Cuenta de Google en cuyo calendario se apuntan los eventos de este
+   * calendario. Quien reserva es anónimo y no tiene sesión de la que sacar el
+   * permiso, así que la cuenta se designa aquí, desde el engranaje.
+   */
+  google_cuenta_email: string | null;
+  /** Usuario del software cuyo permiso de Google se usa. Lo pone el servidor. */
+  google_user_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Cuenta de Google que se puede elegir para un calendario. Sin secretos. */
+export interface CuentaGoogleElegible {
+  email: string;
+  nombre: string;
+  /** true = está conectada por quien está mirando; false = la puso otra persona. */
+  propia: boolean;
 }
 
 /** Franja en la que se puede reservar. Las horas son de la EMPRESA, no del navegador. */
@@ -62,6 +78,8 @@ export interface Cita {
   notas: string | null;
   google_event_id: string | null;
   google_cuenta_email: string | null;
+  /** Enlace de la videollamada. Es el que va en el correo de confirmación. */
+  google_meet_url: string | null;
   created_at: string;
   updated_at: string;
 }

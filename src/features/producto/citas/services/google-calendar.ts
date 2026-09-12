@@ -8,6 +8,12 @@
  *
  * Si Google falla, la cita ya está guardada en el software: esto es un espejo,
  * nunca la fuente de verdad.
+ *
+ * El aviso a quien reserva NO lo manda Google (`sendUpdates=none`): lo manda el
+ * software, con la marca de la empresa y con el enlace de la videollamada
+ * dentro (`notificarCitaConfirmada`). Antes el único correo que recibía era la
+ * invitación de Google, que no lleva nuestra marca y que no llega si Google
+ * tiene un mal día.
  */
 import { createAdminClient } from "@/lib/supabase/admin";
 import { refreshAccessToken } from "@/lib/google/api";
@@ -70,10 +76,10 @@ export async function sincronizarCitaConGoogle(citaId: string): Promise<void> {
 
   const { data: emp } = await supabase
     .from("empresas")
-    .select("datos_generales")
+    .select("config_operativa")
     .eq("id", cita.empresa_id as string)
     .maybeSingle();
-  const zona = zonaHorariaDeConfig((emp as { datos_generales?: unknown } | null)?.datos_generales);
+  const zona = zonaHorariaDeConfig((emp as { config_operativa?: unknown } | null)?.config_operativa);
 
   const cli = cita.clientes_sala as
     | { nombre?: string; apellidos?: string; email?: string; telefono?: string }
@@ -101,7 +107,8 @@ export async function sincronizarCitaConGoogle(citaId: string): Promise<void> {
 
   try {
     const res = await fetch(
-      `${CALENDAR_API}/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all`,
+      // `sendUpdates=none`: el correo a quien reserva lo manda el software.
+      `${CALENDAR_API}/calendars/primary/events?conferenceDataVersion=1&sendUpdates=none`,
       {
         method: "POST",
         headers: {
@@ -118,13 +125,24 @@ export async function sincronizarCitaConGoogle(citaId: string): Promise<void> {
       return;
     }
 
-    const evento = (await res.json()) as { id?: string };
+    const evento = (await res.json()) as {
+      id?: string;
+      hangoutLink?: string;
+      conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] };
+    };
     if (evento.id) {
+      // El enlace de la videollamada se guarda de nuestro lado: es lo que lleva
+      // el correo de confirmación, y sin él quien reserva no tiene dónde entrar.
+      const meet =
+        evento.hangoutLink ||
+        evento.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")?.uri ||
+        null;
       await supabase
         .from("citas")
         .update({
           google_event_id: evento.id,
           google_cuenta_email: cal.google_cuenta_email,
+          google_meet_url: meet,
           updated_at: new Date().toISOString(),
         })
         .eq("id", citaId);
@@ -154,6 +172,9 @@ export async function cancelarCitaEnGoogle(citaId: string): Promise<void> {
   if (!accessToken) return;
 
   try {
+    // Aquí SÍ avisa Google (`sendUpdates=all`): al alta la confirmación la manda
+    // el software, pero la anulación no tiene correo propio todavía, y es peor
+    // que la persona se presente a una cita que ya no existe.
     await fetch(`${CALENDAR_API}/calendars/primary/events/${eventoId}?sendUpdates=all`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
