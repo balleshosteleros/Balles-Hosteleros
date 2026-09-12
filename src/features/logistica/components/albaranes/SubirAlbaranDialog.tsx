@@ -26,6 +26,7 @@ import { ProveedorCombobox } from "@/features/logistica/components/productos/Pro
 import { MesaIncidenciasDialog } from "@/features/logistica/components/albaranes/MesaIncidenciasDialog";
 import { formatNumero } from "@/shared/lib/numero";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   open: boolean;
@@ -195,7 +196,7 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Fecha</label>
-                <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="h-9" />
+                <SelectorFecha value={fecha} onChange={setFecha} className="h-9" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Nº albarán proveedor</label>

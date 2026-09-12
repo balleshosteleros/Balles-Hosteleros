@@ -37,6 +37,7 @@ import { CANJE_ESTADO_COLOR, CANJE_ESTADO_LABEL } from "@/features/toques/types/
 import { OtorgarToqueDialog } from "./OtorgarToqueDialog";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 type Row = Record<string, unknown>;
 function s(r: Row, k: string): string {
@@ -345,13 +346,11 @@ export function CanjesAdminView() {
               <Label htmlFor="fecha-disfrute" className="text-xs">
                 Fecha de disfrute (opcional)
               </Label>
-              <Input
-                id="fecha-disfrute"
-                type="date"
+              <SelectorFecha id="fecha-disfrute" 
                 className="mt-1"
                 value={aprobando?.fecha ?? ""}
-                onChange={(e) =>
-                  setAprobando((prev) => (prev ? { ...prev, fecha: e.target.value } : prev))
+                onChange={(valor) =>
+                  setAprobando((prev) => (prev ? { ...prev, fecha: valor } : prev))
                 }
               />
             </div>

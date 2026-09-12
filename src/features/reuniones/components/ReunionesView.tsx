@@ -34,6 +34,7 @@ import {
   updateReunion,
 } from "@/features/reuniones/actions/reuniones-actions";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 type Reunion = {
   id: string;
@@ -284,10 +285,8 @@ export function ReunionesView() {
             </div>
             <div>
               <Label>Fecha</Label>
-              <Input
-                type="date"
-                value={form.fecha}
-                onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+              <SelectorFecha value={form.fecha}
+                onChange={(valor) => setForm({ ...form, fecha: valor })}
               />
             </div>
             <div>

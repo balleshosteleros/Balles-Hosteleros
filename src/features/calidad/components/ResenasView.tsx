@@ -104,6 +104,7 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { ResenasAnaliticaPanel } from "@/features/calidad/components/ResenasAnaliticaPanel";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 // ─── Filtro de período ────────────────────────────────────────
 type PeriodoResenas = "todo" | "semana" | "mes" | "personalizado";
@@ -559,18 +560,14 @@ function FiltroPeriodo({
       ))}
       {periodo === "personalizado" && (
         <div className="flex items-center gap-1.5 ml-1">
-          <Input
-            type="date"
-            value={customFrom}
-            onChange={(e) => onCustomFromChange(e.target.value)}
+          <SelectorFecha value={customFrom}
+            onChange={(valor) => onCustomFromChange(valor)}
             className="h-9 w-[140px] text-xs"
             aria-label="Desde"
           />
           <span className="text-xs text-muted-foreground">—</span>
-          <Input
-            type="date"
-            value={customTo}
-            onChange={(e) => onCustomToChange(e.target.value)}
+          <SelectorFecha value={customTo}
+            onChange={(valor) => onCustomToChange(valor)}
             className="h-9 w-[140px] text-xs"
             aria-label="Hasta"
           />

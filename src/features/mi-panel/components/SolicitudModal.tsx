@@ -79,6 +79,7 @@ import {
   TEXTOS_PERMISO,
   type VacacionesReglas,
 } from "@/features/mi-panel/lib/vacaciones-reglas";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface SolicitudModalProps {
   open: boolean;
@@ -788,11 +789,9 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                   <Label htmlFor="fechaBaja">
                     ¿Qué día quieres que sea efectiva tu baja?
                   </Label>
-                  <Input
-                    id="fechaBaja"
-                    type="date"
+                  <SelectorFecha id="fechaBaja" 
                     value={fechaFin}
-                    onChange={(e) => setFechaFin(e.target.value)}
+                    onChange={setFechaFin}
                     min={minBaja}
                   />
                   <p className="text-xs text-muted-foreground">
@@ -942,12 +941,10 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                       ? "Fecha"
                       : "Desde"}
                   </Label>
-                  <Input
-                    id="fechaInicio"
-                    type="date"
+                  <SelectorFecha id="fechaInicio" 
                     value={fechaInicio}
-                    onChange={(e) => {
-                      const desde = e.target.value;
+                    onChange={(valor) => {
+                      const desde = valor;
                       setFechaInicio(desde);
                       // Si la empresa exige un mínimo de días, proponemos el
                       // "hasta" que lo cumple en vez de dejar que lo calcule él
@@ -975,11 +972,9 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                     <Label htmlFor="fechaFin">
                       {subtipo === "baja_medica" ? "Vuelta aproximada" : "Hasta"}
                     </Label>
-                    <Input
-                      id="fechaFin"
-                      type="date"
+                    <SelectorFecha id="fechaFin" 
                       value={fechaFin}
-                      onChange={(e) => setFechaFin(e.target.value)}
+                      onChange={setFechaFin}
                       min={fechaInicio || undefined}
                     />
                     {subtipo === "baja_medica" && (

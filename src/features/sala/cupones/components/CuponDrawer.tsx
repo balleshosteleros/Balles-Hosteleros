@@ -28,6 +28,7 @@ import {
   deleteCuponAction,
 } from "@/features/sala/cupones/actions/cupones-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 const DIAS: { key: DiaSemanaKey; label: string }[] = [
   { key: "lun", label: "Lun" },
@@ -268,7 +269,7 @@ export function CuponDrawer({ open, onClose, cupon, onSaved }: Props) {
 
           <div className="space-y-1.5">
             <Label htmlFor="fc">Fecha de caducidad</Label>
-            <Input id="fc" type="date" value={fechaCaducidad} onChange={e => setFechaCaducidad(e.target.value)} className="w-44" />
+            <SelectorFecha id="fc" value={fechaCaducidad} onChange={setFechaCaducidad} className="w-44" />
             <p className="text-xs text-muted-foreground">Si la dejas vacía, el cupón no caduca.</p>
           </div>
 

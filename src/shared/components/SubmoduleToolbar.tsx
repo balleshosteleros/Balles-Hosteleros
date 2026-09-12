@@ -59,6 +59,7 @@ import {
 } from "@/shared/io/view-preferences";
 import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 export type ToolbarFiltroTipo =
   | "lista"
@@ -559,19 +560,15 @@ function FiltrosPopover({
               <div className="space-y-2">
                 <div>
                   <Label className="text-xs text-muted-foreground">Desde</Label>
-                  <Input
-                    type="date"
-                    value={tempDesde}
-                    onChange={(e) => setTempDesde(e.target.value)}
+                  <SelectorFecha value={tempDesde}
+                    onChange={setTempDesde}
                     className="h-8 mt-0.5"
                   />
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Hasta</Label>
-                  <Input
-                    type="date"
-                    value={tempHasta}
-                    onChange={(e) => setTempHasta(e.target.value)}
+                  <SelectorFecha value={tempHasta}
+                    onChange={setTempHasta}
                     className="h-8 mt-0.5"
                   />
                 </div>

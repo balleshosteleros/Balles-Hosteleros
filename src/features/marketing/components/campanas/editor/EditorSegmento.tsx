@@ -16,6 +16,7 @@ import type {
 } from "@/features/marketing/data/campanas";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   segmento: SegmentoJson;
@@ -367,10 +368,8 @@ function ValoresDeCondicion({
     case "alta_antes":
     case "alta_despues":
       return (
-        <Input
-          type="date"
-          value={condicion.fecha}
-          onChange={(e) => onChange({ ...condicion, fecha: e.target.value })}
+        <SelectorFecha value={condicion.fecha}
+          onChange={(valor) => onChange({ ...condicion, fecha: valor })}
           className="h-7 w-40"
         />
       );

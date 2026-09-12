@@ -23,6 +23,7 @@ import {
   type EstadoDenuncia,
   type ModalidadDenuncia,
 } from "@/features/mi-panel/actions/denuncias-actions";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 export const CATEGORIA_LABEL: Record<CategoriaDenuncia, string> = {
   acoso_laboral: "Acoso laboral",
@@ -188,7 +189,7 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
             </div>
             <div>
               <Label>Fecha de los hechos</Label>
-              <Input type="date" value={fechaHechos} onChange={(e) => setFechaHechos(e.target.value)} />
+              <SelectorFecha value={fechaHechos} onChange={setFechaHechos} />
             </div>
           </div>
 

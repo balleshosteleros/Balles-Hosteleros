@@ -42,6 +42,7 @@ import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { formatEur as fmtEur, parseDecimal } from "@/shared/lib/numero";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   productoId: string;
@@ -512,10 +513,8 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground block mb-1">Fecha inicio *</Label>
-                <Input
-                  type="date"
-                  value={fechaInicio}
-                  onChange={(e) => setFechaInicio(e.target.value)}
+                <SelectorFecha value={fechaInicio}
+                  onChange={setFechaInicio}
                   className={fechaInicioError ? "border-destructive" : ""}
                 />
                 {fechaInicioError && (
@@ -527,10 +526,8 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                   <Label className="text-xs text-muted-foreground block mb-1">
                     Fecha hasta <span className="text-muted-foreground/70">(opcional)</span>
                   </Label>
-                  <Input
-                    type="date"
-                    value={fechaFin}
-                    onChange={(e) => setFechaFin(e.target.value)}
+                  <SelectorFecha value={fechaFin}
+                    onChange={setFechaFin}
                     min={fechaInicio || undefined}
                     className={fechaFinError ? "border-destructive" : ""}
                   />

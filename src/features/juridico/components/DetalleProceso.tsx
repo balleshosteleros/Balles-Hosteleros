@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { listDocumentosByProceso, uploadDocumentoJuridico, deleteDocumentoJuridico } from "@/features/juridico/actions/documentos-actions";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   open: boolean;
@@ -368,7 +369,7 @@ export function DetalleProceso({ open, onClose, item, onAddActualizacion, onAddD
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs font-bold">FECHA</Label>
-                  <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+                  <SelectorFecha value={fecha} onChange={setFecha} />
                 </div>
                 <div>
                   <Label className="text-xs font-bold">APUNTADO POR</Label>

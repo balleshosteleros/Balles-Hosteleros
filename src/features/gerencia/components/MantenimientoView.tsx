@@ -38,6 +38,7 @@ import {
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 function mapDbToIncidencia(row: Record<string, unknown>): Incidencia {
   const actualizaciones: Actualizacion[] = Array.isArray(row.mantenimiento_actualizaciones)
@@ -446,7 +447,7 @@ export function MantenimientoView() {
       ),
       td: (item) => (
         <td key="fechaPublicado" className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-          <Input type="date" value={item.fechaPublicado} disabled={item.estado === "TERMINADO"} onChange={(e) => updateField(item.id, "fechaPublicado", e.target.value)} className="h-8 text-xs w-[130px]" />
+          <SelectorFecha value={item.fechaPublicado} disabled={item.estado === "TERMINADO"} onChange={(valor) => updateField(item.id, "fechaPublicado", valor)} className="h-8 text-xs w-[130px]" />
         </td>
       ),
     },

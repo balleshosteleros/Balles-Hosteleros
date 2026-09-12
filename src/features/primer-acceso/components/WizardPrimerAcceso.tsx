@@ -21,6 +21,7 @@ import {
 import type { ModoPrimerAcceso } from "@/features/primer-acceso/data/empleado-status";
 import type { PasoFicha } from "@/features/primer-acceso/lib/ficha-incompleta";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Prefilled {
   doc_dni_anverso_path?: string | null;
@@ -793,15 +794,16 @@ export function WizardPrimerAcceso({
                   </div>
                   <div className="space-y-1.5">
                     <Label>Fecha de nacimiento *</Label>
-                    <Input
-                      type="date"
+                    <SelectorFecha
                       value={leidos.fecha_nacimiento}
-                      readOnly={bloqueado.fecha_nacimiento}
                       disabled={bloqueado.fecha_nacimiento}
                       className={bloqueado.fecha_nacimiento ? "bg-muted text-muted-foreground" : undefined}
-                      onChange={(e) => {
+                      // Nacimiento: el calendario abre por un año lejano, o se
+                      // queda a decenas de clics del suyo.
+                      mesPorDefecto="1990-01-01"
+                      onChange={(valor) => {
                         if (bloqueado.fecha_nacimiento) return;
-                        setLeidos((p) => ({ ...p, fecha_nacimiento: e.target.value }));
+                        setLeidos((p) => ({ ...p, fecha_nacimiento: valor }));
                         setError(null);
                       }}
                     />

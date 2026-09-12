@@ -9,6 +9,7 @@ import { Loader2, Save, Cake, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { actualizarFechaAlta } from "@/features/toques/actions/toques-admin-actions";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 type Row = Record<string, unknown>;
 
@@ -194,11 +195,9 @@ export function AntiguedadEmpleadosPanel() {
                       )}
                     </td>
                     <td className="py-2 pr-3">
-                      <Input
-                        type="date"
-                        value={draft}
-                        onChange={(e) =>
-                          setDrafts((prev) => ({ ...prev, [emp.userId]: e.target.value }))
+                      <SelectorFecha value={draft}
+                        onChange={(valor) =>
+                          setDrafts((prev) => ({ ...prev, [emp.userId]: valor }))
                         }
                         max={new Date().toISOString().slice(0, 10)}
                         className="h-8"

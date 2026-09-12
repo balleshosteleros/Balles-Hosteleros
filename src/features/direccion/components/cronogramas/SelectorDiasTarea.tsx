@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import type { Frecuencia, TerminaTipo } from "../../hooks/useCronogramasOperativos";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 type CalendarioPatch = {
   frecuencia?: Frecuencia;
@@ -391,10 +392,8 @@ export function SelectorDiasTarea({
                   className="w-4 h-4 text-primary"
                 />
                 <span className="text-sm w-16">El</span>
-                <Input
-                  type="date"
-                  value={termina_fecha ?? ""}
-                  onChange={(e) => onChange({ termina_fecha: e.target.value || null, termina_tipo: "fecha" })}
+                <SelectorFecha value={termina_fecha ?? ""}
+                  onChange={(valor) => onChange({ termina_fecha: valor || null, termina_tipo: "fecha" })}
                   disabled={termina_tipo !== "fecha"}
                   className="h-8 flex-1"
                 />
@@ -448,10 +447,8 @@ export function SelectorDiasTarea({
           <Label className="text-xs font-semibold text-muted-foreground uppercase">
             Empieza el
           </Label>
-          <Input
-            type="date"
-            value={fecha_inicio ?? ""}
-            onChange={(e) => onChange({ fecha_inicio: e.target.value || null })}
+          <SelectorFecha value={fecha_inicio ?? ""}
+            onChange={(valor) => onChange({ fecha_inicio: valor || null })}
             className="mt-1.5 max-w-[200px]"
           />
           <p className="text-xs text-muted-foreground mt-1">

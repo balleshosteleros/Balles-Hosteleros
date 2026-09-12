@@ -55,6 +55,7 @@ import {
   PUNTO_ESTADO_META,
   periodoLabel,
 } from "@/features/direccion/data/auditorias";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   auditoriaId: string;
@@ -286,11 +287,9 @@ export function AuditoriaDetalle({ auditoriaId, cabecera, onVolver }: Props) {
         </div>
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Fecha de la reunión</Label>
-          <Input
-            type="date"
-            value={fechaReunion}
+          <SelectorFecha value={fechaReunion}
             disabled={cerrada}
-            onChange={(e) => guardarFecha(e.target.value)}
+            onChange={(valor) => guardarFecha(valor)}
             className="h-9 w-[170px]"
           />
         </div>

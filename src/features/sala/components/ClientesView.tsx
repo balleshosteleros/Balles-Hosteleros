@@ -94,6 +94,7 @@ import { friendlyError } from "@/shared/lib/friendly-errors";
 import { formatearFechaEs } from "@/shared/lib/fecha";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 /** Filas por hoja en la tabla de clientes. */
 const POR_PAGINA = 50;
@@ -1277,13 +1278,11 @@ export function ClientesView() {
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="cli-nacimiento">Fecha de nacimiento</Label>
-                    <Input
-                      id="cli-nacimiento"
-                      type="date"
+                    <SelectorFecha id="cli-nacimiento" 
                       value={borrador.fechaNacimiento ?? ""}
                       max={new Date().toISOString().split("T")[0]}
-                      onChange={(e) =>
-                        setBorrador({ ...borrador, fechaNacimiento: e.target.value })
+                      onChange={(valor) =>
+                        setBorrador({ ...borrador, fechaNacimiento: valor })
                       }
                     />
                   </div>

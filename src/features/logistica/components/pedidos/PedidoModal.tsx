@@ -14,6 +14,7 @@ import type { Producto } from "@/features/logistica/data/productos";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { Trash2, Plus, Check, ChevronsUpDown, Search, AlertTriangle } from "lucide-react";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 /** Reparto vigente de un proveedor: negociado con nosotros con prioridad; si no, el genérico. */
 type ProveedorOpcion = { id: string; nombre: string; reparto: RepartoProveedor };
@@ -356,8 +357,8 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
               <SelectContent>{almacenes.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div><Label className="text-xs font-semibold">Fecha</Label><Input type="date" value={form.fecha} onChange={(e) => setField("fecha", e.target.value)} /></div>
-          <div><Label className="text-xs font-semibold">Día de reparto (entrega)</Label><Input type="date" value={form.fechaEntrega} onChange={(e) => setField("fechaEntrega", e.target.value)} /></div>
+          <div><Label className="text-xs font-semibold">Fecha</Label><SelectorFecha value={form.fecha} onChange={(valor) => setField("fecha", valor)} /></div>
+          <div><Label className="text-xs font-semibold">Día de reparto (entrega)</Label><SelectorFecha value={form.fechaEntrega} onChange={(valor) => setField("fechaEntrega", valor)} /></div>
           <div>
             <Label className="text-xs font-semibold">Hora de reparto (entre dos horas)</Label>
             <div className="flex items-center gap-1.5">

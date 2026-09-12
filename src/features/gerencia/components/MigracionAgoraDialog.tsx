@@ -20,6 +20,7 @@ import {
   type MigracionFactura,
 } from "@/features/gerencia/actions/agora-migracion-actions";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 const eur = (n: number) => `${(n ?? 0).toFixed(2)} €`;
 const fechaCorta = (iso: string | null) => (iso ? formatearFechaEs(iso) : "—");
@@ -108,7 +109,7 @@ export function MigracionAgoraDialog() {
               <div className="flex flex-wrap items-end gap-2">
                 <div>
                   <label className="text-xs text-muted-foreground">Business-day</label>
-                  <Input type="date" value={dia} onChange={(e) => setDia(e.target.value)} className="h-9 w-44" />
+                  <SelectorFecha value={dia} onChange={setDia} className="h-9 w-44" />
                 </div>
                 <Button onClick={sincronizar} disabled={pending} size="sm" className="gap-2">
                   {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}

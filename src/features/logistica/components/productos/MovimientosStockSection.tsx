@@ -40,6 +40,7 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 // `fecha` es TIMESTAMPTZ (instante): se muestra en la zona de la empresa (PRP-069).
 function fmtFecha(iso: string, tz: string): string {
@@ -181,19 +182,15 @@ export function MovimientosStockSection({
           <div className="mt-2 flex flex-wrap items-end gap-3">
             <label className="text-xs text-muted-foreground">
               Desde
-              <input
-                type="date"
-                value={desde}
-                onChange={(e) => setDesde(e.target.value)}
+              <SelectorFecha value={desde}
+                onChange={setDesde}
                 className="mt-1 block rounded-md border border-input bg-background px-2 py-1 text-sm"
               />
             </label>
             <label className="text-xs text-muted-foreground">
               Hasta
-              <input
-                type="date"
-                value={hasta}
-                onChange={(e) => setHasta(e.target.value)}
+              <SelectorFecha value={hasta}
+                onChange={setHasta}
                 className="mt-1 block rounded-md border border-input bg-background px-2 py-1 text-sm"
               />
             </label>

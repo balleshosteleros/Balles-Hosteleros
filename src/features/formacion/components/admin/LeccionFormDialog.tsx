@@ -22,6 +22,7 @@ import { useFormacionStore } from "../../store/use-formacion-store";
 import { uploadFormacionDoc } from "../../actions/formacion-actions";
 import type { Leccion } from "../../types";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 type Mode =
   | { mode: "new"; seccionId: string }
@@ -171,11 +172,9 @@ export function LeccionFormDialog({ cursoId, mode, onClose }: Props) {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="lec-fecha">Fecha de subida</Label>
-              <Input
-                id="lec-fecha"
-                type="date"
+              <SelectorFecha id="lec-fecha" 
                 value={fechaSubida}
-                onChange={(e) => setFechaSubida(e.target.value)}
+                onChange={setFechaSubida}
               />
             </div>
           </div>

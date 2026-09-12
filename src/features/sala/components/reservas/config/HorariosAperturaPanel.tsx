@@ -41,6 +41,7 @@ import {
   useListaPendiente,
 } from "@/features/sala/reglas/hooks/useListaPendiente";
 import type { PanelPendienteHandle } from "./LimitesReglas";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   config: EmpresaReservasConfig;
@@ -720,19 +721,15 @@ export function HorariosAperturaPanel({
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Desde</Label>
-            <Input
-              type="date"
-              value={rangoIni}
-              onChange={(e) => setRangoIni(e.target.value)}
+            <SelectorFecha value={rangoIni}
+              onChange={setRangoIni}
               className="h-8 w-40 text-xs"
             />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Hasta</Label>
-            <Input
-              type="date"
-              value={rangoFin}
-              onChange={(e) => setRangoFin(e.target.value)}
+            <SelectorFecha value={rangoFin}
+              onChange={setRangoFin}
               className="h-8 w-40 text-xs"
             />
           </div>
@@ -744,10 +741,8 @@ export function HorariosAperturaPanel({
           <div className="flex items-end gap-2">
             <div className="space-y-1.5">
               <Label className="text-xs">Añadir fecha</Label>
-              <Input
-                type="date"
-                value={fechaNueva}
-                onChange={(e) => setFechaNueva(e.target.value)}
+              <SelectorFecha value={fechaNueva}
+                onChange={setFechaNueva}
                 className="h-8 w-40 text-xs"
               />
             </div>

@@ -19,6 +19,7 @@ import {
   type EstadoGestionResena,
   type PlataformaResena,
 } from "@/features/calidad/types/resenas";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 /**
  * Radix Select no admite `value=""`, así que "sin informar" viaja con este
@@ -112,21 +113,17 @@ export function SeguimientoCalidadResena({
 
         <div className="space-y-1">
           <Label className="text-xs">Fecha de la visita</Label>
-          <Input
-            type="date"
-            className="h-9"
+          <SelectorFecha className="h-9"
             value={fechaRegistro}
-            onChange={(e) => onFechaRegistroChange(e.target.value)}
+            onChange={(valor) => onFechaRegistroChange(valor)}
           />
         </div>
 
         <div className="space-y-1">
           <Label className="text-xs">Fecha de gestión</Label>
-          <Input
-            type="date"
-            className="h-9"
+          <SelectorFecha className="h-9"
             value={fechaSesion}
-            onChange={(e) => onFechaSesionChange(e.target.value)}
+            onChange={(valor) => onFechaSesionChange(valor)}
           />
         </div>
 

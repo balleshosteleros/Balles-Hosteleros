@@ -12,6 +12,7 @@ import { Plus, Pencil, Trash2, CalendarDays, Sun } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   temporadas: TemporadaStock[];
@@ -158,11 +159,11 @@ export default function TemporadasConfig({ temporadas, setTemporadas, productos,
               </div>
               <div>
                 <Label className="text-xs font-bold">Fecha inicio</Label>
-                <Input type="date" value={form.fechaInicio} onChange={(e) => setForm((f) => ({ ...f, fechaInicio: e.target.value }))} />
+                <SelectorFecha value={form.fechaInicio} onChange={(valor) => setForm((f) => ({ ...f, fechaInicio: valor }))} />
               </div>
               <div>
                 <Label className="text-xs font-bold">Fecha fin</Label>
-                <Input type="date" value={form.fechaFin} onChange={(e) => setForm((f) => ({ ...f, fechaFin: e.target.value }))} />
+                <SelectorFecha value={form.fechaFin} onChange={(valor) => setForm((f) => ({ ...f, fechaFin: valor }))} />
               </div>
             </div>
 

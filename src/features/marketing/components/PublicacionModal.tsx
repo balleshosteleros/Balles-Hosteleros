@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   open: boolean;
@@ -64,7 +65,7 @@ export function PublicacionModal({ open, onClose, onSave, editItem, empresaId }:
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Fecha</Label>
-            <Input type="date" value={pub.fecha} onChange={(e) => setPub((p) => ({ ...p, fecha: e.target.value }))} />
+            <SelectorFecha value={pub.fecha} onChange={(valor) => setPub((p) => ({ ...p, fecha: valor }))} />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Hora</Label>
@@ -271,7 +272,7 @@ export function PublicacionModal({ open, onClose, onSave, editItem, empresaId }:
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Fecha</Label>
-                <Input type="date" value={evt.fecha} onChange={(e) => setEvt((p) => ({ ...p, fecha: e.target.value }))} />
+                <SelectorFecha value={evt.fecha} onChange={(valor) => setEvt((p) => ({ ...p, fecha: valor }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Hora</Label>

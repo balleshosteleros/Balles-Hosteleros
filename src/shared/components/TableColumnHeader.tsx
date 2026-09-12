@@ -32,6 +32,7 @@ import type {
   ToolbarFiltroTipo,
   ToolbarOrdenActivo,
 } from "@/shared/components/SubmoduleToolbar";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 export interface TableColumnHeaderProps {
   label: string;
@@ -629,19 +630,15 @@ function FechaFilter({
     <div className="space-y-2 p-2">
       <div>
         <Label className="text-xs text-muted-foreground">Desde</Label>
-        <Input
-          type="date"
-          value={desde}
-          onChange={(e) => setDesde(e.target.value)}
+        <SelectorFecha value={desde}
+          onChange={setDesde}
           className="mt-0.5 h-8 rounded-lg"
         />
       </div>
       <div>
         <Label className="text-xs text-muted-foreground">Hasta</Label>
-        <Input
-          type="date"
-          value={hasta}
-          onChange={(e) => setHasta(e.target.value)}
+        <SelectorFecha value={hasta}
+          onChange={setHasta}
           className="mt-0.5 h-8 rounded-lg"
         />
       </div>

@@ -31,6 +31,7 @@ import type {
 import { getPlantilla } from "@/features/calidad/cuestionarios/actions";
 import type { PlantillaCuestionario } from "@/features/calidad/cuestionarios/types";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   envioId: string | null;
@@ -175,10 +176,8 @@ function ReunionTab({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label>Fecha</Label>
-          <Input
-            type="date"
-            value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
+          <SelectorFecha value={fecha}
+            onChange={setFecha}
           />
         </div>
         <div className="space-y-2">

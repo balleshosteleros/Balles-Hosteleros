@@ -59,6 +59,7 @@ import { cierresIO } from "@/features/gerencia/io/cierres.io";
 import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import { formatearFechaEs } from "@/shared/lib/fecha";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 // Tipos de movimiento del submódulo (el selector de arriba del modal).
 const TIPOS_MOVIMIENTO: { value: CierreTipo; label: string }[] = [
@@ -1558,14 +1559,12 @@ export function CierresView() {
                     ? "Fecha del ingreso *"
                     : "Fecha del cierre *"}
               </Label>
-              <Input
-                type="date"
-                value={form.fecha}
+              <SelectorFecha value={form.fecha}
                 // El calendario nativo pinta en gris y no deja pulsar nada
                 // anterior al plazo. El servidor vuelve a comprobarlo.
                 min={fechaMinima ?? undefined}
-                onChange={(e) => {
-                  const v = e.target.value;
+                onChange={(valor) => {
+                  const v = valor;
                   if (v && fechaBloqueada(v)) {
                     toast.error(
                       `Solo se puede apuntar hasta ${config.dias_bloqueo} ${config.dias_bloqueo === 1 ? "día" : "días"} atrás. `
@@ -2104,19 +2103,15 @@ export function CierresView() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Empieza el *</Label>
-                <Input
-                  type="date"
-                  value={progForm.fecha_inicio}
-                  onChange={(e) => setProgForm({ ...progForm, fecha_inicio: e.target.value })}
+                <SelectorFecha value={progForm.fecha_inicio}
+                  onChange={(valor) => setProgForm({ ...progForm, fecha_inicio: valor })}
                 />
               </div>
               <div>
                 <Label>Termina el</Label>
-                <Input
-                  type="date"
-                  value={progForm.fecha_fin}
+                <SelectorFecha value={progForm.fecha_fin}
                   min={progForm.fecha_inicio || undefined}
-                  onChange={(e) => setProgForm({ ...progForm, fecha_fin: e.target.value })}
+                  onChange={(valor) => setProgForm({ ...progForm, fecha_fin: valor })}
                 />
                 <p className="text-xs text-muted-foreground mt-1">Déjalo vacío para que no termine.</p>
               </div>

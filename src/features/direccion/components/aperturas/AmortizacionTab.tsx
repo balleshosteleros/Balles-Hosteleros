@@ -12,6 +12,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { LineaAmortizacion, TIPOS_AMORTIZACION, MESES, TRIMESTRES } from "@/features/direccion/data/aperturas";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 function fmt(n: number) { return n.toLocaleString("es-ES", { maximumFractionDigits: 2 }); }
 
@@ -160,7 +161,7 @@ export function AmortizacionTab({ lineas, onChange, readOnly = false }: Props) {
           {editing && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Fecha</Label><Input type="date" value={editing.fecha} onChange={e => upd("fecha", e.target.value)} /></div>
+                <div><Label>Fecha</Label><SelectorFecha value={editing.fecha} onChange={(valor) => upd("fecha", valor)} /></div>
                 <div><Label>Año</Label><NumberInput decimales={false} value={editing.ano} onValueChange={v => upd("ano", v)} /></div>
                 <div><Label>Trimestre</Label>
                   <Select value={editing.trimestre} onValueChange={v => upd("trimestre", v)}>

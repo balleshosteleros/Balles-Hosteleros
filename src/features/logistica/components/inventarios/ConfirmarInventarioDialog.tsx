@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Lock, AlertTriangle } from "lucide-react";
 import { getUltimoDiaCerrable } from "@/features/logistica/actions/cierre-almacen-actions";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 /**
  * Lo que va a pasar al confirmar un inventario, dicho antes de hacerlo.
@@ -105,12 +106,10 @@ export default function ConfirmarInventarioDialog({
             {cerrarAlmacen && (
               <div className="space-y-2 pl-6">
                 <Label htmlFor="dia-cierre" className="text-xs">Cerrar hasta el día (incluido)</Label>
-                <Input
-                  id="dia-cierre"
-                  type="date"
+                <SelectorFecha id="dia-cierre" 
                   value={dia}
                   max={maxDia}
-                  onChange={(e) => setDia(e.target.value)}
+                  onChange={setDia}
                   className="w-44"
                 />
                 {inventarioEsDeHoy && (

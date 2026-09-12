@@ -29,6 +29,7 @@ import {
 } from "@/features/rrhh/lib/documentacion-validacion";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   token: string;
@@ -720,13 +721,15 @@ export function FormDocumentacionPublica({ token, empresaSlug, candidatoNombre }
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="fecha-nac">Fecha de nacimiento *</Label>
-            <Input
+            <SelectorFecha
               id="fecha-nac"
-              type="date"
               value={fechaNacimiento}
-              onChange={(e) => setFechaNacimiento(e.target.value)}
+              onChange={setFechaNacimiento}
               max={fechaMaximaNacimiento}
-              aria-invalid={Boolean(avisoEdad)}
+              // Nacimiento: abre por un año lejano y con los desplegables de
+              // mes y año, para no ir mes a mes hasta el suyo.
+              mesPorDefecto="1990-01-01"
+              className={avisoEdad ? "border-destructive" : undefined}
             />
             {/* Aviso inline: la persona ve el motivo en el propio campo, no solo al enviar. */}
             {avisoEdad && (

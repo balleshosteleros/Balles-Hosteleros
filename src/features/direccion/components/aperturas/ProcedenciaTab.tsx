@@ -11,6 +11,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis
 import { LineaProcedencia, ORIGENES_CAPITAL } from "@/features/direccion/data/aperturas";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 const COLORS = ["hsl(210 70% 55%)", "hsl(150 60% 45%)", "hsl(40 90% 55%)", "hsl(340 65% 55%)", "hsl(270 60% 55%)", "hsl(20 80% 55%)", "hsl(180 60% 45%)", "hsl(0 60% 55%)"];
 
@@ -164,7 +165,7 @@ export function ProcedenciaTab({ lineas, onChange, readOnly = false }: Props) {
           {editing && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Fecha</Label><Input type="date" value={editing.fecha} onChange={e => upd("fecha", e.target.value)} /></div>
+                <div><Label>Fecha</Label><SelectorFecha value={editing.fecha} onChange={(valor) => upd("fecha", valor)} /></div>
                 <div><Label>Origen</Label>
                   <Select value={editing.origen} onValueChange={v => upd("origen", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>

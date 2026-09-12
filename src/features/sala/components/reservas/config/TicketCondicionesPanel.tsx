@@ -23,6 +23,7 @@ import {
   type TicketTurno,
 } from "@/features/sala/data/ticket-productos";
 import { listGruposZonasEmpresa } from "@/features/sala/actions/ticket-productos-actions";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 export interface CondicionesState {
   diasSemana: DiaSemanaKey[];
@@ -239,10 +240,8 @@ export function TicketCondicionesPanel({ value, onChange }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Input
-            type="date"
-            value={nuevaFecha}
-            onChange={(e) => setNuevaFecha(e.target.value)}
+          <SelectorFecha value={nuevaFecha}
+            onChange={setNuevaFecha}
             className="h-9 w-44"
             aria-label="Fecha a excluir"
           />

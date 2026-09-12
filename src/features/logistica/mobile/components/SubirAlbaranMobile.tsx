@@ -16,6 +16,7 @@ import { useSubirAlbaran } from "@/features/logistica/hooks/use-subir-albaran";
 import { ProveedorCombobox } from "@/features/logistica/components/productos/ProveedorCombobox";
 import { formatNumero } from "@/shared/lib/numero";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 export function SubirAlbaranMobile() {
   const [exito, setExito] = useState<{ id: string; numero?: string } | null>(null);
@@ -290,7 +291,7 @@ export function SubirAlbaranMobile() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Fecha</label>
-                  <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="h-10" />
+                  <SelectorFecha value={fecha} onChange={setFecha} className="h-10" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Nº albarán</label>

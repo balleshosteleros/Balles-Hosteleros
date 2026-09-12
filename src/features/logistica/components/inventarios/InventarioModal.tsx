@@ -12,6 +12,7 @@ import {
 } from "@/features/logistica/data/inventarios";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 const NONE = "__NONE__";
 
@@ -72,7 +73,7 @@ export default function InventarioModal({ open, onOpenChange, tipos, plantillas,
           {/* Fecha retroactiva */}
           <div>
             <Label className="text-xs font-bold">Fecha</Label>
-            <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+            <SelectorFecha value={fecha} onChange={setFecha} />
             <p className="text-[10px] text-muted-foreground mt-0.5">Puedes seleccionar una fecha anterior si es necesario.</p>
           </div>
 

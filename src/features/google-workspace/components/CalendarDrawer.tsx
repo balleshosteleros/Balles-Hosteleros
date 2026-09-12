@@ -54,6 +54,7 @@ import { SelectorTZ } from "./SelectorTZ";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 type GoogleCalendar = {
   id: string;
@@ -1519,10 +1520,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
 
                 <div>
                   <Label className="text-[11px]">Fecha</Label>
-                  <Input
-                    type="date"
-                    value={form.fecha}
-                    onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+                  <SelectorFecha value={form.fecha}
+                    onChange={(valor) => setForm({ ...form, fecha: valor })}
                     className="mt-1"
                   />
                 </div>

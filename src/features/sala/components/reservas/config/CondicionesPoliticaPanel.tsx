@@ -29,6 +29,7 @@ import {
   POLITICA_DESDE_PAX_OPCIONES,
   type DiaSemanaKey,
 } from "@/features/sala/data/reservas";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 /** Turnos tal y como se guardan en `reservas.turno`. */
 const TURNOS = [
@@ -231,16 +232,11 @@ export function CondicionesPoliticaPanel({
       <div className="space-y-1.5">
         <Label className="text-xs">Fechas concretas</Label>
         <div className="flex items-center gap-2">
-          <Input
-            type="date"
+          {/* Con calendario ya no se teclea, así que el atajo del Enter sobra:
+              se elige el día y se pulsa Añadir. */}
+          <SelectorFecha
             value={nuevaFecha}
-            onChange={(e) => setNuevaFecha(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                anadirFecha();
-              }
-            }}
+            onChange={setNuevaFecha}
             className="h-8 text-xs max-w-[180px]"
           />
           <button

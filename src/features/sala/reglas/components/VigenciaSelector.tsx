@@ -14,6 +14,7 @@ import {
 } from "../data/reglas";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   value: VigenciaSpec;
@@ -181,11 +182,11 @@ function SelectorRango({
     <div className="grid grid-cols-2 gap-3 max-w-md">
       <div className="space-y-1">
         <Label className="text-[11px] text-muted-foreground">Desde</Label>
-        <Input type="date" value={desde} onChange={(e) => onChange(e.target.value, hasta)} />
+        <SelectorFecha value={desde} onChange={(valor) => onChange(valor, hasta)} />
       </div>
       <div className="space-y-1">
         <Label className="text-[11px] text-muted-foreground">Hasta</Label>
-        <Input type="date" value={hasta} onChange={(e) => onChange(desde, e.target.value)} />
+        <SelectorFecha value={hasta} onChange={(valor) => onChange(desde, valor)} />
       </div>
     </div>
   );
@@ -213,7 +214,7 @@ function SelectorFechas({
       <div className="flex items-end gap-2">
         <div className="space-y-1 flex-1 max-w-xs">
           <Label className="text-[11px] text-muted-foreground">Fecha</Label>
-          <Input type="date" value={nueva} onChange={(e) => setNueva(e.target.value)} />
+          <SelectorFecha value={nueva} onChange={setNueva} />
         </div>
         <Button type="button" variant="outline" size="sm" onClick={agregar}>
           <Plus className="h-3.5 w-3.5 mr-1" />

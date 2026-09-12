@@ -24,6 +24,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { comunicarMiAltaMedica } from "@/features/mi-panel/actions/comunicaciones-actions";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 /** dd/mm/aaaa, el formato de fecha de toda la casa. */
 function fechaEs(iso: string): string {
@@ -95,14 +96,12 @@ export function AltaMedicaModal({
 
         <div className="space-y-2 py-2">
           <Label htmlFor="fecha-alta">Día del alta</Label>
-          <Input
-            id="fecha-alta"
-            type="date"
+          <SelectorFecha id="fecha-alta" 
             value={fechaAlta}
             // Como pronto hoy: la baja termina ayer y se vuelve hoy. Días atrás
             // dejarían un hueco sin baja y sin fichar.
             min={hoyIso}
-            onChange={(e) => setFechaAlta(e.target.value)}
+            onChange={setFechaAlta}
           />
           <p className="text-xs text-muted-foreground">
             El que pone tu parte de alta. Si te lo dieron hace días, pon hoy. Te diremos el

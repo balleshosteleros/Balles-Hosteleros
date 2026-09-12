@@ -20,6 +20,7 @@ import {
   crearAuditoria,
   type OpcionesNuevaAuditoria,
 } from "@/features/calidad/actions/envios-actions";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 /** Fecha de hoy en formato aaaa-mm-dd, sin desfases de huso. */
 function hoyISO(): string {
@@ -123,7 +124,7 @@ export function NuevaAuditoriaDialog({
 
             <div>
               <Label className="text-xs">Fecha</Label>
-              <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+              <SelectorFecha value={fecha} onChange={setFecha} />
             </div>
           </div>
         )}

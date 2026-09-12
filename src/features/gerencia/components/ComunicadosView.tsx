@@ -136,6 +136,7 @@ import { NumberInput } from "@/shared/components/NumberInput";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { getOpcionesSegmento } from "@/features/notificaciones/actions/aviso-manual-actions";
 import { ComunicadoTarjeta } from "@/features/gerencia/components/ComunicadoTarjeta";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 /** Letra y trazo del menú de acciones: los mismos en todas sus opciones. */
 const ITEM_MENU = "cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold tracking-tight";
@@ -830,11 +831,9 @@ function ComunicadoEditor({
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Fecha de los hechos</Label>
-                    <Input
-                      type="date"
-                      className="mt-1 h-9 text-xs"
+                    <SelectorFecha className="mt-1 h-9 text-xs"
                       value={form.sancion.fechaHechos}
-                      onChange={e => uSancion({ fechaHechos: e.target.value })}
+                      onChange={(valor) => uSancion({ fechaHechos: valor })}
                     />
                   </div>
                   {prescripcion && (
@@ -883,7 +882,7 @@ function ComunicadoEditor({
                   </div>
                   {form.programado ? (
                     <div className="grid grid-cols-2 gap-2">
-                      <Input type="date" className="h-8 text-xs" value={form.envioFecha} onChange={e => u({ envioFecha: e.target.value })} />
+                      <SelectorFecha className="h-8 text-xs" value={form.envioFecha} onChange={(valor) => u({ envioFecha: valor })} />
                       <Input type="time" className="h-8 text-xs" value={form.envioHora} onChange={e => u({ envioHora: e.target.value })} />
                     </div>
                   ) : (
@@ -1009,7 +1008,7 @@ function ComunicadoEditor({
               </div>
               {form.programado ? (
                 <div className="grid grid-cols-2 gap-2">
-                  <Input type="date" className="h-8 text-xs" value={form.envioFecha} onChange={e => u({ envioFecha: e.target.value })} />
+                  <SelectorFecha className="h-8 text-xs" value={form.envioFecha} onChange={(valor) => u({ envioFecha: valor })} />
                   <Input type="time" className="h-8 text-xs" value={form.envioHora} onChange={e => u({ envioHora: e.target.value })} />
                 </div>
               ) : (

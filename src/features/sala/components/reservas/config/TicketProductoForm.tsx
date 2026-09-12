@@ -29,6 +29,7 @@ import {
   createTicketProducto,
   updateTicketProducto,
 } from "@/features/sala/actions/ticket-productos-actions";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   producto: ReservaTicketProducto | null;
@@ -262,10 +263,8 @@ export function TicketProductoForm({ producto, onSaved, onCancel }: Props) {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">O fecha límite</Label>
-            <Input
-              type="date"
-              value={s.canjeHasta}
-              onChange={(e) => setS({ ...s, canjeHasta: e.target.value })}
+            <SelectorFecha value={s.canjeHasta}
+              onChange={(valor) => setS({ ...s, canjeHasta: valor })}
               className="h-9"
             />
             <p className="text-[10px] text-muted-foreground">

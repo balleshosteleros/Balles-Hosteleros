@@ -29,6 +29,7 @@ import {
   type CategoriaCurso,
   type Curso,
 } from "../../types";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 const CATEGORIAS: CategoriaCurso[] = [
   "bienvenida",
@@ -260,11 +261,9 @@ export function CursoFormDialog({ empresaId, curso, onClose, onSaved }: Props) {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="cur-fecha">Fecha de publicación</Label>
-              <Input
-                id="cur-fecha"
-                type="date"
+              <SelectorFecha id="cur-fecha" 
                 value={fechaPublicacion}
-                onChange={(e) => setFechaPublicacion(e.target.value)}
+                onChange={setFechaPublicacion}
               />
             </div>
             <div className="grid gap-2">

@@ -19,6 +19,7 @@ import {
 import type { Compra } from "../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   recetaId: string;
@@ -282,10 +283,8 @@ export function CompraTab({ recetaId }: Props) {
 
               <div>
                 <Label className="text-xs">Fecha recepción prevista</Label>
-                <Input
-                  type="date"
-                  value={draft.fecha_recepcion_prevista}
-                  onChange={(e) => setDraft({ ...draft, fecha_recepcion_prevista: e.target.value })}
+                <SelectorFecha value={draft.fecha_recepcion_prevista}
+                  onChange={(valor) => setDraft({ ...draft, fecha_recepcion_prevista: valor })}
                   className="h-9"
                 />
               </div>

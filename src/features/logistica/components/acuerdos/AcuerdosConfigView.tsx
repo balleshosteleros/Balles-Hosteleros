@@ -32,6 +32,7 @@ import {
   type MarcaRow,
   type ReferenciaRow,
 } from "@/features/logistica/actions/marcas-actions";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   onBack: () => void;
@@ -454,15 +455,13 @@ export function AcuerdosConfigView({ onBack, onChanged }: Props) {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="text-xs">Fecha de comienzo</Label>
-                <Input
-                  type="date"
-                  value={fechaInicio}
-                  onChange={(e) => setFechaInicio(e.target.value)}
+                <SelectorFecha value={fechaInicio}
+                  onChange={setFechaInicio}
                 />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Fecha de fin</Label>
-                <Input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+                <SelectorFecha value={fechaFin} onChange={setFechaFin} />
               </div>
             </div>
             <div className="space-y-1.5">

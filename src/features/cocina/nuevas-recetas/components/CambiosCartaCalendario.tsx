@@ -31,6 +31,7 @@ import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/ca
 import { cn } from "@/lib/utils";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -254,11 +255,10 @@ export function CambiosCartaCalendario() {
           <div className="space-y-3">
             <div>
               <Label htmlFor="cc-fecha">Fecha inicio (lunes recomendado)</Label>
-              <Input
+              <SelectorFecha
                 id="cc-fecha"
-                type="date"
                 value={fechaNueva}
-                onChange={(e) => setFechaNueva(e.target.value)}
+                onChange={setFechaNueva}
               />
               <p className="text-xs text-muted-foreground mt-1">
                 Día oficial:{" "}
@@ -583,11 +583,10 @@ function DetalleCambioDialog({
           <Label htmlFor="mov-bloque" className="text-xs font-medium whitespace-nowrap">
             Mover todo el bloque a:
           </Label>
-          <Input
+          <SelectorFecha
             id="mov-bloque"
-            type="date"
             value={movDelta}
-            onChange={(e) => setMovDelta(e.target.value)}
+            onChange={setMovDelta}
             className="h-8"
           />
           <Button size="sm" className="h-8" onClick={handleMoverBloque} disabled={!movDelta}>
@@ -639,13 +638,15 @@ function DetalleCambioDialog({
                       <Label htmlFor={`sem-${s.id}`} className="text-xs">
                         Nueva fecha de inicio
                       </Label>
-                      <Input
+                      {/* Antes era un campo de texto que solo hacía caso al SALIR
+                          de él; ahora la fecha se elige en el calendario y la
+                          semana se mueve en ese mismo momento. */}
+                      <SelectorFecha
                         id={`sem-${s.id}`}
-                        type="date"
-                        defaultValue={s.fecha_inicio}
-                        onBlur={(e) => {
-                          if (e.target.value && e.target.value !== s.fecha_inicio) {
-                            handleMoverSemana(s.id, e.target.value);
+                        value={s.fecha_inicio ?? ""}
+                        onChange={(valor) => {
+                          if (valor && valor !== s.fecha_inicio) {
+                            handleMoverSemana(s.id, valor);
                           }
                         }}
                       />

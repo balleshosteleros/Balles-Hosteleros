@@ -32,6 +32,7 @@ import {
   type Puesto,
   type TipoNovedad,
 } from "../../types";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 const TIPOS: TipoNovedad[] = ["tarea", "leccion", "curso", "cambio", "aviso"];
 
@@ -167,11 +168,9 @@ export function NovedadFormDialog({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="nov-fecha">Fecha de publicación</Label>
-              <Input
-                id="nov-fecha"
-                type="date"
+              <SelectorFecha id="nov-fecha" 
                 value={fechaPublicacion}
-                onChange={(e) => setFechaPublicacion(e.target.value)}
+                onChange={setFechaPublicacion}
               />
             </div>
             <div className="grid gap-2">

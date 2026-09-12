@@ -36,6 +36,7 @@ import { InspectoresConfigView } from "@/features/calidad/inspecciones/inspector
 import { DialogCompartirInspectores } from "@/features/calidad/inspecciones/inspectores/components/DialogCompartirInspectores";
 import type { PlantillaResumen } from "../actions";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 const columnasDef: ToolbarColumna[] = [
   { campo: "version", label: "Versión", bloqueada: true },
@@ -343,7 +344,7 @@ function EditarPlantillaDialog({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Fecha de creación</Label>
-            <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+            <SelectorFecha value={fecha} onChange={setFecha} />
           </div>
         </div>
         <DialogFooter>

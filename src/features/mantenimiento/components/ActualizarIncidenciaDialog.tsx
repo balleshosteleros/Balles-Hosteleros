@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Loader2 } from "lucide-react";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   open: boolean;
@@ -183,11 +184,9 @@ export function ActualizarIncidenciaDialog({ open, onClose, item, onGuardar }: P
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 [&>div]:min-w-0">
             <div>
               <Label>Fecha</Label>
-              <Input
-                type="date"
-                className="h-11 sm:h-10 w-full max-w-full min-w-0 block"
+              <SelectorFecha className="h-11 sm:h-10 w-full max-w-full min-w-0 block"
                 value={fecha}
-                onChange={(e) => { setFecha(e.target.value); limpiarError("fecha"); }}
+                onChange={(valor) => { setFecha(valor); limpiarError("fecha"); }}
               />
               <MsgError campo="fecha" />
             </div>

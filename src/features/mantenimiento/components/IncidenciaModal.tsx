@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { capitalizeText } from "@/shared/lib/utils";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 // Minimo de texto en comentarios: una incidencia sin describir no se puede reparar.
 const MIN_COMENTARIOS = 15;
@@ -194,7 +195,7 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
           </div>
           <div>
             <Label>Fecha publicado</Label>
-            <Input type="date" value={form.fechaPublicado} onChange={(e) => set("fechaPublicado", e.target.value)} />
+            <SelectorFecha value={form.fechaPublicado} onChange={(valor) => set("fechaPublicado", valor)} />
             <MsgError campo="fechaPublicado" />
           </div>
           <div className="col-span-2">

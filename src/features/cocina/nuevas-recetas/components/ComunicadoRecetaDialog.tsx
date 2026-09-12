@@ -21,6 +21,7 @@ import {
 } from "@/features/rrhh/data/comunicados";
 import type { RecetaConExtras } from "../actions/recetas-actions";
 import { formatEur } from "@/shared/lib/numero";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   open: boolean;
@@ -111,11 +112,9 @@ export function ComunicadoRecetaDialog({ open, onOpenChange, receta }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Día entrada en carta</Label>
-              <Input
-                type="date"
-                value={diaEntrada}
-                onChange={(e) => {
-                  setDiaEntrada(e.target.value);
+              <SelectorFecha value={diaEntrada}
+                onChange={(valor) => {
+                  setDiaEntrada(valor);
                 }}
                 className="h-9"
               />

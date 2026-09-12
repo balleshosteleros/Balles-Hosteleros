@@ -36,6 +36,7 @@ import {
   type VencimientoRow, type HistorialRow,
 } from "@/features/gerencia/actions/vencimientos-actions";
 import { DocumentosVencimiento } from "./DocumentosVencimiento";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 // ─── Estado calculado a partir de la fecha ──────────────────────────────────
 
@@ -619,7 +620,7 @@ function RegistrarRevisionDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Fecha en que se hizo</Label>
-              <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+              <SelectorFecha value={fecha} onChange={setFecha} />
             </div>
             <div>
               <Label>Resultado</Label>
@@ -710,7 +711,7 @@ function NuevaRevisionDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Próximo vencimiento</Label>
-              <Input type="date" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} />
+              <SelectorFecha value={fechaVencimiento} onChange={setFechaVencimiento} />
             </div>
             <div>
               <Label>Empresa que la realiza</Label>

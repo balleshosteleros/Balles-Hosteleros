@@ -26,6 +26,7 @@ import { previewSegmentoAction } from "@/features/marketing/actions/segmento-act
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   open: boolean;
@@ -367,12 +368,10 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
                               ? "Un día de ese mes"
                               : "El día del año"}
                       </Label>
-                      <Input
-                        id="prog-fecha"
-                        type="date"
+                      <SelectorFecha id="prog-fecha" 
                         className="h-8 w-40"
                         value={programacion.fecha}
-                        onChange={(e) => cambiarProgramacion({ fecha: e.target.value })}
+                        onChange={(valor) => cambiarProgramacion({ fecha: valor })}
                       />
                     </div>
                   )}

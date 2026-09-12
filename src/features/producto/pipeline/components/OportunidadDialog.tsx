@@ -37,6 +37,7 @@ import { parseDecimalOr0 } from "@/shared/lib/numero";
 import { borrarOportunidad, guardarOportunidad } from "../actions/pipeline-actions";
 import type { Oportunidad, OportunidadEstado, PipelineFase } from "../types";
 import { OPORTUNIDAD_ESTADOS, OPORTUNIDAD_ESTADO_LABEL } from "../types";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   abierto: boolean;
@@ -236,11 +237,9 @@ export function OportunidadDialog({
             </div>
             <div>
               <Label htmlFor="op-cierre">Cierre previsto</Label>
-              <Input
-                id="op-cierre"
-                type="date"
+              <SelectorFecha id="op-cierre" 
                 value={cierrePrevisto}
-                onChange={(e) => setCierrePrevisto(e.target.value)}
+                onChange={setCierrePrevisto}
               />
             </div>
 

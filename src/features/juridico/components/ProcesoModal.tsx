@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   open: boolean;
@@ -94,7 +95,7 @@ export function ProcesoModal({ open, onClose, onSave, item, empresa, empresaId }
           </div>
           <div>
             <Label>FECHA DE APERTURA</Label>
-            <Input type="date" value={form.fecha} onChange={(e) => set("fecha", e.target.value)} />
+            <SelectorFecha value={form.fecha} onChange={(valor) => set("fecha", valor)} />
           </div>
           <div className="col-span-2">
             <Label>DESCRIPCIÓN DEL CASO</Label>

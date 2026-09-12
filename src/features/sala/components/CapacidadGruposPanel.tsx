@@ -21,6 +21,7 @@ import {
   type CapacidadGruposResult,
 } from "@/features/sala/actions/capacidad-grupos-actions";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Local {
   id: string;
@@ -127,10 +128,8 @@ export function CapacidadGruposPanel() {
           )}
           <div className="relative">
             <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="date"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
+            <SelectorFecha value={fecha}
+              onChange={setFecha}
               className="h-9 w-40 pl-8 text-xs"
             />
           </div>

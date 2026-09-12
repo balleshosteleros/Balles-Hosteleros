@@ -34,6 +34,7 @@ import {
   listInformes, createInforme, deleteInforme,
 } from "@/features/gerencia/actions/informes-actions";
 import { INFORME_TIPOS, type InformeRow, type InformeTipo } from "@/features/gerencia/data/informes";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 const TIPO_COLORS: Record<InformeTipo, string> = {
   descuentos: "hsl(210 70% 55%)",
@@ -494,10 +495,8 @@ export function InformesView() {
 
             <div>
               <Label>Fecha *</Label>
-              <Input
-                type="date"
-                value={form.fecha}
-                onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+              <SelectorFecha value={form.fecha}
+                onChange={(valor) => setForm({ ...form, fecha: valor })}
               />
             </div>
 

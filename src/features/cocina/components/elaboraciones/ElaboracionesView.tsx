@@ -36,6 +36,7 @@ import {
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 type ProductoElab = { id: string; nombre: string; unidad: string };
 
@@ -189,11 +190,11 @@ function ElaboracionModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs font-bold">Fecha producción</Label>
-              <Input type="date" value={fecha} onChange={e => setFecha(e.target.value)} />
+              <SelectorFecha value={fecha} onChange={setFecha} />
             </div>
             <div>
               <Label className="text-xs font-bold">Fecha caducidad</Label>
-              <Input type="date" value={fechaCaducidad} onChange={e => setFechaCaducidad(e.target.value)} />
+              <SelectorFecha value={fechaCaducidad} onChange={setFechaCaducidad} />
             </div>
           </div>
 

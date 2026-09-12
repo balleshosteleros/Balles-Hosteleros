@@ -30,6 +30,7 @@ import {
   type PreguntaAnalitica,
 } from "@/features/calidad/actions/analitica-actions";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 /* Paleta: azul sequencial para magnitud, estados para bueno/crítico. */
 const AZUL = "#2a78d6";
@@ -242,11 +243,11 @@ export function AuditoriasAnaliticaView() {
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Desde</Label>
-          <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="h-9 w-[160px]" />
+          <SelectorFecha value={desde} onChange={setDesde} className="h-9 w-[160px]" />
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Hasta</Label>
-          <Input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="h-9 w-[160px]" />
+          <SelectorFecha value={hasta} onChange={setHasta} className="h-9 w-[160px]" />
         </div>
         {(plantillaId !== TODAS || localId !== TODAS || desde || hasta) && (
           <Button

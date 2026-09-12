@@ -58,6 +58,7 @@ import type {
   VentaProducto,
 } from "@/features/gerencia/types/ventas";
 import { MENU_CLASS_LABEL, MENU_CLASS_HINT } from "@/features/gerencia/types/ventas";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 // ─── Helpers ────────────────────────────────────────────────────
 const fmtEUR = (v: number) =>
@@ -212,19 +213,15 @@ function FiltroFechas({
           <>
             <div>
               <Label className="text-[10px] uppercase text-muted-foreground">Desde</Label>
-              <Input
-                type="date"
-                value={customFrom}
-                onChange={(e) => onChange("personalizado", e.target.value, customTo)}
+              <SelectorFecha value={customFrom}
+                onChange={(valor) => onChange("personalizado", valor, customTo)}
                 className="h-8 w-[150px] text-xs"
               />
             </div>
             <div>
               <Label className="text-[10px] uppercase text-muted-foreground">Hasta</Label>
-              <Input
-                type="date"
-                value={customTo}
-                onChange={(e) => onChange("personalizado", customFrom, e.target.value)}
+              <SelectorFecha value={customTo}
+                onChange={(valor) => onChange("personalizado", customFrom, valor)}
                 className="h-8 w-[150px] text-xs"
               />
             </div>

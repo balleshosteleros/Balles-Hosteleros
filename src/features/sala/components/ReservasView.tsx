@@ -190,6 +190,7 @@ import { colorZona, fondoMesaLibre } from "@/features/sala/lib/color-zona";
 import { formatearFechaEs } from "@/shared/lib/fecha";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 /**
  * Paleta de fondo de mesa por estado.
@@ -1947,7 +1948,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             />
             {renderSugerencias("email")}
         </div>
-        <div><Label className="text-xs">Fecha *</Label><Input type="date" className="h-8 text-xs" value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} /></div>
+        <div><Label className="text-xs">Fecha *</Label><SelectorFecha className="h-8 text-xs" value={form.fecha} onChange={(valor) => setForm(p => ({ ...p, fecha: valor }))} /></div>
         {/* Hora: solo las del horario real del turno. El ⚠ de cada hora sigue a
             la MESA elegida si la hay (esa mesa está pillada a esa hora); si aún
             no hay mesa, avisa cuando no queda ningún hueco para el grupo. */}
