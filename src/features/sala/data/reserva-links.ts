@@ -7,7 +7,6 @@ export interface ReservaLink {
   creadoPor: string | null;
   createdAt: string;
   updatedAt: string;
-  nombre: string | null;
   vendeTickets: boolean;
   ticketProductoIds: string[];
 }

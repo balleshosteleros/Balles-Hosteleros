@@ -51,7 +51,6 @@ function rowToLink(
     creadoPor: (row.creado_por as string | null) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
-    nombre: (row.nombre as string | null) ?? null,
     vendeTickets: (row.vende_tickets as boolean) ?? false,
     ticketProductoIds,
   };
@@ -100,7 +99,6 @@ export async function listReservaLinks() {
 
 export interface CreateReservaLinkInput {
   palabraClave: string;
-  nombre?: string | null;
   vendeTickets?: boolean;
   ticketProductoIds?: string[];
 }
@@ -127,7 +125,6 @@ export async function createReservaLink(input: string | CreateReservaLinkInput) 
         palabra_clave: v.valor,
         url_generada: url,
         creado_por: user?.id ?? null,
-        nombre: normalized.nombre?.trim() || null,
         vende_tickets: vendeTickets,
       })
       .select()
@@ -147,48 +144,6 @@ export async function createReservaLink(input: string | CreateReservaLinkInput) 
     }
     revalidatePath("/sala/reservas/links");
     return { ok: true, data: rowToLink(data, empresaSlug, productoIds, dominioPropio) };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error";
-    return { ok: false, error: msg };
-  }
-}
-
-export async function updateReservaLink(
-  id: string,
-  updates: { nombre?: string | null; vendeTickets?: boolean; ticketProductoIds?: string[] },
-) {
-  try {
-    const { supabase, empresaId } = await getCtx();
-    if (!empresaId) return { ok: false, error: "Sin empresa" };
-
-    const patch: Record<string, unknown> = {};
-    if (updates.nombre !== undefined) patch.nombre = updates.nombre?.trim() || null;
-    if (updates.vendeTickets !== undefined) patch.vende_tickets = updates.vendeTickets;
-    if (Object.keys(patch).length > 0) {
-      const { error } = await supabase
-        .from("reserva_links")
-        .update(patch)
-        .eq("id", id)
-        .eq("empresa_id", empresaId);
-      if (error) throw error;
-    }
-
-    if (updates.ticketProductoIds !== undefined) {
-      const del = await supabase.from("reserva_link_ticket_productos").delete().eq("link_id", id);
-      if (del.error) throw del.error;
-      const desired = updates.vendeTickets === false ? [] : updates.ticketProductoIds;
-      if (desired.length > 0) {
-        const pivotRows = desired.map((pid, idx) => ({
-          link_id: id,
-          producto_id: pid,
-          orden: idx,
-        }));
-        const ins = await supabase.from("reserva_link_ticket_productos").insert(pivotRows);
-        if (ins.error) throw ins.error;
-      }
-    }
-    revalidatePath("/sala/reservas/links");
-    return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
     return { ok: false, error: msg };

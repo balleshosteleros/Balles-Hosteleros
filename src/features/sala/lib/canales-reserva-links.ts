@@ -18,11 +18,7 @@ import { buildReservaUrl } from "@/features/sala/data/reserva-links";
  * Business, que funciona hoy sin partnership. Lo que distinguirá al RWG nativo
  * cuando llegue es `external_origen`, no un origen distinto.
  */
-export const CANALES_RESERVA_FIJOS = [
-  { palabraClave: "GOOGLE", nombre: "Google" },
-  { palabraClave: "INSTAGRAM", nombre: "Instagram" },
-  { palabraClave: "FACEBOOK", nombre: "Facebook" },
-] as const;
+export const CANALES_RESERVA_FIJOS = ["GOOGLE", "INSTAGRAM", "FACEBOOK"] as const;
 
 /**
  * Garantiza que la empresa tenga sus enlaces de canal, creando los que falten.
@@ -52,22 +48,18 @@ export async function ensureCanalesReservaLinks(
       .from("reserva_links")
       .select("palabra_clave")
       .eq("empresa_id", empresaId)
-      .in(
-        "palabra_clave",
-        CANALES_RESERVA_FIJOS.map((c) => c.palabraClave),
-      );
+      .in("palabra_clave", [...CANALES_RESERVA_FIJOS]);
     if (error) return;
 
     const yaEstan = new Set((existentes ?? []).map((r) => r.palabra_clave as string));
-    const faltan = CANALES_RESERVA_FIJOS.filter((c) => !yaEstan.has(c.palabraClave));
+    const faltan = CANALES_RESERVA_FIJOS.filter((c) => !yaEstan.has(c));
     if (faltan.length === 0) return;
 
     await supabase.from("reserva_links").insert(
       faltan.map((c) => ({
         empresa_id: empresaId,
-        palabra_clave: c.palabraClave,
-        url_generada: buildReservaUrl(empresaSlug, c.palabraClave, dominioPropio),
-        nombre: c.nombre,
+        palabra_clave: c,
+        url_generada: buildReservaUrl(empresaSlug, c, dominioPropio),
         activo: true,
         vende_tickets: false,
       })),

@@ -51,7 +51,6 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
   const [busqueda, setBusqueda] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [nuevaPalabra, setNuevaPalabra] = useState("");
-  const [nuevoNombre, setNuevoNombre] = useState("");
   const [vendeTickets, setVendeTickets] = useState(false);
   const [ticketIdsSel, setTicketIdsSel] = useState<string[]>([]);
   const [productos, setProductos] = useState<ReservaTicketProducto[]>([]);
@@ -85,7 +84,6 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
 
   function abrirDialog() {
     setNuevaPalabra("");
-    setNuevoNombre("");
     setVendeTickets(false);
     setTicketIdsSel([]);
     setDialogOpen(true);
@@ -142,7 +140,6 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
     startCreate(async () => {
       const r = await createReservaLink({
         palabraClave: nuevaPalabra,
-        nombre: nuevoNombre.trim() || null,
         vendeTickets,
         ticketProductoIds: vendeTickets ? ticketIdsSel : [],
       });
@@ -152,7 +149,6 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
       }
       toast.success(`Link "${r.data!.palabraClave}" creado`);
       setNuevaPalabra("");
-      setNuevoNombre("");
       setVendeTickets(false);
       setTicketIdsSel([]);
       setDialogOpen(false);
@@ -312,19 +308,6 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
             <DialogTitle>Nuevo link de reserva</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div>
-              <Label htmlFor="nombre-link">Nombre del enlace</Label>
-              <Input
-                id="nombre-link"
-                value={nuevoNombre}
-                onChange={(e) => setNuevoNombre(e.target.value)}
-                placeholder="Promoción Nochevieja, Influencer Lucía, …"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Solo para identificarlo internamente. Opcional.
-              </p>
-            </div>
-
             <div>
               <Label htmlFor="palabra-clave">Palabra clave</Label>
               <Input
