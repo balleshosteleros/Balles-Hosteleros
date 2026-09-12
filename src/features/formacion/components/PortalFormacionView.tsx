@@ -3,7 +3,7 @@
 // Portal de Formación — pantalla de inicio (estilo Skool).
 // - Cabecera con nombre y avance global
 // - Novedades de los últimos 3 meses
-// - Grid de tarjetas: cursos generales + cursos del puesto del empleado
+// - Grid de tarjetas: generales + de sus departamentos + de su puesto
 // El detalle de cada curso vive en /mi-panel/formacion/curso/[cursoId].
 
 import { useMemo, useState, useEffect } from "react";
@@ -40,7 +40,7 @@ import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 const TRES_MESES_MS = 1000 * 60 * 60 * 24 * 90;
 
 export function PortalFormacionView() {
-  const { profile, puedeEditar } = useAuth();
+  const { profile, puedeEditar, puedeVer } = useAuth();
   const { empresaActual } = useEmpresa();
   const userKey = profile?.email ?? "anon";
   const { puesto, setPuesto, ready } = usePuestoActual(userKey);
@@ -58,11 +58,16 @@ export function PortalFormacionView() {
   }, [hydrate, userKey]);
 
   const visibles = useMemo(
-    () => cursosVisibles(cursos, empresaActual.id, puesto),
-    [cursos, empresaActual.id, puesto],
+    () =>
+      cursosVisibles(cursos, empresaActual.id, puesto, {
+        // Los cursos de departamento se ven si el rol ve ese departamento.
+        puedeVerDepartamento: (d) => puedeVer(d),
+      }),
+    [cursos, empresaActual.id, puesto, puedeVer],
   );
 
   const generales = visibles.filter((c) => c.ambito === "general");
+  const porDepartamento = visibles.filter((c) => c.ambito === "departamento");
   const especificos = visibles.filter((c) => c.ambito === "puesto");
 
   // Métricas globales
@@ -198,6 +203,47 @@ export function PortalFormacionView() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {generales.map((c) => {
+              const ords = leccionesOrdenadas(secciones, lecciones, c.id);
+              const a = avanceCurso(
+                secciones,
+                lecciones,
+                completadas,
+                userKey,
+                c.id,
+              );
+              return (
+                <CursoCard
+                  key={c.id}
+                  curso={c}
+                  totalLecciones={ords.length}
+                  totalMinutos={duracionCurso(secciones, lecciones, c.id)}
+                  avancePct={a.pct}
+                  destacar={esNuevo(c.fechaPublicacion)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Cursos del departamento — el eje principal de la formación */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold tracking-tight">
+            Cursos de tus departamentos
+          </h2>
+          <span className="text-xs text-muted-foreground">
+            {porDepartamento.length}{" "}
+            {porDepartamento.length === 1 ? "curso" : "cursos"}
+          </span>
+        </div>
+        {porDepartamento.length === 0 ? (
+          <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+            Todavía no hay cursos de departamento publicados.
+          </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {porDepartamento.map((c) => {
               const ords = leccionesOrdenadas(secciones, lecciones, c.id);
               const a = avanceCurso(
                 secciones,

@@ -17,7 +17,10 @@ import {
   leccionesOrdenadas,
 } from "@/features/formacion/store/use-formacion-store";
 import { usePuestosEmpresa } from "@/features/formacion/hooks/use-puestos-empresa";
-import { syncCursosPorPuesto } from "@/features/formacion/actions/formacion-actions";
+import {
+  syncCursosPorPuesto,
+  syncCursosPorDepartamento,
+} from "@/features/formacion/actions/formacion-actions";
 import {
   getAreaForDepartamento, AREA_FORM_LABEL, AREA_FORM_BADGE,
   getGradienteDepto, type AreaFormacion,
@@ -37,11 +40,11 @@ export function FormacionGridAdmin() {
   const [filtroArea, setFiltroArea] = useState<AreaFormacion>("OPERATIVA");
   const [busqueda, setBusqueda] = useState("");
 
-  // Asegura 1 curso por puesto y recarga datos al entrar / cambiar de empresa.
+  // Asegura 1 curso por departamento y 1 por puesto, y recarga al entrar.
   useEffect(() => {
     let alive = true;
     (async () => {
-      await syncCursosPorPuesto();
+      await Promise.all([syncCursosPorPuesto(), syncCursosPorDepartamento()]);
       if (alive) await hydrate("");
     })();
     return () => { alive = false; };

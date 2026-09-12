@@ -1,7 +1,7 @@
 "use client";
 
 // Tarjeta de curso al estilo Skool: portada gradiente con título, badge de
-// ámbito (general / puesto), barra de progreso y meta (lecciones · minutos).
+// ámbito (general / departamento / puesto), barra de progreso y meta.
 
 import Link from "next/link";
 import { CheckCircle2, GraduationCap, PlayCircle } from "lucide-react";
@@ -46,7 +46,11 @@ export function CursoCard({
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent" />
           <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5">
             <Badge className="bg-white/90 text-slate-900 hover:bg-white">
-              {curso.ambito === "general" ? "General" : (curso.puesto ?? "")}
+              {curso.ambito === "general"
+                ? "General"
+                : curso.ambito === "departamento"
+                  ? (curso.departamento ?? "Departamento")
+                  : (curso.puesto ?? "")}
             </Badge>
             {destacar && (
               <Badge className="bg-amber-400 text-amber-950 hover:bg-amber-400">

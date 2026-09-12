@@ -253,22 +253,44 @@ export function novedadesActivas(
     );
 }
 
+/** Orden en el que se pintan los cursos: primero lo de todos, luego lo tuyo. */
+const ORDEN_AMBITO: Record<string, number> = {
+  general: 0,
+  departamento: 1,
+  puesto: 2,
+};
+
 export function cursosVisibles(
   cursos: Curso[],
   empresaId: string,
   puesto: Puesto | null,
-  opts: { incluirNoPublicados?: boolean } = {},
+  opts: {
+    incluirNoPublicados?: boolean;
+    /**
+     * Si el rol puede ver ese departamento. Es lo que decide qué cursos de
+     * departamento se enseñan — el mismo criterio que el menú, para que a nadie
+     * le aparezca el temario de un departamento que no pisa. Sin pasarlo, los
+     * cursos de departamento no se muestran.
+     */
+    puedeVerDepartamento?: (departamento: string) => boolean;
+  } = {},
 ): Curso[] {
   return cursos
     .filter((c) => c.empresaId === empresaId)
     .filter((c) => opts.incluirNoPublicados || c.publicado)
     .filter((c) => {
       if (c.ambito === "general") return true;
+      if (c.ambito === "departamento") {
+        if (!c.departamento || !opts.puedeVerDepartamento) return false;
+        return opts.puedeVerDepartamento(c.departamento);
+      }
       if (!puesto) return false;
       return c.puesto === puesto;
     })
     .sort((a, b) => {
-      if (a.ambito !== b.ambito) return a.ambito === "general" ? -1 : 1;
+      const da = ORDEN_AMBITO[a.ambito] ?? 9;
+      const db = ORDEN_AMBITO[b.ambito] ?? 9;
+      if (da !== db) return da - db;
       return a.orden - b.orden;
     });
 }

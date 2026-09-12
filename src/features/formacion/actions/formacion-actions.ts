@@ -23,12 +23,17 @@ async function ctx() {
 
 // ─── Mappers BD → modelo del store ──────────────────────────────
 type CursoRow = {
-  id: string; empresa_id: string; puesto_id: string | null; ambito: string;
+  id: string; empresa_id: string; puesto_id: string | null;
+  departamento_id?: string | null; ambito: string;
   titulo: string; descripcion: string | null; cover: string | null;
   categoria: string; orden: number; publicado: boolean; proximamente?: boolean | null;
   fecha_publicacion: string; autor: string;
 };
-function toCurso(r: CursoRow, puestoNombre: string | null): Curso {
+function toCurso(
+  r: CursoRow,
+  puestoNombre: string | null,
+  departamentoNombre: string | null = null,
+): Curso {
   return {
     id: r.id,
     titulo: r.titulo,
@@ -38,6 +43,8 @@ function toCurso(r: CursoRow, puestoNombre: string | null): Curso {
     ambito: (r.ambito as Curso["ambito"]) ?? "general",
     puesto: puestoNombre ?? undefined,
     puestoId: r.puesto_id ?? undefined,
+    departamento: departamentoNombre ?? undefined,
+    departamentoId: r.departamento_id ?? undefined,
     empresaId: r.empresa_id,
     orden: r.orden ?? 0,
     fechaPublicacion: r.fecha_publicacion ?? "",
@@ -260,6 +267,60 @@ export async function syncCursosPorPuesto(): Promise<{ ok: boolean; creados: num
   }
 }
 
+/**
+ * Garantiza exactamente un curso por cada DEPARTAMENTO activo de la empresa.
+ *
+ * El departamento es el eje principal de la formación: el temario de SALA es el
+ * mismo para el camarero y para el jefe de sala. Los cursos por PUESTO siguen
+ * existiendo para lo específico de cada uno, pero el grueso va aquí.
+ *
+ * Idempotente: crea los que falten y el índice único de `departamento_id` evita
+ * duplicados aunque dos pantallas lo llamen a la vez.
+ */
+export async function syncCursosPorDepartamento(): Promise<{ ok: boolean; creados: number }> {
+  try {
+    const { supabase, userId, empresaId } = await ctx();
+    if (!empresaId) return { ok: false, creados: 0 };
+
+    const [{ data: departamentos }, { data: cursos }] = await Promise.all([
+      supabase.from("departamentos").select("id, nombre, estado").eq("empresa_id", empresaId),
+      supabase.from("formacion_cursos").select("departamento_id").eq("empresa_id", empresaId),
+    ]);
+
+    const conCurso = new Set(
+      (cursos ?? [])
+        .map((c) => (c as { departamento_id: string | null }).departamento_id)
+        .filter(Boolean),
+    );
+    const faltan = (departamentos ?? [])
+      .filter((d) => (d as { estado?: string }).estado !== "Inactivo")
+      .filter((d) => !conCurso.has((d as { id: string }).id));
+
+    if (faltan.length === 0) return { ok: true, creados: 0 };
+
+    const filas = faltan.map((d, i) => ({
+      empresa_id: empresaId,
+      departamento_id: (d as { id: string }).id,
+      ambito: "departamento",
+      titulo: (d as { nombre: string }).nombre ?? "Departamento",
+      descripcion: "",
+      categoria: "operativa",
+      orden: i + 1,
+      publicado: true,
+      autor: "Sistema",
+      created_by: userId,
+    }));
+    const { error } = await supabase
+      .from("formacion_cursos")
+      .upsert(filas, { onConflict: "departamento_id", ignoreDuplicates: true });
+    if (error) throw error;
+    return { ok: true, creados: filas.length };
+  } catch (err) {
+    console.error("[formacion] syncCursosPorDepartamento:", err);
+    return { ok: false, creados: 0 };
+  }
+}
+
 // ─── Carga completa del módulo ──────────────────────────────────
 export interface FormacionData {
   cursos: Curso[];
@@ -288,7 +349,7 @@ export async function getFormacionData(
     const { supabase, userId, empresaId } = await ctx();
     if (!empresaId) return { ok: true, data: vacio };
 
-    const [cursosR, seccionesR, leccionesR, novedadesR, puestosR, progresoR] = await Promise.all([
+    const [cursosR, seccionesR, leccionesR, novedadesR, puestosR, departamentosR, progresoR] = await Promise.all([
       // Los cursos de LA ESCUELA (portal de alumnos de la empresa matriz) viven
       // en estas mismas tablas y NO son formación de empleados: por defecto
       // quedan fuera de RRHH y de Mi panel. Sin este filtro, al trabajar con la
@@ -301,6 +362,7 @@ export async function getFormacionData(
       supabase.from("formacion_lecciones").select("*").eq("empresa_id", empresaId),
       supabase.from("formacion_novedades").select("*").eq("empresa_id", empresaId),
       supabase.from("puestos").select("id, nombre").eq("empresa_id", empresaId),
+      supabase.from("departamentos").select("id, nombre").eq("empresa_id", empresaId),
       userId
         ? supabase.from("formacion_progreso").select("leccion_id").eq("user_id", userId)
         : Promise.resolve({ data: [] as { leccion_id: string }[] }),
@@ -309,10 +371,17 @@ export async function getFormacionData(
     const nombrePuesto = new Map<string, string>(
       (puestosR.data ?? []).map((p) => [p.id as string, (p.nombre as string) ?? ""]),
     );
+    const nombreDepartamento = new Map<string, string>(
+      (departamentosR.data ?? []).map((d) => [d.id as string, (d.nombre as string) ?? ""]),
+    );
 
     const data: FormacionData = {
       cursos: ((cursosR.data ?? []) as CursoRow[]).map((c) =>
-        toCurso(c, c.puesto_id ? nombrePuesto.get(c.puesto_id) ?? null : null),
+        toCurso(
+          c,
+          c.puesto_id ? nombrePuesto.get(c.puesto_id) ?? null : null,
+          c.departamento_id ? nombreDepartamento.get(c.departamento_id) ?? null : null,
+        ),
       ),
       secciones: ((seccionesR.data ?? []) as SeccionRow[]).map(toSeccion),
       lecciones: ((leccionesR.data ?? []) as LeccionRow[]).map(toLeccion),

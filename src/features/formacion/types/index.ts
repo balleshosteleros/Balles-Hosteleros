@@ -19,7 +19,7 @@ export interface PuestoRef {
  * tablas, pero nunca se mezcla con la formación de la plantilla: las lecturas de
  * RRHH y Mi panel lo excluyen.
  */
-export type Ambito = "general" | "puesto" | "escuela";
+export type Ambito = "general" | "puesto" | "departamento" | "escuela";
 
 export type CategoriaCurso =
   | "bienvenida"
@@ -44,6 +44,13 @@ export interface Curso {
   puesto?: Puesto;
   /** Sólo si ambito === "puesto": id real del puesto (vínculo de BD). */
   puestoId?: string;
+  /**
+   * Sólo si ambito === "departamento": el departamento al que pertenece el
+   * curso. Es el eje principal de la formación — el temario de SALA es el
+   * mismo para el camarero y para el jefe de sala.
+   */
+  departamentoId?: string;
+  departamento?: string;
   empresaId: string;
   orden: number;
   /** ISO yyyy-mm-dd — usado para destacar como novedad en los últimos 3 meses. */

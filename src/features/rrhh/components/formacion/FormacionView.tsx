@@ -30,7 +30,10 @@ import {
   leccionesOrdenadas,
 } from "@/features/formacion/store/use-formacion-store";
 import { usePuestosEmpresa } from "@/features/formacion/hooks/use-puestos-empresa";
-import { syncCursosPorPuesto } from "@/features/formacion/actions/formacion-actions";
+import {
+  syncCursosPorPuesto,
+  syncCursosPorDepartamento,
+} from "@/features/formacion/actions/formacion-actions";
 import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -62,11 +65,12 @@ export function FormacionView() {
   const hydrate = useFormacionStore((s) => s.hydrate);
   const { puestos } = usePuestosEmpresa();
 
-  // Al entrar al panel admin: garantiza un curso por puesto real y carga de BD.
+  // Al entrar al panel admin: garantiza los cursos por departamento y por
+  // puesto, y carga de BD.
   useEffect(() => {
     let alive = true;
     (async () => {
-      await syncCursosPorPuesto();
+      await Promise.all([syncCursosPorPuesto(), syncCursosPorDepartamento()]);
       if (alive) await hydrate("");
     })();
     return () => {

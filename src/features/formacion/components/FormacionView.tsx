@@ -1,108 +1,12 @@
 "use client";
 
 import {
-  ArrowRight,
-  BookOpenCheck,
   Brain,
   Compass,
-  Package,
   Sparkles,
-  Target,
 } from "lucide-react";
-import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-
-const recorridoModulos: Array<{
-  href: string;
-  titulo: string;
-  descripcion: string;
-}> = [
-  {
-    href: "/direccion",
-    titulo: "Dirección",
-    descripcion: "Visión, valores y estructura jerárquica de la empresa.",
-  },
-  {
-    href: "/sala",
-    titulo: "Sala",
-    descripcion: "Atención al cliente, reservas y temperaturas.",
-  },
-  {
-    href: "/cocina",
-    titulo: "Cocina",
-    descripcion: "Escandallos, partidas y elaboraciones.",
-  },
-  {
-    href: "/gerencia",
-    titulo: "Gerencia",
-    descripcion: "Mantenimiento, ratios, comunicados y descuentos.",
-  },
-  {
-    href: "/calidad",
-    titulo: "Calidad",
-    descripcion: "Auditorías, inspecciones y control de empleados.",
-  },
-  {
-    href: "/rrhh",
-    titulo: "Recursos Humanos",
-    descripcion: "Empleados, fichajes, calendarios y formación.",
-  },
-  {
-    href: "/marketing",
-    titulo: "Marketing",
-    descripcion: "Calendario, contenido, fidelización y captación.",
-  },
-  {
-    href: "/logistica",
-    titulo: "Logística",
-    descripcion: "Proveedores, productos, pedidos, stock y subida de precio.",
-  },
-  {
-    href: "/contabilidad",
-    titulo: "Contabilidad",
-    descripcion: "Facturas, impuestos, transacciones y conciliación.",
-  },
-];
-
-const materialPorPuesto: Array<{ puesto: string; items: string[] }> = [
-  {
-    puesto: "Sala",
-    items: [
-      "Uniforme de sala (camisa, pantalón, delantal y mandil)",
-      "Bolígrafo, libreta y abridor",
-      "Manual de carta vigente y fichas de alérgenos",
-      "PDA / TPV personal con credenciales",
-    ],
-  },
-  {
-    puesto: "Cocina",
-    items: [
-      "Uniforme de cocina (chaquetilla, pantalón, gorro y zapato antideslizante)",
-      "Cuchillos básicos y funda",
-      "Termómetro y guantes anticorte",
-      "Acceso a escandallos y planning de partidas",
-    ],
-  },
-  {
-    puesto: "Logística",
-    items: [
-      "EPI: zapato de seguridad y guantes",
-      "Lectora de códigos / móvil corporativo",
-      "Acceso a Logística → Proveedores, Productos, Pedidos y Stock",
-      "Plantilla de control de subida de precios",
-    ],
-  },
-  {
-    puesto: "Gerencia / Mandos",
-    items: [
-      "Móvil y portátil corporativo",
-      "Acceso a comunicados, mantenimiento y ratios",
-      "Tarjeta de gastos del local",
-      "Llaves o credenciales de apertura/cierre",
-    ],
-  },
-];
+import { CursosDepartamentoGrid } from "./CursosDepartamentoGrid";
 
 export function FormacionView() {
   return (
@@ -127,43 +31,7 @@ export function FormacionView() {
         </CardContent>
       </Card>
 
-      {/* Recorrido por los módulos */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <BookOpenCheck className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold tracking-tight">
-            Tu recorrido por los módulos
-          </h2>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Estos son los apartados que tienes que conocer. Pulsa cada uno
-          para abrirlo y ver cómo funciona.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {recorridoModulos.map((m, i) => (
-            <Link
-              key={m.href}
-              href={m.href}
-              className={cn(
-                "group rounded-lg border bg-card p-4 transition-all",
-                "hover:border-primary hover:shadow-sm",
-              )}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Paso {i + 1}
-                  </div>
-                  <div className="mt-1 text-sm font-bold text-foreground">
-                    {m.titulo}
-                  </div>
-                </div>
-                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
+      <CursosDepartamentoGrid />
 
       {/* Ikigai p. 94 — Fluir en el trabajo */}
       <Card className="border-amber-200 bg-amber-50/40 dark:bg-amber-950/20">
@@ -222,40 +90,6 @@ export function FormacionView() {
         </CardContent>
       </Card>
 
-      {/* Material de Entregas por puesto */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Package className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold tracking-tight">
-            Material de Entregas por puesto
-          </h2>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Esto es lo que la empresa te entrega el primer día según tu puesto.
-          Si te falta algo, avisa a tu responsable.
-        </p>
-        <div className="grid gap-3 md:grid-cols-2">
-          {materialPorPuesto.map((bloque) => (
-            <Card key={bloque.puesto}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold uppercase tracking-wide text-foreground">
-                  {bloque.puesto}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  {bloque.items.map((item) => (
-                    <li key={item} className="flex items-start gap-2">
-                      <Target className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                      <span className="text-muted-foreground">{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }
