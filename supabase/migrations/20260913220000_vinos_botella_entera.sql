@@ -1,0 +1,6 @@
+-- Conde San Cristobal y Marques de Vargas estrenan foto de botella entera.
+--
+-- Los originales de Agora venian ya recortados a la etiqueta: por muy bien
+-- que se encuadre, de ahi no sale una botella entera. Se cogen las fotos
+-- oficiales -la del propio Marques de Vargas y la de su distribuidor- y se
+-- montan sobre el fondo de humo, como el resto de botellas.
