@@ -17,6 +17,19 @@
  * y, sobre todo, **quién ha entrado en la app y aun así no lo ha hecho**, que es
  * la lista que de verdad hace falta para poder reclamar.
  *
+ * Son DOS preguntas distintas y no hay que confundirlas, que es justo lo que
+ * pasaba hasta el 12-09-2026:
+ *
+ *   · ¿ha visto el aviso? → última señal POSTERIOR a `AVISO_DESDE`.
+ *   · ¿usa la app? → última señal, sin recortar por fecha.
+ *
+ * Al mirar los fichajes solo desde el aviso, quien no hubiera entrado en esas
+ * horas salía como «no ha abierto la app» — y el aviso se desplegó a las 07:00
+ * del mismo día en que sale el parte, o sea que salían los 8 pendientes, siete
+ * de ellos con fichajes de esa misma semana. La etiqueta acusaba de no usar el
+ * software a gente que ficha a diario. «Todavía no lo ha visto» es la verdad;
+ * «no ha abierto la app nunca» se reserva para quien no tiene NINGUNA señal.
+ *
  * «Ha entrado» mira DOS señales, y hace falta mirar las dos:
  *
  *   · `auth.users.last_sign_in_at` — el último inicio de sesión. Lo escribe
@@ -73,6 +86,11 @@ const DESTINO = "balleshosteleros@gmail.com";
  * la de la base de datos: `select now()`.
  */
 const AVISO_DESDE = "2026-09-12T05:00:00Z";
+
+/** Fecha en día-mes-año, como en todo el software. */
+function dia(marca: string): string {
+  return marca.slice(0, 10).split("-").reverse().join("-");
+}
 
 function fila(nombre: string, empresa: string, detalle: string): string {
   return `<tr>
@@ -150,10 +168,10 @@ export async function GET(request: Request) {
   // Última vez que se le vio en la app. Se queda la MÁS RECIENTE de las tres
   // señales: el último inicio de sesión, la marca de navegación del proxy y el
   // último fichaje (para fichar hay que abrir la app).
-  const actividad = new Map<string, string | null>();
+  const actividad = new Map<string, string>();
   const { data: cuentas } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
   for (const u of cuentas?.users ?? []) {
-    actividad.set(u.id, u.last_sign_in_at ?? null);
+    if (u.last_sign_in_at) actividad.set(u.id, u.last_sign_in_at);
   }
 
   const { data: navegacion } = await supabase
@@ -168,15 +186,33 @@ export async function GET(request: Request) {
     if (!previa || cuando > previa) actividad.set(id, cuando);
   }
 
-  const { data: fichajes } = await supabase
-    .from("fichajes")
-    .select("empleado_id, hora_entrada")
-    .gte("hora_entrada", AVISO_DESDE);
+  // El ÚLTIMO fichaje de cada persona, sin recortar por fecha: una persona que
+  // fichó anoche usa la app, aunque el aviso saltara esta mañana. Va de uno en
+  // uno porque PostgREST no agrupa, y traer todos los fichajes para quedarse con
+  // el máximo chocaría con el tope de 1000 filas (se perderían justo los de
+  // quien lleva más tiempo sin fichar, que es a quien hay que reclamar).
+  //
   // `fichajes.empleado_id` apunta a `auth.users`, no a `empleados`: es la misma
   // clave con la que se guarda el inicio de sesión, así que se comparan directas.
-  for (const f of fichajes ?? []) {
-    const id = String(f.empleado_id);
-    const cuando = String(f.hora_entrada);
+  const cuentasEmpleado = [...porPersona.values()]
+    .map((p) => p.userId)
+    .filter((id): id is string => Boolean(id));
+
+  const ultimosFichajes = await Promise.all(
+    cuentasEmpleado.map(async (id) => {
+      const { data } = await supabase
+        .from("fichajes")
+        .select("hora_entrada")
+        .eq("empleado_id", id)
+        .order("hora_entrada", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return { id, cuando: data?.hora_entrada ? String(data.hora_entrada) : null };
+    }),
+  );
+
+  for (const { id, cuando } of ultimosFichajes) {
+    if (!cuando) continue;
     const previa = actividad.get(id);
     if (!previa || cuando > previa) actividad.set(id, cuando);
   }
@@ -199,10 +235,15 @@ export async function GET(request: Request) {
     const detalle = `falta ${pendientes.map((c) => c.etiqueta).join(", ")}`;
 
     if (haEntrado) {
-      const dia = String(ultima).slice(0, 10).split("-").reverse().join("-");
-      vistoSinHacer.push(fila(p.nombre, empresas, `${detalle} · usó la app el ${dia}`));
+      vistoSinHacer.push(fila(p.nombre, empresas, `${detalle} · usó la app el ${dia(ultima ?? "")}`));
+    } else if (ultima) {
+      // Usa la app, pero no ha vuelto a entrar desde que salta el aviso: aún no
+      // ha tenido ocasión de verlo. No se le puede reclamar todavía.
+      sinEntrar.push(
+        fila(p.nombre, empresas, `${detalle} · última vez en la app el ${dia(ultima)}`),
+      );
     } else {
-      sinEntrar.push(fila(p.nombre, empresas, `${detalle} · no ha abierto la app`));
+      sinEntrar.push(fila(p.nombre, empresas, `${detalle} · nunca ha abierto la app`));
     }
   }
 
@@ -238,13 +279,18 @@ export async function GET(request: Request) {
       }
     </p>
     ${tabla("Han entrado y NO lo han rellenado", "#b91c1c", vistoSinHacer)}
-    ${tabla("Todavía no han abierto la app", "#a16207", sinEntrar)}
+    ${tabla("Todavía no les ha saltado el aviso", "#a16207", sinEntrar)}
     ${tabla("Ficha completa", "#15803d", completos)}
     ${tabla("Lo ponemos NOSOTROS: condiciones sin salario", "#1d4ed8", sinCondiciones)}
     <p style="margin:24px 0 0;color:#999;font-size:11px">
       Los de la primera lista han abierto la app —han fichado o se han identificado— después de
       que saltara el aviso, y han seguido sin rellenarlo. El aviso les tapa el software entero:
       lo único que pueden hacer es fichar.
+    </p>
+    <p style="margin:6px 0 0;color:#999;font-size:11px">
+      Los de la segunda usan la app —ahí está la última vez—, pero no han vuelto a entrar desde
+      que saltó el aviso, así que todavía no lo han tenido delante. Saldrán en la lista de arriba
+      en cuanto entren.
     </p>`;
 
   // El parte deja de mandarse cuando no queda NADA que reclamar, ni a ellos ni a
