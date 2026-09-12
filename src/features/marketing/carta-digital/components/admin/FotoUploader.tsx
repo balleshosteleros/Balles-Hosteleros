@@ -11,11 +11,15 @@ export function FotoUploader({
   empresaId,
   itemId,
   fotoUrl,
+  proporcion,
   onUploaded,
 }: {
   empresaId: string;
   itemId: string;
   fotoUrl: string | null;
+  /** La misma proporción con la que se verá en la carta: si aquí se
+      previsualiza cuadrada y allí sale vertical, se elige mal la foto. */
+  proporcion: number;
   onUploaded: (url: string, path: string) => void;
 }) {
   const [preview, setPreview] = useState<string | null>(fotoUrl);
@@ -48,7 +52,10 @@ export function FotoUploader({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-stone-100 ring-1 ring-stone-200">
+      <div
+        className="relative w-full overflow-hidden rounded-lg bg-stone-100 ring-1 ring-stone-200"
+        style={{ aspectRatio: proporcion }}
+      >
         {preview ? (
           <Image src={preview} alt="Foto del plato" fill sizes="320px" className="object-cover" />
         ) : (

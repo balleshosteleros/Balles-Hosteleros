@@ -18,7 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/components/ui/select";
-import { ALERGENOS_UE, type CartaCategoria, type CartaItem, type Alergeno } from "../../types";
+import {
+  ALERGENOS_UE,
+  PROPORCION_FORMATO,
+  type CartaCategoria,
+  type CartaItem,
+  type Alergeno,
+  type FormatoFoto,
+} from "../../types";
 import { crearItem, actualizarItem, borrarItem, moverItemAPosicion } from "../../actions/carta-admin-actions";
 import { cambiarEstadoItem, type EstadoCartaItem } from "../../actions/estado-item-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -64,6 +71,7 @@ export function ItemEditorModal({
   categorias,
   item,
   defaultCategoriaId,
+  formatoCarta,
   horasApagado,
   onClose,
 }: {
@@ -72,6 +80,8 @@ export function ItemEditorModal({
   categorias: CartaCategoria[];
   item: CartaItem | null;
   defaultCategoriaId: string | null;
+  /** Formato de foto de la carta, para previsualizar igual que se verá. */
+  formatoCarta: FormatoFoto;
   /** Cuánto dura el "agotado", para poder decirlo en el propio botón. */
   horasApagado: number;
   onClose: () => void;
@@ -88,6 +98,13 @@ export function ItemEditorModal({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
+
+  // La foto se previsualiza con la proporción de su categoría —la de la carta
+  // si la categoría no manda otra—, que es la que verá el comensal.
+  const proporcionFoto =
+    PROPORCION_FORMATO[
+      categorias.find((c) => c.id === categoriaId)?.formato_foto ?? formatoCarta
+    ];
 
   /**
    * ¿El plato viene de un producto de venta? Entonces el precio y los
@@ -231,13 +248,17 @@ export function ItemEditorModal({
               empresaId={empresaId}
               itemId={item.id}
               fotoUrl={fotoUrl}
+              proporcion={proporcionFoto}
               onUploaded={(url, path) => {
                 setFotoUrl(url);
                 actualizarItem({ id: item.id, fotoUrl: url, fotoStoragePath: path }).catch(() => {});
               }}
             />
           ) : (
-            <div className="flex aspect-square items-center justify-center rounded-lg bg-stone-100 text-center text-xs text-stone-500">
+            <div
+              className="flex items-center justify-center rounded-lg bg-stone-100 text-center text-xs text-stone-500"
+              style={{ aspectRatio: proporcionFoto }}
+            >
               Guarda primero el plato para poder añadir foto.
             </div>
           )}

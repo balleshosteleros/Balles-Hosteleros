@@ -261,6 +261,7 @@ export function CartaAdminBoard({
         categorias={data.categorias}
         item={editingItem}
         defaultCategoriaId={defaultCatId}
+        formatoCarta={data.empresa.carta_formato_foto === "vertical" ? "vertical" : "cuadrada"}
         horasApagado={data.horasApagado}
         onClose={() => setEditorOpen(false)}
       />
