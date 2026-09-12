@@ -13,6 +13,7 @@ import {
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHoraEnZona, minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { cn } from "@/shared/lib/utils";
+import { setAvisoFichajeActivo } from "@/shared/lib/aviso-fichaje-activo";
 import { BigClockButton } from "./BigClockButton";
 import { reproducirAvisoFichaje } from "../lib/aviso-fichaje";
 
@@ -333,6 +334,14 @@ export function MobileFichajeProvider() {
   const pospuesto = pospuestoHasta != null && Date.now() < pospuestoHasta;
   const mostrarFichar = cargado && habilitado && debeFichar && !pospuesto;
 
+  // Mientras hay aviso de fichar, los avisos de la app (comunicados,
+  // liquidaciones) se apartan: son diálogos modales de Radix y su
+  // `pointer-events: none` en el body dejaba el botón verde muerto al tacto.
+  useEffect(() => {
+    setAvisoFichajeActivo(mostrarFichar);
+    return () => setAvisoFichajeActivo(false);
+  }, [mostrarFichar]);
+
   // Segundero de la cuenta atrás: el tick lento de 20 s vale para decidir SI se
   // muestra el aviso, pero no para un contador que baja segundo a segundo.
   useEffect(() => {
@@ -405,7 +414,7 @@ export function MobileFichajeProvider() {
         <button
           type="button"
           onClick={() => setIndicadorOpen(true)}
-          className="fixed left-1/2 top-[max(env(safe-area-inset-top),8px)] z-[55] flex -translate-x-1/2 items-center gap-2 rounded-full bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 active:scale-95"
+          className="pointer-events-auto fixed left-1/2 top-[max(env(safe-area-inset-top),8px)] z-[55] flex -translate-x-1/2 items-center gap-2 rounded-full bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 active:scale-95"
         >
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
@@ -419,7 +428,7 @@ export function MobileFichajeProvider() {
       {/* Pop-up de fichar: solo dentro de la ventana horaria (±15 min) */}
       {mostrarFichar && (
         <div
-          className="fixed inset-0 z-[60] flex flex-col justify-end bg-black/50"
+          className="pointer-events-auto fixed inset-0 z-[60] flex flex-col justify-end bg-black/50"
           onClick={posponer}
         >
           <div
@@ -494,7 +503,7 @@ export function MobileFichajeProvider() {
       {/* Pop-up del indicador: tiempo + paralizar */}
       {indicadorOpen && trabajando && (
         <div
-          className="fixed inset-0 z-[60] flex flex-col justify-end bg-black/50"
+          className="pointer-events-auto fixed inset-0 z-[60] flex flex-col justify-end bg-black/50"
           onClick={() => {
             setIndicadorOpen(false);
             setPidiendoMotivo(false);

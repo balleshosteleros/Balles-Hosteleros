@@ -413,7 +413,7 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
   };
 
   return (
-    <div className="px-5 pt-3">
+    <div className="pointer-events-auto px-5 pt-3">
       {(!online || pendingOffline > 0) && (
         <div className="mb-2 flex items-center justify-between rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-100">
           <span className="flex items-center gap-1.5">
@@ -500,7 +500,7 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
           un párrafo, se pulsa en automático y deja de servir de nada. */}
       {confirmandoEntrada && (
         <div
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
+          className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
           onClick={() => setConfirmandoEntrada(false)}
         >
           <div
@@ -534,7 +534,7 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
           el turno entero (jornada a 0 h y botón apagado el resto del día). */}
       {avisoPronto && (
         <div
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
+          className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
           onClick={() => setAvisoPronto(null)}
         >
           <div
@@ -581,7 +581,7 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
       {/* Sale antes de su hora: se cierra igual, pero explicándose. */}
       {pidiendoMotivo && (
         <div
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
+          className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
           onClick={() => setPidiendoMotivo(false)}
         >
           <div
@@ -639,7 +639,7 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
       {/* Hoja de elección de tipo (solo si hay más de un tipo disponible hoy). */}
       {eligiendoTipo && (
         <div
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
+          className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
           onClick={() => setEligiendoTipo(false)}
         >
           <div
@@ -675,7 +675,7 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
       {/* Hoja de elección de modo (solo si el empleado puede teletrabajar). */}
       {eligiendoModo && (
         <div
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
+          className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
           onClick={() => setEligiendoModo(false)}
         >
           <div

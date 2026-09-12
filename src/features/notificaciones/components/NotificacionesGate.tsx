@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAvisoFichajeActivo } from "@/shared/lib/aviso-fichaje-activo";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,6 +39,14 @@ export function NotificacionesGate() {
   const [pend, setPend] = useState<NotificacionApp[]>([]);
   const [busy, setBusy] = useState(false);
   const [pasoTexto, setPasoTexto] = useState(false); // 2º paso de la liquidación
+  /**
+   * FICHAR VA PRIMERO. Este aviso es un diálogo MODAL: Radix deja el `body` en
+   * `pointer-events: none` y el botón verde de fichar, que vive fuera, se veía
+   * encima pero no respondía al dedo (Iván y Farid, 12-09-2026). Mientras haya
+   * aviso de fichaje, este se aparta; vuelve en cuanto se ficha o se pospone,
+   * sin perderse (la cola no se toca, solo deja de pintarse).
+   */
+  const ficharAhora = useAvisoFichajeActivo();
 
   useEffect(() => {
     let on = true;
@@ -50,7 +59,7 @@ export function NotificacionesGate() {
   }, []);
 
   const actual = pend[0];
-  if (!actual) return null;
+  if (!actual || ficharAhora) return null;
 
   const esLiquidacion = actual.tipo === "liquidacion" && actual.requiereAccion && !!actual.refId;
   const esComunicado = actual.tipo === "comunicado";
