@@ -41,6 +41,12 @@ type Comunicado = {
   recurrencia: string;
   envio: string;
   enviar_email: boolean;
+  /** Tipo del comunicado. `sancion` no se publica y ya está: se emite. */
+  tipo: string | null;
+  empleados_destinatarios: string[] | null;
+  creador_id: string | null;
+  /** Solo en las sanciones: la falta, el día de los hechos y el plazo de firma. */
+  sancion: unknown;
 };
 
 /** Siguiente ocurrencia según la recurrencia. Conserva la hora del envío. */
@@ -79,7 +85,7 @@ export async function GET(request: Request) {
 
   const ahora = new Date().toISOString();
   const CAMPOS =
-    "id, empresa_id, titulo, cuerpo, recurrencia, envio, enviar_email";
+    "id, empresa_id, titulo, cuerpo, recurrencia, envio, enviar_email, tipo, empleados_destinatarios, creador_id, sancion";
 
   // 1) Los que se repiten: se publican cada vez que les toca y se reprograman.
   const { data, error } = await supabase
@@ -127,6 +133,38 @@ export async function GET(request: Request) {
         .eq("id", c.id);
       if (errUpd) throw new Error(errUpd.message);
       publicados++;
+
+      // 1-bis) UNA SANCIÓN NO SE PUBLICA Y YA ESTÁ. El día que le toca salir es
+      //    cuando se monta su documento, se registra para firma y le llega al
+      //    trabajador por correo y aviso. El comunicado que se acaba de
+      //    publicar es el que le queda a él en su panel, así que no se crea
+      //    otro, y los avisos normales se saltan: el de firma es el bueno.
+      if (c.tipo === "sancion") {
+        const { emitirSancion } = await import(
+          "@/features/gerencia/actions/sancion-disciplinaria-actions"
+        );
+        const { leerSancionProgramada } = await import(
+          "@/features/gerencia/data/sancion-programada"
+        );
+        const datos = leerSancionProgramada(c.sancion);
+        const destinatario = (c.empleados_destinatarios ?? [])[0];
+        if (!datos || !destinatario) {
+          errores.push(`${c.titulo}: sanción programada sin datos; no se ha podido emitir`);
+          continue;
+        }
+        const res = await emitirSancion({
+          empresaId: c.empresa_id,
+          emitidaPor: c.creador_id,
+          comunicadoId: c.id,
+          empleadoId: destinatario,
+          gravedad: datos.gravedad,
+          fechaHechos: datos.fechaHechos,
+          hechos: c.cuerpo ?? "",
+          plazoDias: datos.plazoDias,
+        });
+        if (!res.ok) errores.push(`${c.titulo}: ${res.error}`);
+        continue;
+      }
 
       // 2) Push al móvil + notificación in-app (mismo camino que al publicar a mano).
       try {

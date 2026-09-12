@@ -17,6 +17,8 @@ import {
   GRAVEDAD_LABEL,
   type GravedadSancion,
 } from "@/features/gerencia/services/sancion-disciplinaria-pdf";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { claveDiaEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const BUCKET = "firmas";
 const TIPO_DOC = "sancion_disciplinaria";
@@ -67,7 +69,12 @@ export interface SancionInput {
   /** Obligatoria: el art. 58.2 ET exige hacer constar la fecha de los hechos. */
   fechaHechos: string;
   hechos: string;
-  fechaEmision: string;
+  /**
+   * El día que se emite. No se elige: es el día en que SALE, en la hora de la
+   * empresa, y lo pone el servidor. Poner una fecha a mano y mandarla hoy solo
+   * servía para que el papel dijera una cosa y el correo otra.
+   */
+  fechaEmision?: string;
   /** Días de plazo para firmar el acuse de recibo. */
   plazoDias?: number;
 }
@@ -88,6 +95,34 @@ export async function crearSancionDisciplinaria(
 ): Promise<CrearSancionResult> {
   try {
     const { userId, empresaId } = await requireAdmin();
+    return await emitirSancion({ ...input, empresaId, emitidaPor: userId });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[sancion] crearSancionDisciplinaria:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * El trabajo de emitir, sin preguntar quién lo pide.
+ *
+ * Vive aparte porque la sanción se emite por DOS caminos: cuando alguien pulsa
+ * «Enviar», y cuando el cron publica una que estaba programada para hoy. El
+ * segundo no tiene sesión de nadie, así que el permiso se comprueba fuera.
+ *
+ * `comunicadoId` es el comunicado que ya existe (el programado que acaba de
+ * publicarse). Si no viene, se crea uno nuevo para que le salga al trabajador.
+ */
+export async function emitirSancion(
+  input: SancionInput & {
+    empresaId: string;
+    emitidaPor: string | null;
+    comunicadoId?: string;
+  },
+): Promise<CrearSancionResult> {
+  try {
+    const { empresaId } = input;
+    const userId = input.emitidaPor;
     const admin = createAdminClient();
     const meta = await getRequestMeta();
 
@@ -96,7 +131,13 @@ export async function crearSancionDisciplinaria(
     if (!input.hechos?.trim()) return { ok: false, error: "Describe los hechos que motivan la sanción" };
     // Sin fecha de los hechos la comunicación no cumple el art. 58.2 ET.
     if (!input.fechaHechos) return { ok: false, error: "Falta la fecha de los hechos" };
-    if (!input.fechaEmision) return { ok: false, error: "Falta la fecha de emisión" };
+
+    // El día de emisión es HOY en la hora de la empresa, no la del navegador de
+    // quien la escribe: un gerente en otro huso fechaba el papel en otro día.
+    const tz = await getZonaHorariaEmpresa(admin, empresaId);
+    const emitidaEn = new Date().toISOString();
+    const fechaEmision = input.fechaEmision || claveDiaEnZona(emitidaEn, tz);
+    const horaEmision = formatHoraEnZona(emitidaEn, tz);
 
     const plazoDias = Math.max(1, Math.min(60, Number(input.plazoDias ?? 15) || 15));
 
@@ -105,7 +146,7 @@ export async function crearSancionDisciplinaria(
     // distintas y nunca coinciden, así que se acepta cualquiera de los dos: se
     // busca primero por la ficha y, si no aparece, por el usuario al que pertenece.
     const CAMPOS_EMPLEADO =
-      "id, nombre, apellidos, dni_nie, puesto, email_empresa, email_personal, empresa_id, estado, departamentos!empleados_departamento_id_fkey ( nombre )";
+      "id, user_id, nombre, apellidos, dni_nie, puesto, email_empresa, email_personal, empresa_id, estado, departamentos!empleados_departamento_id_fkey ( nombre )";
 
     const { data: porFicha, error: empErr } = await admin
       .from("empleados")
@@ -158,7 +199,8 @@ export async function crearSancionDisciplinaria(
       gravedad: input.gravedad,
       fechaHechos: input.fechaHechos,
       hechos: input.hechos.trim(),
-      fechaEmision: input.fechaEmision,
+      fechaEmision,
+      horaEmision,
     });
     const pdfBuffer = Buffer.from(pdfBytes);
     const sha256Original = sha256(pdfBuffer);
@@ -269,10 +311,13 @@ export async function crearSancionDisciplinaria(
         // documento firmable: así el aviso se marca solo al firmar y reenviar la
         // sanción no le deja dos avisos distintos de lo mismo en la bandeja.
         tipo: "firma_pendiente",
-        titulo: "Sanción disciplinaria — firma requerida",
-        mensaje: "Has recibido una comunicación de sanción disciplinaria. Fírmala como acuse de recibo (leído).",
+        // El aviso solo dice QUÉ es. Lo que hay que hacer con ella —firmarla
+        // como acuse de recibo— se lee ya dentro, con el documento delante
+        // (Iván, 12-09-2026): el aviso no es el sitio para exigir nada.
+        titulo: "Sanción disciplinaria",
+        mensaje: "Has recibido una comunicación de sanción disciplinaria.",
         segmento: { tipo: "empleados", empleadoIds: [fichaId] },
-        accionLabel: "Firmar",
+        accionLabel: "Leer",
         accionUrl: `${base}/firmar/${encodeURIComponent(token)}`,
         refTabla: "firmas_documentos",
         refId: documentoId,
@@ -283,11 +328,126 @@ export async function crearSancionDisciplinaria(
       console.error("[sancion] notificar:", e);
     }
 
+    // 5) LA SANCIÓN LE SALE EN SUS COMUNICADOS. Es una comunicación de la
+    // empresa y ahí es donde el trabajador las busca: se le deja publicada,
+    // marcada con su tipo, y a él solo. No se avisa por esta vía —ni push ni
+    // campana ni correo—: el aviso de firma que acaba de salir es el bueno, y
+    // dos avisos de lo mismo son ruido.
+    const userIdEmpleado = (emp.user_id as string | null) ?? null;
+    if (userIdEmpleado && !input.comunicadoId) {
+      const { error: comErr } = await admin.from("comunicados").insert({
+        empresa_id: empresaId,
+        titulo,
+        cuerpo: input.hechos.trim(),
+        estado: "publicado",
+        tipo: "sancion",
+        recurrencia: "sin_repeticion",
+        toda_empresa: false,
+        roles_destinatarios: [],
+        empleados_destinatarios: [userIdEmpleado],
+        departamentos_destinatarios: [],
+        envio: ahora.toISOString(),
+        adjuntos: [],
+        enviar_email: false,
+        creador_id: userId,
+      });
+      if (comErr) console.error("[sancion] comunicado del trabajador:", comErr.message);
+    }
+
     revalidatePath("/gerencia/comunicados");
     return { ok: true, documentoId, emailEnviado: sendResult.ok };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[sancion] crearSancionDisciplinaria:", msg);
+    console.error("[sancion] emitirSancion:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * DEJAR UNA SANCIÓN PROGRAMADA. No se emite nada todavía: se guarda como un
+ * comunicado de tipo sanción en estado `programado`, con la falta, el día de
+ * los hechos y el plazo de firma esperando en su sitio. El día y la hora que
+ * se haya puesto, el cron de comunicados lo publica y ES ENTONCES cuando se
+ * monta el documento y le llega al trabajador.
+ *
+ * Con `comunicadoId` se reescribe una que ya estaba programada.
+ */
+export async function programarSancion(input: {
+  comunicadoId?: string;
+  empleadoId: string;
+  gravedad: GravedadSancion;
+  fechaHechos: string;
+  hechos: string;
+  plazoDias?: number;
+  /** Cuándo tiene que salir, en UTC. */
+  envio: string;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const { userId, empresaId } = await requireAdmin();
+    const admin = createAdminClient();
+
+    if (!input.empleadoId) return { ok: false, error: "Falta el trabajador destinatario" };
+    if (!input.hechos?.trim()) return { ok: false, error: "Describe los hechos que motivan la sanción" };
+    if (!input.fechaHechos) return { ok: false, error: "Falta la fecha de los hechos" };
+    if (!input.envio) return { ok: false, error: "Falta el día en que tiene que salir" };
+
+    // El destinatario se guarda por su USUARIO, que es lo que mira el panel del
+    // trabajador. El selector ya trabaja con él, pero puede llegar el id de la
+    // ficha: se acepta cualquiera de los dos.
+    const { data: porUsuario } = await admin
+      .from("empleados")
+      .select("id, user_id, nombre, apellidos, estado, empresa_id")
+      .eq("user_id", input.empleadoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const { data: porFicha } = porUsuario
+      ? { data: null }
+      : await admin
+          .from("empleados")
+          .select("id, user_id, nombre, apellidos, estado, empresa_id")
+          .eq("id", input.empleadoId)
+          .eq("empresa_id", empresaId)
+          .maybeSingle();
+    const emp = porUsuario ?? porFicha;
+    if (!emp) return { ok: false, error: "Trabajador no encontrado" };
+    if (emp.estado !== "Activo") return { ok: false, error: "El trabajador no está activo" };
+    const userIdEmpleado = emp.user_id as string | null;
+    if (!userIdEmpleado) {
+      return { ok: false, error: "El trabajador no tiene acceso al software; no se le puede programar una sanción" };
+    }
+
+    const fila = {
+      empresa_id: empresaId,
+      titulo: `Sanción disciplinaria — ${`${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim() || "Trabajador/a"}`,
+      cuerpo: input.hechos.trim(),
+      estado: "programado",
+      tipo: "sancion",
+      recurrencia: "sin_repeticion",
+      toda_empresa: false,
+      roles_destinatarios: [],
+      empleados_destinatarios: [userIdEmpleado],
+      departamentos_destinatarios: [],
+      envio: input.envio,
+      adjuntos: [],
+      enviar_email: false,
+      creador_id: userId,
+      sancion: {
+        gravedad: input.gravedad,
+        fechaHechos: input.fechaHechos,
+        plazoDias: Math.max(1, Math.min(60, Number(input.plazoDias ?? 15) || 15)),
+      },
+    };
+
+    const { data, error } = input.comunicadoId
+      ? await admin.from("comunicados").update(fila).eq("id", input.comunicadoId).select("id").single()
+      : await admin.from("comunicados").insert(fila).select("id").single();
+    if (error || !data) return { ok: false, error: error?.message ?? "No se pudo programar la sanción" };
+
+    revalidatePath("/gerencia/comunicados");
+    return { ok: true, id: data.id as string };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[sancion] programarSancion:", msg);
     return { ok: false, error: msg };
   }
 }

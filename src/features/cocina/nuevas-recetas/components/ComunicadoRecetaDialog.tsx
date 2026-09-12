@@ -15,7 +15,7 @@ import { Send, X, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { createComunicado } from "@/features/gerencia/actions/comunicados-actions";
 import {
-  TIPOS_COMUNICADO,
+  TIPOS_COMUNICADO_ELEGIBLES,
   TIPO_COMUNICADO_LABEL,
   type TipoComunicado,
 } from "@/features/rrhh/data/comunicados";
@@ -125,7 +125,7 @@ export function ComunicadoRecetaDialog({ open, onOpenChange, receta }: Props) {
               <Select value={tipo} onValueChange={(v) => setTipo(v as TipoComunicado)}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {TIPOS_COMUNICADO.map((t) => (
+                  {TIPOS_COMUNICADO_ELEGIBLES.map((t) => (
                     <SelectItem key={t} value={t}>{TIPO_COMUNICADO_LABEL[t]}</SelectItem>
                   ))}
                 </SelectContent>

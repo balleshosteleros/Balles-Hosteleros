@@ -54,6 +54,12 @@ export type DatosSancion = {
   hechos: string;
   /** Fecha de emisión (YYYY-MM-DD). */
   fechaEmision: string;
+  /**
+   * Hora de emisión (HH:mm), en la hora de la EMPRESA. Una sanción no se sella
+   * solo por días: la prescripción y los plazos se cuentan desde que se emite,
+   * así que consta a qué hora salió.
+   */
+  horaEmision?: string;
 };
 
 const GRAVEDAD_COLOR: Record<GravedadSancion, ReturnType<typeof rgb>> = {
@@ -247,7 +253,17 @@ export async function generarSancionPdf(
   // La sanción la impone la EMPRESA (art. 58.1 ET), no un empleado concreto: en
   // el documento va la sociedad, para no señalar a nadie de la plantilla. Quién
   // la emitió queda igualmente guardado en el registro interno y en el acta.
-  drawField("Emitido por", `La dirección de ${razonSocial} · ${fmtFecha(datos.fechaEmision)}`);
+  //
+  // Va el nombre legal y el NIF, y nada más (Iván, 12-09-2026): es quien
+  // sanciona, no una frase. La fecha ya está arriba, en la cabecera.
+  // Quién la impone ya está impreso arriba, en la cabecera (razón social y
+  // NIF), así que aquí va CUÁNDO salió: día y hora (Iván, 12-09-2026).
+  drawField(
+    "Emitido el",
+    datos.horaEmision
+      ? `${fmtFecha(datos.fechaEmision)} a las ${datos.horaEmision}`
+      : fmtFecha(datos.fechaEmision),
+  );
 
   // Banda reservada a la firma manuscrita del trabajador. Se reserva ENTERA en
   // una sola página: si no cabe, se pasa a la siguiente antes de dibujarla, para

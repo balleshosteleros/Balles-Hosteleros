@@ -79,7 +79,17 @@ export function NotificacionesGate() {
     setBusy(true);
     const r = await marcarNotificacionVista(actual.id);
     setBusy(false);
-    if (r.ok) siguiente();
+    if (!r.ok) return;
+    /**
+     * UN AVISO CON ACCIÓN TIENE QUE LLEVAR ALLÍ. Antes el botón solo apuntaba
+     * «visto» y dejaba al trabajador en el menú: pulsaba «Firmar» y no pasaba
+     * nada (Iván, 12-09-2026). Se marca visto y se abre lo que hay que hacer.
+     */
+    if (actual.accionUrl) {
+      window.location.href = actual.accionUrl;
+      return;
+    }
+    siguiente();
   };
 
   const onConfirmarLiquidar = async () => {
@@ -96,7 +106,7 @@ export function NotificacionesGate() {
       "Las liquidaciones se emiten siempre el primer miércoles del mes.";
     return (
       <AlertDialog open>
-        <AlertDialogContent className="max-w-sm">
+        <AlertDialogContent className="w-[calc(100%-2.5rem)] max-w-sm">
           <AlertDialogHeader>
             <AlertDialogTitle>Liquidación aprobada</AlertDialogTitle>
             <AlertDialogDescription>{texto}</AlertDialogDescription>
@@ -130,7 +140,7 @@ export function NotificacionesGate() {
 
   return (
     <AlertDialog open>
-      <AlertDialogContent className="max-w-sm">
+      <AlertDialogContent className="w-[calc(100%-2.5rem)] max-w-sm">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             {/* Un comunicado sale con la marca de la empresa que lo firma; el
@@ -237,6 +247,9 @@ export function NotificacionesGate() {
               else void onVisto();
             }}
             disabled={busy}
+            /* Verde cuando el aviso lleva a algún sitio: se ve de un vistazo que
+               ahí hay algo que hacer, y no es el «Visto» de quitarlo de en medio. */
+            className={actual.accionUrl ? "bg-emerald-600 text-white hover:bg-emerald-700" : undefined}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : actual.accionLabel || "Visto"}
           </AlertDialogAction>

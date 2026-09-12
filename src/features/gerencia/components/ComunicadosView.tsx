@@ -17,7 +17,7 @@ import {
   RECURRENCIA_LABELS,
   type EstadoComunicado,
   type Recurrencia,
-  TIPOS_COMUNICADO,
+  TIPOS_COMUNICADO_ELEGIBLES,
   TIPO_COMUNICADO_LABEL,
   TIPO_COMUNICADO_COLOR,
   tipoComunicado,
@@ -68,7 +68,6 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -87,8 +86,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   CalendarDays, MoreHorizontal, Eye, Clock, Archive,
-  Trash2, FileText, Users, ArrowLeft, Send, Upload, X, Bell, Mail, Paperclip,
+  Trash2, Users, ArrowLeft, Send, Upload, X, Bell, Mail, Paperclip,
   ChevronLeft, ChevronRight, ChevronDown, Settings, ShieldAlert, Link as LinkIcon, Copy,
+  Table2, Download, RefreshCw, Ban,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -105,7 +105,34 @@ import { IOActions } from "@/shared/io";
 import { comunicadosIO } from "@/features/gerencia/io/comunicados.io";
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
-import { SancionDisciplinariaView } from "@/features/gerencia/components/sancion-disciplinaria-piezas";
+import {
+  GRAVEDAD_OPCIONES,
+  AvisoAcuseRecibo,
+  PrototipoSancion,
+  EstadoFirmaBadge,
+  estadoFirmaLabel,
+  gravedadLabel,
+  avisoPrescripcion,
+  datosSancionVacios,
+  type DatosSancion,
+  type EmpresaSancion,
+} from "@/features/gerencia/components/sancion-disciplinaria-piezas";
+import {
+  crearSancionDisciplinaria,
+  programarSancion,
+  listSancionesDisciplinarias,
+  getEmpresaDeLaSancion,
+  type SancionResumen,
+} from "@/features/gerencia/actions/sancion-disciplinaria-actions";
+import { leerSancionProgramada } from "@/features/gerencia/data/sancion-programada";
+import {
+  getVisorOriginalUrl,
+  getVisorFirmadoUrl,
+  getDescargaFirmadoUrl,
+  reenviarFirma,
+  cancelarFirma,
+} from "@/features/rrhh/actions/firmas-actions";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { getOpcionesSegmento } from "@/features/notificaciones/actions/aviso-manual-actions";
 import { ComunicadoTarjeta } from "@/features/gerencia/components/ComunicadoTarjeta";
@@ -229,6 +256,11 @@ interface EditorForm {
   /** Lo que se lee en ese botón. Vacío = "Abrir enlace". */
   enlaceTexto: string;
   observaciones: string;
+  /**
+   * Lo que la sanción pide de más. Solo cuenta cuando el tipo es «Sanción»:
+   * en cualquier otro comunicado se queda tal cual y no se mira.
+   */
+  sancion: DatosSancion;
 }
 
 const emptyForm: EditorForm = {
@@ -238,6 +270,7 @@ const emptyForm: EditorForm = {
   envioFecha: "", envioHora: "", adjuntos: [],
   archivosNuevos: [], enviarEmail: false, observaciones: "",
   enlace: "", enlaceTexto: "",
+  sancion: datosSancionVacios,
 };
 
 /**
@@ -263,6 +296,22 @@ function formFromComunicado(c: Comunicado, tz: string): EditorForm {
     adjuntos: [...c.adjuntos], archivosNuevos: [], enviarEmail: c.enviarEmail,
     enlace: c.enlace, enlaceTexto: c.enlaceTexto,
     observaciones: c.observaciones,
+    // Una sanción que todavía espera se puede volver a abrir y cambiar: sus
+    // datos salen de donde estaban guardados. La que ya se emitió no se reabre.
+    sancion: sancionDelComunicado(c),
+  };
+}
+
+/** Lo que una sanción programada dejó guardado, listo para su ficha. */
+function sancionDelComunicado(c: Comunicado): DatosSancion {
+  const datos = leerSancionProgramada(c.sancion);
+  if (!datos) return datosSancionVacios;
+  return {
+    ...datosSancionVacios,
+    empleadoId: c.empleadosDestinatarios[0] ?? "",
+    gravedad: datos.gravedad,
+    fechaHechos: datos.fechaHechos,
+    plazoDias: datos.plazoDias,
   };
 }
 
@@ -298,12 +347,15 @@ function firmaForm(f: EditorForm): string {
 }
 
 function ComunicadoEditor({
-  comunicado, onBack, onSave, empleadosReales, departamentosReales, empresaNombre, empresaColor, empresaIsotipo, tz,
+  comunicado, onBack, onSave, onEmitirSancion, empleadosReales, departamentosReales,
+  empresaNombre, empresaColor, empresaIsotipo, empresaSancion, puedeSancionar, tz,
 }: {
   comunicado: Comunicado | null;
   onBack: () => void;
   /** `publicar` lo manda a la plantilla; `borrador` solo lo deja guardado. */
   onSave: (form: EditorForm, intencion: IntencionGuardado) => void | Promise<void>;
+  /** La sanción no se publica: se emite, genera su documento y se firma. */
+  onEmitirSancion: (form: EditorForm) => Promise<boolean>;
   empleadosReales: EmpleadoSelector[];
   departamentosReales: { id: string; nombre: string }[];
   empresaNombre: string;
@@ -312,6 +364,10 @@ function ComunicadoEditor({
   empresaColor: string;
   /** Isotipo de la empresa: es el que sale en el comunicado del trabajador. */
   empresaIsotipo: string;
+  /** Razón social, NIF y domicilio: lo que sale IMPRESO en la sanción. */
+  empresaSancion: EmpresaSancion | null;
+  /** Sin Recursos Humanos, el tipo «Sanción» ni se ofrece. */
+  puedeSancionar: boolean;
   /** Zona horaria de la empresa: la fecha de envío se elige en SU hora. */
   tz: string;
 }) {
@@ -326,6 +382,23 @@ function ComunicadoEditor({
   const firmaInicial = useMemo(() => firmaForm(formInicial), [formInicial]);
   const [preview, setPreview] = useState(false);
   const [empleadoFilter, setEmpleadoFilter] = useState("");
+  /**
+   * LA SANCIÓN ES UN TIPO DE COMUNICADO. La ficha es la misma —la hoja, el
+   * título, el mensaje—, pero por dentro deja de ser un aviso: va a UNA sola
+   * persona, pide la falta y los hechos, y al enviarla se genera el documento
+   * que el trabajador firma. Ni se programa, ni se archiva, ni se duplica.
+   */
+  const esSancion = form.tipo === "sancion";
+  const empleadoSancionado = useMemo(
+    () => empleadosReales.find(e => e.userId === form.sancion.empleadoId) ?? null,
+    [empleadosReales, form.sancion.empleadoId],
+  );
+  const uSancion = (patch: Partial<DatosSancion>) =>
+    setForm(f => ({ ...f, sancion: { ...f.sancion, ...patch } }));
+  const prescripcion = useMemo(
+    () => avisoPrescripcion(form.sancion.fechaHechos, form.sancion.gravedad),
+    [form.sancion.fechaHechos, form.sancion.gravedad],
+  );
   const inputArchivos = useRef<HTMLInputElement>(null);
   const u = (patch: Partial<EditorForm>) => setForm(f => ({ ...f, ...patch }));
 
@@ -379,6 +452,24 @@ function ComunicadoEditor({
     }
   };
 
+  /** Emitir la sanción: genera el documento y se lo manda a firmar. */
+  const emitirSancion = async () => {
+    if (enMarcha) return;
+    setEnMarcha("publicar");
+    try {
+      await onEmitirSancion({ ...form, creadorId: form.creadorId || user?.id || "" });
+    } finally {
+      setEnMarcha(null);
+    }
+  };
+
+  /** Hasta que no esté todo, el botón de enviar se queda apagado. */
+  const sancionCompleta =
+    !!form.sancion.empleadoId &&
+    !!form.cuerpo.trim() &&
+    !!form.sancion.fechaHechos &&
+    (!form.programado || !!form.envioFecha);
+
 
   /** ¿Hay algo escrito? Salir de una ficha en blanco no debe dejar borradores vacíos. */
   const tieneContenido =
@@ -397,6 +488,12 @@ function ComunicadoEditor({
    */
   const salir = async () => {
     if (enMarcha) return;
+    // Una sanción sin emitir NO se guarda: no existe la sanción a medias. O se
+    // manda entera o no se ha escrito nunca.
+    if (esSancion) {
+      onBack();
+      return;
+    }
     const hayCambios = firmaForm(form) !== firmaInicial;
     if (!hayCambios) {
       onBack();
@@ -445,13 +542,34 @@ function ComunicadoEditor({
       <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold tracking-tight">Así lo verá el equipo</h2>
-            <p className="text-xs text-muted-foreground">Es la misma vista de Mi panel.</p>
+            <h2 className="text-base font-semibold tracking-tight">
+              {esSancion ? "Así la firmará el trabajador" : "Así lo verá el equipo"}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {esSancion ? "Es el documento que se le manda." : "Es la misma vista de Mi panel."}
+            </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => setPreview(false)}>
             <ArrowLeft className="h-4 w-4 mr-1" />Volver al editor
           </Button>
         </div>
+        {esSancion ? (
+          <PrototipoSancion
+            datos={{
+              ...form.sancion,
+              fechaEmision: form.programado && form.envioFecha
+                ? form.envioFecha
+                : claveDiaEnZona(new Date().toISOString(), tz),
+              horaEmision: form.programado && form.envioFecha
+                ? form.envioHora || "00:00"
+                : formatHoraEnZona(new Date().toISOString(), tz),
+            }}
+            hechos={form.cuerpo}
+            empleado={empleadoSancionado}
+            empresa={empresaSancion}
+          />
+        ) : (
+        <>
         <div className="flex items-center gap-3">
           <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Hoy</h3>
           <span className="h-px flex-1 bg-border" />
@@ -471,6 +589,8 @@ function ComunicadoEditor({
             nuevo: true,
           }}
         />
+        </>
+        )}
       </div>
     );
   }
@@ -493,11 +613,32 @@ function ComunicadoEditor({
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={salir} disabled={!!enMarcha}><ArrowLeft className="h-4 w-4 mr-1" />Volver</Button>
           <Separator orientation="vertical" className="h-5" />
-          <h2 className="text-sm font-bold">{isEdit ? "Editar comunicado" : "Crear comunicado"}</h2>
-          <EstadoBadge estado={form.estado} />
+          <h2 className="text-sm font-bold">
+            {esSancion
+              ? "Sanción disciplinaria"
+              : isEdit ? "Editar comunicado" : "Crear comunicado"}
+          </h2>
+          {!esSancion && <EstadoBadge estado={form.estado} />}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setPreview(true)} disabled={!!enMarcha}><Eye className="h-4 w-4 mr-1" />Previsualizar</Button>
+          {esSancion ? (
+            <Button
+              size="sm"
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              onClick={emitirSancion}
+              disabled={!!enMarcha || !sancionCompleta}
+            >
+              {enMarcha ? (
+                <LoadingSpinner size="sm" className="py-0 mr-1" iconClassName="text-current" />
+              ) : (
+                <Send className="h-4 w-4 mr-1" />
+              )}
+              {enMarcha
+                ? vaProgramado ? "Programando…" : "Enviando…"
+                : vaProgramado ? "Programar" : "Enviar"}
+            </Button>
+          ) : (
           <Button
             size="sm"
             className="bg-emerald-600 text-white hover:bg-emerald-700"
@@ -513,6 +654,7 @@ function ComunicadoEditor({
               ? vaProgramado ? "Programando…" : "Publicando…"
               : vaProgramado ? "Programar" : "Publicar"}
           </Button>
+          )}
         </div>
       </div>
 
@@ -522,24 +664,38 @@ function ComunicadoEditor({
             {/* El comunicado se escribe sobre la hoja tal y como se recibe: la
                 franja de marca de la empresa arriba y el texto dentro. No hay
                 nada que montar ni colores que elegir. */}
+            {esSancion && <AvisoAcuseRecibo />}
+
             <Card className="overflow-hidden shadow-sm">
               <div className="h-2" style={{ background: empresaColor }} />
               <CardContent className="p-6 space-y-4">
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">Título</Label>
-                  <Input
-                    value={form.titulo}
-                    onChange={e => u({ titulo: e.target.value })}
-                    placeholder="Cambio de horario de invierno"
-                    className="text-xl font-bold border-0 rounded-none px-0 h-auto py-1 focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/40 placeholder:font-normal"
-                  />
+                  {/* El encabezamiento de una sanción no se escribe: lo fija la
+                      ley y es el que sale impreso en el documento. */}
+                  {esSancion ? (
+                    <p className="py-1 text-xl font-bold">Comunicación de sanción disciplinaria</p>
+                  ) : (
+                    <>
+                      <Label className="text-xs font-medium text-muted-foreground">Título</Label>
+                      <Input
+                        value={form.titulo}
+                        onChange={e => u({ titulo: e.target.value })}
+                        placeholder="Cambio de horario de invierno"
+                        className="text-xl font-bold border-0 rounded-none px-0 h-auto py-1 focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/40 placeholder:font-normal"
+                      />
+                    </>
+                  )}
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">Mensaje</Label>
+                  <Label className="text-xs font-medium text-muted-foreground">
+                    {esSancion ? "Hechos que motivan la sanción" : "Mensaje"}
+                  </Label>
                   <Textarea
                     value={form.cuerpo}
                     onChange={e => u({ cuerpo: e.target.value })}
-                    placeholder="Escribe aquí lo que quieres contarle al equipo…"
+                    placeholder={esSancion
+                      ? "Describe con detalle los hechos, fechas y circunstancias que motivan la sanción…"
+                      : "Escribe aquí lo que quieres contarle al equipo…"}
                     className="border-0 px-0 focus-visible:ring-0 shadow-none min-h-[200px] resize-y text-base leading-7 placeholder:text-muted-foreground/40"
                   />
                 </div>
@@ -548,7 +704,9 @@ function ComunicadoEditor({
 
             {/* Un enlace no se pega dentro del texto: ahí no se puede pulsar
                 desde el aviso y se pierde entre el mensaje. Puesto aquí, sale
-                como un botón en el aviso, en el comunicado y en el correo. */}
+                como un botón en el aviso, en el comunicado y en el correo.
+                En la sanción no hay enlace ni notas: el documento es el que es. */}
+            {!esSancion && (
             <div className="space-y-2 rounded-xl border p-3">
               <div className="flex items-center gap-2">
                 <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -575,9 +733,11 @@ function ComunicadoEditor({
                 />
               </div>
             </div>
+            )}
 
             {/* Las notas no salen en el comunicado, así que van plegadas: no
                 tienen por qué robar sitio a lo que sí se manda. */}
+            {!esSancion && (
             <Collapsible>
               <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left hover:bg-muted/40">
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -590,6 +750,7 @@ function ComunicadoEditor({
                 <Textarea value={form.observaciones} onChange={e => u({ observaciones: e.target.value })} rows={3} className="resize-y" />
               </CollapsibleContent>
             </Collapsible>
+            )}
           </div>
         </ScrollArea>
 
@@ -598,6 +759,141 @@ function ComunicadoEditor({
             documentos) va plegado y dice cuántos llevas elegidos. */}
         <ScrollArea className="w-80 xl:w-96 border-l bg-muted/20 shrink-0">
           <div className="p-4 space-y-3">
+            {/* EL TIPO MANDA. Pinta el recuadro del comunicado y, si se elige
+                «Sanción», cambia la ficha entera: deja de ser un aviso y pasa a
+                ser el documento disciplinario que firma el trabajador. Solo se
+                ofrece sancionar a quien puede editar Recursos Humanos, que es
+                el permiso que exige el servidor al emitirla.
+                El creador NO se elige: es quien lo escribe, y solo se deja ver. */}
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm font-normal">Tipo</Label>
+              <Select value={form.tipo} onValueChange={v => u({ tipo: v as TipoComunicado })}>
+                <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TIPOS_COMUNICADO_ELEGIBLES.map((t) => (
+                    <SelectItem key={t} value={t}>{TIPO_COMUNICADO_LABEL[t]}</SelectItem>
+                  ))}
+                  {/* Se puede elegir al crearla, y sigue ahí al reabrir una que
+                      quedó programada. Una ya emitida no se reedita nunca. */}
+                  {puedeSancionar && (!isEdit || esSancion) && (
+                    <SelectItem value="sancion">{TIPO_COMUNICADO_LABEL.sancion}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Separator />
+
+            {esSancion ? (
+              /* LA PARTE TÉCNICA DE LA SANCIÓN. Aquí no hay destinatarios que
+                 elegir ni día en que sale: una sanción va a UNA persona y se
+                 manda en cuanto se emite. Lo que se pide es lo que la ley exige
+                 que conste (arts. 58 y 60.2 del Estatuto de los Trabajadores). */
+              <>
+                <div className="space-y-2">
+                  <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5" />Trabajador sancionado
+                  </Label>
+                  <Select value={form.sancion.empleadoId} onValueChange={v => uSancion({ empleadoId: v })}>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Selecciona al trabajador…" /></SelectTrigger>
+                    <SelectContent>
+                      {empleadosReales.map(e => {
+                        const extra = [e.puesto ?? e.rolLabel, e.departamento].filter(Boolean).join(" · ");
+                        return (
+                          <SelectItem key={e.userId} value={e.userId}>
+                            {e.nombre} {e.apellidos}
+                            {extra && <span className="text-muted-foreground">{" — "}{extra}</span>}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Una sanción se dirige a una sola persona: no se manda en bloque.
+                  </p>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <ShieldAlert className="h-3.5 w-3.5" />La falta
+                  </Label>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Calificación</Label>
+                    <Select value={form.sancion.gravedad} onValueChange={v => uSancion({ gravedad: v as DatosSancion["gravedad"] })}>
+                      <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {GRAVEDAD_OPCIONES.map(g => <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Fecha de los hechos</Label>
+                    <Input
+                      type="date"
+                      className="mt-1 h-9 text-xs"
+                      value={form.sancion.fechaHechos}
+                      onChange={e => uSancion({ fechaHechos: e.target.value })}
+                    />
+                  </div>
+                  {prescripcion && (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200 leading-relaxed">
+                      {prescripcion}
+                    </p>
+                  )}
+                </div>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5" />Firma
+                  </Label>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Días para firmarla</Label>
+                    <NumberInput
+                      min={1}
+                      max={60}
+                      decimales={false}
+                      emptyValue={15}
+                      value={form.sancion.plazoDias}
+                      onValueChange={v => uSancion({ plazoDias: v })}
+                      className="mt-1 h-9 text-xs"
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Cuando salga se genera el documento, le llega por correo y aviso, y lo firma
+                    dentro del software. Pasados esos días el enlace caduca.
+                  </p>
+                </div>
+
+                <Separator />
+
+                {/* Se puede dejar para otro día, igual que un comunicado. Hasta
+                    que llega ese día no se genera nada: el documento se monta
+                    cuando sale, y el plazo de firma empieza a contar ahí. */}
+                <div className="space-y-2">
+                  <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <CalendarDays className="h-3.5 w-3.5" />Cuándo sale
+                  </Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="sw-prog-sancion" className="text-sm font-normal">Dejarla programada</Label>
+                    <Switch checked={form.programado} onCheckedChange={v => u({ programado: v })} id="sw-prog-sancion" />
+                  </div>
+                  {form.programado ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input type="date" className="h-8 text-xs" value={form.envioFecha} onChange={e => u({ envioFecha: e.target.value })} />
+                      <Input type="time" className="h-8 text-xs" value={form.envioHora} onChange={e => u({ envioHora: e.target.value })} />
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">Sale en cuanto pulses «Enviar».</p>
+                  )}
+                </div>
+
+              </>
+            ) : (
+              <>
             <div className="space-y-2">
               <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <Users className="h-3.5 w-3.5" />Destinatarios
@@ -819,23 +1115,10 @@ function ComunicadoEditor({
                 </p>
               </CollapsibleContent>
             </Collapsible>
+              </>
+            )}
 
-            <Separator />
-
-            {/* El tipo pinta el recuadro del comunicado. El creador NO se
-                elige: es quien lo escribe, y solo se deja ver. */}
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-sm font-normal">Tipo</Label>
-              <Select value={form.tipo} onValueChange={v => u({ tipo: v as TipoComunicado })}>
-                <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TIPOS_COMUNICADO.map((t) => (
-                    <SelectItem key={t} value={t}>{TIPO_COMUNICADO_LABEL[t]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {creadorNombre && (
+            {creadorNombre && !esSancion && (
               <p className="text-[11px] text-muted-foreground">Lo firma {creadorNombre}.</p>
             )}
           </div>
@@ -846,12 +1129,12 @@ function ComunicadoEditor({
 }
 
 function ComunicadoCalendario({ comunicados, vista, setVista, mesOffset, setMesOffset, onSelect }: {
-  comunicados: Comunicado[];
+  comunicados: FilaComunicado[];
   vista: "mensual" | "anual";
   setVista: (v: "mensual" | "anual") => void;
   mesOffset: number;
   setMesOffset: (fn: (p: number) => number) => void;
-  onSelect: (c: Comunicado) => void;
+  onSelect: (c: FilaComunicado) => void;
 }) {
   const hoy = new Date();
   const mesBase = new Date(hoy.getFullYear(), hoy.getMonth() + mesOffset, 1);
@@ -1063,6 +1346,7 @@ function filaAComunicado(fila: Record<string, unknown>): Comunicado {
     enviarEmail: fila.enviar_email === true,
     enlace: texto(fila.enlace),
     enlaceTexto: texto(fila.enlace_texto),
+    sancion: fila.sancion ?? null,
   };
 }
 
@@ -1084,6 +1368,46 @@ function normalizarAdjuntosFila(raw: unknown): ComunicadoAdjunto[] {
   });
 }
 
+/**
+ * Fila del listado. Es un comunicado, y si lleva `firma` es una sanción ya
+ * EMITIDA: los datos de la lista se leen igual (título, tipo, cuándo salió, a
+ * quién) y lo que cambia es el estado —el de su firma— y lo que se puede hacer
+ * con ella. Una sanción todavía programada no la lleva: hasta que sale es un
+ * comunicado más, y se edita y se borra como tal.
+ */
+type FilaComunicado = Comunicado & { firma?: SancionResumen };
+
+/** Una sanción emitida, contada como lo que es en la lista de comunicados. */
+function sancionAFila(s: SancionResumen): FilaComunicado {
+  return {
+    id: `sancion-${s.id}`,
+    titulo: `Sanción disciplinaria — ${s.empleadoNombre}`,
+    cuerpo: s.resumen,
+    // El estado de verdad es el de la firma y se pinta aparte; este solo sirve
+    // para que los filtros y el orden de la barra no se queden sin valor.
+    estado: "publicado",
+    creadorId: "",
+    creadoEl: s.enviadoEn,
+    envio: s.enviadoEn,
+    recurrencia: "sin_repeticion",
+    alcancePct: 0,
+    lecturas: [],
+    rolesDestinatarios: [],
+    todaEmpresa: false,
+    departamentosDestinatarios: s.departamento && s.departamento !== "—" ? [s.departamento] : [],
+    empleadosDestinatarios: [],
+    destinatarios: { empresas: 0, departamentos: 0, empleados: 1 },
+    tipo: "sancion",
+    observaciones: "",
+    adjuntos: [],
+    enviarEmail: true,
+    enlace: "",
+    enlaceTexto: "",
+    sancion: null,
+    firma: s,
+  };
+}
+
 export function ComunicadosView() {
   // `empresaResuelta` evita enseñar el nombre de la empresa por defecto mientras
   // aún se está resolviendo cuál es la activa del usuario.
@@ -1098,6 +1422,14 @@ export function ComunicadosView() {
   // la del navegador de quien mira la pantalla.
   const tz = empresaActual?.zonaHoraria ?? ZONA_HORARIA_FALLBACK;
   const [comunicados, setComunicados] = useState<Comunicado[]>([]);
+  /**
+   * Las sanciones NO se guardan en `comunicados`: son documentos firmables y
+   * viven en el circuito de firmas, con su PDF, su acta y su carpeta. Pero se
+   * escriben y se consultan aquí, así que se traen y se enseñan en la misma
+   * lista, marcadas con su tipo.
+   */
+  const [sanciones, setSanciones] = useState<SancionResumen[]>([]);
+  const [empresaSancion, setEmpresaSancion] = useState<EmpresaSancion | null>(null);
   const [empleadosReales, setEmpleadosReales] = useState<EmpleadoSelector[]>([]);
   // Departamentos REALES de la empresa: los mismos que usa el resto del
   // software para segmentar avisos. Una lista escrita a mano se desincroniza y
@@ -1120,6 +1452,19 @@ export function ComunicadosView() {
     }
   }, []);
 
+  const loadSanciones = useCallback(async () => {
+    if (!puedeSancionar) {
+      setSanciones([]);
+      return;
+    }
+    const [lista, empresa] = await Promise.all([
+      listSancionesDisciplinarias(),
+      getEmpresaDeLaSancion(),
+    ]);
+    if (lista.ok) setSanciones(lista.data);
+    if (empresa.ok) setEmpresaSancion(empresa.data);
+  }, [puedeSancionar]);
+
   const loadEmpleadosReales = useCallback(async () => {
     const res = await listEmpleadosParaComunicado();
     if (res.ok) setEmpleadosReales(res.data);
@@ -1132,7 +1477,10 @@ export function ComunicadosView() {
     loadEmpleadosReales();
   }, [loadComunicados, loadEmpleadosReales]);
 
-  const [mainTab, setMainTab] = useState<"listado" | "calendario" | "sancion">("listado");
+  useEffect(() => { void loadSanciones(); }, [loadSanciones]);
+
+  /** El calendario ya no es una pestaña: es otra forma de ver la misma lista. */
+  const [vistaCalendario, setVistaCalendario] = useState(false);
   const [calVista, setCalVista] = useState<"mensual" | "anual">("mensual");
   const [mesOffset, setMesOffset] = useState(0);
   const [search, setSearch] = useState("");
@@ -1150,6 +1498,12 @@ export function ComunicadosView() {
     onCambio: () => void loadComunicados(),
     pausado: !!editingComunicado,
   });
+  // Una sanción que el trabajador acaba de firmar cambia de estado sin recargar.
+  useSincronizacionEnVivo({
+    tablas: ["firmas_documentos"],
+    onCambio: () => void loadSanciones(),
+    pausado: editorMode !== "list",
+  });
   const [faltantesComunicado, setFaltantesComunicado] = useState<string[]>([]);
   /** Comunicado a punto de publicarse desde el listado, y si sale por correo. */
   const [publicando, setPublicando] = useState<Comunicado | null>(null);
@@ -1157,6 +1511,21 @@ export function ComunicadosView() {
   const [publicandoBusy, setPublicandoBusy] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const { validar: validarComunicado } = useReglasSubmodulo("gerencia", "comunicados");
+
+  /**
+   * TODO lo que hay en esta pantalla, en una sola lista: los comunicados y las
+   * sanciones emitidas, ordenado por lo último que salió.
+   */
+  const listaCompleta = useMemo<FilaComunicado[]>(() => {
+    // Una sanción YA EMITIDA sale por su documento, que es donde se ve si la ha
+    // firmado; el comunicado que le queda al trabajador no se repite aquí. La
+    // que todavía está programada sí sale: aún no existe como documento.
+    const filas: FilaComunicado[] = [
+      ...comunicados.filter(c => c.tipo !== "sancion" || c.estado !== "publicado"),
+      ...sanciones.map(sancionAFila),
+    ];
+    return filas.sort((a, b) => (b.creadoEl ?? "").localeCompare(a.creadoEl ?? ""));
+  }, [comunicados, sanciones]);
 
   const accesoComunicado = (c: Comunicado, campo: string): unknown => {
     if (campo === "estado") return c.estado;
@@ -1170,9 +1539,15 @@ export function ComunicadosView() {
   };
 
   const filtered = useMemo(() => {
-    let lista = comunicados.filter(c => {
+    let lista: FilaComunicado[] = listaCompleta.filter(c => {
       const q = search.toLowerCase();
-      return !q || c.titulo.toLowerCase().includes(q);
+      if (!q) return true;
+      if (c.titulo.toLowerCase().includes(q)) return true;
+      // De una sanción se busca por el trabajador o por cómo está la firma.
+      return !!c.firma && (
+        c.firma.empleadoNombre.toLowerCase().includes(q) ||
+        estadoFirmaLabel(c.firma.estado).toLowerCase().includes(q)
+      );
     });
     const accesoGenerico = accesoComunicado as unknown as (
       c: Record<string, unknown>,
@@ -1182,14 +1557,14 @@ export function ComunicadosView() {
       lista as unknown as Record<string, unknown>[],
       filtros,
       accesoGenerico,
-    ) as unknown as Comunicado[];
+    ) as unknown as FilaComunicado[];
     lista = aplicarOrdenToolbar(
       lista as unknown as Record<string, unknown>[],
       orden,
       accesoGenerico,
-    ) as unknown as Comunicado[];
+    ) as unknown as FilaComunicado[];
     return lista;
-  }, [comunicados, search, filtros, orden]);
+  }, [listaCompleta, search, filtros, orden]);
 
 
   const openEdit = (c: Comunicado) => { setEditingComunicado(c); setEditorMode("edit"); };
@@ -1278,9 +1653,12 @@ export function ComunicadosView() {
   };
 
   const eliminar = async (c: Comunicado) => {
+    const esSancionProgramada = c.tipo === "sancion";
     const ok = await confirm({
-      title: "¿Eliminar este comunicado?",
-      description: `Se borrará «${c.titulo}». Esta acción no se puede deshacer.`,
+      title: esSancionProgramada ? "¿Eliminar esta sanción?" : "¿Eliminar este comunicado?",
+      description: esSancionProgramada
+        ? `Se borrará la sanción de «${c.titulo}», que aún no ha salido. Esta acción no se puede deshacer.`
+        : `Se borrará «${c.titulo}». Esta acción no se puede deshacer.`,
       confirmLabel: "Eliminar",
     });
     if (!ok) return;
@@ -1289,8 +1667,118 @@ export function ComunicadosView() {
       toast.error(res.error ?? "No se pudo eliminar");
       return;
     }
-    toast.success("Comunicado eliminado");
+    toast.success(esSancionProgramada ? "Sanción eliminada" : "Comunicado eliminado");
     await loadComunicados();
+  };
+
+  /**
+   * EMITIR LA SANCIÓN. No se crea ningún comunicado: se genera el documento
+   * oficial, se registra para firma y le llega al trabajador por correo y
+   * aviso. A partir de ahí sigue el mismo circuito de siempre —firmada o no
+   * firmada, con su acta— y acaba en su carpeta «Sanciones».
+   */
+  const emitirSancion = async (form: EditorForm): Promise<boolean> => {
+    // Con día puesto no se emite nada todavía: se deja programada y el cron la
+    // saca ese día, que es cuando se monta el documento.
+    if (form.programado && form.envioFecha) {
+      const res = await programarSancion({
+        comunicadoId: editingComunicado?.id,
+        empleadoId: form.sancion.empleadoId,
+        gravedad: form.sancion.gravedad,
+        fechaHechos: form.sancion.fechaHechos,
+        hechos: form.cuerpo,
+        plazoDias: form.sancion.plazoDias,
+        envio: zonaLocalAUtcISO(form.envioFecha, form.envioHora || "00:00", tz),
+      });
+      if (!res.ok) {
+        toast.error(res.error || "No se pudo programar la sanción");
+        return false;
+      }
+      toast.success("Sanción programada");
+      await loadComunicados();
+      closeEditor();
+      return true;
+    }
+
+    const res = await crearSancionDisciplinaria({
+      empleadoId: form.sancion.empleadoId,
+      gravedad: form.sancion.gravedad,
+      fechaHechos: form.sancion.fechaHechos,
+      hechos: form.cuerpo,
+      plazoDias: form.sancion.plazoDias,
+    });
+    if (!res.ok) {
+      toast.error(res.error || "No se pudo emitir la sanción");
+      return false;
+    }
+    // Si venía de una programada y se ha decidido mandarla ya, el comunicado que
+    // estaba esperando sobra: la emisión ha dejado el suyo publicado.
+    if (editingComunicado?.id) await deleteComunicado(editingComunicado.id);
+    toast.success(
+      res.emailEnviado
+        ? "Sanción enviada al trabajador para firma"
+        : "Sanción creada (revisa el email del trabajador)",
+    );
+    await Promise.all([loadSanciones(), loadComunicados()]);
+    closeEditor();
+    return true;
+  };
+
+  /** Abrir un PDF de la sanción (el original, el firmado o su descarga). */
+  const abrirDocumentoSancion = async (
+    accion: () => Promise<{ ok: true; url: string } | { ok: false; error: string }>,
+  ) => {
+    const res = await accion();
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  };
+
+  /**
+   * Pulsar una fila. Un comunicado se abre para leerlo o editarlo; una sanción
+   * ya emitida no se toca: lo que se abre es el documento que se mandó.
+   */
+  const abrirFila = (c: FilaComunicado) => {
+    if (c.firma) {
+      void abrirDocumentoSancion(() => getVisorOriginalUrl(c.firma!.id));
+      return;
+    }
+    openEdit(c);
+  };
+
+  const reenviarSancion = async (s: SancionResumen) => {
+    const ok = await confirm({
+      title: "Reenviar la sanción",
+      description: `Se vuelve a mandar a ${s.empleadoNombre} el correo con el enlace para firmarla.`,
+      confirmLabel: "Aceptar",
+      tono: "normal",
+    });
+    if (!ok) return;
+    const res = await reenviarFirma(s.id);
+    if (res.ok) {
+      toast.success(res.emailEnviado ? "Sanción reenviada" : "Reenviada (revisa el email del trabajador)");
+      await loadSanciones();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  const cancelarSancion = async (s: SancionResumen) => {
+    const ok = await confirm({
+      title: "Cancelar la sanción",
+      description: `La sanción de ${s.empleadoNombre} quedará anulada y el enlace de firma dejará de funcionar.`,
+      confirmLabel: "Cancelar sanción",
+    });
+    if (!ok) return;
+    const res = await cancelarFirma(s.id);
+    if (res.ok) {
+      toast.success("Sanción cancelada");
+      await loadSanciones();
+    } else {
+      toast.error(res.error);
+    }
   };
 
   const saveEditor = async (form: EditorForm, intencion: IntencionGuardado) => {
@@ -1434,11 +1922,14 @@ export function ComunicadosView() {
           comunicado={editingComunicado}
           onBack={closeEditor}
           onSave={saveEditor}
+          onEmitirSancion={emitirSancion}
           empleadosReales={empleadosReales}
           departamentosReales={departamentosReales}
           empresaNombre={empresaResuelta ? empresaActual?.nombre ?? "" : ""}
           empresaColor={empresaActual?.color ?? "hsl(var(--primary))"}
           empresaIsotipo={empresaActual ? getIsotipoUrl(empresaActual.id) : ""}
+          empresaSancion={empresaSancion}
+          puedeSancionar={puedeSancionar}
           tz={tz}
         />
         <ValidacionFaltantesDialog
@@ -1468,12 +1959,17 @@ export function ComunicadosView() {
     return e ? `${e.nombre} ${e.apellidos}`.trim() : "";
   };
 
-  const columnDefs: Record<string, { th: ReactNode; td: (c: Comunicado) => ReactNode }> = {
+  const columnDefs: Record<string, { th: ReactNode; td: (c: FilaComunicado) => ReactNode }> = {
     titulo: {
       th: <TableHead key="titulo">Título</TableHead>,
       td: (c) => (
         <TableCell key="titulo">
           <p className="font-semibold text-sm">{c.titulo}</p>
+          {/* En una sanción, la calificación de la falta se lee aquí mismo:
+              es lo primero que se busca y estaba dentro del PDF. */}
+          {c.firma && (
+            <p className="text-[11px] text-muted-foreground">{gravedadLabel(c.firma.gravedad)}</p>
+          )}
         </TableCell>
       ),
     },
@@ -1490,7 +1986,11 @@ export function ComunicadosView() {
     estado: {
       th: <TableHead key="estado">Estado</TableHead>,
       td: (c) => (
-        <TableCell key="estado"><EstadoBadge estado={c.estado} /></TableCell>
+        <TableCell key="estado">
+          {/* En una sanción lo que importa es si la ha firmado, no si está
+              publicada: publicada lo está desde que se emite. */}
+          {c.firma ? <EstadoFirmaBadge estado={c.firma.estado} /> : <EstadoBadge estado={c.estado} />}
+        </TableCell>
       ),
     },
     creadoEl: {
@@ -1508,13 +2008,21 @@ export function ComunicadosView() {
     recurrencia: {
       th: <TableHead key="recurrencia">Recurrencia</TableHead>,
       td: (c) => (
-        <TableCell key="recurrencia"><Badge variant="outline" className="text-xs">{RECURRENCIA_LABELS[c.recurrencia]}</Badge></TableCell>
+        <TableCell key="recurrencia">
+          {c.tipo === "sancion"
+            ? <span className="text-muted-foreground">—</span>
+            : <Badge variant="outline" className="text-xs">{RECURRENCIA_LABELS[c.recurrencia]}</Badge>}
+        </TableCell>
       ),
     },
     alcance: {
       th: <TableHead key="alcance">Alcance</TableHead>,
       td: (c) => (
-        <TableCell key="alcance"><AlcanceCircle pct={c.alcancePct} lecturas={c.lecturas} tz={tz} /></TableCell>
+        <TableCell key="alcance">
+          {c.tipo === "sancion"
+            ? <span className="text-muted-foreground">—</span>
+            : <AlcanceCircle pct={c.alcancePct} lecturas={c.lecturas} tz={tz} />}
+        </TableCell>
       ),
     },
     destinatarios: {
@@ -1522,7 +2030,11 @@ export function ComunicadosView() {
       td: (c) => (
         <TableCell key="destinatarios">
           <div className="flex flex-wrap gap-1">
-            {c.todaEmpresa ? (
+            {c.firma ? (
+              <Badge variant="outline" className="text-[11px] gap-1">
+                <Users className="h-3 w-3" />{c.firma.empleadoNombre}
+              </Badge>
+            ) : c.todaEmpresa ? (
               <Badge variant="secondary" className="text-[11px] gap-1"><Users className="h-3 w-3" />Todos</Badge>
             ) : (
               <>
@@ -1546,29 +2058,38 @@ export function ComunicadosView() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Lo primero que se mira no es cuántos llevas, es lo que te queda por
+          mandar: los borradores son lo único que pide una acción. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{comunicados.length}</p><p className="text-xs text-muted-foreground">Total comunicados</p></CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{comunicados.filter(c => c.estado === "borrador").length}</p><p className="text-xs text-muted-foreground">Borradores</p></CardContent></Card>
         <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{comunicados.filter(c => c.estado === "publicado").length}</p><p className="text-xs text-muted-foreground">Publicados</p></CardContent></Card>
         <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{comunicados.filter(c => c.estado === "programado").length}</p><p className="text-xs text-muted-foreground">Programados</p></CardContent></Card>
         <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{Math.round(comunicados.filter(c => c.alcancePct > 0).reduce((s, c) => s + c.alcancePct, 0) / Math.max(comunicados.filter(c => c.alcancePct > 0).length, 1))}%</p><p className="text-xs text-muted-foreground">Alcance medio</p></CardContent></Card>
       </div>
 
-      <Tabs value={mainTab} onValueChange={v => setMainTab(v as "listado" | "calendario" | "sancion")}>
-        <TabsList>
-          <TabsTrigger value="listado"><FileText className="h-4 w-4 mr-1" />Comunicados</TabsTrigger>
-          <TabsTrigger value="calendario"><CalendarDays className="h-4 w-4 mr-1" />Calendario</TabsTrigger>
-          {puedeSancionar && (
-            <TabsTrigger value="sancion"><ShieldAlert className="h-4 w-4 mr-1" />Sanción disciplinaria</TabsTrigger>
-          )}
-        </TabsList>
-
-        <TabsContent value="listado">
+      <>
           <div className="mb-4">
             <SubmoduleToolbar
               busqueda={search}
               onBusquedaChange={setSearch}
               placeholderBusqueda="Buscar"
               onNuevo={openCreate}
+              /* El calendario no es otra pantalla: es la misma lista vista por
+                 días, así que se enciende desde aquí, al lado de «Nuevo». */
+              extraIzquierda={
+                <Button
+                  size="icon"
+                  variant={vistaCalendario ? "default" : "outline"}
+                  className="h-9 w-9"
+                  onClick={() => setVistaCalendario(v => !v)}
+                  title={vistaCalendario ? "Ver la lista" : "Ver el calendario"}
+                  aria-label={vistaCalendario ? "Ver la lista" : "Ver el calendario"}
+                >
+                  {vistaCalendario
+                    ? <Table2 className="h-4 w-4" strokeWidth={1.75} />
+                    : <CalendarDays className="h-4 w-4" strokeWidth={1.75} />}
+                </Button>
+              }
               filtros={filtros}
               onFiltrosChange={setFiltros}
               orden={orden}
@@ -1596,6 +2117,16 @@ export function ComunicadosView() {
             />
           </div>
 
+          {vistaCalendario ? (
+            <ComunicadoCalendario
+              comunicados={filtered}
+              vista={calVista}
+              setVista={setCalVista}
+              mesOffset={mesOffset}
+              setMesOffset={setMesOffset}
+              onSelect={abrirFila}
+            />
+          ) : (
           <Card>
             <Table data-tabla-consulta>
               <TableHeader>
@@ -1609,10 +2140,54 @@ export function ComunicadosView() {
                   <TableRow key={c.id}>
                     {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
                     <TableCell>
+                      {c.firma ? (
+                        <div className="flex items-center justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground">
+                                <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56 rounded-xl p-1.5 shadow-lg">
+                              <DropdownMenuItem className={ITEM_MENU} onClick={() => void abrirDocumentoSancion(() => getVisorOriginalUrl(c.firma!.id))}>
+                                <Eye className={ICONO_MENU} strokeWidth={1.75} />Ver la sanción
+                              </DropdownMenuItem>
+                              {/* «leido» = la cerró sin firmarla: ese PDF también
+                                  existe, con el NO FIRMADO en rojo y su acta detrás. */}
+                              {(c.firma.estado === "firmado" || c.firma.estado === "leido") && (
+                                <>
+                                  <DropdownMenuItem className={ITEM_MENU} onClick={() => void abrirDocumentoSancion(() => getVisorFirmadoUrl(c.firma!.id))}>
+                                    <Eye className={ICONO_MENU} strokeWidth={1.75} />
+                                    {c.firma.estado === "firmado" ? "Ver la firmada" : "Ver la no firmada"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className={ITEM_MENU} onClick={() => void abrirDocumentoSancion(() => getDescargaFirmadoUrl(c.firma!.id))}>
+                                    <Download className={ICONO_MENU} strokeWidth={1.75} />Descargar con el acta
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {c.firma.estado === "pendiente" && (
+                                <>
+                                  <DropdownMenuItem className={ITEM_MENU} onClick={() => void reenviarSancion(c.firma!)}>
+                                    <RefreshCw className={ICONO_MENU} strokeWidth={1.75} />Reenviar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className={`${ITEM_MENU} text-destructive focus:text-destructive`}
+                                    onClick={() => void cancelarSancion(c.firma!)}
+                                  >
+                                    <Ban className={ICONO_MENU} strokeWidth={1.75} />Cancelar
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      ) : (
                       <div className="flex items-center justify-end gap-1">
                         {/* Lo que estaba escrito y sin mandar se publica desde
-                            aquí, a la vista, sin tener que abrir la ficha. */}
-                        {c.estado !== "publicado" && (
+                            aquí, a la vista, sin tener que abrir la ficha. Una
+                            sanción no: publicarla es emitir su documento, y eso
+                            se hace desde su ficha o el día que le toca. */}
+                        {c.estado !== "publicado" && c.tipo !== "sancion" && (
                           <Button size="sm" className="h-8 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => pedirPublicar(c)}>
                             <Send className="h-3.5 w-3.5 mr-1" />Publicar
                           </Button>
@@ -1630,15 +2205,17 @@ export function ComunicadosView() {
                           <DropdownMenuItem className={ITEM_MENU} onClick={() => openEdit(c)}>
                             <Eye className={ICONO_MENU} strokeWidth={1.75} />Ver / editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem className={ITEM_MENU} onClick={() => duplicar(c)}>
-                            <Copy className={ICONO_MENU} strokeWidth={1.75} />Duplicar
-                          </DropdownMenuItem>
-                          {c.estado === "publicado" && (
+                          {c.tipo !== "sancion" && (
+                            <DropdownMenuItem className={ITEM_MENU} onClick={() => duplicar(c)}>
+                              <Copy className={ICONO_MENU} strokeWidth={1.75} />Duplicar
+                            </DropdownMenuItem>
+                          )}
+                          {c.estado === "publicado" && c.tipo !== "sancion" && (
                             <DropdownMenuItem className={ITEM_MENU} onClick={() => mandarPorCorreo(c)}>
                               <Mail className={ICONO_MENU} strokeWidth={1.75} />Mandar por correo
                             </DropdownMenuItem>
                           )}
-                          {c.estado !== "archivado" && (
+                          {c.estado !== "archivado" && c.tipo !== "sancion" && (
                             <DropdownMenuItem className={ITEM_MENU} onClick={() => archivar(c)}>
                               <Archive className={ICONO_MENU} strokeWidth={1.75} />Archivar
                             </DropdownMenuItem>
@@ -1653,6 +2230,7 @@ export function ComunicadosView() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                       </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1662,23 +2240,8 @@ export function ComunicadosView() {
               </TableBody>
             </Table>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="calendario">
-          <ComunicadoCalendario
-            comunicados={comunicados}
-            vista={calVista}
-            setVista={setCalVista}
-            mesOffset={mesOffset}
-            setMesOffset={setMesOffset}
-            onSelect={openEdit}
-          />
-        </TabsContent>
-
-        <TabsContent value="sancion">
-          {puedeSancionar && <SancionDisciplinariaView />}
-        </TabsContent>
-      </Tabs>
+          )}
+      </>
       {publicando && (
         <Dialog open onOpenChange={(abierto) => { if (!abierto) setPublicando(null); }}>
           <DialogContent className="max-w-md">
