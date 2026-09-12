@@ -993,6 +993,44 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
             talla: string | null;
           } | null;
 
+          // El acta firmada se archiva en la carpeta «Entregas» del trabajador.
+          // La carpeta ya existía y el portal ya la enseñaba, pero nadie guardaba
+          // nada en ella: el acta solo vivía en el bucket de firmas, donde el
+          // trabajador no entra. Best-effort, igual que el contrato: si falla,
+          // la firma ya está hecha y él tiene su copia por correo.
+          if (cabecera) {
+            try {
+              const nombrePrenda = linea
+                ? (linea.talla ? `${linea.tipo_nombre} (${linea.talla})` : linea.tipo_nombre)
+                : "material";
+              const destPath = `${cabecera.empresa_id}/${cabecera.empleado_id}/entrega-${documentoId}.pdf`;
+              const copia = await admin.storage
+                .from("empleados-docs")
+                .upload(destPath, firmadoBytes, { upsert: true, contentType: "application/pdf" });
+              if (!copia.error) {
+                const queEs = esEntrega
+                  ? "Entrega"
+                  : esMerma
+                    ? "Baja por deterioro"
+                    : "Devolución";
+                await admin.from("documentos_empleado").insert({
+                  empresa_id: cabecera.empresa_id,
+                  empleado_id: cabecera.empleado_id,
+                  categoria: "entregas",
+                  nombre: `${queEs} — ${nombrePrenda} (firmado).pdf`,
+                  storage_path: destPath,
+                  tipo_mime: "application/pdf",
+                  tamano_bytes: firmadoBytes.length,
+                  created_by: (emp?.user_id as string) ?? null,
+                });
+              } else {
+                console.error("[firmar/firmar] archivar acta de entrega:", copia.error.message);
+              }
+            } catch (e) {
+              console.error("[firmar/firmar] archivar acta de entrega en sus documentos:", e);
+            }
+          }
+
           if (linea && cabecera) {
             const movimiento = await registrarMovimiento({
               empresaId: cabecera.empresa_id,
