@@ -199,6 +199,11 @@ export function PaginaPublicaShell({
     ["footer", "#contacto"],
     ["historia", "#historia"],
     ["reservas", "#reservas"],
+    // La compra también vive DENTRO de la web, como las reservas: los botones
+    // que dicen "#tickets" bajan a esa sección en vez de sacar al visitante a
+    // otra página. Sin esta línea se tomaban por enlaces rotos y el botón
+    // entero desaparecía.
+    ["tickets", "#tickets"],
   ] as Array<[Bloque["tipo"], string]>) {
     if (visibleEn(conReservasResuelto, tipo)) anclasVivas.add(ancla);
   }
@@ -238,7 +243,7 @@ export function PaginaPublicaShell({
       (b) => b.tipo === "collage_carta" && b.visible && (b.datos.imagenes?.length ?? 0) > 0,
     ) || visible("menu");
   if (contexto?.empresaSlug && hayCarta && !sinCarta) {
-    nav.push({ href: `/carta`, label: "Carta" });
+    nav.push({ href: `/carta?web=1`, label: "Carta" });
   }
   if (visible("mapa")) nav.push({ href: "#mapa", label: "Ubicación" });
   if (visible("footer")) nav.push({ href: "#contacto", label: "Contacto" });
