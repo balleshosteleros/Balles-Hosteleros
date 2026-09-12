@@ -46,7 +46,9 @@ export function PanelAsignacion({
     ),
   ).sort((a, b) => a.localeCompare(b, "es"));
 
+  // Para asignar solo se ofrece la versión vigente de cada turno.
   const turnosOrden = [...turnos]
+    .filter((t) => t.esOficial)
     .filter((t) => depto === "__todos__" || t.departamento?.trim() === depto)
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
   const patronesOrden = [...patrones]

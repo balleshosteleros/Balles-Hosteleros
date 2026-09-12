@@ -41,6 +41,12 @@ export interface PlanTurno {
   flexHorasDia: number | null;
   /** Legacy: horas objetivo por día concreto (flexibles antiguos). */
   flexHoras: Partial<Record<DiaSemana, number>>;
+  /**
+   * Si es la versión vigente de su familia. Las versiones anteriores siguen
+   * aquí para poder pintar los días que todavía cubren, pero no se ofrecen
+   * para asignar: eso siempre se hace con la versión vigente.
+   */
+  esOficial: boolean;
 }
 
 export interface PlanEmpleado {
@@ -166,12 +172,17 @@ export async function getPlanificacionHorarios(
         colorPorDepto.get(normalizeDeptoNombre(departamento))) ||
       COLOR_DEPARTAMENTO_FALLBACK;
 
-    // 2b) Catálogo de turnos (oficiales y activos).
+    // 2b) Catálogo de turnos activos. Van TODAS las versiones, no solo la
+    //     vigente: al versionar un turno, la versión anterior sigue cubriendo
+    //     sus días hasta su fecha de fin y hay que poder pintarlos. Si solo se
+    //     trajeran las oficiales, esos días saldrían vacíos y parecería que
+    //     esa gente no trabaja. Para ASIGNAR se filtra luego por `esOficial`.
     const { data: turnosRows } = await supabase
       .from("rrhh_turnos")
-      .select("id, codigo, nombre, tramos, dias, departamento, tipo_jornada, flex_horas, flex_horas_dia")
+      .select(
+        "id, codigo, nombre, tramos, dias, departamento, tipo_jornada, flex_horas, flex_horas_dia, es_oficial",
+      )
       .eq("empresa_id", empresaId)
-      .eq("es_oficial", true)
       .eq("activo", true);
     const turnos: PlanTurno[] = (turnosRows ?? []).map((t) => {
       const departamento = (t.departamento as string | null) ?? null;
@@ -188,6 +199,7 @@ export async function getPlanificacionHorarios(
           t.flex_horas_dia == null ? null : Number(t.flex_horas_dia),
         flexHoras:
           (t.flex_horas as Partial<Record<DiaSemana, number>>) ?? {},
+        esOficial: t.es_oficial !== false,
       };
     });
     const turnoById = new Map(turnos.map((t) => [t.id, t]));

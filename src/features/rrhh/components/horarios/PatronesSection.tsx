@@ -97,7 +97,9 @@ export function PatronesSection({ empresaId }: { empresaId: string }) {
     setCargando(true);
     const [pr, tr, dr] = await Promise.all([
       listPatrones(empresaId),
-      listTurnos(empresaId),
+      // Todas las versiones: un patrón antiguo puede apuntar a un turno que ya
+      // tiene versión nueva, y su horario tiene que verse igual.
+      listTurnos(empresaId, { todasLasVersiones: true }),
       listDepartamentos(),
     ]);
     if (pr.ok) setPatrones(pr.data);
@@ -788,9 +790,12 @@ function PatronEditor({
   const rangoInvalido =
     !!borrador.vigenteHasta && borrador.vigenteHasta < borrador.vigenteDesde;
 
+  // Para montar el horario solo se ofrece la versión vigente de cada turno; las
+  // anteriores están cargadas únicamente para poder pintar lo ya asignado.
   const turnosFiltrados = turnos.filter(
     (t) =>
       t.activo &&
+      t.esOficial &&
       t.tipoJornada === jornada &&
       (!busquedaTurno ||
         t.nombre.toLowerCase().includes(busquedaTurno.toLowerCase()) ||

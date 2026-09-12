@@ -134,19 +134,21 @@ async function aplicarColoresDepartamento(
   }));
 }
 
-export async function listTurnos(empresaIdOrSlug: string): Promise<Result<Turno[]>> {
+export async function listTurnos(
+  empresaIdOrSlug: string,
+  opts?: { todasLasVersiones?: boolean },
+): Promise<Result<Turno[]>> {
   try {
     const { supabase } = await getAppContext();
     const empresaId = await resolveEmpresaUuid(supabase, empresaIdOrSlug);
     if (!empresaId) return { ok: true, data: [] };
     // La lista de gestión muestra una fila por familia: la versión oficial.
-    // Las versiones anteriores quedan como histórico (getVersionesTurno).
-    const { data, error } = await supabase
-      .from("rrhh_turnos")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .eq("es_oficial", true)
-      .order("nombre", { ascending: true });
+    // Con `todasLasVersiones` vienen también las anteriores, que hacen falta
+    // para PINTAR: un horario asignado se ve siempre, sea de la versión que
+    // sea. La versión solo decide cuál se ofrece al hacer un cambio.
+    let q = supabase.from("rrhh_turnos").select("*").eq("empresa_id", empresaId);
+    if (!opts?.todasLasVersiones) q = q.eq("es_oficial", true);
+    const { data, error } = await q.order("nombre", { ascending: true });
     if (error) throw error;
     const turnos = await aplicarColoresDepartamento(
       supabase,
