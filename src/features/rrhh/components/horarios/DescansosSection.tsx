@@ -54,6 +54,7 @@ import {
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 const DIAS: DiaSemana[] = ["L", "M", "X", "J", "V", "S", "D"];
 
@@ -542,17 +543,13 @@ function DescansoEditDialog({
               </label>
               {descanso.cuandoFichar === "intervalo" && (
                 <div className="flex items-center gap-2 ml-6">
-                  <Input
-                    type="time"
-                    value={descanso.intervaloInicio}
-                    onChange={(e) => update({ intervaloInicio: e.target.value })}
+                  <SelectorHora value={descanso.intervaloInicio}
+                    onChange={(valor) => update({ intervaloInicio: valor })}
                     className="w-32"
                   />
                   <span className="text-muted-foreground">—</span>
-                  <Input
-                    type="time"
-                    value={descanso.intervaloFin}
-                    onChange={(e) => update({ intervaloFin: e.target.value })}
+                  <SelectorHora value={descanso.intervaloFin}
+                    onChange={(valor) => update({ intervaloFin: valor })}
                     className="w-32"
                   />
                 </div>

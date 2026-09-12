@@ -137,6 +137,7 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { getOpcionesSegmento } from "@/features/notificaciones/actions/aviso-manual-actions";
 import { ComunicadoTarjeta } from "@/features/gerencia/components/ComunicadoTarjeta";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 /** Letra y trazo del menú de acciones: los mismos en todas sus opciones. */
 const ITEM_MENU = "cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold tracking-tight";
@@ -883,7 +884,7 @@ function ComunicadoEditor({
                   {form.programado ? (
                     <div className="grid grid-cols-2 gap-2">
                       <SelectorFecha className="h-8 text-xs" value={form.envioFecha} onChange={(valor) => u({ envioFecha: valor })} />
-                      <Input type="time" className="h-8 text-xs" value={form.envioHora} onChange={e => u({ envioHora: e.target.value })} />
+                      <SelectorHora className="h-8 text-xs" value={form.envioHora} onChange={(valor) => u({ envioHora: valor })} />
                     </div>
                   ) : (
                     <p className="text-[11px] text-muted-foreground">Sale en cuanto pulses «Enviar».</p>
@@ -1009,7 +1010,7 @@ function ComunicadoEditor({
               {form.programado ? (
                 <div className="grid grid-cols-2 gap-2">
                   <SelectorFecha className="h-8 text-xs" value={form.envioFecha} onChange={(valor) => u({ envioFecha: valor })} />
-                  <Input type="time" className="h-8 text-xs" value={form.envioHora} onChange={e => u({ envioHora: e.target.value })} />
+                  <SelectorHora className="h-8 text-xs" value={form.envioHora} onChange={(valor) => u({ envioHora: valor })} />
                 </div>
               ) : (
                 <p className="text-[11px] text-muted-foreground">Sale en cuanto pulses «Publicar».</p>

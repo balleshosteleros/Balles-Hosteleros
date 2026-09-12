@@ -50,6 +50,7 @@ import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
   const localRaw = row.locales as
@@ -659,18 +660,20 @@ export function FichajesView() {
               <div />
               <div className="space-y-1">
                 <Label className="text-xs">Hora entrada</Label>
-                <Input
-                  type="time"
+                {/* A mano se registra una hora REAL de trabajo, así que aquí
+                    valen todos los minutos, no de cinco en cinco. */}
+                <SelectorHora
+                  paso={1}
                   value={manualForm.horaEntrada}
-                  onChange={(e) => setManualForm((f) => ({ ...f, horaEntrada: e.target.value }))}
+                  onChange={(valor) => setManualForm((f) => ({ ...f, horaEntrada: valor }))}
                 />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Hora salida (opcional)</Label>
-                <Input
-                  type="time"
+                <SelectorHora
+                  paso={1}
                   value={manualForm.horaSalida}
-                  onChange={(e) => setManualForm((f) => ({ ...f, horaSalida: e.target.value }))}
+                  onChange={(valor) => setManualForm((f) => ({ ...f, horaSalida: valor }))}
                 />
               </div>
             </div>

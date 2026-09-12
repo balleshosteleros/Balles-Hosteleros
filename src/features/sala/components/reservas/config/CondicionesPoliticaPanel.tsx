@@ -30,6 +30,7 @@ import {
   type DiaSemanaKey,
 } from "@/features/sala/data/reservas";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 /** Turnos tal y como se guardan en `reservas.turno`. */
 const TURNOS = [
@@ -208,17 +209,13 @@ export function CondicionesPoliticaPanel({
         <div className="space-y-1.5">
           <Label className="text-xs">Franja horaria</Label>
           <div className="flex items-center gap-2">
-            <Input
-              type="time"
-              value={valor.horaDesde ?? ""}
-              onChange={(e) => onChange({ horaDesde: e.target.value || null })}
+            <SelectorHora value={valor.horaDesde ?? ""}
+              onChange={(valor) => onChange({ horaDesde: valor || null })}
               className="h-8 text-xs"
             />
             <span className="text-xs text-muted-foreground">a</span>
-            <Input
-              type="time"
-              value={valor.horaHasta ?? ""}
-              onChange={(e) => onChange({ horaHasta: e.target.value || null })}
+            <SelectorHora value={valor.horaHasta ?? ""}
+              onChange={(valor) => onChange({ horaHasta: valor || null })}
               className="h-8 text-xs"
             />
           </div>

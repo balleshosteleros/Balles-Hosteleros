@@ -19,6 +19,7 @@ import {
   type MaxPersonasHoraModo,
   type MaxPersonasReglaTramo,
 } from "@/features/sala/data/reservas";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 interface Props {
   config: EmpresaReservasConfig;
@@ -112,19 +113,15 @@ function BloqueCerrarMotor({ config, onChange }: Props) {
         <div className="grid grid-cols-2 gap-3 max-w-md">
           <div className="space-y-1.5">
             <Label className="text-xs">Comida — hora de cierre</Label>
-            <Input
-              type="time"
-              value={config.cerrarMotorWebComida ?? ""}
-              onChange={(e) => onChange({ cerrarMotorWebComida: e.target.value || null })}
+            <SelectorHora value={config.cerrarMotorWebComida ?? ""}
+              onChange={(valor) => onChange({ cerrarMotorWebComida: valor || null })}
               className="h-8"
             />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Cena — hora de cierre</Label>
-            <Input
-              type="time"
-              value={config.cerrarMotorWebCena ?? ""}
-              onChange={(e) => onChange({ cerrarMotorWebCena: e.target.value || null })}
+            <SelectorHora value={config.cerrarMotorWebCena ?? ""}
+              onChange={(valor) => onChange({ cerrarMotorWebCena: valor || null })}
               className="h-8"
             />
           </div>

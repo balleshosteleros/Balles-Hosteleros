@@ -15,6 +15,7 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { Trash2, Plus, Check, ChevronsUpDown, Search, AlertTriangle } from "lucide-react";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 /** Reparto vigente de un proveedor: negociado con nosotros con prioridad; si no, el genérico. */
 type ProveedorOpcion = { id: string; nombre: string; reparto: RepartoProveedor };
@@ -362,9 +363,9 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
           <div>
             <Label className="text-xs font-semibold">Hora de reparto (entre dos horas)</Label>
             <div className="flex items-center gap-1.5">
-              <Input type="time" value={form.horaEntrega ?? ""} onChange={(e) => setField("horaEntrega", e.target.value)} />
+              <SelectorHora value={form.horaEntrega ?? ""} onChange={(valor) => setField("horaEntrega", valor)} />
               <span className="text-muted-foreground text-xs">a</span>
-              <Input type="time" value={form.horaEntregaHasta ?? ""} onChange={(e) => setField("horaEntregaHasta", e.target.value)} />
+              <SelectorHora value={form.horaEntregaHasta ?? ""} onChange={(valor) => setField("horaEntregaHasta", valor)} />
             </div>
           </div>
         </div>

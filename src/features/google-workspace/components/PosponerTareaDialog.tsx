@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { posponerTarea, type TareaRow } from "@/features/tareas/actions/tareas-actions";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 interface Props {
   tarea:
@@ -128,10 +129,8 @@ export function PosponerTareaDialog({ tarea, onClose, onDone }: Props) {
                 <Clock className="h-3.5 w-3.5" />
                 Hora de inicio (opcional)
               </p>
-              <Input
-                type="time"
-                value={hora}
-                onChange={(e) => setHora(e.target.value)}
+              <SelectorHora value={hora}
+                onChange={setHora}
                 className="h-9"
               />
               <p className="text-[11px] text-muted-foreground mt-1.5 flex items-start gap-1">

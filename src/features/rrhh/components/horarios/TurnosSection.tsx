@@ -75,6 +75,7 @@ import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { Desplegable } from "@/components/ui/desplegable";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 interface TurnoDraft {
   nombre: string;
@@ -830,30 +831,26 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
               <div className="space-y-2 pl-6">
                 {draft.tramos.map((tramo, idx) => (
                   <div key={idx} className="flex items-center gap-2">
-                    <Input
-                      type="time"
-                      value={tramo.inicio}
+                    <SelectorHora value={tramo.inicio}
                       disabled={!!editandoId}
-                      onChange={(e) =>
+                      onChange={(valor) =>
                         setDraft((d) => ({
                           ...d,
                           tramos: d.tramos.map((tr, i) =>
-                            i === idx ? { ...tr, inicio: e.target.value } : tr,
+                            i === idx ? { ...tr, inicio: valor } : tr,
                           ),
                         }))
                       }
                       className="w-28"
                     />
                     <span className="text-muted-foreground">-</span>
-                    <Input
-                      type="time"
-                      value={tramo.fin}
+                    <SelectorHora value={tramo.fin}
                       disabled={!!editandoId}
-                      onChange={(e) =>
+                      onChange={(valor) =>
                         setDraft((d) => ({
                           ...d,
                           tramos: d.tramos.map((tr, i) =>
-                            i === idx ? { ...tr, fin: e.target.value } : tr,
+                            i === idx ? { ...tr, fin: valor } : tr,
                           ),
                         }))
                       }

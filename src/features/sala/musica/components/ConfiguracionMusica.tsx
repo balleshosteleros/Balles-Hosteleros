@@ -33,6 +33,7 @@ import {
 } from "@/features/sala/musica/actions/musica-actions";
 import { DIAS_SEMANA, type ListaMusica } from "@/features/sala/musica/types";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 export function ConfiguracionMusica() {
   const { listas, uso, recargar } = useMusica();
@@ -286,19 +287,15 @@ function HorarioDeLista({
               <div className="flex flex-wrap items-end gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs">Desde</Label>
-                  <Input
-                    type="time"
-                    value={inicio}
-                    onChange={(e) => setInicio(e.target.value)}
+                  <SelectorHora value={inicio}
+                    onChange={setInicio}
                     className="h-9 w-28"
                   />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Hasta</Label>
-                  <Input
-                    type="time"
-                    value={fin}
-                    onChange={(e) => setFin(e.target.value)}
+                  <SelectorHora value={fin}
+                    onChange={setFin}
                     className="h-9 w-28"
                   />
                 </div>

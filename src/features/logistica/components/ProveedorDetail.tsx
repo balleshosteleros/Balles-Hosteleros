@@ -51,6 +51,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 type Props = {
   proveedor: Proveedor;
@@ -443,9 +444,9 @@ export function ProveedorDetail({ proveedor, onBack, onSave, onDelete }: Props) 
                   </Button>
                   {esReparto ? (
                     <div className="flex items-center gap-1.5">
-                      <Input type="time" className="h-8 w-28" value={horaParte(d, "desde")} onChange={(e) => setHoraReparto(d, "desde", e.target.value)} />
+                      <SelectorHora className="h-8 w-28" value={horaParte(d, "desde")} onChange={(valor) => setHoraReparto(d, "desde", valor)} />
                       <span className="text-xs text-muted-foreground">a</span>
-                      <Input type="time" className="h-8 w-28" value={horaParte(d, "hasta")} onChange={(e) => setHoraReparto(d, "hasta", e.target.value)} />
+                      <SelectorHora className="h-8 w-28" value={horaParte(d, "hasta")} onChange={(valor) => setHoraReparto(d, "hasta", valor)} />
                     </div>
                   ) : (
                     <span className="text-xs text-muted-foreground italic">El proveedor no reparte este día</span>

@@ -24,6 +24,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { crearClase, actualizarClase, type EntradaClase } from "../../actions/clases-actions";
 import { TIPOS_CLASE, type ClaseEscuela } from "../../types";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 /**
  * Alta y edición de una clase del calendario.
@@ -132,20 +133,16 @@ export function ClaseDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="inicio">Empieza</Label>
-              <Input
-                id="inicio"
-                type="time"
+              <SelectorHora id="inicio" 
                 value={form.horaInicio}
-                onChange={(e) => set("horaInicio", e.target.value)}
+                onChange={(valor) => set("horaInicio", valor)}
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="fin">Termina</Label>
-              <Input
-                id="fin"
-                type="time"
+              <SelectorHora id="fin" 
                 value={form.horaFin ?? ""}
-                onChange={(e) => set("horaFin", e.target.value)}
+                onChange={(valor) => set("horaFin", valor)}
               />
             </div>
           </div>

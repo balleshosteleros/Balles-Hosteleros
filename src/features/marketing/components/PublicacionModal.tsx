@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 interface Props {
   open: boolean;
@@ -69,7 +70,7 @@ export function PublicacionModal({ open, onClose, onSave, editItem, empresaId }:
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Hora</Label>
-            <Input type="time" value={pub.hora} onChange={(e) => setPub((p) => ({ ...p, hora: e.target.value }))} />
+            <SelectorHora value={pub.hora} onChange={(valor) => setPub((p) => ({ ...p, hora: valor }))} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -276,7 +277,7 @@ export function PublicacionModal({ open, onClose, onSave, editItem, empresaId }:
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Hora</Label>
-                <Input type="time" value={evt.hora} onChange={(e) => setEvt((p) => ({ ...p, hora: e.target.value }))} />
+                <SelectorHora value={evt.hora} onChange={(valor) => setEvt((p) => ({ ...p, hora: valor }))} />
               </div>
             </div>
             <div className="space-y-1.5">

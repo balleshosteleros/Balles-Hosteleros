@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 function hoyISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -135,26 +136,22 @@ export function AsistenteVersionTurno({
               <div className="space-y-2 pl-6">
                 {tramos.map((tramo, idx) => (
                   <div key={idx} className="flex items-center gap-2">
-                    <Input
-                      type="time"
-                      value={tramo.inicio}
-                      onChange={(e) =>
+                    <SelectorHora value={tramo.inicio}
+                      onChange={(valor) =>
                         setTramos((t) =>
                           t.map((tr, i) =>
-                            i === idx ? { ...tr, inicio: e.target.value } : tr,
+                            i === idx ? { ...tr, inicio: valor } : tr,
                           ),
                         )
                       }
                       className="w-28"
                     />
                     <span className="text-muted-foreground">-</span>
-                    <Input
-                      type="time"
-                      value={tramo.fin}
-                      onChange={(e) =>
+                    <SelectorHora value={tramo.fin}
+                      onChange={(valor) =>
                         setTramos((t) =>
                           t.map((tr, i) =>
-                            i === idx ? { ...tr, fin: e.target.value } : tr,
+                            i === idx ? { ...tr, fin: valor } : tr,
                           ),
                         )
                       }

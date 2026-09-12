@@ -24,6 +24,7 @@ import {
 } from "@/features/sala/data/ticket-productos";
 import { listGruposZonasEmpresa } from "@/features/sala/actions/ticket-productos-actions";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 export interface CondicionesState {
   diasSemana: DiaSemanaKey[];
@@ -148,18 +149,14 @@ export function TicketCondicionesPanel({ value, onChange }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Input
-            type="time"
-            value={value.horaDesde}
-            onChange={(e) => set({ horaDesde: e.target.value })}
+          <SelectorHora value={value.horaDesde}
+            onChange={(valor) => set({ horaDesde: valor })}
             className="h-9 w-32"
             aria-label="Desde"
           />
           <span className="text-xs text-muted-foreground">a</span>
-          <Input
-            type="time"
-            value={value.horaHasta}
-            onChange={(e) => set({ horaHasta: e.target.value })}
+          <SelectorHora value={value.horaHasta}
+            onChange={(valor) => set({ horaHasta: valor })}
             className="h-9 w-32"
             aria-label="Hasta"
           />
@@ -186,10 +183,8 @@ export function TicketCondicionesPanel({ value, onChange }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Input
-            type="time"
-            value={nuevaHora}
-            onChange={(e) => setNuevaHora(e.target.value)}
+          <SelectorHora value={nuevaHora}
+            onChange={setNuevaHora}
             className="h-9 w-32"
             aria-label="Hora a excluir"
           />

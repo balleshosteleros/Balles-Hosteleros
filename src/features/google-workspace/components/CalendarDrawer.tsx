@@ -55,6 +55,7 @@ import { friendlyError } from "@/shared/lib/friendly-errors";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 type GoogleCalendar = {
   id: string;
@@ -1619,7 +1620,7 @@ function TimeInput({
   invalido?: boolean;
   className?: string;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   // Listener no pasivo: React monta wheel como pasivo y no deja preventDefault.
   useEffect(() => {
     const el = ref.current;
@@ -1631,14 +1632,17 @@ function TimeInput({
     el.addEventListener("wheel", handler, { passive: false });
     return () => el.removeEventListener("wheel", handler);
   }, [onStep]);
+  // La rueda ya no va sobre el campo, sino sobre el recuadro que lo envuelve:
+  // el selector de hora no es un `input`, son dos desplegables nuestros.
   return (
-    <Input
-      ref={ref}
-      type="time"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(invalido && "border-destructive focus-visible:ring-destructive", className)}
-    />
+    <div ref={ref} className="inline-flex">
+      <SelectorHora
+        value={value}
+        onChange={onChange}
+        paso={15}
+        className={cn(invalido && "border-destructive focus-within:ring-destructive", className)}
+      />
+    </div>
   );
 }
 

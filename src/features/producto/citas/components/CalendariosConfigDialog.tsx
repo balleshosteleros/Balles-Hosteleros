@@ -39,6 +39,7 @@ import {
 } from "../actions/citas-actions";
 import type { CitaCalendario, EmpleadoDeCalendario } from "../types";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 const DIAS = [
   { n: 1, nombre: "Lunes" },
@@ -321,24 +322,20 @@ export function CalendariosConfigDialog({ open, onOpenChange, onGuardado }: Prop
                           </option>
                         ))}
                       </Desplegable>
-                      <Input
-                        type="time"
-                        className="w-28"
+                      <SelectorHora className="w-28"
                         value={f.hora_inicio}
-                        onChange={(e) => {
+                        onChange={(valor) => {
                           const copia = [...franjas];
-                          copia[i] = { ...f, hora_inicio: e.target.value };
+                          copia[i] = { ...f, hora_inicio: valor };
                           setFranjas(copia);
                         }}
                       />
                       <span className="text-sm text-muted-foreground">a</span>
-                      <Input
-                        type="time"
-                        className="w-28"
+                      <SelectorHora className="w-28"
                         value={f.hora_fin}
-                        onChange={(e) => {
+                        onChange={(valor) => {
                           const copia = [...franjas];
-                          copia[i] = { ...f, hora_fin: e.target.value };
+                          copia[i] = { ...f, hora_fin: valor };
                           setFranjas(copia);
                         }}
                       />

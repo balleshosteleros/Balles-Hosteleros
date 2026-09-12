@@ -27,6 +27,7 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { SelectorHora } from "@/components/ui/selector-hora";
 
 interface Props {
   open: boolean;
@@ -379,12 +380,10 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
                     <Label htmlFor="prog-hora" className="text-xs text-muted-foreground">
                       Hora
                     </Label>
-                    <Input
-                      id="prog-hora"
-                      type="time"
+                    <SelectorHora id="prog-hora" 
                       className="h-8 w-28"
                       value={programacion.hora}
-                      onChange={(e) => cambiarProgramacion({ hora: e.target.value })}
+                      onChange={(valor) => cambiarProgramacion({ hora: valor })}
                     />
                   </div>
                 </div>
