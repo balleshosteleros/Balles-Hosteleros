@@ -454,13 +454,13 @@ export function AccesosDrawer({
         <SheetTrigger asChild>{children}</SheetTrigger>
         <SheetContent side="right" maximizable className="flex flex-col gap-0 p-0">
           <SheetHeader className="border-b py-3 pl-5 pr-14 shrink-0">
+            {/* Solo el título y el buscador: la explicación de que hay que
+                verificarse ya la da el propio paso al revelar una clave, y aquí
+                solo robaba sitio (Iván, 12-sep). */}
             <SheetTitle className="flex items-center gap-2 text-base">
               <Lock className="h-4 w-4 text-red-500" />
               Claves
             </SheetTitle>
-            <p className="text-xs text-muted-foreground">
-              Bóveda segura. Cada revelado exige verificar tu identidad y respeta tu rol.
-            </p>
           </SheetHeader>
           <div className="px-5 py-3 shrink-0 border-b">
             <Buscador value={busqueda} onChange={setBusqueda} placeholder="Buscar app, usuario o etiqueta…" />

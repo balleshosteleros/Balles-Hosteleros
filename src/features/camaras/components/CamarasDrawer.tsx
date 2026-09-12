@@ -21,7 +21,7 @@ import {
   Check,
   X,
   Router,
-  ChevronUp,
+  ChevronDown,
   Grid2x2,
 } from "lucide-react";
 import {
@@ -346,7 +346,7 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                 toda la pantalla: se despliega solo para elegir cámara. */}
             <aside
               className={cn(
-                "order-2 shrink-0 border-t bg-muted/20 md:order-1 md:max-h-none md:border-t-0 md:border-r",
+                "order-1 shrink-0 border-b bg-muted/20 md:max-h-none md:border-b-0 md:border-r",
                 listaAbierta ? "max-h-[55vh] overflow-y-auto" : "overflow-hidden",
                 "md:overflow-y-auto",
               )}
@@ -358,7 +358,7 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                   onClick={() => setListaAbierta((v) => !v)}
                   className="flex flex-1 items-center gap-1.5 py-1 text-left md:pointer-events-none"
                 >
-                  <ChevronUp
+                  <ChevronDown
                     className={cn(
                       "h-3.5 w-3.5 text-muted-foreground transition-transform md:hidden",
                       listaAbierta && "rotate-180",
@@ -466,7 +466,7 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
             </aside>
 
             {/* Visor */}
-            <section ref={viewerRef} className="order-1 flex min-h-0 flex-1 flex-col min-w-0 bg-black md:order-2">
+            <section ref={viewerRef} className="order-2 flex min-h-0 flex-1 flex-col min-w-0 bg-black">
               {/* Toolbar visor */}
               <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-zinc-900 px-3 py-2">
                 {/* En el teléfono esto es SOLO para ver en directo: nada de
@@ -525,7 +525,7 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-white hover:bg-white/10 hover:text-white"
+                    className="hidden h-7 w-7 text-white hover:bg-white/10 hover:text-white md:inline-flex"
                     onClick={togglePantallaCompleta}
                     title={fullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
                   >
@@ -552,7 +552,17 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                     )}
                   >
                     {camarasVisiblesMovil.map((c) => (
-                      <Tile key={c.id} camara={c} />
+                      // Se toca la propia imagen y se pone grande; estando
+                      // grande, otro toque vuelve a verlas todas.
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => (viendoUnaSola ? verTodas() : verSolo(c.id))}
+                        aria-label={viendoUnaSola ? "Ver todas las cámaras" : `Ver ${c.nombre} en grande`}
+                        className="min-h-0 overflow-hidden rounded-lg text-left active:opacity-80"
+                      >
+                        <Tile camara={c} />
+                      </button>
                     ))}
                   </div>
                 ) : (
