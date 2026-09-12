@@ -254,13 +254,11 @@ export function AcuerdosView() {
                   <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">Rapel/ud.</th>
                   <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">Objetivo</th>
                   {MESES_CORTOS.map((m, i) => (
-                    <th
-                      key={m}
-                      className="px-2 py-2.5 text-right font-medium whitespace-nowrap"
-                      title={MESES[i]}
-                    >
-                      {m}
-                    </th>
+                    <ToolTooltip key={m} label={MESES[i]}>
+                      <th className="px-2 py-2.5 text-right font-medium whitespace-nowrap">
+                        {m}
+                      </th>
+                    </ToolTooltip>
                   ))}
                   <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">Comprado</th>
                   <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">Rapel</th>
