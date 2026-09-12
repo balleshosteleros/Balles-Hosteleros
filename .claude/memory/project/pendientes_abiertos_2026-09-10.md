@@ -18,9 +18,21 @@ Comprobado línea a línea el 12/09/2026 sobre las 168 líneas de `rrhh_pagos`
 
 ### Lo único de verdad roto que salió al mirar
 
-- **Karen Johanna Aguilar, HABANA, abril 2026**: el `total` (1.285 €) se dejó fuera el
-  bonus de 155 €; los conceptos suman 1.440 €. Es la ÚNICA línea descuadrada de las 168.
-  Pendiente de decidir si se corrige.
+- **Karen Johanna Aguilar, HABANA, abril 2026 — CORREGIDO (12/09/2026).**
+  El `total` decía 1.285 € (nómina 685,97 + complemento 599,03) y se había dejado fuera el
+  bonus de 155 €. Iván confirmó que **cobró 1.440 €**: el dinero estaba bien pagado, lo
+  que estaba mal era el número guardado. Ahora `total = 1.440,00` y las 168 líneas cuadran.
+  ⚠️ **Cómo se hizo, porque hay DOS candados** (y hay que dejarlos los dos puestos):
+  1. `trg_rrhh_pagos_lock` → congela la fila cuando la liquidación ya se envió.
+  2. `trg_rrhh_pagos_lock_nomina` → `mes_nominas_confirmado()`: bloquea todo el MES si está
+     confirmado en `rrhh_nominas_mes`. Los 8 meses de las 2 empresas están confirmados y la
+     app NO tiene acción para desconfirmar un mes (`confirmado_en` solo se escribe).
+  Se apagaron los dos triggers dentro de un bloque `DO` atómico (con `get diagnostics` +
+  `raise` si no tocaba exactamente 1 fila, para que un error lo deshiciera todo), se
+  corrigió el total, se dejó constancia en `comentario` y se volvieron a encender.
+  **El mes NUNCA se desconfirmó**: era la alternativa mala, porque reabrir abril de HABANA
+  habría abierto la nómina de toda la plantilla. Comprobado después: 3 de 3 triggers
+  activos, mes cerrado, envío y marca de pagado intactos, 0 líneas descuadradas.
 - **Alberto Cieliczka: RESUELTO (12/09/2026).** No estaba duplicado: una sola persona,
   mismo `user_id` (`a2601c39-…`) y una ficha por empresa, el espejo normal multiempresa.
   Salían dos nombres porque su ficha está **Inactiva** y la pantalla de Pagos solo lista
