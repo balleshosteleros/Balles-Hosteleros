@@ -58,6 +58,16 @@ export interface Comunicado {
    * plazo, esperando hasta que salga. Vacío en todos los demás.
    */
   sancion: unknown;
+  /**
+   * De qué PLANTILLA nació esta línea. Null = se escribió a mano.
+   *
+   * Un comunicado que se repite deja una línea nueva cada vez que sale: la
+   * plantilla se queda esperando su próxima fecha y cada salida se persigue por
+   * separado, con su día y sus vistos (Iván, 12-09-2026).
+   */
+  origenId: string | null;
+  /** Cuándo se paró la repetición. Null = se sigue repitiendo. */
+  repeticionParadaAt: string | null;
 }
 
 /**

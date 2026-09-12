@@ -8,6 +8,10 @@ import {
   MAX_ADJUNTOS_COMUNICADO,
   type ComunicadoAdjunto,
 } from "@/features/gerencia/data/comunicados-adjuntos";
+import {
+  crearSalidaDePlantilla,
+  seRepite,
+} from "@/features/gerencia/services/comunicado-salidas";
 
 async function getContext() {
   const supabase = await createClient();
@@ -465,6 +469,30 @@ export async function cambiarEstadoComunicado(
       .maybeSingle();
     if (!anterior) return { ok: false, error: "El comunicado ya no existe" };
 
+    /**
+     * PUBLICAR A MANO UNO QUE SE REPITE deja su salida de hoy, igual que el día
+     * que le toca: una línea nueva con la fecha de hoy y su propio alcance, y
+     * la plantilla esperando la siguiente vez. Los avisos, el push y el correo
+     * van con la salida, que es la que recibe la plantilla.
+     */
+    if (estado === "publicado" && seRepite(anterior.recurrencia as string | null)) {
+      if (enviarEmail !== undefined) {
+        await supabase
+          .from("comunicados")
+          .update({ enviar_email: enviarEmail, updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .eq("empresa_id", empresaId);
+      }
+      const salida = await crearSalidaDePlantilla(
+        supabase as unknown as Parameters<typeof crearSalidaDePlantilla>[0],
+        id,
+      );
+      if (!salida.ok) return { ok: false, error: salida.error };
+      const quiereCorreo = enviarEmail ?? anterior.enviar_email === true;
+      const aviso = await avisarComunicadoPublicado(salida.idSalida, quiereCorreo);
+      return { ok: true, ...aviso };
+    }
+
     const cambios: Record<string, unknown> = {
       estado,
       updated_at: new Date().toISOString(),
@@ -659,6 +687,60 @@ export async function duplicarComunicado(
  * La barrera está aquí, en el servidor, y no solo en el menú: es la única forma
  * de que no se pueda por ninguna otra puerta.
  */
+/**
+ * PARAR O REANUDAR LA REPETICIÓN.
+ *
+ * Se puede pulsar desde cualquiera de sus líneas —la plantilla o cualquier
+ * salida—: la repetición vive en un solo sitio, la plantilla, así que no se
+ * «copia» en las demás. Parada, no vuelve a salir NUNCA más, pero la plantilla
+ * no se borra: se queda escrita para poder arrancarla otro día (Iván,
+ * 12-09-2026). Las salidas de antes se quedan tal cual: ya ocurrieron.
+ */
+export async function pararRepeticionComunicado(
+  id: string,
+  parar: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // Da igual desde qué línea se pulse: se actúa sobre la plantilla.
+    const { data: fila, error: errLeer } = await supabase
+      .from("comunicados")
+      .select("id, origen_id, recurrencia")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (errLeer) throw errLeer;
+    if (!fila) return { ok: false, error: "El comunicado ya no existe" };
+
+    const plantillaId = (fila.origen_id as string | null) ?? (fila.id as string);
+    const { data: plantilla, error: errPlantilla } = await supabase
+      .from("comunicados")
+      .select("recurrencia")
+      .eq("id", plantillaId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (errPlantilla) throw errPlantilla;
+    if (!plantilla) return { ok: false, error: "No se encuentra el comunicado que se repite" };
+    if (!seRepite(plantilla.recurrencia as string | null)) {
+      return { ok: false, error: "Este comunicado no se repite" };
+    }
+
+    const { error } = await supabase
+      .from("comunicados")
+      .update({ repeticion_parada_at: parar ? new Date().toISOString() : null })
+      .eq("id", plantillaId)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = friendlyError(err, "comunicados");
+    console.error("[comunicados] pararRepeticionComunicado:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export async function deleteComunicado(id: string) {
   try {
     const { supabase, empresaId } = await getContext();
@@ -678,6 +760,22 @@ export async function deleteComunicado(id: string) {
         ok: false,
         error:
           "Este comunicado ya se envió y no se puede borrar. Si no quieres tenerlo delante, archívalo.",
+      };
+    }
+
+    // Una plantilla que ya ha salido alguna vez tampoco se borra: es el origen
+    // de esas salidas y de lo que se volverá a mandar. Lo que se hace con ella
+    // es PARAR la repetición.
+    const { count: salidas } = await supabase
+      .from("comunicados")
+      .select("id", { count: "exact", head: true })
+      .eq("origen_id", id)
+      .eq("empresa_id", empresaId);
+    if ((salidas ?? 0) > 0) {
+      return {
+        ok: false,
+        error:
+          "Este comunicado ya ha salido y no se puede borrar. Si no quieres que se repita más, para la repetición.",
       };
     }
 

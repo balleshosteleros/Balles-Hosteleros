@@ -7,14 +7,20 @@
  * acuerde de publicarlos.
  *
  * Cada HORA este cron busca los comunicados con `recurrencia` distinta de
- * `sin_repeticion` cuya fecha de `envio` ya ha llegado y:
- *   1. los marca como `publicado`,
- *   2. dispara push al móvil + notificación in-app (igual que al publicarlos a
- *      mano desde Gerencia),
- *   3. los manda por correo a la plantilla destinataria, con la cabecera de
+ * `sin_repeticion` cuya fecha de `envio` ya ha llegado y, por cada uno:
+ *   1. DEJA UNA LÍNEA NUEVA con la salida de hoy —una copia publicada, con el
+ *      día que ha salido y su propio alcance—, para que cada vez que sale se
+ *      persiga por separado y no se mezclen los vistos de todos los años
+ *      (Iván, 12-09-2026),
+ *   2. dispara push al móvil + notificación in-app de ESA salida (igual que al
+ *      publicarla a mano desde Gerencia),
+ *   3. la manda por correo a la plantilla destinataria, con la cabecera de
  *      comunicado (isotipo sobre disco y degradado con el color de la empresa),
- *   4. y adelanta `envio` a la siguiente fecha (un año o un mes después), de
- *      modo que el año que viene vuelve a saltar sin tocar nada.
+ *   4. y deja la PLANTILLA esperando su siguiente fecha (un año o un mes
+ *      después), de modo que el año que viene vuelve a saltar sin tocar nada.
+ *
+ * Una plantilla con `repeticion_parada_at` no sale: se paró a mano y no vuelve
+ * a salir nunca más, pero sigue escrita para poder arrancarla otro día.
  *
  * Corre cada hora a propósito: la hora de salida la decide el campo `envio` de
  * cada comunicado (se edita en su ficha), no el `schedule`. Con un cron diario,
@@ -29,6 +35,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { enviarComunicadoPorEmail } from "@/features/gerencia/services/comunicado-email";
+import { crearSalidaDePlantilla } from "@/features/gerencia/services/comunicado-salidas";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,39 +44,25 @@ type Comunicado = {
   id: string;
   empresa_id: string;
   titulo: string;
+  asunto: string | null;
   cuerpo: string | null;
   recurrencia: string;
   envio: string;
   enviar_email: boolean;
   /** Tipo del comunicado. `sancion` no se publica y ya está: se emite. */
   tipo: string | null;
+  toda_empresa: boolean | null;
+  roles_destinatarios: string[] | null;
   empleados_destinatarios: string[] | null;
+  departamentos_destinatarios: string[] | null;
+  adjuntos: unknown;
+  enlace: string | null;
+  enlace_texto: string | null;
+  observaciones: string | null;
   creador_id: string | null;
   /** Solo en las sanciones: la falta, el día de los hechos y el plazo de firma. */
   sancion: unknown;
 };
-
-/** Siguiente ocurrencia según la recurrencia. Conserva la hora del envío. */
-function siguienteEnvio(iso: string, recurrencia: string): string | null {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  switch (recurrencia) {
-    case "anual":
-      d.setUTCFullYear(d.getUTCFullYear() + 1);
-      return d.toISOString();
-    case "mensual":
-      d.setUTCMonth(d.getUTCMonth() + 1);
-      return d.toISOString();
-    case "semanal":
-      d.setUTCDate(d.getUTCDate() + 7);
-      return d.toISOString();
-    case "diaria":
-      d.setUTCDate(d.getUTCDate() + 1);
-      return d.toISOString();
-    default:
-      return null;
-  }
-}
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -85,13 +78,18 @@ export async function GET(request: Request) {
 
   const ahora = new Date().toISOString();
   const CAMPOS =
-    "id, empresa_id, titulo, cuerpo, recurrencia, envio, enviar_email, tipo, empleados_destinatarios, creador_id, sancion";
+    "id, empresa_id, titulo, asunto, cuerpo, recurrencia, envio, enviar_email, tipo, " +
+    "toda_empresa, roles_destinatarios, empleados_destinatarios, departamentos_destinatarios, " +
+    "adjuntos, enlace, enlace_texto, observaciones, creador_id, sancion";
 
   // 1) Los que se repiten: se publican cada vez que les toca y se reprograman.
   const { data, error } = await supabase
     .from("comunicados")
     .select(CAMPOS)
     .neq("recurrencia", "sin_repeticion")
+    // Una repetición parada a mano NO vuelve a salir. La plantilla se queda
+    // escrita para poder arrancarla otro día, pero el cron la ignora.
+    .is("repeticion_parada_at", null)
     .not("envio", "is", null)
     .lte("envio", ahora);
 
@@ -118,20 +116,45 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: errUnaVez.message }, { status: 500 });
   }
 
-  const pendientes = [...(data ?? []), ...(unaVez ?? [])] as Comunicado[];
+  // Los que se repiten van marcados: de esos nace una línea nueva por salida.
+  // Los programados de una sola vez son ellos mismos la salida.
+  const pendientes: { c: Comunicado; seRepite: boolean }[] = [
+    ...((data ?? []) as unknown as Comunicado[]).map((c) => ({ c, seRepite: true })),
+    ...((unaVez ?? []) as unknown as Comunicado[]).map((c) => ({ c, seRepite: false })),
+  ];
   let publicados = 0;
   let correos = 0;
   const errores: string[] = [];
 
-  for (const c of pendientes) {
+  for (const { c, seRepite } of pendientes) {
     try {
-      // 1) Publicar y reprogramar a la siguiente ocurrencia.
-      const proximo = siguienteEnvio(c.envio, c.recurrencia);
-      const { error: errUpd } = await supabase
-        .from("comunicados")
-        .update({ estado: "publicado", envio: proximo ?? c.envio })
-        .eq("id", c.id);
-      if (errUpd) throw new Error(errUpd.message);
+      // Una sanción no se repite NUNCA: va a una persona por unos hechos de un
+      // día concreto. Si alguna quedó marcada así, se avisa y no se toca.
+      if (seRepite && c.tipo === "sancion") {
+        errores.push(`${c.titulo}: una sanción no puede repetirse; revisa su ficha`);
+        continue;
+      }
+
+      /**
+       * QUÉ SALE HOY.
+       *
+       * En los que se repiten, la línea que se escribió es la PLANTILLA y se
+       * queda esperando su próxima fecha: lo que sale hoy es una copia
+       * publicada, con el día de hoy y su propio alcance. En los de una sola
+       * vez, la salida es la propia línea.
+       */
+      let idSalida = c.id;
+      if (seRepite) {
+        const salida = await crearSalidaDePlantilla(supabase, c.id, ahora);
+        if (!salida.ok) throw new Error(salida.error);
+        idSalida = salida.idSalida;
+      } else {
+        const { error: errUpd } = await supabase
+          .from("comunicados")
+          .update({ estado: "publicado" })
+          .eq("id", c.id);
+        if (errUpd) throw new Error(errUpd.message);
+      }
       publicados++;
 
       // 1-bis) UNA SANCIÓN NO SE PUBLICA Y YA ESTÁ. El día que le toca salir es
@@ -171,7 +194,7 @@ export async function GET(request: Request) {
         const { notificarComunicadoNuevo } = await import(
           "@/features/mi-panel/mobile/lib/push-comunicado"
         );
-        await notificarComunicadoNuevo(c.id);
+        await notificarComunicadoNuevo(idSalida);
       } catch (e) {
         console.error("[cron comunicados] push:", e);
       }
@@ -179,7 +202,7 @@ export async function GET(request: Request) {
         const { emitirNotifComunicado } = await import(
           "@/features/notificaciones/actions/emisores-actions"
         );
-        await emitirNotifComunicado(c.id);
+        await emitirNotifComunicado(idSalida);
       } catch (e) {
         console.error("[cron comunicados] notif:", e);
       }
@@ -189,7 +212,7 @@ export async function GET(request: Request) {
       //    este cron tenía su propia copia, que mandaba el comunicado a la
       //    plantilla entera aunque fuera para un solo departamento.
       if (c.enviar_email === true) {
-        const res = await enviarComunicadoPorEmail(c.id);
+        const res = await enviarComunicadoPorEmail(idSalida);
         correos += res.enviados;
         if (!res.ok && res.error) errores.push(`${c.titulo} (correo): ${res.error}`);
       }

@@ -31,6 +31,7 @@ import {
   enviarCorreoComunicado,
   duplicarComunicado,
   deleteComunicado,
+  pararRepeticionComunicado,
   listEmpleadosParaComunicado,
   crearUrlsSubidaComunicado,
   type EmpleadoSelector,
@@ -1351,6 +1352,9 @@ function filaAComunicado(fila: Record<string, unknown>): Comunicado {
     enlace: texto(fila.enlace),
     enlaceTexto: texto(fila.enlace_texto),
     sancion: fila.sancion ?? null,
+    origenId: typeof fila.origen_id === "string" ? fila.origen_id : null,
+    repeticionParadaAt:
+      typeof fila.repeticion_parada_at === "string" ? fila.repeticion_parada_at : null,
   };
 }
 
@@ -1411,6 +1415,8 @@ function sancionAFila(s: SancionResumen): FilaComunicado {
     enlace: "",
     enlaceTexto: "",
     sancion: null,
+    origenId: null,
+    repeticionParadaAt: null,
     firma: s,
   };
 }
@@ -1531,7 +1537,18 @@ export function ComunicadosView() {
       ...comunicados.filter(c => c.tipo !== "sancion" || c.estado !== "publicado"),
       ...sanciones.map(sancionAFila),
     ];
-    return filas.sort((a, b) => (b.creadoEl ?? "").localeCompare(a.creadoEl ?? ""));
+    /**
+     * Arriba, LO ÚLTIMO QUE HA SALIDO. Un comunicado que se manda hoy sube al
+     * primer puesto aunque se escribiera hace un año: lo que se mira es cuándo
+     * salió, no cuándo se redactó (Iván, 12-09-2026). Lo que todavía no ha
+     * salido se ordena por cuándo se escribió, porque su fecha de envío está en
+     * el futuro y no dice nada de lo ocurrido.
+     */
+    const cuando = (c: FilaComunicado) =>
+      (c.estado === "publicado" || c.estado === "archivado"
+        ? c.envio ?? c.creadoEl
+        : c.creadoEl) ?? "";
+    return filas.sort((a, b) => cuando(b).localeCompare(cuando(a)));
   }, [comunicados, sanciones]);
 
   /**
@@ -1549,16 +1566,53 @@ export function ComunicadosView() {
     return Math.round(medibles.reduce((s, c) => s + c.alcancePct, 0) / medibles.length);
   }, [listaCompleta]);
 
-  const accesoComunicado = (c: Comunicado, campo: string): unknown => {
+  /**
+   * LA PLANTILLA Y SUS SALIDAS.
+   *
+   * Una línea con `origenId` es una salida: nació de la plantilla el día que le
+   * tocaba. La repetición vive SOLO en la plantilla, así que para saber si está
+   * parada —o para pararla— hay que mirar allí, se pulse desde donde se pulse.
+   */
+  const plantillaDe = (c: FilaComunicado): Comunicado | null =>
+    c.origenId ? comunicados.find(x => x.id === c.origenId) ?? null : null;
+
+  /** Cada cuánto se repite la línea, sea plantilla o salida de una. */
+  const recurrenciaDe = (c: FilaComunicado): Recurrencia =>
+    (c.origenId ? comunicados.find(x => x.id === c.origenId)?.recurrencia : null) ??
+    c.recurrencia;
+
+  /** `true` si esa línea pertenece a un comunicado que se repite. */
+  const esDeLosQueSeRepiten = (c: FilaComunicado): boolean =>
+    recurrenciaDe(c) !== "sin_repeticion";
+
+  /** Cuándo se paró su repetición. Null = sigue viva. */
+  const paradaDe = (c: FilaComunicado): string | null =>
+    (c.origenId ? plantillaDe(c)?.repeticionParadaAt : c.repeticionParadaAt) ?? null;
+
+  /** `true` si esa plantilla ya ha dejado alguna salida: no se puede borrar. */
+  const yaHaSalido = (c: FilaComunicado): boolean =>
+    comunicados.some(x => x.origenId === c.id);
+
+  const accesoComunicado = useCallback((c: Comunicado, campo: string): unknown => {
     if (campo === "estado") return c.estado;
-    if (campo === "recurrencia") return c.recurrencia;
+    if (campo === "recurrencia") {
+      // Una salida filtra y ordena por la recurrencia de SU plantilla, que es
+      // la que se lee en su línea.
+      const f = c as FilaComunicado;
+      return (
+        (f.origenId ? comunicados.find(x => x.id === f.origenId)?.recurrencia : null) ??
+        f.recurrencia
+      );
+    }
     if (campo === "tipo") return c.tipo;
     if (campo === "titulo") return c.titulo;
     if (campo === "creadoEl") return c.creadoEl;
     if (campo === "envio") return c.envio ?? "";
     if (campo === "alcancePct") return c.alcancePct;
     return (c as unknown as Record<string, unknown>)[campo];
-  };
+    // `comunicados` entra porque la recurrencia de una salida se lee de su
+    // plantilla, y la plantilla está en esa lista.
+  }, [comunicados]);
 
   const filtered = useMemo(() => {
     let lista: FilaComunicado[] = listaCompleta.filter(c => {
@@ -1586,7 +1640,7 @@ export function ComunicadosView() {
       accesoGenerico,
     ) as unknown as FilaComunicado[];
     return lista;
-  }, [listaCompleta, search, filtros, orden]);
+  }, [listaCompleta, search, filtros, orden, accesoComunicado]);
 
 
   const openEdit = (c: Comunicado) => { setEditingComunicado(c); setEditorMode("edit"); };
@@ -1671,6 +1725,32 @@ export function ComunicadosView() {
       return;
     }
     toast.success("Copia creada en borrador");
+    await loadComunicados();
+  };
+
+  /**
+   * PARAR (o volver a arrancar) LA REPETICIÓN.
+   *
+   * Se puede pulsar desde cualquiera de sus líneas: la repetición vive solo en
+   * la plantilla, así que no hay nada que copiar en las demás. Parada, no sale
+   * NUNCA más; las salidas de antes se quedan como están, porque ya ocurrieron.
+   */
+  const pararRepeticion = async (c: FilaComunicado, parar: boolean) => {
+    const cada = RECURRENCIA_LABELS[recurrenciaDe(c)].toLowerCase();
+    const ok = await confirm({
+      title: parar ? "¿Parar la repetición?" : "¿Volver a repetirlo?",
+      description: parar
+        ? `«${c.titulo}» no volverá a salir. Lo que ya se envió se queda como está, y el comunicado sigue escrito para poder arrancarlo otro día.`
+        : `«${c.titulo}» volverá a salir con su repetición ${cada}.`,
+      confirmLabel: "Aceptar",
+    });
+    if (!ok) return;
+    const res = await pararRepeticionComunicado(c.id, parar);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo cambiar la repetición");
+      return;
+    }
+    toast.success(parar ? "Repetición parada" : "Vuelve a repetirse");
     await loadComunicados();
   };
 
@@ -1856,6 +1936,18 @@ export function ComunicadosView() {
           ? (envioGuardado ?? new Date().toISOString())
           : null;
 
+    /**
+     * MANDAR AHORA UNO QUE SE REPITE no lo convierte en «publicado»: deja su
+     * salida de hoy y la plantilla sigue esperando la siguiente vez. Por eso se
+     * guarda como programado y se manda por el camino de siempre, que es el que
+     * saca la salida (Iván, 12-09-2026).
+     */
+    const publicarRepetido =
+      form.recurrencia !== "sin_repeticion" &&
+      estadoFinal === "publicado" &&
+      editorMode !== "create";
+    const estadoAGuardar: EstadoComunicado = publicarRepetido ? "programado" : estadoFinal;
+
     // Los documentos suben DIRECTOS al almacén con una URL firmada. Si pasaran
     // por la acción de guardado, cualquier PDF de más de 4,5 MB fallaría.
     const adjuntos: ComunicadoAdjunto[] = [...form.adjuntos];
@@ -1893,7 +1985,7 @@ export function ComunicadosView() {
     const payload = {
       titulo: form.titulo,
       cuerpo: form.cuerpo,
-      estado: estadoFinal,
+      estado: estadoAGuardar,
       tipo: form.tipo,
       recurrencia: form.recurrencia,
       todaEmpresa: form.todaEmpresa,
@@ -1914,6 +2006,23 @@ export function ComunicadosView() {
         : { ok: false, error: "Sin contexto" };
 
     if (res.ok) {
+      // Uno que se repite se manda por su camino: deja la salida de hoy y la
+      // plantilla se queda esperando la próxima vez.
+      let avisos: { emailEnviados?: number; emailError?: string } = res;
+      if (publicarRepetido && editingComunicado) {
+        const salida = await cambiarEstadoComunicado(
+          editingComunicado.id,
+          "publicado",
+          form.enviarEmail,
+        );
+        if (!salida.ok) {
+          toast.error(salida.error ?? "No se pudo mandar el comunicado");
+          await loadComunicados();
+          closeEditor();
+          return;
+        }
+        avisos = salida;
+      }
       toast.success(
         estadoFinal === "publicado"
           ? "Comunicado publicado"
@@ -1923,8 +2032,8 @@ export function ComunicadosView() {
       );
       // El correo se dice aparte: que salga el comunicado y no salga el correo
       // es exactamente lo que nadie se entera de que ha pasado.
-      const enviados = res.emailEnviados ?? 0;
-      const errorEmail = res.emailError;
+      const enviados = avisos.emailEnviados ?? 0;
+      const errorEmail = avisos.emailError;
       if (enviados > 0) {
         toast.success(`Correo enviado a ${enviados} ${enviados === 1 ? "persona" : "personas"}`);
       } else if (errorEmail) {
@@ -2024,17 +2133,30 @@ export function ComunicadosView() {
     envio: {
       th: <TableHead key="envio">Envío</TableHead>,
       td: (c) => (
-        <TableCell key="envio" className="text-sm text-muted-foreground whitespace-nowrap">{c.envio ? formatFechaHoraEnZona(c.envio, tz) : "—"}</TableCell>
+        <TableCell key="envio" className="text-sm text-muted-foreground whitespace-nowrap">
+          {/* En lo que ya salió, el día que salió. En lo que está esperando, el
+              día que le toca: son dos cosas distintas y se leen distinto. */}
+          {!c.envio
+            ? "—"
+            : c.estado === "programado"
+              ? `Próximo: ${formatFechaHoraEnZona(c.envio, tz)}`
+              : formatFechaHoraEnZona(c.envio, tz)}
+        </TableCell>
       ),
     },
     recurrencia: {
       th: <TableHead key="recurrencia">Recurrencia</TableHead>,
       td: (c) => (
-        <TableCell key="recurrencia">
+        <TableCell key="recurrencia" className="whitespace-nowrap">
           {/* La sanción no se repite NUNCA y no se puede cambiar: pone "No",
               como cualquier comunicado que sale una sola vez. Un guion dejaba
-              la duda de si faltaba el dato (Iván, 12-09-2026). */}
-          <Badge variant="outline" className="text-xs">{RECURRENCIA_LABELS[c.recurrencia]}</Badge>
+              la duda de si faltaba el dato (Iván, 12-09-2026).
+              Una salida dice de qué repetición viene —la de su plantilla—, y si
+              esa repetición está parada se lee aquí mismo. */}
+          <Badge variant="outline" className="text-xs">
+            {RECURRENCIA_LABELS[recurrenciaDe(c)]}
+            {esDeLosQueSeRepiten(c) && paradaDe(c) ? " · parada" : ""}
+          </Badge>
         </TableCell>
       ),
     },
@@ -2243,11 +2365,33 @@ export function ComunicadosView() {
                               <Archive className={ICONO_MENU} strokeWidth={1.75} />Archivar
                             </DropdownMenuItem>
                           )}
+                          {/* PARAR LA REPETICIÓN, desde cualquiera de sus
+                              líneas: la plantilla o cualquier salida. Actúa
+                              siempre sobre la plantilla, que es donde vive
+                              (Iván, 12-09-2026). */}
+                          {esDeLosQueSeRepiten(c) && c.tipo !== "sancion" && (
+                            <DropdownMenuItem
+                              className={ITEM_MENU}
+                              onClick={() => void pararRepeticion(c, !paradaDe(c))}
+                            >
+                              {paradaDe(c) ? (
+                                <>
+                                  <RefreshCw className={ICONO_MENU} strokeWidth={1.75} />Volver a repetirlo
+                                </>
+                              ) : (
+                                <>
+                                  <Ban className={ICONO_MENU} strokeWidth={1.75} />Parar la repetición
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                          )}
                           {/* UN COMUNICADO ENVIADO NO SE BORRA. La plantilla ya
                               lo tiene y quedan sus lecturas: lo que se hace con
                               uno viejo es archivarlo (Iván, 12-09-2026). Solo
-                              se puede borrar lo que aún no ha salido. */}
-                          {(c.estado === "borrador" || c.estado === "programado") && (
+                              se puede borrar lo que aún no ha salido, y una
+                              plantilla que ya ha dejado salidas tampoco: esa se
+                              para. */}
+                          {(c.estado === "borrador" || c.estado === "programado") && !yaHaSalido(c) && (
                             <>
                               <DropdownMenuSeparator className="my-1" />
                               <DropdownMenuItem
@@ -2282,6 +2426,11 @@ export function ComunicadosView() {
             <p className="text-sm text-muted-foreground">
               «{publicando.titulo}» se enviará{" "}
               {publicando.todaEmpresa ? "a toda la plantilla" : "a sus destinatarios"}.
+              {/* Mandar ahora uno que se repite no rompe su repetición: deja su
+                  línea de hoy y sigue saliendo cuando le toque. */}
+              {publicando.recurrencia !== "sin_repeticion"
+                ? " Se queda su línea con la salida de hoy y seguirá saliendo cuando le toque."
+                : ""}
             </p>
             <div className="space-y-1 rounded-lg border p-3">
               <div className="flex items-center justify-between gap-3">
