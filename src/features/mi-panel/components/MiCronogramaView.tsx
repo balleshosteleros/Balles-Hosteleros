@@ -40,6 +40,7 @@ import {
   AREA_BADGE_CLASS,
   AREA_LABEL,
 } from "@/features/direccion/data/cronogramaAreas";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const ORDERED_FREQUENCIES: Frecuencia[] = [
   "DIARIO",
@@ -150,34 +151,34 @@ function DepartamentoCronograma({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-end">
         <div className="inline-flex p-0.5 rounded-lg bg-muted/40 border">
-          <button
-            type="button"
-            onClick={() => setVistaModo("TABLA")}
-            className={cn(
-              "px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5 transition-all",
-              vistaModo === "TABLA"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            title="Vista tabla"
-          >
-            <Table2 className="h-3.5 w-3.5" />
-            Tabla
-          </button>
-          <button
-            type="button"
-            onClick={() => setVistaModo("CALENDARIO")}
-            className={cn(
-              "px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5 transition-all",
-              vistaModo === "CALENDARIO"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            title="Vista calendario"
-          >
-            <CalendarRange className="h-3.5 w-3.5" />
-            Calendario
-          </button>
+          <ToolTooltip label="Vista tabla">
+            <button
+              type="button"
+              onClick={() => setVistaModo("TABLA")}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5 transition-all",
+                vistaModo === "TABLA"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )} aria-label="Vista tabla">
+              <Table2 className="h-3.5 w-3.5" />
+              Tabla
+            </button>
+          </ToolTooltip>
+          <ToolTooltip label="Vista calendario">
+            <button
+              type="button"
+              onClick={() => setVistaModo("CALENDARIO")}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5 transition-all",
+                vistaModo === "CALENDARIO"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )} aria-label="Vista calendario">
+              <CalendarRange className="h-3.5 w-3.5" />
+              Calendario
+            </button>
+          </ToolTooltip>
         </div>
       </div>
 

@@ -23,6 +23,7 @@ import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 import { cn } from "@/lib/utils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const TIPO_FESTIVO_LABEL: Record<string, string> = {
   nacional: "Nacional",
@@ -213,85 +214,87 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
     const compact = opts?.compact ?? false;
 
     return (
-      <div
-        title={`${fecha} · ${di.badgeText} ${di.horario}`}
-        className={cn(
-          "relative rounded-md p-1.5 flex flex-col items-center justify-center gap-1 transition-colors cursor-default",
-          compact ? "min-h-[44px]" : "min-h-[78px]",
-          cls.bg,
-        )}
-      >
-        <span className={cn(
-          "absolute top-1 right-1.5 font-bold leading-none",
-          compact ? "text-[9px]" : "text-[11px]",
-          isToday ? "text-yellow-900" : "text-slate-700",
-        )}>
-          {dia}
-        </span>
-        {festivoInfo && !compact && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                onClick={(e) => e.stopPropagation()}
-                className={cn(
-                  "absolute top-1 left-1 h-4 w-4 rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform z-10",
-                  festivoInfo.tipo === "festivo" ? "bg-rose-500 text-white" : "bg-sky-500 text-white",
-                )}
-                aria-label={festivoInfo.tipo === "festivo" ? "Festivo" : "Víspera de festivo"}
-              >
-                {festivoInfo.tipo === "festivo"
-                  ? <AlertCircle className="h-3 w-3" />
-                  : <Info className="h-3 w-3" />}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent side="top" className="w-60 p-3 text-xs">
-              <div className="flex items-center gap-2 font-semibold">
-                {festivoInfo.tipo === "festivo"
-                  ? <><AlertCircle className="h-3.5 w-3.5 text-rose-500" /> Festivo</>
-                  : <><Info className="h-3.5 w-3.5 text-sky-500" /> Víspera de festivo</>}
-              </div>
-              <div className="mt-2 space-y-1">
-                <div className="font-medium">{festivoInfo.festivo.nombre}</div>
-                <div className="text-muted-foreground">{festivoInfo.festivo.fecha}</div>
-                <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-                  <Badge variant="outline" className="text-[10px]">
-                    {TIPO_FESTIVO_LABEL[festivoInfo.festivo.tipo] ?? festivoInfo.festivo.tipo}
-                  </Badge>
-                  {festivoInfo.festivo.region && (
-                    <Badge variant="outline" className="text-[10px]">{festivoInfo.festivo.region}</Badge>
+      <ToolTooltip label={`${fecha} · ${di.badgeText} ${di.horario}`}>
+        <div
+          className={cn(
+            "relative rounded-md p-1.5 flex flex-col items-center justify-center gap-1 transition-colors cursor-default",
+            compact ? "min-h-[44px]" : "min-h-[78px]",
+            cls.bg,
+          )}
+        >
+          <span className={cn(
+            "absolute top-1 right-1.5 font-bold leading-none",
+            compact ? "text-[9px]" : "text-[11px]",
+            isToday ? "text-yellow-900" : "text-slate-700",
+          )}>
+            {dia}
+          </span>
+          {festivoInfo && !compact && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    "absolute top-1 left-1 h-4 w-4 rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform z-10",
+                    festivoInfo.tipo === "festivo" ? "bg-rose-500 text-white" : "bg-sky-500 text-white",
                   )}
+                  aria-label={festivoInfo.tipo === "festivo" ? "Festivo" : "Víspera de festivo"}
+                >
+                  {festivoInfo.tipo === "festivo"
+                    ? <AlertCircle className="h-3 w-3" />
+                    : <Info className="h-3 w-3" />}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" className="w-60 p-3 text-xs">
+                <div className="flex items-center gap-2 font-semibold">
+                  {festivoInfo.tipo === "festivo"
+                    ? <><AlertCircle className="h-3.5 w-3.5 text-rose-500" /> Festivo</>
+                    : <><Info className="h-3.5 w-3.5 text-sky-500" /> Víspera de festivo</>}
                 </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-        )}
-        {festivoInfo && compact && (
-          <span
-            className={cn(
-              "absolute top-0.5 left-0.5 h-1.5 w-1.5 rounded-full",
-              festivoInfo.tipo === "festivo" ? "bg-rose-500" : "bg-sky-500",
-            )}
-            title={festivoInfo.festivo.nombre}
-          />
-        )}
-        {!compact && (
-          <>
-            <span className={cn("text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded", cls.badge)}>
-              {di.badgeText}
-            </span>
-            <span className={cn("text-[10px] font-medium leading-none", cls.horario)}>
-              {di.horario}
-            </span>
-            {info?.trabajoExtra === "horas_extras" && (
-              <span className="text-[8px] font-semibold text-amber-700 leading-none">+ EXTRAS</span>
-            )}
-          </>
-        )}
-        {compact && (
-          <span className={cn("h-1 w-1 rounded-full", cls.badge)} />
-        )}
-      </div>
+                <div className="mt-2 space-y-1">
+                  <div className="font-medium">{festivoInfo.festivo.nombre}</div>
+                  <div className="text-muted-foreground">{festivoInfo.festivo.fecha}</div>
+                  <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                    <Badge variant="outline" className="text-[10px]">
+                      {TIPO_FESTIVO_LABEL[festivoInfo.festivo.tipo] ?? festivoInfo.festivo.tipo}
+                    </Badge>
+                    {festivoInfo.festivo.region && (
+                      <Badge variant="outline" className="text-[10px]">{festivoInfo.festivo.region}</Badge>
+                    )}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+          {festivoInfo && compact && (
+            <ToolTooltip label={festivoInfo.festivo.nombre}>
+              <span
+                className={cn(
+                  "absolute top-0.5 left-0.5 h-1.5 w-1.5 rounded-full",
+                  festivoInfo.tipo === "festivo" ? "bg-rose-500" : "bg-sky-500",
+                )}
+              />
+            </ToolTooltip>
+          )}
+          {!compact && (
+            <>
+              <span className={cn("text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded", cls.badge)}>
+                {di.badgeText}
+              </span>
+              <span className={cn("text-[10px] font-medium leading-none", cls.horario)}>
+                {di.horario}
+              </span>
+              {info?.trabajoExtra === "horas_extras" && (
+                <span className="text-[8px] font-semibold text-amber-700 leading-none">+ EXTRAS</span>
+              )}
+            </>
+          )}
+          {compact && (
+            <span className={cn("h-1 w-1 rounded-full", cls.badge)} />
+          )}
+        </div>
+      </ToolTooltip>
     );
   };
 

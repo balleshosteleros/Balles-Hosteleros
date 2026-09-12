@@ -767,7 +767,7 @@ async function evaluarEntradaFichaje(
   // vuelta no es fichar y ya está: es comunicar el alta, que cierra la baja,
   // avisa a RRHH y a la gestoría y le devuelve sus turnos.
   {
-    const { data: bajaAbierta } = await supabase
+    const { data: bajaAbierta, error: errBaja } = await supabase
       .from("solicitudes_personal")
       .select("id")
       .eq("empresa_id", empresaId)
@@ -777,6 +777,15 @@ async function evaluarEntradaFichaje(
       .is("alta_medica_comunicada_en", null)
       .limit(1)
       .maybeSingle();
+    // Si la comprobación no se puede hacer, NO se ficha. Un fallo de red no
+    // puede acabar en horas fichadas por alguien que está de baja: se pide
+    // reintentar, que cuesta un toque.
+    if (errBaja) {
+      return {
+        ok: false,
+        error: "No se ha podido comprobar tu situación. Inténtalo otra vez en un momento.",
+      };
+    }
     if (bajaAbierta) {
       return {
         ok: false,
@@ -2870,6 +2879,37 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       !["baja_medica", "vacaciones", "permiso", "baja_contrato"].includes(input.subtipo)
     ) {
       return { ok: false, error: "Subtipo de ausencia no válido" };
+    }
+
+    // DE BAJA MÉDICA no se pide nada más. Vacaciones, permisos, horas extras o
+    // material mientras estás de baja no tienen sentido: no estás trabajando. Lo
+    // único que cabe pedir es el alta, y eso va por su propio camino
+    // (`comunicarMiAltaMedica`), no por aquí.
+    {
+      const { data: bajaAbierta, error: errBaja } = await supabase
+        .from("solicitudes_personal")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .eq("user_id", user.id)
+        .eq("subtipo", "baja_medica")
+        .eq("estado", "aprobada")
+        .is("alta_medica_comunicada_en", null)
+        .limit(1)
+        .maybeSingle();
+      if (errBaja) {
+        return {
+          ok: false,
+          error: "No se ha podido comprobar tu situación. Inténtalo otra vez en un momento.",
+        };
+      }
+      if (bajaAbierta) {
+        return {
+          ok: false,
+          error:
+            "Estás de baja médica: lo único que puedes solicitar ahora es tu alta médica, " +
+            "desde el botón rojo de esta pantalla.",
+        };
+      }
     }
     if (input.tipo === "trabajo" && !["horas_extras", "dia_trabajado"].includes(input.subtipo)) {
       return { ok: false, error: "Subtipo de trabajo no válido" };

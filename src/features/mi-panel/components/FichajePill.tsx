@@ -49,6 +49,7 @@ import {
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /** «2:35 h» de lo que lleva dentro, o del total si ya salió. */
 function horasVivas(f: MiFichajeHoy | null): string {
@@ -257,20 +258,21 @@ export function FichajePill() {
           lado; con el borde puesto directamente sobre el icono quedaba más bajo
           y se veía descolgado. */}
       <span className="flex shrink-0 items-center rounded-full border bg-muted/40 p-1">
-        <button
-          type="button"
-          onClick={() => setFijado((v) => !v)}
-          aria-expanded={abierto}
-          aria-label={`${ROTULO[estado]} · ${horasVivas(fichaje)}`}
-          title={`${ROTULO[estado]} · ${horasVivas(fichaje)}`}
-          className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {enviando ? (
-            <Loader2 className={`h-4 w-4 animate-spin ${color}`} />
-          ) : (
-            <Fingerprint className={`h-[18px] w-[18px] ${color}`} />
-          )}
-        </button>
+        <ToolTooltip label={`${ROTULO[estado]} · ${horasVivas(fichaje)}`}>
+          <button
+            type="button"
+            onClick={() => setFijado((v) => !v)}
+            aria-expanded={abierto}
+            aria-label={`${ROTULO[estado]} · ${horasVivas(fichaje)}`}
+            className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {enviando ? (
+              <Loader2 className={`h-4 w-4 animate-spin ${color}`} />
+            ) : (
+              <Fingerprint className={`h-[18px] w-[18px] ${color}`} />
+            )}
+          </button>
+        </ToolTooltip>
       </span>
 
       <AvisoBajaMedicaDialog open={avisoBaja} onOpenChange={setAvisoBaja} />

@@ -9,6 +9,7 @@ import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { FichajeBar } from "./FichajeBar";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const ESTADO_COLOR: Record<string, string> = {
   trabajando: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -134,28 +135,32 @@ export function MisFichajesView() {
                     <td className="py-2 pl-3">
                       <div className="flex items-center gap-1.5">
                         {esAlerta && (
-                          <span title={tooltip} className="inline-flex">
-                            <AlertTriangle
-                              className="h-3.5 w-3.5 text-red-600 shrink-0"
-                              aria-label="Incidencia"
-                            />
-                          </span>
+                          <ToolTooltip label={tooltip}>
+                            <span className="inline-flex">
+                              <AlertTriangle
+                                className="h-3.5 w-3.5 text-red-600 shrink-0"
+                                aria-label="Incidencia"
+                              />
+                            </span>
+                          </ToolTooltip>
                         )}
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] ${ESTADO_COLOR[estadoVista] ?? ESTADO_COLOR.pendiente}`}
-                          title={tooltip}
-                        >
-                          {estadoVista}
-                        </Badge>
-                        {f.porSolicitud && (
+                        <ToolTooltip label={tooltip}>
                           <Badge
                             variant="outline"
-                            className="text-[10px] bg-sky-100 text-sky-700 border-sky-200"
-                            title="Este fichaje se creó al aprobarse una solicitud"
+                            className={`text-[10px] ${ESTADO_COLOR[estadoVista] ?? ESTADO_COLOR.pendiente}`}
                           >
-                            Por solicitud
+                            {estadoVista}
                           </Badge>
+                        </ToolTooltip>
+                        {f.porSolicitud && (
+                          <ToolTooltip label="Este fichaje se creó al aprobarse una solicitud">
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] bg-sky-100 text-sky-700 border-sky-200"
+                            >
+                              Por solicitud
+                            </Badge>
+                          </ToolTooltip>
                         )}
                       </div>
                     </td>
