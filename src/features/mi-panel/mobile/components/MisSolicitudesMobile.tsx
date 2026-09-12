@@ -22,7 +22,6 @@ import type { SolicitudPersonal } from "@/features/mi-panel/types";
 import { ESTADO_LABEL, SUBTIPO_LABEL } from "@/features/mi-panel/types";
 import {
   listMisDenuncias,
-  type EstadoDenuncia,
   type MiDenuncia,
 } from "@/features/mi-panel/actions/denuncias-actions";
 import { SolicitudModal } from "@/features/mi-panel/components/SolicitudModal";
@@ -46,50 +45,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/shared/components/ui/alert-dialog";
+import {
+  DENUNCIA_ESTADO_DOT,
+  ESTADO_DOT,
+  SOLICITUD_TABS,
+  formatFechaSolicitud as formatFecha,
+} from "@/features/mi-panel/lib/solicitudes-ui";
 import { cn } from "@/shared/lib/utils";
-
-/**
- * Los cuatro tipos que puede pedir un empleado, cada uno en su pestaña. No hay
- * vista «todas» a propósito: mezclarlos no dice nada, se miran por tipo.
- */
-const TABS: Array<{
-  key: "ausencias" | "trabajos" | "entregas" | "quejas";
-  label: string;
-}> = [
-  { key: "ausencias", label: "Ausencias" },
-  { key: "trabajos", label: "Trabajos" },
-  { key: "entregas", label: "Entregas" },
-  { key: "quejas", label: "Quejas" },
-];
-
-const ESTADO_DOT: Record<string, string> = {
-  pendiente: "bg-amber-500",
-  aprobada: "bg-emerald-500",
-  rechazada: "bg-rose-500",
-  anulada: "bg-slate-400",
-};
-
-/**
- * Una queja sigue su propio ciclo (recibida → investigación → resuelta), así
- * que no se traduce al estado de una solicitud: se muestra el suyo. Los
- * nombres salen de `DENUNCIA_ESTADO_LABEL`, comunes con el panel.
- */
-const DENUNCIA_ESTADO_DOT: Record<EstadoDenuncia, string> = {
-  recibida: "bg-blue-500",
-  en_investigacion: "bg-amber-500",
-  informacion_solicitada: "bg-purple-500",
-  resuelta: "bg-emerald-500",
-  archivada: "bg-slate-400",
-};
-
-function formatFecha(s: string): string {
-  try {
-    const [y, m, d] = s.split("-");
-    return `${d}/${m}/${y}`;
-  } catch {
-    return s;
-  }
-}
 
 export function MisSolicitudesMobile() {
   const [items, setItems] = useState<SolicitudPersonal[]>([]);
@@ -98,7 +60,7 @@ export function MisSolicitudesMobile() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [open, setOpen] = useState(false);
   const [denunciaOpen, setDenunciaOpen] = useState(false);
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("ausencias");
+  const [tab, setTab] = useState<(typeof SOLICITUD_TABS)[number]["key"]>("ausencias");
   const [aAnular, setAAnular] = useState<SolicitudPersonal | null>(null);
   const [anulando, setAnulando] = useState(false);
 
@@ -179,7 +141,7 @@ export function MisSolicitudesMobile() {
       )}
 
       <div className="mt-4 flex gap-1.5 rounded-full bg-muted p-1">
-        {TABS.map((t) => (
+        {SOLICITUD_TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
