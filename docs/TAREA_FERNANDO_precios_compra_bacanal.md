@@ -5,6 +5,27 @@
 
 ---
 
+## 🗂️ 12-SEP — TODO LO PENDIENTE, EN UN SOLO SITIO
+
+Este fichero se ha hecho largo y las cosas pendientes están repartidas por él. Las he
+recogido todas en un documento aparte, escrito en cristiano y con las cifras medidas hoy:
+
+> ### 👉 **`docs/LOGISTICA_LO_QUE_QUEDA_PENDIENTE.md`**
+
+Está separado en dos partes: **lo que depende de vosotros** (las recetas a medio escribir,
+las 49 cantidades en blanco de Borja, los 27 productos declarados por unidades, el precio
+de la base de arroz, las 21 altas de Ágora, las 5 decisiones del cierre y los 2 avisos de
+seguridad) y **lo que depende de nosotros** (que se reduce a una sola pieza: la venta por
+formato).
+
+Termina con el orden en el que hay que hacer las cosas para poder **encender el descuento
+automático de stock**, que es a donde va todo esto.
+
+Las notas de más abajo siguen valiendo como detalle de cada asunto; el documento nuevo es
+el resumen por el que empezar.
+
+---
+
 ## 📦 12-SEP — YA NO HAY QUE DAR DE ALTA NADA A MANO: HAY UNA PANTALLA
 
 > **Esto sustituye la lista que te mandamos el 4 de septiembre.** En vez de pedirte por
