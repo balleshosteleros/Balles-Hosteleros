@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import type { CartaCategoria, CartaItem, CartaFamilia, FamiliaCarta } from "../../types";
 
 type CategoriaConItems = CartaCategoria & { items: CartaItem[] };
@@ -35,6 +36,9 @@ export function CategoriaSidebar({
   familiasCfg: CartaFamilia[];
 }) {
   const navRef = useRef<HTMLUListElement | null>(null);
+  // El desplegable de categorías del móvil. Nace cerrado: abierto de entrada
+  // taparía la primera fila de fotos, que es lo que hace entrar en la carta.
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
   // Una categoría sin familia asignada se trata como comida: es lo que era
   // antes de existir la separación, y así nunca desaparece de la carta.
@@ -52,6 +56,13 @@ export function CategoriaSidebar({
         .filter((f) => categorias.some((c) => (c.familia ?? "comida") === f.clave)),
     [categorias, familiasCfg],
   );
+
+  const actual = deFamilia.find((c) => c.id === activeId) ?? deFamilia[0];
+
+  // Al cambiar de familia se cierra: lo que se ve dentro ya es otra cosa.
+  useEffect(() => {
+    setMenuAbierto(false);
+  }, [familia]);
 
   // Auto-scroll del item activo en la sidebar (mobile + desktop scroll si overflow).
   useEffect(() => {
@@ -87,7 +98,7 @@ export function CategoriaSidebar({
 
   return (
     <>
-      {/* Mobile: familias + tabs horizontales, ambos pegados arriba */}
+      {/* Móvil: familias y, debajo, la carta en un desplegable */}
       <nav
         className="sticky top-0 z-20 -mx-4 mb-6 mt-4 border-b px-4 pt-3 backdrop-blur lg:hidden"
         style={{
@@ -96,42 +107,84 @@ export function CategoriaSidebar({
         }}
       >
         {selectorFamilia}
-        <ul
-          ref={navRef}
-          className="flex gap-1 overflow-x-auto py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+
+        {/* La carta entera, desplegada. Antes era una tira con scroll lateral
+            y solo se veían dos categorías de doce: el resto quedaba fuera de
+            pantalla sin nada que avisara de que había más, así que en el móvil
+            la carta parecía tener la mitad. El desplegable las enseña todas,
+            que es lo que ya se ve en el ordenador. */}
+        <button
+          type="button"
+          onClick={() => setMenuAbierto((v) => !v)}
+          aria-expanded={menuAbierto}
+          className="my-2 flex w-full items-center justify-between gap-3 rounded-xl px-3.5 py-3 text-left transition active:scale-[0.99]"
+          style={{
+            backgroundColor: "color-mix(in srgb, var(--carta-superficie-enfasis) 70%, transparent)",
+            border: "1px solid var(--carta-borde)",
+          }}
         >
-          {deFamilia.map((c) => {
-            const active = activeId === c.id;
-            return (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  data-cat={c.id}
-                  onClick={() => onSelect(c.id)}
-                  className="relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition"
-                  style={{
-                    color: active ? "var(--carta-primario)" : "var(--carta-texto-tenue)",
-                  }}
-                >
-                  {c.destacada ? (
+          <span className="min-w-0">
+            <span
+              className="block text-[9px] font-semibold uppercase tracking-[0.22em]"
+              style={{ color: "var(--carta-texto-tenue)" }}
+            >
+              Ver la carta
+            </span>
+            <span
+              className="block truncate text-[13px] font-semibold uppercase tracking-[0.14em]"
+              style={{ color: "var(--carta-primario)" }}
+            >
+              {actual?.nombre ?? "Elige categoría"}
+            </span>
+          </span>
+          <ChevronDown
+            className={`h-5 w-5 shrink-0 transition-transform ${menuAbierto ? "rotate-180" : ""}`}
+            style={{ color: "var(--carta-texto-tenue)" }}
+            strokeWidth={2}
+          />
+        </button>
+
+        {menuAbierto ? (
+          <ul ref={navRef} className="mb-3 max-h-[55vh] overflow-y-auto pb-1">
+            {deFamilia.map((c) => {
+              const active = activeId === c.id;
+              return (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    data-cat={c.id}
+                    onClick={() => {
+                      onSelect(c.id);
+                      setMenuAbierto(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] font-semibold uppercase tracking-[0.14em] transition"
+                    style={{
+                      color: active ? "var(--carta-primario)" : "var(--carta-texto-tenue)",
+                      backgroundColor: active
+                        ? "color-mix(in srgb, var(--carta-primario) 10%, transparent)"
+                        : "transparent",
+                    }}
+                  >
+                    {c.destacada ? (
+                      <span
+                        aria-hidden
+                        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: "var(--carta-acento)", opacity: 0.8 }}
+                      />
+                    ) : null}
+                    <span className="truncate">{c.nombre}</span>
                     <span
-                      aria-hidden
-                      className="inline-block h-1 w-1 rounded-full"
-                      style={{ backgroundColor: "var(--carta-acento)", opacity: 0.75 }}
-                    />
-                  ) : null}
-                  {c.nombre}
-                  {!c.destacada ? (
-                    <span
-                      className="absolute -bottom-px left-3 right-3 h-[2px] rounded-full transition-all"
-                      style={{ backgroundColor: active ? "var(--carta-primario)" : "transparent" }}
-                    />
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                      className="ml-auto shrink-0 text-[10px] font-medium tabular-nums opacity-70"
+                      style={{ color: "var(--carta-texto-tenue)" }}
+                    >
+                      {c.items.length}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
       </nav>
 
       {/* Desktop: sidebar fija */}

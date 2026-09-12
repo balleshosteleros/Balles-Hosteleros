@@ -140,13 +140,14 @@ export function ItemCard({
           // Estrella + rótulo: la estrella sola no dice por qué está ahí.
           <ToolTooltip label="Uno de los más pedidos">
             <span
-              // En móvil la etiqueta llegaba a tocar el contador de la esquina
-              // opuesta: aquí va compacta, y el rótulo solo aparece cuando hay
-              // ancho para los dos.
-              className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/45 px-1.5 py-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.4)] ring-1 ring-white/25 backdrop-blur-md sm:gap-1.5 sm:pl-1.5 sm:pr-2.5 sm:py-1"
+              // El rótulo se lee TAMBIÉN en el móvil, que es donde más se mira
+              // la carta: la estrella sola no dice por qué está ahí. Cabe al
+              // lado del contador porque en pantalla pequeña va más apretado y
+              // sin espaciado entre letras.
+              className="absolute left-2 top-2 inline-flex max-w-[calc(100%-5.5rem)] items-center gap-1 rounded-full bg-black/45 px-1.5 py-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.4)] ring-1 ring-white/25 backdrop-blur-md sm:gap-1.5 sm:pl-1.5 sm:pr-2.5 sm:py-1"
             >
-              <Star className="h-3 w-3 fill-amber-400 text-amber-400 sm:h-3.5 sm:w-3.5" strokeWidth={1.5} />
-              <span className="hidden text-[9px] font-bold uppercase tracking-[0.12em] text-white sm:inline">
+              <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400 sm:h-3.5 sm:w-3.5" strokeWidth={1.5} />
+              <span className="truncate text-[8px] font-bold uppercase tracking-normal text-white sm:text-[9px] sm:tracking-[0.12em]">
                 Best seller
               </span>
             </span>
