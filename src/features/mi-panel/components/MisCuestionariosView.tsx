@@ -410,13 +410,6 @@ export function MisCuestionariosView() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Mis cuestionarios</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Evaluaciones y tests asignados por RRHH
-        </p>
-      </div>
-
       {activo ? (
         <ResolverCuestionario
           cuestionario={activo}
