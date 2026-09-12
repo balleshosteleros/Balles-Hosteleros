@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Plus, Pencil, Trash2, CalendarDays, Sun } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   temporadas: TemporadaStock[];
@@ -194,14 +195,14 @@ export default function TemporadasConfig({ temporadas, setTemporadas, productos,
               )}
 
               {availableProducts.length > 0 && (
-                <select
+                <Desplegable
                   className="w-full rounded-md border bg-background text-sm px-3 py-2 text-foreground"
                   value=""
                   onChange={(e) => { if (e.target.value) addProduct(e.target.value); }}
                 >
                   <option value="">+ Añadir producto…</option>
                   {availableProducts.map((p) => <option key={p.id} value={p.id}>{p.nombre} ({p.categoria})</option>)}
-                </select>
+                </Desplegable>
               )}
             </div>
           </div>

@@ -5,6 +5,7 @@ import { useEditorStore } from "../../../../hooks/useEditorStore";
 import { Field, Section } from "./shared";
 import { SubirImagenUnica } from "./imagenes";
 import type { Bloque, ImagenDatos } from "../../../../types";
+import { Desplegable } from "@/components/ui/desplegable";
 
 export function ImagenForm({ bloque }: { bloque: Extract<Bloque, { tipo: "imagen" }> }) {
   const actualizar = useEditorStore((s) => s.actualizarBloque);
@@ -26,14 +27,14 @@ export function ImagenForm({ bloque }: { bloque: Extract<Bloque, { tipo: "imagen
 
       <Section title="Cómo se ve">
         <Field label="Ancho">
-          <select
+          <Desplegable
             className="h-9 w-full rounded-md border bg-background px-3 text-sm"
             value={datos.ancho}
             onChange={(e) => set({ ancho: e.target.value as ImagenDatos["ancho"] })}
           >
             <option value="contenido">Centrada, con márgenes</option>
             <option value="completo">De lado a lado</option>
-          </select>
+          </Desplegable>
         </Field>
         <Field label="Pie de imagen" hint="Opcional. Sale debajo, en pequeño.">
           <Input value={datos.pie ?? ""} onChange={(e) => set({ pie: e.target.value })} />

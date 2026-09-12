@@ -38,6 +38,7 @@ import {
 import { analizarImportacionIA } from "@/features/logistica/actions/importador-ia-actions";
 import { bulkImportProductos } from "@/features/logistica/actions/producto-actions";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface ImportadorIADialogProps {
   open: boolean;
@@ -557,7 +558,7 @@ function CeldaCatalogo({
       : bordeConfianza;
 
   return (
-    <select
+    <Desplegable
       value={valido ? valor : ""}
       onChange={(e) => onChange(e.target.value)}
       disabled={deshabilitado}
@@ -571,7 +572,7 @@ function CeldaCatalogo({
           {o.label}
         </option>
       ))}
-    </select>
+    </Desplegable>
   );
 }
 

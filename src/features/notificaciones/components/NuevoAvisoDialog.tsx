@@ -25,6 +25,7 @@ import {
   type OpcionesSegmento,
 } from "@/features/notificaciones/actions/aviso-manual-actions";
 import type { Segmento } from "@/features/notificaciones/types";
+import { Desplegable } from "@/components/ui/desplegable";
 
 type TipoDest = "empresa" | "departamento" | "rol" | "area" | "empleados";
 
@@ -175,7 +176,7 @@ export function NuevoAvisoDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="aviso-tipo">Enviar a</Label>
-              <select
+              <Desplegable
                 id="aviso-tipo"
                 className={SELECT_CLASS}
                 value={tipoDest}
@@ -186,14 +187,14 @@ export function NuevoAvisoDialog({
                 <option value="rol">Un rol</option>
                 <option value="area">Un área</option>
                 <option value="empleados">Empleados concretos</option>
-              </select>
+              </Desplegable>
             </div>
 
             <div className="space-y-1.5">
               {tipoDest === "departamento" && (
                 <>
                   <Label htmlFor="aviso-depto">Departamento</Label>
-                  <select
+                  <Desplegable
                     id="aviso-depto"
                     className={SELECT_CLASS}
                     value={departamentoId}
@@ -205,13 +206,13 @@ export function NuevoAvisoDialog({
                         {d.nombre}
                       </option>
                     ))}
-                  </select>
+                  </Desplegable>
                 </>
               )}
               {tipoDest === "rol" && (
                 <>
                   <Label htmlFor="aviso-rol">Rol</Label>
-                  <select
+                  <Desplegable
                     id="aviso-rol"
                     className={SELECT_CLASS}
                     value={rolLabel}
@@ -223,13 +224,13 @@ export function NuevoAvisoDialog({
                         {r}
                       </option>
                     ))}
-                  </select>
+                  </Desplegable>
                 </>
               )}
               {tipoDest === "area" && (
                 <>
                   <Label htmlFor="aviso-area">Área</Label>
-                  <select
+                  <Desplegable
                     id="aviso-area"
                     className={SELECT_CLASS}
                     value={area}
@@ -237,7 +238,7 @@ export function NuevoAvisoDialog({
                   >
                     <option value="OPERATIVA">Operativa</option>
                     <option value="ADMINISTRATIVA">Administrativa</option>
-                  </select>
+                  </Desplegable>
                 </>
               )}
             </div>

@@ -22,6 +22,7 @@
 
 import { cn } from "@/lib/utils";
 import type { Mesa } from "@/features/sala/data/reservas";
+import { Desplegable } from "@/components/ui/desplegable";
 
 /** Capacidad real del catálogo para una mesa. */
 export interface AforoMesa {
@@ -77,7 +78,7 @@ export function SelectorMesaConAvisos({
 }: SelectorMesaConAvisosProps) {
   return (
     <div className="space-y-1">
-      <select
+      <Desplegable
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
@@ -104,7 +105,7 @@ export function SelectorMesaConAvisos({
             </option>
           );
         })}
-      </select>
+      </Desplegable>
     </div>
   );
 }

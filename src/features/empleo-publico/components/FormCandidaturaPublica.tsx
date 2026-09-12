@@ -16,6 +16,7 @@ import {
   type CamposFormularioConfig,
 } from "@/features/rrhh/data/campos-candidatura";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   empresaSlug: string;
@@ -473,7 +474,7 @@ export function FormCandidaturaPublica({
           {visible("genero") && (
             <div className="space-y-1.5">
               <Label htmlFor="genero">Género{requerido("genero") && " *"}</Label>
-              <select
+              <Desplegable
                 id="genero"
                 required={requerido("genero")}
                 value={form.genero}
@@ -483,13 +484,13 @@ export function FormCandidaturaPublica({
                 <option value="">Selecciona…</option>
                 <option value="masculino">Masculino</option>
                 <option value="femenino">Femenino</option>
-              </select>
+              </Desplegable>
             </div>
           )}
           {visible("disponibilidad") && (
             <div className="space-y-1.5">
               <Label htmlFor="disponibilidad">¿Desde cuándo puedes empezar?{requerido("disponibilidad") && " *"}</Label>
-              <select
+              <Desplegable
                 id="disponibilidad"
                 required={requerido("disponibilidad")}
                 value={form.disponibilidad}
@@ -500,7 +501,7 @@ export function FormCandidaturaPublica({
                 {DISPONIBILIDAD_OPCIONES.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
           )}
         </div>
@@ -509,7 +510,7 @@ export function FormCandidaturaPublica({
       {visible("experiencia_previa") && (
         <div className="space-y-1.5">
           <Label htmlFor="experiencia_previa">Experiencia previa{requerido("experiencia_previa") && " *"}</Label>
-          <select
+          <Desplegable
             id="experiencia_previa"
             required={requerido("experiencia_previa")}
             value={form.experiencia_previa}
@@ -520,7 +521,7 @@ export function FormCandidaturaPublica({
             {EXPERIENCIA_OPCIONES.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
-          </select>
+          </Desplegable>
         </div>
       )}
 
@@ -534,7 +535,7 @@ export function FormCandidaturaPublica({
       {pedirOrigen && (
         <div className="space-y-1.5">
           <Label htmlFor="como_nos_conocio">¿Por dónde nos has conocido?{cfg.como_nos_conocio.obligatorio && " *"}</Label>
-          <select
+          <Desplegable
             id="como_nos_conocio"
             required={cfg.como_nos_conocio.obligatorio}
             value={form.como_nos_conocio}
@@ -545,7 +546,7 @@ export function FormCandidaturaPublica({
             {origenes.map((o) => (
               <option key={o} value={o}>{o}</option>
             ))}
-          </select>
+          </Desplegable>
         </div>
       )}
 

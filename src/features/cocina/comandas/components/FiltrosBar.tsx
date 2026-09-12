@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/shared/components/ui/button";
 import { listPartidas } from "@/features/cocina/actions/partidas-actions";
 import type { FiltroDestino, FiltrosComandas } from "../types";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Partida {
   id: string;
@@ -62,7 +63,7 @@ export function FiltrosBar({ value, onChange }: Props) {
           <div className="h-5 w-px bg-border" />
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             Partida
-            <select
+            <Desplegable
               value={value.partidaId ?? ""}
               onChange={(e) =>
                 onChange({ ...value, partidaId: e.target.value || null })
@@ -75,7 +76,7 @@ export function FiltrosBar({ value, onChange }: Props) {
                   {p.nombre}
                 </option>
               ))}
-            </select>
+            </Desplegable>
           </label>
         </>
       )}

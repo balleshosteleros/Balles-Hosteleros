@@ -51,6 +51,7 @@ import { SalaPlanoEditor } from "./SalaPlanoEditor";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { loadEstructuraContext } from "@/features/sala/actions/estructura-context";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 export function EstructuraTab() {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
@@ -248,7 +249,7 @@ export function EstructuraTab() {
       {locales.length > 1 && (
         <div className="space-y-1.5 max-w-sm">
           <Label className="text-xs">Local</Label>
-          <select
+          <Desplegable
             value={localId}
             onChange={(e) => cargarTodo(e.target.value)}
             className="h-9 text-sm w-full rounded-md border border-input bg-background px-2"
@@ -256,7 +257,7 @@ export function EstructuraTab() {
             {locales.map((l) => (
               <option key={l.id} value={l.id}>{l.nombre}</option>
             ))}
-          </select>
+          </Desplegable>
         </div>
       )}
 
@@ -662,7 +663,7 @@ function SalaModal({
             ) : (
               <div className="space-y-1.5">
                 <Label className="text-xs">Plano</Label>
-                <select
+                <Desplegable
                   value={planoId}
                   onChange={(e) => setPlanoId(e.target.value)}
                   className="h-9 text-sm w-full rounded-md border border-input bg-background px-2"
@@ -672,7 +673,7 @@ function SalaModal({
                       {p.nombre}{p.esPrincipal ? " (Principal)" : ""}
                     </option>
                   ))}
-                </select>
+                </Desplegable>
               </div>
             )
           )}

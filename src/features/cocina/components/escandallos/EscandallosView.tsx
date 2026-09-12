@@ -58,6 +58,7 @@ import { formatNumero, parseDecimal } from "@/shared/lib/numero";
 import { MargenesAnalisis } from "@/features/cocina/components/escandallos/MargenesAnalisis";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 // ─── Estado colors ─────────────────────────────────────────────
 const ESTADO_COLORS: Record<EstadoEscandallo, string> = {
@@ -818,7 +819,7 @@ function EscandalloDetalle({
                 <Label className="text-xs flex items-center gap-1.5">
                   <LinkIcon className="h-3 w-3" /> Producto asociado
                 </Label>
-                <select
+                <Desplegable
                   className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   value={form.productoId ?? ""}
                   onChange={(e) => update({ productoId: e.target.value || undefined })}
@@ -835,7 +836,7 @@ function EscandalloDetalle({
                         {p.tipo === "elaboracion" ? "[ELAB] " : ""}{p.nombre}
                       </option>
                     ))}
-                </select>
+                </Desplegable>
                 <p className="text-[10px] text-muted-foreground">
                   Al guardar, la receta se copia a este producto (queda en solo lectura en Productos).
                 </p>
@@ -875,7 +876,7 @@ function EscandalloDetalle({
                           ) : ing.tipo === "compra" ? (
                             <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-200 shrink-0">PRODUCTO</Badge>
                           ) : null}
-                          <select
+                          <Desplegable
                             className="h-8 flex-1 min-w-0 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             value={ing.productoId ?? ""}
                             onChange={(e) => handleIngredienteProducto(ing.id, e.target.value)}
@@ -893,7 +894,7 @@ function EscandalloDetalle({
                                   {p.medida ? ` · ${p.medida}` : ""}{p.formato ? ` · ${p.formato}` : ""}
                                 </option>
                               ))}
-                          </select>
+                          </Desplegable>
                           <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => removeIngrediente(ing.id)}>
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </Button>

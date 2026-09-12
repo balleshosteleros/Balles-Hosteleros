@@ -38,6 +38,7 @@ import {
   deletePlantilla,
 } from "@/features/calidad/cuestionarios/actions";
 import type { PlantillaCuestionario } from "@/features/calidad/cuestionarios/types";
+import { Desplegable } from "@/components/ui/desplegable";
 
 const columnasDef: ToolbarColumna[] = [
   { campo: "nombre", label: "Nombre", bloqueada: true },
@@ -341,7 +342,7 @@ function PlantillaDialog({ open, onOpenChange, plantilla, onGuardada }: Plantill
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Categoría</Label>
-              <select
+              <Desplegable
                 value={categoria}
                 onChange={(e) => setCategoria(e.target.value as CategoriaCuestionario)}
                 className="w-full h-9 px-3 rounded-md border bg-background text-sm"
@@ -353,7 +354,7 @@ function PlantillaDialog({ open, onOpenChange, plantilla, onGuardada }: Plantill
                     </option>
                   ),
                 )}
-              </select>
+              </Desplegable>
             </div>
 
             <div className="space-y-2">

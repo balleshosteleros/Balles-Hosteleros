@@ -73,6 +73,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface TurnoDraft {
   nombre: string;
@@ -697,7 +698,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
 
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-              <select
+              <Desplegable
                 value={draft.departamento}
                 onChange={(e) => {
                   const departamento = e.target.value;
@@ -724,7 +725,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                     {dep}
                   </option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
             <p className="pl-6 text-xs text-muted-foreground">
               El color del turno lo define su departamento (se edita en

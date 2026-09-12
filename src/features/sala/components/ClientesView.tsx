@@ -93,6 +93,7 @@ import { clientesIO } from "@/features/sala/io/clientes.io";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { formatearFechaEs } from "@/shared/lib/fecha";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 /** Filas por hoja en la tabla de clientes. */
 const POR_PAGINA = 50;
@@ -1226,7 +1227,7 @@ export function ClientesView() {
                             (x) => x.prefijo === separarPrefijo(borrador.telefono).prefijo,
                           )?.label ?? ""
                         }>
-                        <select
+                        <Desplegable
                           value={separarPrefijo(borrador.telefono).prefijo}
                           onChange={(e) =>
                             setBorrador({
@@ -1244,7 +1245,7 @@ export function ClientesView() {
                               {x.flag} {x.prefijo}
                             </option>
                           ))}
-                        </select>
+                        </Desplegable>
                       </ToolTooltip>
                       <Input
                         id="cli-telefono"
@@ -1295,7 +1296,7 @@ export function ClientesView() {
                   */}
                   <div className="space-y-1.5">
                     <Label htmlFor="cli-origen">Origen</Label>
-                    <select
+                    <Desplegable
                       id="cli-origen"
                       value={borrador.origen ?? ""}
                       onChange={(e) =>
@@ -1309,7 +1310,7 @@ export function ClientesView() {
                           {labelOrigen(clave)}
                         </option>
                       ))}
-                    </select>
+                    </Desplegable>
                   </div>
                 </div>
 

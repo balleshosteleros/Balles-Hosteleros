@@ -10,6 +10,7 @@ import {
 } from "@/features/soporte/actions/huecos-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import type { HuecoConocimiento } from "@/features/soporte/types";
+import { Desplegable } from "@/components/ui/desplegable";
 
 /**
  * Lo que la gente pregunta y el asistente no sabe contestar.
@@ -149,7 +150,7 @@ export function HuecosPanel({ huecos }: HuecosPanelProps) {
                     <label className="block text-xs font-medium text-muted-foreground">
                       Módulo (quién podrá verlo)
                     </label>
-                    <select
+                    <Desplegable
                       value={form.modulo}
                       onChange={(e) => setForm({ ...form, modulo: e.target.value })}
                       className="mt-1 block w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -159,7 +160,7 @@ export function HuecosPanel({ huecos }: HuecosPanelProps) {
                           {m === "GENERAL" ? "General (lo ve todo el mundo)" : m}
                         </option>
                       ))}
-                    </select>
+                    </Desplegable>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground">

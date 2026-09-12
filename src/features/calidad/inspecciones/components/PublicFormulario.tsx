@@ -25,6 +25,7 @@ import type {
 } from "../types";
 import { QrViewerDialog } from "./QrViewerDialog";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 // Limpia sufijos del nombre de la plantilla (" — versión 2", " — V3",
 // " — 2023"...) para mostrar el título de forma neutra. El badge V# va aparte.
@@ -305,7 +306,7 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
                   </div>
                 ) : (
                   <>
-                    <select
+                    <Desplegable
                       value={inspectorId ?? ""}
                       onChange={(e) => setInspectorId(e.target.value || null)}
                       className="w-full rounded-md border bg-background px-3 py-2 text-sm"
@@ -316,7 +317,7 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
                           {i.nombre_completo}
                         </option>
                       ))}
-                    </select>
+                    </Desplegable>
                     {inspectorSeleccionado && (
                       <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm space-y-1">
                         <div>
@@ -506,7 +507,7 @@ function PreguntaInput({
       }
       return (
         <div className="space-y-2">
-          <select
+          <Desplegable
             value={seleccionado?.empleado_id ?? ""}
             onChange={(e) => {
               const id = e.target.value;
@@ -535,7 +536,7 @@ function PreguntaInput({
                 {e.nombre_completo}
               </option>
             ))}
-          </select>
+          </Desplegable>
           {seleccionado && (
             <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm space-y-1">
               <div>

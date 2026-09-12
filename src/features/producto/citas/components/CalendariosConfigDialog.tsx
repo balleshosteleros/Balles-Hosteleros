@@ -38,6 +38,7 @@ import {
   guardarDisponibilidad,
 } from "../actions/citas-actions";
 import type { CitaCalendario, EmpleadoDeCalendario } from "../types";
+import { Desplegable } from "@/components/ui/desplegable";
 
 const DIAS = [
   { n: 1, nombre: "Lunes" },
@@ -305,7 +306,7 @@ export function CalendariosConfigDialog({ open, onOpenChange, onGuardado }: Prop
                 <div className="space-y-2">
                   {franjas.map((f, i) => (
                     <div key={i} className="flex flex-wrap items-center gap-2">
-                      <select
+                      <Desplegable
                         className="h-9 rounded-md border bg-background px-2 text-sm"
                         value={f.dia_semana}
                         onChange={(e) => {
@@ -319,7 +320,7 @@ export function CalendariosConfigDialog({ open, onOpenChange, onGuardado }: Prop
                             {d.nombre}
                           </option>
                         ))}
-                      </select>
+                      </Desplegable>
                       <Input
                         type="time"
                         className="w-28"

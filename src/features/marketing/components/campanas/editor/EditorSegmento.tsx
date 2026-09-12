@@ -15,6 +15,7 @@ import type {
   TipoSegmentoCondicion,
 } from "@/features/marketing/data/campanas";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   segmento: SegmentoJson;
@@ -227,7 +228,7 @@ export function EditorSegmento({ segmento, onChange, coincidencias }: Props) {
 
       {/* Añadir */}
       <div className="flex flex-wrap items-center gap-2">
-        <select
+        <Desplegable
           value={tipoNuevo}
           onChange={(e) => setTipoNuevo(e.target.value as TipoSegmentoCondicion)}
           className="h-8 rounded-md border bg-background px-2 text-xs"
@@ -241,7 +242,7 @@ export function EditorSegmento({ segmento, onChange, coincidencias }: Props) {
               ))}
             </optgroup>
           ))}
-        </select>
+        </Desplegable>
         <Button type="button" variant="outline" size="sm" onClick={addCondicion}>
           <Plus className="mr-1 h-3.5 w-3.5" />
           Añadir filtro

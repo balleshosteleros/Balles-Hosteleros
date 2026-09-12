@@ -19,6 +19,7 @@ import type {
 } from "@/features/calidad/cuestionarios/types";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   campanaId?: string;
@@ -81,7 +82,7 @@ export function PuntosTimelineDialog({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Estado</Label>
-            <select
+            <Desplegable
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value as EstadoPunto | "todos")}
               className="w-full h-9 px-3 rounded-md border bg-background text-sm"
@@ -90,7 +91,7 @@ export function PuntosTimelineDialog({
               <option value="pendiente">Pendiente</option>
               <option value="en_curso">En curso</option>
               <option value="cerrado">Cerrado</option>
-            </select>
+            </Desplegable>
           </div>
         </div>
 

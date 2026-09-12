@@ -30,6 +30,7 @@ import type {
   ImportadorEntityConfig,
 } from "@/features/logistica/types/importador-catalogo-ia";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface ImportadorIACatalogoDialogProps {
   open: boolean;
@@ -429,7 +430,7 @@ function Celda({
         : bordeConfianza;
 
     return (
-      <select
+      <Desplegable
         value={valido ? valor : ""}
         onChange={(e) => onChange(e.target.value)}
         disabled={deshabilitado}
@@ -447,7 +448,7 @@ function Celda({
             {o.label}
           </option>
         ))}
-      </select>
+      </Desplegable>
     );
   }
 

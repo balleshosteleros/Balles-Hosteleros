@@ -53,6 +53,7 @@ import {
 import { SelectorTZ } from "./SelectorTZ";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 type GoogleCalendar = {
   id: string;
@@ -1469,7 +1470,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                 {calendarios.length > 0 && (
                   <div>
                     <Label className="text-[11px]">Calendario</Label>
-                    <select
+                    <Desplegable
                       value={form.calendarId}
                       onChange={(e) => setForm({ ...form, calendarId: e.target.value })}
                       className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
@@ -1481,7 +1482,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                             {c.nombre}
                           </option>
                         ))}
-                    </select>
+                    </Desplegable>
                   </div>
                 )}
 

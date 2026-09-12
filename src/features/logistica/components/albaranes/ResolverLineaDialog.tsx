@@ -39,6 +39,7 @@ import {
   type LineaEmparejada,
   type SugerenciaCandidato,
 } from "@/features/logistica/actions/asistente-albaran-actions";
+import { Desplegable } from "@/components/ui/desplegable";
 
 export type ResolucionLinea =
   | { tipo: "vincular"; productoId: string; nombreProducto: string }
@@ -329,7 +330,7 @@ export function ResolverLineaDialog({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-muted-foreground block mb-1">Categoría *</Label>
-                <select
+                <Desplegable
                   className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                   value={categoria}
                   onChange={(e) => setCategoria(e.target.value)}
@@ -338,11 +339,11 @@ export function ResolverLineaDialog({
                   {categorias.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
-                </select>
+                </Desplegable>
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground block mb-1">IVA *</Label>
-                <select
+                <Desplegable
                   className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                   value={iva}
                   onChange={(e) => setIva(e.target.value)}
@@ -350,7 +351,7 @@ export function ResolverLineaDialog({
                   {IVA_OPCIONES.map((op) => (
                     <option key={op} value={op}>{op}</option>
                   ))}
-                </select>
+                </Desplegable>
               </div>
             </div>
             <div>

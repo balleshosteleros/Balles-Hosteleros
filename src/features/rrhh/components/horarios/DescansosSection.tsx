@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { Desplegable } from "@/components/ui/desplegable";
 
 const DIAS: DiaSemana[] = ["L", "M", "X", "J", "V", "S", "D"];
 
@@ -460,7 +461,7 @@ function DescansoEditDialog({
                 <label className="text-xs font-medium text-muted-foreground">
                   Icono
                 </label>
-                <select
+                <Desplegable
                   value={descanso.icono}
                   onChange={(e) => update({ icono: e.target.value })}
                   className="h-10 w-16 rounded-md border bg-background px-2 text-base"
@@ -470,7 +471,7 @@ function DescansoEditDialog({
                       {i}
                     </option>
                   ))}
-                </select>
+                </Desplegable>
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">

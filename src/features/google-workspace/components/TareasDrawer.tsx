@@ -48,6 +48,7 @@ import {
   type TareasValidacion,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 type InfoTarea = {
   id: string;
@@ -701,7 +702,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                   placeholder="Añadir tarea de hoy…"
                   className="h-8 text-sm flex-1"
                 />
-                <select
+                <Desplegable
                   value={newPrio}
                   onChange={(e) => setNewPrio(e.target.value as Tarea["prioridad"])}
                   className="h-8 text-xs rounded-md border bg-background px-2 text-foreground"
@@ -709,7 +710,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
                   <option value="alta">Alta</option>
                   <option value="media">Media</option>
                   <option value="baja">Baja</option>
-                </select>
+                </Desplegable>
                 <Button
                   size="sm"
                   className="h-8 w-8 p-0 bg-violet-600 hover:bg-violet-700"

@@ -22,6 +22,7 @@ import {
   type EtiquetaCategoria,
 } from "@/features/sala/actions/sala-etiquetas-actions";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   /** `null` = tarjeta de las etiquetas que se quedaron sin grupo. */
@@ -213,7 +214,7 @@ function EtiquetaItem({
           </div>
           <div className="space-y-1">
             <span className="text-[10px] text-muted-foreground">Grupo</span>
-            <select
+            <Desplegable
               value={categoriaId}
               onChange={(e) => setCategoriaId(e.target.value)}
               className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
@@ -224,7 +225,7 @@ function EtiquetaItem({
                   {c.nombre}
                 </option>
               ))}
-            </select>
+            </Desplegable>
           </div>
           <div className="flex items-center justify-between pt-1">
             <div className="flex items-center gap-2 text-xs">

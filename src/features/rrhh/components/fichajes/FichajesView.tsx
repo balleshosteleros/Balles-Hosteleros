@@ -48,6 +48,7 @@ import { IOActions } from "@/shared/io";
 import { fichajesIO } from "@/features/rrhh/io/fichajes.io";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
   const localRaw = row.locales as
@@ -631,7 +632,7 @@ export function FichajesView() {
           <div className="space-y-4 text-sm">
             <div className="space-y-1">
               <Label className="text-xs">Empleado</Label>
-              <select
+              <Desplegable
                 className="w-full border rounded-md h-9 px-2 bg-background"
                 value={manualForm.empleadoId}
                 onChange={(e) => setManualForm((f) => ({ ...f, empleadoId: e.target.value }))}
@@ -645,7 +646,7 @@ export function FichajesView() {
                     </option>
                   );
                 })}
-              </select>
+              </Desplegable>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

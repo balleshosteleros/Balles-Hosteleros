@@ -10,6 +10,7 @@ import { getFichajePolicy, saveFichajePolicy } from "@/features/rrhh/actions/fic
 import { cerrarFichajesAbiertos } from "@/features/rrhh/actions/fichajes-actions";
 import { FICHAJE_POLICY_DEFAULT, type FichajePolicy } from "@/features/rrhh/data/fichaje-policy";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { Desplegable } from "@/components/ui/desplegable";
 
 const MINUTOS_OPCIONES = [5, 10, 15, 20, 25, 30];
 // La CORTESÍA (el margen que se redondea a la hora del turno) no pasa de 15
@@ -119,7 +120,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
               <>
                 <div className="flex items-center justify-between pl-1">
                   <Label className="text-sm">Hasta cuántos minutos antes</Label>
-                  <select
+                  <Desplegable
                     className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                     value={policy.margenAntesMin}
                     onChange={(e) => setPolicy((p) => ({ ...p, margenAntesMin: Number(e.target.value) }))}
@@ -127,7 +128,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                     {CORTESIA_OPCIONES.map((m) => (
                       <option key={m} value={m}>{m} min</option>
                     ))}
-                  </select>
+                  </Desplegable>
                 </div>
                 <div className="flex items-center justify-between pl-1">
                   <Label className="text-sm">Redondear a la hora exacta del turno</Label>
@@ -159,7 +160,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
               <>
                 <div className="flex items-center justify-between pl-1">
                   <Label className="text-sm">Hasta cuántos minutos después</Label>
-                  <select
+                  <Desplegable
                     className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                     value={policy.margenDespuesMin}
                     onChange={(e) => setPolicy((p) => ({ ...p, margenDespuesMin: Number(e.target.value) }))}
@@ -167,7 +168,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                     {CORTESIA_OPCIONES.map((m) => (
                       <option key={m} value={m}>{m} min</option>
                     ))}
-                  </select>
+                  </Desplegable>
                 </div>
                 <div className="flex items-center justify-between pl-1">
                   <Label className="text-sm">Redondear a la hora exacta del turno</Label>
@@ -195,7 +196,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
             </div>
             <div className="flex items-center justify-between pl-1">
               <Label className="text-sm">Minutos desde la entrada</Label>
-              <select
+              <Desplegable
                 className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                 value={policy.minMinutosParaCerrar}
                 onChange={(e) =>
@@ -205,7 +206,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                 {MIN_CIERRE_OPCIONES.map((m) => (
                   <option key={m} value={m}>{m} min</option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
           </div>
 
@@ -221,7 +222,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
             <>
                 <div className="flex items-center justify-between pl-1">
                   <Label className="text-sm">Salta hasta X min antes de su hora</Label>
-                  <select
+                  <Desplegable
                     className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                     value={policy.popupMargenAntesMin}
                     onChange={(e) =>
@@ -231,11 +232,11 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                     {MINUTOS_OPCIONES.map((m) => (
                       <option key={m} value={m}>{m} min</option>
                     ))}
-                  </select>
+                  </Desplegable>
                 </div>
                 <div className="flex items-center justify-between pl-1">
                   <Label className="text-sm">Sigue saltando hasta X min después</Label>
-                  <select
+                  <Desplegable
                     className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                     value={policy.popupMargenDespuesMin}
                     onChange={(e) =>
@@ -245,7 +246,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                     {MINUTOS_OPCIONES.map((m) => (
                       <option key={m} value={m}>{m} min</option>
                     ))}
-                  </select>
+                  </Desplegable>
                 </div>
 
                 <div className="flex items-center justify-between gap-4 pl-1">
@@ -263,7 +264,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                 {policy.reavisoActivo && (
                   <div className="flex items-center justify-between pl-1">
                     <Label className="text-sm">Cada cuánto reavisar</Label>
-                    <select
+                    <Desplegable
                       className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                       value={policy.reavisoIntervaloMin}
                       onChange={(e) =>
@@ -273,7 +274,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                       {REAVISO_OPCIONES.map((m) => (
                         <option key={m} value={m}>{m} min</option>
                       ))}
-                    </select>
+                    </Desplegable>
                   </div>
                 )}
             </>
@@ -332,7 +333,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
               <div className="space-y-1 pl-1">
                 <div className="flex items-center justify-between gap-4">
                   <Label className="text-sm">Margen tras la hora de salida</Label>
-                  <select
+                  <Desplegable
                     className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                     value={policy.autoSalidaMargenMin}
                     onChange={(e) =>
@@ -342,7 +343,7 @@ export function FichajesConfigPanel({ embedded = false }: { embedded?: boolean }
                     {MINUTOS_OPCIONES.map((m) => (
                       <option key={m} value={m}>{m} min</option>
                     ))}
-                  </select>
+                  </Desplegable>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Tiempo de cortesía que el sistema espera tras la hora prevista antes de cerrar, por

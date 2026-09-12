@@ -25,6 +25,7 @@ import { enviarEmailAction } from "@/features/marketing/actions/campanas-actions
 import { previewSegmentoAction } from "@/features/marketing/actions/segmento-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   open: boolean;
@@ -300,7 +301,7 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
           <div>
             <Label className="flex items-center gap-1"><Link2 className="h-3.5 w-3.5" /> Link de reserva *</Label>
             <div className="flex gap-2 mt-1">
-              <select
+              <Desplegable
                 className="flex-1 h-9 rounded border bg-background px-2 text-sm"
                 value={draft.reservaLinkId ?? ""}
                 onChange={(e) => updateDraft({ reservaLinkId: e.target.value || null })}
@@ -309,7 +310,7 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
                 {links.filter((l) => l.activo).map((l) => (
                   <option key={l.id} value={l.id}>{l.palabraClave}</option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
             {linkActivo && (
               <p className="text-xs text-muted-foreground mt-1 break-all">{linkActivo.urlGenerada}</p>

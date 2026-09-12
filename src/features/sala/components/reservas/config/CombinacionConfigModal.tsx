@@ -26,6 +26,7 @@ import {
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { SelectorMesasPlano } from "./SelectorMesasPlano";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   open: boolean;
@@ -292,7 +293,7 @@ export function CombinacionConfigModal({
           {/* Zona */}
           <div className="space-y-1.5">
             <Label className="text-xs">Zona (opcional)</Label>
-            <select
+            <Desplegable
               value={zonaId}
               onChange={(e) => setZonaId(e.target.value)}
               className="h-9 text-sm w-full rounded-md border border-input bg-background px-2"
@@ -303,13 +304,13 @@ export function CombinacionConfigModal({
                   {z.nombre}
                 </option>
               ))}
-            </select>
+            </Desplegable>
           </div>
 
           {/* Tipo */}
           <div className="space-y-1.5">
             <Label className="text-xs">Tipo de mesa (opcional)</Label>
-            <select
+            <Desplegable
               value={tipo}
               onChange={(e) => setTipo(e.target.value as TipoMesa | "")}
               className="h-9 text-sm w-full rounded-md border border-input bg-background px-2"
@@ -320,7 +321,7 @@ export function CombinacionConfigModal({
                   {TIPO_MESA_LABELS[t]}
                 </option>
               ))}
-            </select>
+            </Desplegable>
           </div>
 
           {/* Color de marca */}

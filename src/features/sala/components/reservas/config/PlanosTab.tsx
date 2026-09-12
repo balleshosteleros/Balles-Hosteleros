@@ -38,6 +38,7 @@ import { TurnoToggle } from "@/features/sala/reglas/components/TurnoToggle";
 import { VigenciaSelector } from "@/features/sala/reglas/components/VigenciaSelector";
 import { VigenciaBadge } from "@/features/sala/reglas/components/VigenciaBadge";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { Desplegable } from "@/components/ui/desplegable";
 
 /** Deriva el turno (COMIDA/CENA/AMBOS) a partir de los flags del plano. */
 function planoToTurno(p: Plano): TurnoRegla {
@@ -165,7 +166,7 @@ export function PlanosTab({
       {!embedded && locales.length > 1 && (
         <div className="space-y-1.5 max-w-sm">
           <Label className="text-xs">Local</Label>
-          <select
+          <Desplegable
             value={localId}
             onChange={(e) => setLocalIdInterno(e.target.value)}
             className="h-9 text-sm w-full rounded-md border border-input bg-background px-2"
@@ -173,7 +174,7 @@ export function PlanosTab({
             {locales.map((l) => (
               <option key={l.id} value={l.id}>{l.nombre}</option>
             ))}
-          </select>
+          </Desplegable>
         </div>
       )}
 

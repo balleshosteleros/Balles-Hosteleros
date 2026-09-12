@@ -12,6 +12,7 @@ import {
 } from "@/features/soporte/actions/faq-actions";
 import { MODULOS_SOPORTE } from "@/lib/soporte/modulos";
 import type { Faq, FaqInput } from "@/features/soporte/types";
+import { Desplegable } from "@/components/ui/desplegable";
 
 /**
  * Las preguntas frecuentes, vistas desde Dirección.
@@ -125,7 +126,7 @@ export function FaqAdminPanel({ initialFaqs }: FaqAdminPanelProps) {
               <label className="block text-xs font-medium text-muted-foreground">
                 Módulo (quién la verá)
               </label>
-              <select
+              <Desplegable
                 value={form.modulo}
                 onChange={(e) => setForm({ ...form, modulo: e.target.value })}
                 className="mt-1 block w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -135,7 +136,7 @@ export function FaqAdminPanel({ initialFaqs }: FaqAdminPanelProps) {
                     {m === "GENERAL" ? "General (la ve todo el mundo)" : m}
                   </option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
 
             <div>

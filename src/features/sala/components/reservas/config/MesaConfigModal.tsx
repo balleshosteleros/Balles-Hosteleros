@@ -19,6 +19,7 @@ import {
 } from "@/features/sala/planos/data/planos";
 import { createMesa, updateMesa, deleteMesa } from "@/features/sala/planos/actions/mesas-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   open: boolean;
@@ -166,7 +167,7 @@ export function MesaConfigModal({
 
           <div className="space-y-1.5">
             <Label className="text-xs">Zona</Label>
-            <select
+            <Desplegable
               value={zonaId}
               onChange={(e) => setZonaId(e.target.value)}
               className="h-9 text-sm w-full rounded-md border border-input bg-background px-2"
@@ -177,12 +178,12 @@ export function MesaConfigModal({
                   {z.nombre}
                 </option>
               ))}
-            </select>
+            </Desplegable>
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-xs">Tipo de mesa</Label>
-            <select
+            <Desplegable
               value={tipo}
               onChange={(e) => setTipo(e.target.value as TipoMesa)}
               className="h-9 text-sm w-full rounded-md border border-input bg-background px-2"
@@ -192,7 +193,7 @@ export function MesaConfigModal({
                   {TIPO_MESA_LABELS[t]}
                 </option>
               ))}
-            </select>
+            </Desplegable>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t">

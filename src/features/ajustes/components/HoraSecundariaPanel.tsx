@@ -12,6 +12,7 @@ import {
   labelTZLocal,
   nombreZona,
 } from "@/features/google-workspace/lib/timezones";
+import { Desplegable } from "@/components/ui/desplegable";
 
 // Panel personal (por usuario): activa una segunda columna de horas en el
 // Calendario y en Meet, con el huso que cada uno elija. La preferencia es
@@ -70,7 +71,7 @@ export function HoraSecundariaPanel() {
           >
             Zona horaria secundaria
           </Label>
-          <select
+          <Desplegable
             id="hora-secundaria-zona"
             value={tz ?? ""}
             onChange={(e) => cambiar(e.target.value)}
@@ -81,7 +82,7 @@ export function HoraSecundariaPanel() {
                 {o.label}
               </option>
             ))}
-          </select>
+          </Desplegable>
           <p className="text-[11px] text-muted-foreground">
             Verás dos columnas: {labelTZLocal()} (tu hora) y{" "}
             {nombreZona(tz ?? TZ_SECUNDARIA_DEFECTO)}.

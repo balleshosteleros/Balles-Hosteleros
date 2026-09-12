@@ -16,6 +16,7 @@ import {
   type NominasGestoriaConfig,
 } from "@/features/rrhh/actions/nominas-gestoria-config-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { Desplegable } from "@/components/ui/desplegable";
 
 // Ajustes del envío automático de nóminas a la gestoría (general de empresa).
 // La gestoría recibe un correo el día configurado con un enlace para subir las
@@ -242,7 +243,7 @@ export function NominasGestoriaConfigPanel() {
             <label htmlFor="mes-envio" className="text-xs text-muted-foreground">
               Reclamar el mes
             </label>
-            <select
+            <Desplegable
               id="mes-envio"
               value={mesEnvio}
               onChange={(e) => setMesEnvio(e.target.value)}
@@ -251,7 +252,7 @@ export function NominasGestoriaConfigPanel() {
               {MESES_ELEGIBLES.map((p) => (
                 <option key={p} value={p}>{etiquetaMes(p)}</option>
               ))}
-            </select>
+            </Desplegable>
           </div>
         )}
         {cfg.activo && (

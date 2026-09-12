@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface LocalOpt {
   id: string;
@@ -364,7 +365,7 @@ export function CuadrantesSection({ empresaId }: { empresaId: string }) {
                 <MapPin className="h-4 w-4 text-muted-foreground" />
                 Local
               </label>
-              <select
+              <Desplegable
                 value={draft.localId ?? ""}
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, localId: e.target.value || null }))
@@ -377,7 +378,7 @@ export function CuadrantesSection({ empresaId }: { empresaId: string }) {
                     {l.nombre}
                   </option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
 
             <div className="space-y-2">

@@ -19,6 +19,7 @@ import { getEmpleadosActivos } from "@/features/rrhh/actions/empleados-actions";
 import { registrarAusenciaEmpleado } from "@/features/rrhh/actions/calendario-ausencias-actions";
 import { SUBTIPO_LABEL } from "@/features/mi-panel/types";
 import type { SolicitudSubtipoAusencia } from "@/features/mi-panel/types";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   /** Tipo a registrar; null cierra el diálogo. */
@@ -129,7 +130,7 @@ export function RegistrarAusenciaDialog({ subtipo, onOpenChange, onRegistrada }:
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando…
               </p>
             ) : (
-              <select
+              <Desplegable
                 id="ra-empleado"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
@@ -139,7 +140,7 @@ export function RegistrarAusenciaDialog({ subtipo, onOpenChange, onRegistrada }:
                 {empleados.map((e) => (
                   <option key={e.userId} value={e.userId}>{e.nombre}</option>
                 ))}
-              </select>
+              </Desplegable>
             )}
           </div>
 

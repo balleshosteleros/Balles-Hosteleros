@@ -39,6 +39,7 @@ import { formatNumero } from "@/shared/lib/numero";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 // `fecha` es TIMESTAMPTZ (instante): se muestra en la zona de la empresa (PRP-069).
 function fmtFecha(iso: string, tz: string): string {
@@ -164,7 +165,7 @@ export function MovimientosStockSection({
           {!compacto && <CardTitle className="text-base">Movimientos de stock</CardTitle>}
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             Controlar stock
-            <select
+            <Desplegable
               value={controla === null ? "" : controla ? "si" : "no"}
               disabled={controla === null}
               onChange={(e) => setPendiente(e.target.value === "si")}
@@ -172,7 +173,7 @@ export function MovimientosStockSection({
             >
               <option value="si">Sí</option>
               <option value="no">No</option>
-            </select>
+            </Desplegable>
           </label>
         </div>
 

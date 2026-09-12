@@ -38,6 +38,7 @@ import {
 } from "@/features/rrhh/services/validar-puesto";
 import type { PuestoSalarial, NivelSalarial } from "@/features/rrhh/data/puestos";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   open: boolean;
@@ -422,7 +423,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ps-depto">Departamento</Label>
-              <select
+              <Desplegable
                 id="ps-depto"
                 value={departamentoId}
                 onChange={(e) => setDepartamentoId(e.target.value)}
@@ -432,7 +433,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
                 {departamentos.map((d) => (
                   <option key={d.id} value={d.id}>{d.nombre}</option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
           </div>
 
@@ -441,7 +442,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
               quien lo ocupe hereda este local al contratar. */}
           <div className="space-y-1.5">
             <Label htmlFor="ps-local">Local</Label>
-            <select
+            <Desplegable
               id="ps-local"
               value={localId}
               onChange={(e) => setLocalId(e.target.value)}
@@ -451,7 +452,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
               {locales.map((l) => (
                 <option key={l.id} value={l.id}>{l.nombre}</option>
               ))}
-            </select>
+            </Desplegable>
             <p className="text-[11px] text-muted-foreground">
               Centro de trabajo del puesto. Quien lo ocupe entra en este local.
             </p>
@@ -466,7 +467,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
 
             <div className="space-y-1.5">
               <Label htmlFor="ps-modo-pago">Cómo se paga</Label>
-              <select
+              <Desplegable
                 id="ps-modo-pago"
                 value={modoPago}
                 onChange={(e) => setCur({ modoPago: e.target.value as ModoPago })}
@@ -474,7 +475,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
               >
                 <option value="MENSUAL">{ETIQUETA_MODO_PAGO.MENSUAL}</option>
                 <option value="HORAS">{ETIQUETA_MODO_PAGO.HORAS}</option>
-              </select>
+              </Desplegable>
               <p className="text-[11px] text-muted-foreground">
                 {porHoras
                   ? "Cobra solo por las horas que trabaja: no tiene sueldo mensual ni vacaciones pagadas."
@@ -565,7 +566,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ps-vac">Vacaciones</Label>
-                <select
+                <Desplegable
                   id="ps-vac"
                   value={cur?.vacaciones ?? ""}
                   onChange={(e) => setCur({ vacaciones: e.target.value })}
@@ -574,14 +575,14 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
                   {opcionesVacaciones.map((v) => (
                     <option key={v} value={v}>{v}</option>
                   ))}
-                </select>
+                </Desplegable>
               </div>
             </div>
 
             {/* Horario del puesto: se hereda al empleado que se contrate. */}
             <div className="space-y-1.5">
               <Label htmlFor="ps-horario">Horario</Label>
-              <select
+              <Desplegable
                 id="ps-horario"
                 value={horarioFamiliaId}
                 onChange={(e) => setHorarioFamiliaId(e.target.value)}
@@ -591,7 +592,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
                 {patrones.map((p) => (
                   <option key={p.familiaId} value={p.familiaId}>{p.nombre}</option>
                 ))}
-              </select>
+              </Desplegable>
               {patronElegido && (
                 <div className="grid grid-cols-7 gap-0.5 pt-1">
                   {DIAS_SEMANA.map((d, i) => {
@@ -645,7 +646,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ps-crono">Cronograma de tareas</Label>
-              <select
+              <Desplegable
                 id="ps-crono"
                 value={cronogramaRol}
                 onChange={(e) => setCronogramaRol(e.target.value)}
@@ -659,7 +660,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
                     {c.rol}{c.departamento ? ` · ${c.departamento}` : ""} ({c.tareas})
                   </option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
           </div>
 
@@ -674,7 +675,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ps-val-depto">Valida este departamento</Label>
-              <select
+              <Desplegable
                 id="ps-val-depto"
                 value={validadorDepartamentoId}
                 onChange={(e) => setValidadorDepartamentoId(e.target.value)}
@@ -684,7 +685,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
                 {departamentos.map((d) => (
                   <option key={d.id} value={d.id}>{d.nombre}</option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
           </div>
 

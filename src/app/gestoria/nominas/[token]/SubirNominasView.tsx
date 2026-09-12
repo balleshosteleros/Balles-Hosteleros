@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { UploadCloud, CheckCircle2, AlertTriangle, Loader2, FileText, X } from "lucide-react";
 import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { Desplegable } from "@/components/ui/desplegable";
 
 /**
  * Pantalla que ve la GESTORÍA al abrir el enlace del correo.
@@ -283,7 +284,7 @@ function Bloque({
           >
             Mes
           </label>
-          <select
+          <Desplegable
             id={`mes-${tipo}`}
             value={mes}
             onChange={(e) => setMes(e.target.value)}
@@ -299,7 +300,7 @@ function Bloque({
                 </option>
               );
             })}
-          </select>
+          </Desplegable>
 
           <label
             htmlFor={`archivo-${tipo}`}

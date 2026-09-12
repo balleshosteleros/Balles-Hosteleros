@@ -9,6 +9,7 @@ import type {
   PlanTurno,
   PlanPatron,
 } from "@/features/rrhh/actions/planificacion-actions";
+import { Desplegable } from "@/components/ui/desplegable";
 
 export interface DragData {
   kind: "turno" | "patron";
@@ -91,7 +92,7 @@ export function PanelAsignacion({
 
       {departamentos.length > 0 && (
         <div className="border-b px-2 py-2">
-          <select
+          <Desplegable
             value={depto}
             onChange={(e) => setDepto(e.target.value)}
             className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
@@ -103,7 +104,7 @@ export function PanelAsignacion({
                 {d}
               </option>
             ))}
-          </select>
+          </Desplegable>
         </div>
       )}
 

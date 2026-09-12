@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pencil, Search, CalendarOff } from "lucide-react";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { Desplegable } from "@/components/ui/desplegable";
 
 type FormState = {
   nombre: string;
@@ -200,14 +201,14 @@ export function TiposAusenciaSection({ empresaId }: { empresaId: string }) {
               </div>
               <div>
                 <label className="text-sm font-medium">Conteo días</label>
-                <select
+                <Desplegable
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                   value={form.conteo_dias}
                   onChange={e => setForm(f => ({ ...f, conteo_dias: e.target.value as ConteoDias }))}
                 >
                   <option value="naturales">Naturales</option>
                   <option value="laborables">Laborables</option>
-                </select>
+                </Desplegable>
               </div>
             </div>
 

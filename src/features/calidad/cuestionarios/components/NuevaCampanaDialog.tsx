@@ -22,6 +22,7 @@ import {
   periodoActual,
 } from "@/features/calidad/cuestionarios/types";
 import type { PlantillaCuestionario } from "@/features/calidad/cuestionarios/types";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   open: boolean;
@@ -74,7 +75,7 @@ export function NuevaCampanaDialog({ open, onOpenChange, onCreada }: Props) {
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label>Cuestionario</Label>
-            <select
+            <Desplegable
               value={plantillaId}
               onChange={(e) => setPlantillaId(e.target.value)}
               className="w-full h-9 px-3 rounded-md border bg-background text-sm"
@@ -88,12 +89,12 @@ export function NuevaCampanaDialog({ open, onOpenChange, onCreada }: Props) {
                   </option>
                 ))
               )}
-            </select>
+            </Desplegable>
           </div>
 
           <div className="space-y-2">
             <Label>Periodo</Label>
-            <select
+            <Desplegable
               value={periodo}
               onChange={(e) => setPeriodo(e.target.value)}
               className="w-full h-9 px-3 rounded-md border bg-background text-sm"
@@ -103,7 +104,7 @@ export function NuevaCampanaDialog({ open, onOpenChange, onCreada }: Props) {
                   {labelPeriodo(p)}
                 </option>
               ))}
-            </select>
+            </Desplegable>
           </div>
         </div>
 

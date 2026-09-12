@@ -19,6 +19,7 @@ import {
   getDatosCopiaEmpleado,
 } from "@/features/rrhh/actions/empleados-actions";
 import type { EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface DatosDestino {
   bloqueado: boolean;
@@ -149,7 +150,7 @@ export function CopiarEmpleadoDialog({
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Empresa destino</label>
-              <select
+              <Desplegable
                 value={destino}
                 onChange={(e) => setDestino(e.target.value)}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -158,7 +159,7 @@ export function CopiarEmpleadoDialog({
                 {opciones.map((e) => (
                   <option key={e.id} value={e.id}>{e.nombre}</option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
 
             {cargando && (

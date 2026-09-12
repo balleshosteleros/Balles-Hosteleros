@@ -29,6 +29,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Users } from "lucide-react";
 import { getOpcionesSegmento, type OpcionesSegmento } from "@/features/notificaciones/actions/aviso-manual-actions";
 import { pedirDocumentacionAEmpleados } from "@/features/rrhh/actions/pedir-doc-empleado-actions";
+import { Desplegable } from "@/components/ui/desplegable";
 
 const SELECT_CLASS =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
@@ -114,7 +115,7 @@ export function PedirDocumentoDialog({
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="doc-tipo">Documento</Label>
-            <select
+            <Desplegable
               id="doc-tipo"
               className={SELECT_CLASS}
               value={tipoDoc}
@@ -125,7 +126,7 @@ export function PedirDocumentoDialog({
                   {t.label}
                 </option>
               ))}
-            </select>
+            </Desplegable>
           </div>
 
           <div className="space-y-1.5">

@@ -30,6 +30,7 @@ import type {
 } from "@/features/calidad/cuestionarios/types";
 import { getPlantilla } from "@/features/calidad/cuestionarios/actions";
 import type { PlantillaCuestionario } from "@/features/calidad/cuestionarios/types";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   envioId: string | null;
@@ -182,7 +183,7 @@ function ReunionTab({
         </div>
         <div className="space-y-2">
           <Label>Estado</Label>
-          <select
+          <Desplegable
             value={estado}
             onChange={(e) => setEstado(e.target.value as EstadoReunion)}
             className="w-full h-9 px-3 rounded-md border bg-background text-sm"
@@ -191,7 +192,7 @@ function ReunionTab({
             <option value="realizada">Realizada</option>
             <option value="cancelada">Cancelada</option>
             <option value="no_aplica">No aplica</option>
-          </select>
+          </Desplegable>
         </div>
       </div>
 

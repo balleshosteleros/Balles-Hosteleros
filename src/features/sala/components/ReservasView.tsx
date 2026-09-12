@@ -189,6 +189,7 @@ import { friendlyError } from "@/shared/lib/friendly-errors";
 import { colorZona, fondoMesaLibre } from "@/features/sala/lib/color-zona";
 import { formatearFechaEs } from "@/shared/lib/fecha";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 /**
  * Paleta de fondo de mesa por estado.
@@ -1907,7 +1908,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                 y otros no, el mismo cliente acaba con dos fichas. */}
             <div className="flex gap-1.5">
               <ToolTooltip label={PREFIJOS_TELEFONO.find(x => x.prefijo === form.telefonoPrefijo)?.label ?? ""}>
-                <select
+                <Desplegable
                   value={form.telefonoPrefijo}
                   onChange={e => setForm(p => ({ ...p, telefonoPrefijo: e.target.value }))}
                   className="h-8 w-[86px] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs"
@@ -1915,7 +1916,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                   {PREFIJOS_TELEFONO.map(x => (
                     <option key={x.prefijo} value={x.prefijo}>{x.flag} {x.prefijo}</option>
                   ))}
-                </select>
+                </Desplegable>
               </ToolTooltip>
               <Input
                 type="tel"
@@ -1952,7 +1953,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             no hay mesa, avisa cuando no queda ningún hueco para el grupo. */}
         <div><Label className="text-xs">Hora *</Label>
           {horasOferta.length > 0 ? (
-            <select
+            <Desplegable
               value={form.hora.slice(0, 5)}
               onChange={(e) => setForm((p) => ({ ...p, hora: e.target.value }))}
               className={cn(
@@ -1966,7 +1967,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                   {o.hora}{o.pisa ? "  ⏰" : ""}
                 </option>
               ))}
-            </select>
+            </Desplegable>
           ) : (
             // Sin horario definido (o fallo al calcularlo) no se bloquea el
             // alta, pero la hora sigue eligiéndose en cuartos: la cuadrícula es
@@ -2194,7 +2195,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               />
             </ToolTooltip>
           ) : (
-            <select
+            <Desplegable
               value={form.origen}
               onChange={(e) => setForm((p) => ({ ...p, origen: e.target.value }))}
               className="h-8 text-xs w-full rounded-md border border-input bg-background px-2"
@@ -2202,7 +2203,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               {ORIGENES_ALTA_SALA.map((o) => (
                 <option key={o} value={o}>{labelOrigen(o)}</option>
               ))}
-            </select>
+            </Desplegable>
           )}
         </div>
         {/* Las etiquetas se asignan desde la ficha de la reserva, una vez
@@ -2223,7 +2224,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               />
             </ToolTooltip>
           ) : (
-          <select
+          <Desplegable
             value={form.tipoCategoria}
             onChange={(e) => {
               const nuevoTipo = e.target.value as TipoReservaCategoria | "";
@@ -2245,7 +2246,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             <option value="gratis">{TIPO_RESERVA_CATEGORIA_LABELS.gratis}</option>
             <option value="politica">{TIPO_RESERVA_CATEGORIA_LABELS.politica}</option>
             <option value="cupon">{TIPO_RESERVA_CATEGORIA_LABELS.cupon}</option>
-          </select>
+          </Desplegable>
           )}
         </div>
         {!sinCobro && form.tipoCategoria === "politica" && (
@@ -7442,7 +7443,7 @@ export function ReservasView() {
                             (x) => x.prefijo === separarPrefijo(clienteEdit.telefono).prefijo,
                           )?.label ?? ""
                         }>
-                        <select
+                        <Desplegable
                           value={separarPrefijo(clienteEdit.telefono).prefijo}
                           onChange={(e) =>
                             setClienteEdit((p) => ({
@@ -7460,7 +7461,7 @@ export function ReservasView() {
                               {x.flag} {x.prefijo}
                             </option>
                           ))}
-                        </select>
+                        </Desplegable>
                       </ToolTooltip>
                       <Input
                         type="tel"

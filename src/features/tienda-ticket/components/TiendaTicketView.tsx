@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Check, Loader2, Ticket } from "lucide-react";
 import { comprarTicketAction } from "@/features/tienda-ticket/actions/comprar-ticket";
+import { Desplegable } from "@/components/ui/desplegable";
 
 export interface ProductoTienda {
   id: string;
@@ -315,7 +316,7 @@ export function TiendaTicketView({
               {/* Desplegable de pares en vez de un número libre: una
                   experiencia se compra para dos, cuatro, seis… Escribir "7" a
                   mano llevaba a un carrito que la sala no puede sentar. */}
-              <select
+              <Desplegable
                 id="uds"
                 value={unidades}
                 onChange={(e) => setUnidades(Number(e.target.value))}
@@ -326,7 +327,7 @@ export function TiendaTicketView({
                     {n} personas
                   </option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
           )}
 

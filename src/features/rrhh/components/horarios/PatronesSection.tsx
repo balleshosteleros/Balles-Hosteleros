@@ -63,6 +63,7 @@ import {
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { toast } from "sonner";
+import { Desplegable } from "@/components/ui/desplegable";
 
 const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -228,7 +229,7 @@ function ListaPatrones({
           {departamentosFiltro.length > 0 && (
             <div className="relative">
               <Building2 className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <select
+              <Desplegable
                 value={deptoFiltro}
                 onChange={(e) => setDeptoFiltro(e.target.value)}
                 className="h-9 rounded-md border border-input bg-background pl-8 pr-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
@@ -240,7 +241,7 @@ function ListaPatrones({
                     {d}
                   </option>
                 ))}
-              </select>
+              </Desplegable>
             </div>
           )}
         </div>
@@ -839,7 +840,7 @@ function PatronEditor({
           <label className="block text-sm font-medium mb-1">Departamento</label>
           <div className="relative">
             <Building2 className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <select
+            <Desplegable
               value={borrador.departamento}
               onChange={(e) =>
                 setBorrador((prev) => ({ ...prev, departamento: e.target.value }))
@@ -852,7 +853,7 @@ function PatronEditor({
                   {d}
                 </option>
               ))}
-            </select>
+            </Desplegable>
           </div>
           <p className="text-[11px] text-muted-foreground mt-1">
             Agrupa y filtra el patrón, aunque tenga turnos de varios departamentos.

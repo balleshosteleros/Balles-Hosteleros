@@ -35,6 +35,7 @@ import {
   analizarContactosIA,
   bulkImportContactos,
 } from "@/features/contabilidad/actions/importador-ia-actions";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   open: boolean;
@@ -370,7 +371,7 @@ function CeldaSelect({
   onChange: (v: string) => void;
 }) {
   return (
-    <select
+    <Desplegable
       value={opciones.includes(valor) ? valor : ""}
       onChange={(e) => onChange(e.target.value)}
       className="w-full rounded border bg-background px-2 py-1 text-xs outline-none focus:border-amber-400"
@@ -381,7 +382,7 @@ function CeldaSelect({
           {o}
         </option>
       ))}
-    </select>
+    </Desplegable>
   );
 }
 

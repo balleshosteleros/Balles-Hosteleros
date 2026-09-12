@@ -17,6 +17,7 @@ import {
   getCatalogosContratacion,
   type EmailContratacionPreview,
 } from "@/features/rrhh/actions/contratacion-fase-actions";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface PuestoRef { id: string; nombre: string; departamento_id?: string | null }
 interface DeptoRef { id: string; nombre: string; area?: string | null }
@@ -360,7 +361,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
             )}
             <div className="space-y-1.5">
               <Label htmlFor="ct-puesto">Puesto</Label>
-              <select
+              <Desplegable
                 id="ct-puesto"
                 value={puestoId}
                 onChange={(e) => setPuestoId(e.target.value)}
@@ -373,7 +374,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
                 {puestoId && !puestos.some((p) => p.id === puestoId) && (
                   <option value={puestoId}>Puesto de la vacante</option>
                 )}
-              </select>
+              </Desplegable>
               {deptoSel && (
                 <p className="text-xs text-muted-foreground">
                   Departamento: {deptoSel.nombre} · Área {esAdministrativo ? "administrativa" : "operativa"}
@@ -401,7 +402,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ct-local">Local</Label>
-                <select
+                <Desplegable
                   id="ct-local"
                   value={localId}
                   onChange={(e) => setLocalId(e.target.value)}
@@ -409,7 +410,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
                 >
                   <option value="">{cargandoCatalogos ? "Cargando…" : "Selecciona…"}</option>
                   {locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-                </select>
+                </Desplegable>
               </div>
             </div>
 

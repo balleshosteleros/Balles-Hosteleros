@@ -18,6 +18,7 @@ import { useMemo } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MINUTOS_VALIDOS_RESERVA } from "@/features/sala/lib/reserva-cuartos";
+import { Desplegable } from "@/components/ui/desplegable";
 
 /**
  * Los dos desplegables van dentro de UN SOLO recuadro: hora y minuto son un
@@ -118,7 +119,7 @@ export function SelectorHoraCuartos({
 
   return (
     <div className={cn(CLASE_CAJA, aviso && "border-amber-500", className)}>
-      <select
+      <Desplegable
         aria-label="Hora"
         disabled={disabled}
         value={hh}
@@ -131,9 +132,9 @@ export function SelectorHoraCuartos({
             {h}
           </option>
         ))}
-      </select>
+      </Desplegable>
       <span className="shrink-0 text-xs text-muted-foreground">:</span>
-      <select
+      <Desplegable
         aria-label="Minutos"
         disabled={disabled || !hh}
         value={mm}
@@ -146,7 +147,7 @@ export function SelectorHoraCuartos({
             {String(m).padStart(2, "0")}
           </option>
         ))}
-      </select>
+      </Desplegable>
       {/* UNA flecha para todo el control, no una por desplegable: es un solo
           dato ("22:30"). Va al final y sin puntero, para que el clic siga
           cayendo en el `select` que hay debajo. */}

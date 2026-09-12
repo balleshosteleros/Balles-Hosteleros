@@ -40,6 +40,7 @@ import type {
   DecisionImportacion,
   PropuestaProducto,
 } from "@/features/logistica/lib/importador-catalogo/clasificar";
+import { Desplegable } from "@/components/ui/desplegable";
 
 // ─── PRESENTACIÓN DE CADA GRUPO ─────────────────────────────────────────────
 
@@ -369,7 +370,7 @@ export function ImportarCatalogoView() {
                           }
                         />
 
-                        <select
+                        <Desplegable
                           value={decision}
                           onChange={(e) =>
                             setDecisiones((d) => ({
@@ -384,7 +385,7 @@ export function ImportarCatalogoView() {
                               {ETIQUETA_DECISION[o]}
                             </option>
                           ))}
-                        </select>
+                        </Desplegable>
 
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium">{p.nombre}</p>

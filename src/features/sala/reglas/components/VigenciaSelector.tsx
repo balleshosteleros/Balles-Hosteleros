@@ -13,6 +13,7 @@ import {
   DIAS_ISO_DOW,
 } from "../data/reglas";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   value: VigenciaSpec;
@@ -149,7 +150,7 @@ function SelectorDiaSemana({
   return (
     <div className="space-y-1.5">
       <Label className="text-[11px] text-muted-foreground">Día de la semana</Label>
-      <select
+      <Desplegable
         value={value ?? ""}
         onChange={(e) => onChange(Number(e.target.value) as DiaIsoDow)}
         className="h-9 text-sm w-full max-w-xs rounded-md border border-input bg-background px-2"
@@ -162,7 +163,7 @@ function SelectorDiaSemana({
             {DIA_ISO_DOW_LABELS[d]}
           </option>
         ))}
-      </select>
+      </Desplegable>
     </div>
   );
 }

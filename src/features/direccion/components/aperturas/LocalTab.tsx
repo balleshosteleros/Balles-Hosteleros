@@ -30,6 +30,7 @@ import { MapaUbicacionRadio } from "./MapaUbicacionRadio";
 import { BadgeSugerenciaIA } from "@/features/direccion/components/aperturas/shared/BadgeSugerenciaIA";
 import type { DraftLocal } from "@/features/direccion/types/aperturas-ia";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 export type SeccionLocalIA = "caracteristicas" | "ubicacion";
 
@@ -337,7 +338,7 @@ function UbicacionCard({
             <Input disabled={readOnly} value={ubicacion.pais} onChange={(e) => onChange({ pais: e.target.value })} />
           </Field>
           <Field label="Radio a la redonda">
-            <select
+            <Desplegable
               disabled={readOnly}
               value={ubicacion.radioKm}
               onChange={(e) => onChange({ radioKm: Number(e.target.value) })}
@@ -350,7 +351,7 @@ function UbicacionCard({
               <option value={10}>10 km</option>
               <option value={20}>20 km</option>
               <option value={50}>50 km</option>
-            </select>
+            </Desplegable>
           </Field>
         </div>
 

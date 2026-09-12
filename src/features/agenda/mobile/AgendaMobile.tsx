@@ -42,6 +42,7 @@ import { refreshDailyCounts } from "@/features/google-workspace/components/useDa
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { Desplegable } from "@/components/ui/desplegable";
 
 const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   mantenimiento: Wrench,
@@ -345,7 +346,7 @@ export function AgendaMobile() {
                 />
               </Campo>
               <Campo label="Categoría">
-                <select
+                <Desplegable
                   value={form.categoria}
                   onChange={(e) => setForm({ ...form, categoria: e.target.value as ContactoCategoria })}
                   className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none"
@@ -355,7 +356,7 @@ export function AgendaMobile() {
                       {CATEGORIA_LABELS[cat]}
                     </option>
                   ))}
-                </select>
+                </Desplegable>
               </Campo>
               <Campo label="Teléfono">
                 <input

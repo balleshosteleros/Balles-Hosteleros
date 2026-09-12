@@ -16,6 +16,7 @@ import {
 import { createZona, updateZona, deleteZona } from "@/features/sala/planos/actions/zonas-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Desplegable } from "@/components/ui/desplegable";
 
 interface Props {
   open: boolean;
@@ -125,7 +126,7 @@ export function ZonaConfigModal({
 
           <div className="space-y-1.5">
             <Label className="text-xs">Sala</Label>
-            <select
+            <Desplegable
               value={salaId}
               onChange={(e) => setSalaId(e.target.value)}
               className="h-9 text-sm w-full rounded-md border border-input bg-background px-2"
@@ -136,7 +137,7 @@ export function ZonaConfigModal({
                   {s.nombre}
                 </option>
               ))}
-            </select>
+            </Desplegable>
           </div>
 
           <div className="space-y-1.5">
