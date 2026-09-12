@@ -132,13 +132,11 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
                       {t.nombre}
                     </span>
                   </TableCell>
-                  <TableCell><Badge variant="outline" className="text-xs font-mono">{t.codigo}</Badge></TableCell>
+                  <TableCell><Badge variant="outline" className="text-xs font-semibold tracking-wide">{t.codigo}</Badge></TableCell>
                   <TableCell>
-                    {t.requiere_solicitud ? (
-                      <Badge variant="outline" className="text-xs">Solo por solicitud</Badge>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Normal</span>
-                    )}
+                    <Badge variant="outline" className="text-xs">
+                      {t.requiere_solicitud ? "Solo por solicitud" : "Normal"}
+                    </Badge>
                   </TableCell>
                   <TableCell><Badge variant={t.computa_tiempo ? "default" : "outline"} className="text-xs">{t.computa_tiempo ? "Sí" : "No"}</Badge></TableCell>
                   <TableCell>
