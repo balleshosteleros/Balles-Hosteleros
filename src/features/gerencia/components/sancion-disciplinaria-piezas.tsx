@@ -65,7 +65,14 @@ export function estadoFirmaLabel(estado: string): string {
 export function EstadoFirmaBadge({ estado }: { estado: string }) {
   const cfg = ESTADO_CFG[estado] ?? { label: estado, className: "bg-muted text-muted-foreground", icon: Clock };
   const Icon = cfg.icon;
-  return <Badge className={`${cfg.className} border-0 font-medium gap-1`}><Icon className="h-3 w-3" />{cfg.label}</Badge>;
+  // El estado se lee de una sola vez: "No firmada" y "Pendiente de firma" se
+  // partían en dos líneas cuando la columna venía estrecha (Iván, 12-09-2026).
+  return (
+    <Badge className={`${cfg.className} border-0 font-medium gap-1 whitespace-nowrap`}>
+      <Icon className="h-3 w-3 shrink-0" />
+      {cfg.label}
+    </Badge>
+  );
 }
 
 export function gravedadLabel(g: GravedadSancion | null): string {

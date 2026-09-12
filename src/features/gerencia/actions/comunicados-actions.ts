@@ -648,10 +648,39 @@ export async function duplicarComunicado(
   }
 }
 
+/**
+ * Borrar un comunicado. SOLO lo que todavía no ha salido.
+ *
+ * Un comunicado que ya se mandó no se borra NUNCA: la plantilla lo ha recibido,
+ * lo tiene en su panel y en su correo, y quedan las lecturas de quién lo abrió
+ * y cuándo. Borrarlo dejaría a la empresa sin constancia de algo que sí dijo
+ * (Iván, 12-09-2026). Lo que se hace con un comunicado viejo es ARCHIVARLO.
+ *
+ * La barrera está aquí, en el servidor, y no solo en el menú: es la única forma
+ * de que no se pueda por ninguna otra puerta.
+ */
 export async function deleteComunicado(id: string) {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data: actual, error: errLeer } = await supabase
+      .from("comunicados")
+      .select("estado")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (errLeer) throw errLeer;
+    if (!actual) return { ok: false, error: "El comunicado ya no existe" };
+    const estado = (actual.estado as string | null) ?? "borrador";
+    if (estado === "publicado" || estado === "archivado") {
+      return {
+        ok: false,
+        error:
+          "Este comunicado ya se envió y no se puede borrar. Si no quieres tenerlo delante, archívalo.",
+      };
+    }
+
     const { error } = await supabase
       .from("comunicados")
       .delete()

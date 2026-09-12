@@ -2008,7 +2008,7 @@ export function ComunicadosView() {
     estado: {
       th: <TableHead key="estado">Estado</TableHead>,
       td: (c) => (
-        <TableCell key="estado">
+        <TableCell key="estado" className="whitespace-nowrap">
           {/* En una sanción lo que importa es si la ha firmado, no si está
               publicada: publicada lo está desde que se emite. */}
           {c.firma ? <EstadoFirmaBadge estado={c.firma.estado} /> : <EstadoBadge estado={c.estado} />}
@@ -2243,13 +2243,21 @@ export function ComunicadosView() {
                               <Archive className={ICONO_MENU} strokeWidth={1.75} />Archivar
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuSeparator className="my-1" />
-                          <DropdownMenuItem
-                            className={`${ITEM_MENU} text-destructive focus:text-destructive`}
-                            onClick={() => eliminar(c)}
-                          >
-                            <Trash2 className={ICONO_MENU} strokeWidth={1.75} />Eliminar
-                          </DropdownMenuItem>
+                          {/* UN COMUNICADO ENVIADO NO SE BORRA. La plantilla ya
+                              lo tiene y quedan sus lecturas: lo que se hace con
+                              uno viejo es archivarlo (Iván, 12-09-2026). Solo
+                              se puede borrar lo que aún no ha salido. */}
+                          {(c.estado === "borrador" || c.estado === "programado") && (
+                            <>
+                              <DropdownMenuSeparator className="my-1" />
+                              <DropdownMenuItem
+                                className={`${ITEM_MENU} text-destructive focus:text-destructive`}
+                                onClick={() => eliminar(c)}
+                              >
+                                <Trash2 className={ICONO_MENU} strokeWidth={1.75} />Eliminar
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                       </div>
