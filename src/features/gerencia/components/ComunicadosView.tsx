@@ -2328,11 +2328,14 @@ export function ComunicadosView() {
                         </div>
                       ) : (
                       <div className="flex items-center justify-end gap-1">
-                        {/* Lo que estaba escrito y sin mandar se publica desde
-                            aquí, a la vista, sin tener que abrir la ficha. Una
-                            sanción no: publicarla es emitir su documento, y eso
-                            se hace desde su ficha o el día que le toca. */}
-                        {c.estado !== "publicado" && c.tipo !== "sancion" && (
+                        {/* Solo el BORRADOR se publica desde aquí: es lo que
+                            está escrito y esperando a que alguien lo mande. El
+                            programado ya tiene día y hora y sale solo, así que
+                            el botón sobra; si hay que adelantarlo, se le quita
+                            la fecha desde su ficha. Una sanción tampoco:
+                            publicarla es emitir su documento, y eso se hace
+                            desde su ficha o el día que le toca. */}
+                        {c.estado === "borrador" && c.tipo !== "sancion" && (
                           <Button size="sm" className="h-8 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => pedirPublicar(c)}>
                             <Send className="h-3.5 w-3.5 mr-1" />Publicar
                           </Button>
