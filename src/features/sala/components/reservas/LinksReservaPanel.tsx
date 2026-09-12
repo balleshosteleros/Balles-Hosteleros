@@ -204,7 +204,7 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar palabra clave..."
         onNuevo={abrirDialog}
-        textoNuevo="Nuevo link"
+        textoNuevo="Nuevo"
         columnas={COLUMNAS}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
@@ -256,9 +256,6 @@ export function LinksReservaPanel({ embedded = false }: { embedded?: boolean } =
                             <Ticket className="h-3 w-3" />
                             Vende ticket
                           </Badge>
-                        )}
-                        {l.nombre && (
-                          <span className="text-xs text-muted-foreground">{l.nombre}</span>
                         )}
                       </div>
                     </td>

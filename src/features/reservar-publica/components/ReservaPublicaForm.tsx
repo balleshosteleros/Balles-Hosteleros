@@ -21,7 +21,7 @@ import { CalendarCheck, Users, Mail, Phone, Calendar, Clock, Ticket, Info, MapPi
 import { crearReservaPublicaAction } from "@/features/reservar-publica/actions/crear-reserva-publica";
 import { validarCuponPublicoAction } from "@/features/reservar-publica/actions/validar-cupon-publico-action";
 import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
-import type { ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
+import { TicketSelector, type ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
 import { SelectorDisponibilidad } from "@/features/reservar-publica/components/SelectorDisponibilidad";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
 import { diaNegocioDe } from "@/features/sala/lib/dia-negocio";
@@ -622,12 +622,26 @@ export function ReservaPublicaForm({
             style={{ background: accent }}
           />
 
-          {/* Aquí NO se venden Tickets ni se pide su código: la web es solo
-              para reservar mesa. Los Tickets se compran en su propia tienda, y
-              quien ya tenga uno lo canjea desde el enlace de su correo, que
-              trae el código puesto (`ticketCodigoInicial`). Meter aquí la venta
-              y el canje llenaba el formulario de campos que el 99% de quien
-              entra a reservar no necesita. */}
+          {/* En el portal NORMAL aquí no se vende nada: la web es solo para
+              reservar mesa, los Tickets se compran en su propia tienda y quien
+              ya tenga uno lo canjea desde el enlace de su correo, que trae el
+              código puesto (`ticketCodigoInicial`).
+
+              La excepción es un enlace creado con "Incluir venta de ticket"
+              (`ticketOnly`): ese enlace EXISTE para vender esos productos, así
+              que ahí el selector es lo primero que se ve. Sin pintarlo, el
+              enlace salía calcado al normal y encima no se podía terminar la
+              reserva, porque el servidor exige producto. */}
+          {ticketObligatorio && (
+            <TicketSelector
+              productos={productosTicket}
+              selectedId={ticketProductoId}
+              onChange={setTicketProductoId}
+              required
+              accent={accent}
+              onAccent={onAccent}
+            />
+          )}
 
           {/* Canje de un Ticket ya comprado. Solo se pinta cuando el cliente
               llega desde el enlace de su correo (`?ticket=CODIGO`): quien entra
