@@ -93,8 +93,9 @@ lo dijo Iván: **10 €/h en TODOS los puestos, menos ARTISTAS, donde manda su p
 — CANTANTE y MÚSICO (BACANAL) **62,50 €**, DJ (HABANA) **18 €**. Campo
 `puesto_salarios.precio_hora_extra` (y su espejo en `empleado_condiciones`), 58 puestos
 repasados, ni una excepción suelta.
-⚠️ Único hueco de datos: HABANA → MANTENIMIENTO → **SEGURIDAD** es el único puesto con
-`coste_hora` a NULL.
+✅ Relleno el 12/09/2026 el único puesto que le faltaba el `coste_hora`:
+HABANA → MANTENIMIENTO → **SEGURIDAD**, 8,0769 €/h (1.400 € × 12 ÷ (52 × 40)), el mismo
+número que ya deducía la fórmula. Los 58 puestos tienen ya su coste/hora explícito.
 Detalle en [[ratios_coste_personal]] (sección Pendiente): `fichajes.tipo` distingue
 NOR/EXT pero solo hay 3 fichajes marcados EXT en toda la base, y el bonus va como
 complemento mensual por persona, no repartido por día.
