@@ -7,7 +7,12 @@ import {
   type ComunicadoVisible,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { marcarComunicadosVistos } from "@/features/mi-panel/actions/comunicados-vistos-actions";
-import { formatFechaHoraEnZona, claveDiaEnZona } from "@/features/empresa/lib/zona-horaria";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import {
+  agruparComunicadosPorTiempo,
+  GRUPO_COMUNICADO_LABEL,
+  hace,
+} from "@/features/mi-panel/lib/comunicados-tiempo";
 import { tipoComunicado } from "@/features/rrhh/data/comunicados";
 import { ComunicadoTarjeta } from "@/features/gerencia/components/ComunicadoTarjeta";
 
@@ -20,21 +25,6 @@ import { ComunicadoTarjeta } from "@/features/gerencia/components/ComunicadoTarj
  * lleva la etiqueta «Nuevo» en verde; al abrirlo por primera vez queda visto
  * (Iván, 10-09-2026).
  */
-
-/** En qué montón va cada comunicado: hoy, esta semana o antiguos. */
-function grupoDe(iso: string, tz: string): "hoy" | "semana" | "antes" {
-  const hoy = claveDiaEnZona(new Date().toISOString(), tz);
-  const dia = claveDiaEnZona(iso, tz);
-  if (dia === hoy) return "hoy";
-  const diff = Date.now() - new Date(iso).getTime();
-  return diff < 7 * 86_400_000 ? "semana" : "antes";
-}
-
-const GRUPO_LABEL: Record<string, string> = {
-  hoy: "Hoy",
-  semana: "Esta semana",
-  antes: "Anteriores",
-};
 
 function TarjetaComunicado({
   c,
@@ -58,7 +48,9 @@ function TarjetaComunicado({
         adjuntos: c.adjuntos,
         empresaNombre: c.empresaNombre,
         isotipoUrl: c.isotipoUrl,
-        fechaTexto: formatFechaHoraEnZona(c.createdAt, c.zonaHoraria, { month: "long" }),
+        fechaTexto: `${formatFechaHoraEnZona(c.createdAt, c.zonaHoraria, {
+          month: "long",
+        })} · ${hace(c.createdAt, c.zonaHoraria)}`,
         nuevo: !c.vistoEl,
       }}
       pie={
@@ -131,13 +123,7 @@ export function MisComunicadosView() {
   }
 
   const tz = items[0]?.zonaHoraria ?? "Europe/Madrid";
-  const grupos: { clave: string; lista: ComunicadoVisible[] }[] = [];
-  for (const c of items) {
-    const g = grupoDe(c.createdAt, tz);
-    const ultimo = grupos[grupos.length - 1];
-    if (ultimo && ultimo.clave === g) ultimo.lista.push(c);
-    else grupos.push({ clave: g, lista: [c] });
-  }
+  const grupos = agruparComunicadosPorTiempo(items, (c) => c.createdAt, tz);
 
   return (
     <div className="mx-auto max-w-3xl space-y-7 p-4 md:p-6">
@@ -145,7 +131,7 @@ export function MisComunicadosView() {
         <section key={`${g.clave}-${i}`} className="space-y-3">
           <div className="flex items-center gap-3">
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {GRUPO_LABEL[g.clave]}
+              {GRUPO_COMUNICADO_LABEL[g.clave]}
             </h2>
             <span className="h-px flex-1 bg-border" />
           </div>

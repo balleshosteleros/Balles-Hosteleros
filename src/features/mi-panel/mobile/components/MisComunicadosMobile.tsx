@@ -7,10 +7,12 @@ import {
   type ComunicadoVisible,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { marcarComunicadosVistos } from "@/features/mi-panel/actions/comunicados-vistos-actions";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
-  formatFechaEnZona,
-  formatFechaHoraEnZona,
-} from "@/features/empresa/lib/zona-horaria";
+  agruparComunicadosPorTiempo,
+  GRUPO_COMUNICADO_LABEL,
+  hace,
+} from "@/features/mi-panel/lib/comunicados-tiempo";
 import { cn } from "@/shared/lib/utils";
 import { TextoConEnlaces } from "@/shared/components/TextoConEnlaces";
 import {
@@ -49,23 +51,6 @@ const TIPO_STYLE: Record<TipoComunicado, { dot: string; tint: string; pill: stri
     pill: "bg-red-600 text-white dark:bg-red-700 dark:text-white",
   },
 };
-
-function formatRel(s: string, tz: string): string {
-  const d = new Date(s);
-  const diff = Date.now() - d.getTime();
-  const min = Math.floor(diff / 60_000);
-  if (min < 1) return "ahora";
-  if (min < 60) return `hace ${min} min`;
-  const hrs = Math.floor(min / 60);
-  if (hrs < 24) return `hace ${hrs} h`;
-  const dias = Math.floor(hrs / 24);
-  if (dias < 7) return `hace ${dias} d`;
-  return formatFechaEnZona(s, tz, {
-    day: "numeric",
-    month: "short",
-    year: undefined,
-  });
-}
 
 function formatFull(s: string, tz: string): string {
   return formatFechaHoraEnZona(s, tz, {
@@ -111,54 +96,81 @@ export function MisComunicadosMobile() {
     );
   }
 
+  const tz = items[0]?.zonaHoraria ?? "Europe/Madrid";
+  const grupos = agruparComunicadosPorTiempo(items, (c) => c.createdAt, tz);
+
   return (
     <>
-      <ul className="space-y-2">
-        {items.map((c) => {
-          const tipo = tipoComunicado(c.tipo);
-          const style = TIPO_STYLE[tipo];
-          return (
-            <li key={c.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelected(c);
-                  // Abrirlo es haberlo leído: así el alcance dice la verdad.
-                  void marcarComunicadosVistos([c.id]);
-                }}
-                className={cn(
-                  "flex w-full items-start gap-3 rounded-2xl border p-3.5 text-left active:opacity-70",
-                  style.tint,
-                )}
-              >
-                <span
-                  className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", style.dot)}
-                  aria-label={TIPO_COMUNICADO_LABEL[tipo]}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="truncate text-sm font-semibold">{c.titulo}</h3>
-                    {!c.vistoEl && (
-                      <span className="shrink-0 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                        Nuevo
-                      </span>
-                    )}
-                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {formatRel(c.createdAt, c.zonaHoraria)}
-                    </span>
-                  </div>
-                  {c.contenido && (
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                      {c.contenido}
-                    </p>
-                  )}
-                </div>
-                <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      <div className="space-y-5">
+        {grupos.map((g, gi) => (
+          <section key={`${g.clave}-${gi}`} className="space-y-2">
+            {/* La barra que dice de cuándo es lo que viene debajo. */}
+            <div className="flex items-center gap-3">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                {GRUPO_COMUNICADO_LABEL[g.clave]}
+              </h2>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            <ul className="space-y-2">
+              {g.lista.map((c) => {
+                const tipo = tipoComunicado(c.tipo);
+                const style = TIPO_STYLE[tipo];
+                return (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelected(c);
+                        // Abrirlo es haberlo leído: así el alcance dice la verdad.
+                        void marcarComunicadosVistos([c.id]);
+                      }}
+                      className={cn(
+                        "flex w-full items-start gap-3 rounded-2xl border p-3.5 text-left active:opacity-70",
+                        style.tint,
+                      )}
+                    >
+                      <span
+                        className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", style.dot)}
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <h3 className="truncate text-sm font-semibold">{c.titulo}</h3>
+                          <span className="shrink-0 text-[10px] text-muted-foreground">
+                            {hace(c.createdAt, c.zonaHoraria)}
+                          </span>
+                        </div>
+                        {/* El tipo se lee siempre, lo haya abierto o no: «Nuevo» es otra cosa. */}
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                              style.pill,
+                            )}
+                          >
+                            {TIPO_COMUNICADO_LABEL[tipo]}
+                          </span>
+                          {!c.vistoEl && (
+                            <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                              Nuevo
+                            </span>
+                          )}
+                        </div>
+                        {c.contenido && (
+                          <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">
+                            {c.contenido}
+                          </p>
+                        )}
+                      </div>
+                      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
 
       {selected && (
         <ComunicadoDetalle
