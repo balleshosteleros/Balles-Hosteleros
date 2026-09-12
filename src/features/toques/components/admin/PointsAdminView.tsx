@@ -1,39 +1,30 @@
 "use client";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Gift, ShoppingBag } from "lucide-react";
-import { CanjesAdminView } from "./CanjesAdminView";
-import { ToquesAdminTab } from "./ToquesAdminTab";
+import { Trophy } from "lucide-react";
 
+/**
+ * RRHH → Points, de momento en obras.
+ *
+ * El juego que ve el trabajador (la píldora de arriba) sigue funcionando; lo
+ * que todavía no se enseña es la parte de gestión —canjes y configuración—,
+ * así que el submódulo se queda con este cartelito y nada más (Iván, 12-sep).
+ *
+ * Las dos pantallas de gestión siguen escritas y probadas en `CanjesAdminView`
+ * y `ToquesAdminTab`: para devolverlas basta con volver a montarlas aquí.
+ */
 export function PointsAdminView() {
   return (
-    <div className="p-3 md:p-4 space-y-3">
-      <Tabs defaultValue="canjes" className="space-y-3">
-        <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
-          <TabsTrigger
-            value="canjes"
-            className="gap-1.5 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-          >
-            <ShoppingBag className="h-3.5 w-3.5" />
-            <span>Canjes</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="config"
-            className="gap-1.5 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-          >
-            <Gift className="h-3.5 w-3.5" />
-            <span>Configuración</span>
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="canjes">
-          <CanjesAdminView />
-        </TabsContent>
-
-        <TabsContent value="config">
-          <ToquesAdminTab />
-        </TabsContent>
-      </Tabs>
+    <div className="flex min-h-[60vh] items-center justify-center p-4">
+      <div className="flex max-w-sm flex-col items-center gap-3 rounded-2xl border bg-muted/30 px-8 py-10 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+          <Trophy className="h-7 w-7" />
+        </span>
+        <p className="text-base font-semibold">Próximamente</p>
+        <p className="text-sm text-muted-foreground">
+          Estamos preparando la gestión de points: canjes de premios y configuración de
+          cómo se ganan.
+        </p>
+      </div>
     </div>
   );
 }

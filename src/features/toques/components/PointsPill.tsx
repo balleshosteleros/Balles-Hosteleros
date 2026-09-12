@@ -280,9 +280,15 @@ function Insignia({
   const Dibujo = iconoDeNivel(icono);
   const { claro, hondo } = tonosDeInsignia(color);
   return (
+    // La chapa de color mide 32px, EXACTAMENTE lo mismo que el isotipo de la
+    // empresa de al lado (`h-8 w-8`), en el teléfono y en el ordenador: las dos
+    // van en la misma fila y una más pequeña que la otra se veía descolgada
+    // (Iván, 12-sep). El aro de progreso va POR FUERA (2px a cada lado, 36px en
+    // total), que es lo único que puede crecer sin pasarse del alto de la
+    // píldora (40px).
     <span
       className={cn(
-        "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+        "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
         destello && "points-nivel-nuevo",
       )}
       style={{
@@ -290,13 +296,13 @@ function Insignia({
       }}
     >
       <span
-        className="flex h-[26px] w-[26px] items-center justify-center rounded-full ring-1 ring-background"
+        className="flex h-8 w-8 items-center justify-center rounded-full ring-1 ring-background"
         style={{
           background: `linear-gradient(145deg, ${claro} 0%, ${hondo} 100%)`,
           boxShadow: `0 1px 4px -1px ${hondo}`,
         }}
       >
-        <Dibujo className="h-4 w-4 text-white" strokeWidth={2.4} />
+        <Dibujo className="h-5 w-5 text-white" strokeWidth={2.4} />
       </span>
     </span>
   );
