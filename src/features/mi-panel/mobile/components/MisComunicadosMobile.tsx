@@ -23,7 +23,10 @@ import {
   urlAdjuntoComunicado,
 } from "@/features/gerencia/data/comunicados-adjuntos";
 
-/** Cada tipo con su color: urgente rojo, novedades amarillo, informativo verde. */
+/**
+ * Cada tipo con su color: urgente rojo, novedades amarillo, informativo verde
+ * y la sanción en rojo fuerte, el recuadro entero.
+ */
 const TIPO_STYLE: Record<TipoComunicado, { dot: string; tint: string; pill: string }> = {
   urgente: {
     dot: "bg-rose-500",
@@ -39,6 +42,11 @@ const TIPO_STYLE: Record<TipoComunicado, { dot: string; tint: string; pill: stri
     dot: "bg-emerald-500",
     tint: "border-border/60 bg-card",
     pill: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+  },
+  sancion: {
+    dot: "bg-red-600",
+    tint: "border-red-500 bg-red-50 dark:border-red-700 dark:bg-red-950/30",
+    pill: "bg-red-600 text-white dark:bg-red-700 dark:text-white",
   },
 };
 

@@ -47,6 +47,7 @@ export function AltaMedicaModal({
   onComunicada,
 }: Props) {
   const [fechaAlta, setFechaAlta] = useState<string>("");
+  const hoyIso = new Date().toISOString().slice(0, 10);
   const [enviando, setEnviando] = useState(false);
 
   const cerrar = (v: boolean) => {
@@ -98,20 +99,22 @@ export function AltaMedicaModal({
             id="fecha-alta"
             type="date"
             value={fechaAlta}
-            min={fechaInicioBaja}
+            // Como pronto hoy: la baja termina ayer y se vuelve hoy. Días atrás
+            // dejarían un hueco sin baja y sin fichar.
+            min={hoyIso}
             onChange={(e) => setFechaAlta(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            El que pone tu parte de alta. Te diremos el primer día que te toca turno, que
-            no tiene por qué ser ese mismo.
+            El que pone tu parte de alta. Si te lo dieron hace días, pon hoy. Te diremos el
+            primer día que te toca turno, que no tiene por qué ser ese mismo.
           </p>
         </div>
 
         <div className="flex items-start gap-2.5 rounded-lg border bg-muted/40 p-3">
           <CalendarCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Al comunicarlo, los días de baja que te quedaban desaparecen de tu calendario y
-            vuelven a salir tus turnos.
+            Hasta que no comuniques el alta no podrás fichar. Al hacerlo, los días de baja
+            que te quedaban desaparecen de tu calendario y vuelven tus turnos.
           </p>
         </div>
 

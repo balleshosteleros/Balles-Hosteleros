@@ -761,6 +761,32 @@ async function evaluarEntradaFichaje(
     }
   }
 
+  // BAJA MÉDICA sin alta: no ficha. Quien está de baja no trabaja, y si el
+  // sistema le dejara fichar tendríamos horas de alguien que oficialmente está
+  // en casa — un lío con la gestoría y con la Seguridad Social. El camino de
+  // vuelta no es fichar y ya está: es comunicar el alta, que cierra la baja,
+  // avisa a RRHH y a la gestoría y le devuelve sus turnos.
+  {
+    const { data: bajaAbierta } = await supabase
+      .from("solicitudes_personal")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", userId)
+      .eq("subtipo", "baja_medica")
+      .eq("estado", "aprobada")
+      .is("alta_medica_comunicada_en", null)
+      .limit(1)
+      .maybeSingle();
+    if (bajaAbierta) {
+      return {
+        ok: false,
+        error:
+          "Estás de baja médica. Para volver a fichar, comunica primero tu alta " +
+          "desde el botón «Comunicar mi alta médica» de tu panel.",
+      };
+    }
+  }
+
   // "Hoy" y "ahora" en la zona horaria de ESTA empresa candidata (PRP-069): la
   // ventana de fichaje se valida contra el horario local de la empresa.
   const tz = await getZonaHorariaEmpresa(supabase, empresaId);

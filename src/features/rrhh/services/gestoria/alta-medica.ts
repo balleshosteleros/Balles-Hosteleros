@@ -152,9 +152,22 @@ export async function comunicarAltaMedica(args: {
       error: `El alta no puede ser anterior al primer día de la baja (${fechaEs(fechaInicio)}).`,
     };
   }
-  // Un parte de alta se comunica cuando te lo dan, no con meses de antelación.
-  // El tope evita que un dedazo en el año cierre la baja en 2030.
-  const tope = sumarDias(new Date().toISOString().slice(0, 10), 90);
+  // El alta NO puede ser de días atrás. Lo más antiguo que se admite es HOY:
+  // la baja termina ayer y se vuelve hoy. Si se aceptaran fechas viejas quedaría
+  // un hueco —días en los que ni estaba de baja ni fichó— que después aparece
+  // como ausencia sin justificar y hay que arreglar a mano.
+  const hoyIso = new Date().toISOString().slice(0, 10);
+  if (args.altaIso < hoyIso) {
+    return {
+      ok: false,
+      error:
+        `Como pronto puedes poner hoy (${fechaEs(hoyIso)}): tu baja termina ayer y te ` +
+        `reincorporas hoy. Si te dieron el alta hace días, díselo a Recursos Humanos.`,
+    };
+  }
+  // Y tampoco con meses de antelación: el tope evita que un dedazo en el año
+  // cierre la baja en 2030.
+  const tope = sumarDias(hoyIso, 90);
   if (args.altaIso > tope) {
     return { ok: false, error: "Esa fecha de alta está demasiado lejos. Revísala." };
   }
