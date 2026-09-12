@@ -84,6 +84,8 @@ export async function actualizarCategoria(input: {
   descripcion?: string | null;
   visible?: boolean;
   orden?: number;
+  /** null = esta categoría usa el formato de foto de la carta. */
+  formatoFoto?: "cuadrada" | "horizontal" | "vertical" | null;
 }): Promise<ActionResult> {
   try {
     const { supabase, empresaId } = await getAppContext();
@@ -95,6 +97,7 @@ export async function actualizarCategoria(input: {
       patch.descripcion = input.descripcion?.toString().trim() || null;
     if (input.visible !== undefined) patch.visible = input.visible;
     if (input.orden !== undefined) patch.orden = input.orden;
+    if (input.formatoFoto !== undefined) patch.formato_foto = input.formatoFoto;
 
     const { error } = await supabase
       .from("carta_categorias")

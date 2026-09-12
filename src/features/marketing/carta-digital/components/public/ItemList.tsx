@@ -2,7 +2,7 @@
 
 import { forwardRef } from "react";
 import { Clock } from "lucide-react";
-import type { CartaCategoria, CartaItem } from "../../types";
+import { PROPORCION_FORMATO, type CartaCategoria, type CartaItem, type FormatoFoto } from "../../types";
 import { ItemCard } from "./ItemCard";
 
 type CategoriaConItems = CartaCategoria & { items: CartaItem[] };
@@ -22,11 +22,16 @@ export const ItemList = forwardRef<HTMLDivElement, {
   likedSet: Set<string>;
   onOpen: (item: CartaItem) => void;
   onLike: (item: CartaItem) => void;
-}>(function ItemList({ categorias, filtroExcluidos, counters, likedSet, onOpen, onLike }, ref) {
+  /** Formato de la carta; una categoría puede pedir el suyo. */
+  formatoCarta: FormatoFoto;
+}>(function ItemList({ categorias, filtroExcluidos, counters, likedSet, onOpen, onLike, formatoCarta }, ref) {
   return (
     <div ref={ref} className="flex flex-col gap-14">
       {categorias.map((cat) => {
         const items = cat.items.filter((i) => !i.alergenos.some((a) => filtroExcluidos.has(a)));
+        // Todas las tarjetas de la categoría comparten alto: es lo que hace
+        // que la fila cuadre en vez de salir escalonada.
+        const proporcion = PROPORCION_FORMATO[cat.formato_foto ?? formatoCarta];
 
         return (
           <section key={cat.id} id={`cat-${cat.id}`} data-cat-section={cat.id} className="scroll-mt-36">
@@ -46,6 +51,7 @@ export const ItemList = forwardRef<HTMLDivElement, {
                     item={item}
                     likes={counters[item.id] ?? item.likes_base + item.likes_count}
                     liked={likedSet.has(item.id)}
+                    proporcion={proporcion}
                     onOpen={() => onOpen(item)}
                     onLike={() => onLike(item)}
                   />

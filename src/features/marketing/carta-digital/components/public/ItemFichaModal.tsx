@@ -3,7 +3,6 @@
 import Image from "next/image";
 import { useEffect } from "react";
 import { X, Star, Utensils } from "lucide-react";
-import { proporcionFoto } from "../../lib/proporcion-foto";
 import type { CartaItem } from "../../types";
 import { LikeButton } from "./LikeButton";
 import { AlergenoIcon, alergenoLabel } from "./FiltroAlergenos";
@@ -15,8 +14,12 @@ export function ItemFichaModal({
   likesCount,
   onClose,
   onToggleLocalLike,
+  proporcion,
 }: {
   item: CartaItem | null;
+  /** El mismo alto de foto que en la tarjeta, para que al abrir la ficha no
+      aparezca un recorte distinto del mismo plato. */
+  proporcion: number;
   deviceId: string | null;
   liked: boolean;
   likesCount: number;
@@ -70,7 +73,7 @@ export function ItemFichaModal({
             backgroundColor: "var(--carta-superficie-enfasis)",
             // La misma proporción que en la tarjeta: al abrir la ficha se ve
             // la misma foto, no un recorte distinto del mismo plato.
-            aspectRatio: proporcionFoto(item.foto_url),
+            aspectRatio: proporcion,
           }}
         >
           {item.foto_url ? (

@@ -3,7 +3,6 @@
 import Image from "next/image";
 import { Heart, Star } from "lucide-react";
 import { AlergenoIcon } from "./FiltroAlergenos";
-import { proporcionFoto } from "../../lib/proporcion-foto";
 import type { CartaItem } from "../../types";
 
 /**
@@ -29,11 +28,15 @@ export function ItemCard({
   liked,
   onOpen,
   onLike,
+  proporcion,
 }: {
   item: CartaItem;
   likes: number;
   liked: boolean;
   onOpen: () => void;
+  /** Alto del hueco de la foto. Lo manda la categoría para que todas las
+      tarjetas de una fila queden a la misma altura. */
+  proporcion: number;
   /** Votar desde la propia tarjeta, sin abrir la ficha. */
   onLike?: () => void;
 }) {
@@ -71,9 +74,9 @@ export function ItemCard({
         className="relative w-full overflow-hidden"
         style={{
           backgroundColor: "var(--carta-superficie-enfasis)",
-          // El hueco toma la proporción de SU foto: así el plato se ve entero
-          // en vez de recortado a un 4:3 que no le corresponde.
-          aspectRatio: proporcionFoto(item.foto_url),
+          // Todas las tarjetas de la categoría comparten alto: con la
+          // proporción de cada foto, la fila salía escalonada.
+          aspectRatio: proporcion,
         }}
       >
         {conFoto ? (

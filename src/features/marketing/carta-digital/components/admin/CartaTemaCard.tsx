@@ -21,6 +21,7 @@ import {
   saveBrandColors,
   getBrandConfig,
   type EstiloCards,
+  type FormatoFoto,
   type ModoCarta,
 } from "@/features/empresa/actions/logo-actions";
 import { friendlyError } from "@/shared/lib/friendly-errors";
@@ -58,6 +59,7 @@ type Estado = {
   fuenteTitulos: string;
   fuenteCuerpo: string;
   estiloCards: EstiloCards;
+  formatoFoto: FormatoFoto;
   modo: ModoCarta;
   heroUrl: string | null;
 };
@@ -71,6 +73,7 @@ const DEFAULT_ESTADO: Estado = {
   fuenteTitulos: "Cormorant Garamond",
   fuenteCuerpo: "Inter",
   estiloCards: "sombra",
+  formatoFoto: "horizontal",
   modo: "claro",
   heroUrl: null,
 };
@@ -103,6 +106,7 @@ export function CartaTemaCard({ empresaSlug, nombreEmpresa }: { empresaSlug: str
           fuenteTitulos: cfg.cartaFuenteTitulos ?? DEFAULT_ESTADO.fuenteTitulos,
           fuenteCuerpo: cfg.cartaFuenteCuerpo ?? DEFAULT_ESTADO.fuenteCuerpo,
           estiloCards: (cfg.cartaEstiloCards ?? DEFAULT_ESTADO.estiloCards) as EstiloCards,
+          formatoFoto: (cfg.cartaFormatoFoto ?? DEFAULT_ESTADO.formatoFoto) as FormatoFoto,
           modo: (cfg.cartaModo ?? DEFAULT_ESTADO.modo) as ModoCarta,
           heroUrl: cfg.cartaHeroUrl,
         });
@@ -177,6 +181,7 @@ export function CartaTemaCard({ empresaSlug, nombreEmpresa }: { empresaSlug: str
         cartaFuenteTitulos: estado.fuenteTitulos,
         cartaFuenteCuerpo: estado.fuenteCuerpo,
         cartaEstiloCards: estado.estiloCards,
+        cartaFormatoFoto: estado.formatoFoto,
         cartaModo: estado.modo,
       });
       toast.success("Estilo de la carta guardado");
@@ -324,6 +329,33 @@ export function CartaTemaCard({ empresaSlug, nombreEmpresa }: { empresaSlug: str
                   </button>
                 ))}
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase">Formato de las fotos</Label>
+              <div className="flex gap-2">
+                {([
+                  { v: "cuadrada", t: "Cuadrada" },
+                  { v: "horizontal", t: "Horizontal" },
+                  { v: "vertical", t: "Vertical" },
+                ] as { v: FormatoFoto; t: string }[]).map(({ v, t }) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setEstado((p) => ({ ...p, formatoFoto: v }))}
+                    className={`flex-1 rounded-md border px-3 py-2 text-xs font-medium transition ${
+                      estado.formatoFoto === v
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "text-muted-foreground hover:bg-muted/40"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Todas las fotos se ven con esta forma, así la rejilla queda a la
+                misma altura. Cada categoría puede llevar la suya.
+              </p>
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase">Modo de color</Label>

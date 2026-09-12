@@ -34,6 +34,8 @@ export type CartaCategoria = {
   visible: boolean;
   /** COMIDA, BEBIDA u OTROS (shishas, vapers): primer nivel de la carta. */
   familia: FamiliaCarta | null;
+  /** Formato de foto de esta categoría. null = el de la carta. */
+  formato_foto?: FormatoFoto | null;
   /** Dietas especiales (celíacos, veganos, niños): botón con estilo propio. */
   destacada: boolean;
   /**
@@ -103,6 +105,23 @@ export type CartaItemLike = {
   created_at: string;
 };
 
+/**
+ * Proporción con la que se enseñan las fotos de una categoría.
+ *
+ * Lo decide la casa, no el archivo: con la proporción de cada foto, las
+ * tarjetas de una misma fila salían a distinta altura y la rejilla quedaba
+ * descuadrada. Se elige por categoría porque no todo se fotografía igual —una
+ * botella pide vertical y un plato horizontal—, y dentro de cada una todas
+ * comparten formato, que es lo que hace que la fila cuadre.
+ */
+export type FormatoFoto = "cuadrada" | "horizontal" | "vertical";
+
+export const PROPORCION_FORMATO: Record<FormatoFoto, number> = {
+  cuadrada: 1,
+  horizontal: 4 / 3,
+  vertical: 3 / 4,
+};
+
 export type EstiloCards = "plana" | "sombra" | "borde";
 export type ModoCarta = "claro" | "oscuro" | "auto";
 
@@ -126,6 +145,8 @@ export type CartaEmpresaPublica = {
   carta_hero_url?: string | null;
   carta_estilo_cards?: EstiloCards | null;
   carta_modo?: ModoCarta | null;
+  /** Formato por defecto; cada categoría puede pisarlo. */
+  carta_formato_foto?: FormatoFoto | null;
 };
 
 /** Carta completa lista para render público. */

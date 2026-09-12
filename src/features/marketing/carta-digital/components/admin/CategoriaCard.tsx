@@ -5,7 +5,7 @@ import { Card, CardHeader, CardContent } from "@/shared/components/ui/card";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Pencil, Trash2, Eye, EyeOff, Plus, ChevronUp, ChevronDown } from "lucide-react";
-import type { CartaCategoria, CartaItem } from "../../types";
+import type { CartaCategoria, CartaItem, FormatoFoto } from "../../types";
 import {
   actualizarCategoria,
   borrarCategoria,
@@ -41,6 +41,12 @@ export function CategoriaCard({
     startTransition(async () => {
       await actualizarCategoria({ id: cat.id, nombre });
       setEditing(false);
+    });
+  };
+
+  const handleFormato = (formatoFoto: FormatoFoto | null) => {
+    startTransition(async () => {
+      await actualizarCategoria({ id: cat.id, formatoFoto });
     });
   };
 
@@ -146,6 +152,33 @@ export function CategoriaCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
+        {/* Forma de las fotos de ESTA categoría. Todas las de la categoría
+            comparten alto, que es lo que hace que la rejilla cuadre; y no
+            todo se fotografía igual: una botella pide vertical y un plato
+            horizontal. "Por defecto" deja mandar al formato de la carta. */}
+        <div className="flex flex-wrap items-center gap-2 pb-1">
+          <span className="text-xs font-bold uppercase text-muted-foreground">Fotos</span>
+          {([
+            { v: null, t: "Por defecto" },
+            { v: "cuadrada" as const, t: "Cuadrada" },
+            { v: "horizontal" as const, t: "Horizontal" },
+            { v: "vertical" as const, t: "Vertical" },
+          ]).map(({ v, t }) => (
+            <button
+              key={t}
+              type="button"
+              disabled={pending}
+              onClick={() => handleFormato(v)}
+              className={`rounded-md border px-2.5 py-1 text-xs font-medium transition disabled:opacity-50 ${
+                (cat.formato_foto ?? null) === v
+                  ? "border-primary bg-primary/5 text-primary"
+                  : "text-muted-foreground hover:bg-muted/40"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
         {items.length === 0 ? (
           <p className="text-sm italic text-stone-500">Sin platos en esta categoría.</p>
         ) : (

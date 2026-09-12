@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CartaPublica, CartaItem, Alergeno, FamiliaCarta } from "../../types";
+import { PROPORCION_FORMATO, type CartaPublica, type CartaItem, type Alergeno, type FamiliaCarta, type FormatoFoto } from "../../types";
 import { buildCartaTheme, themeToCssVars, googleFontsHref } from "../../lib/theme";
 import { useDeviceId } from "../../hooks/useDeviceId";
 import { getLikesDelDevice, toggleLike } from "../../actions/like-actions";
@@ -21,6 +21,9 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
   );
 
   const deviceId = useDeviceId();
+  // Formato de foto: lo elige la casa en Ajustes. Por defecto horizontal, que
+  // es como nació la carta.
+  const formatoCarta = (carta.empresa.carta_formato_foto ?? "horizontal") as FormatoFoto;
   // Familia activa: la carta se navega primero por COMIDA / BEBIDA.
   // Arranca por el primer apartado configurado: HABANA es coctelería y abre
   // por BEBIDA, no por comida.
@@ -104,6 +107,12 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
     );
   }, [carta.categorias, filtroExcluidos, totalItems]);
 
+  // La ficha abre con el alto de foto de SU categoría, para que no aparezca
+  // un recorte distinto del mismo plato.
+  const proporcionAbierta = PROPORCION_FORMATO[
+    (openItem && carta.categorias.find((c) => c.id === openItem.categoria_id)?.formato_foto) || formatoCarta
+  ];
+
   const openItemFinal = openItem
     ? (counters[openItem.id] ?? openItem.likes_base + openItem.likes_count)
     : 0;
@@ -183,6 +192,7 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
                 likedSet={likedSet}
                 onOpen={setOpenItem}
                 onLike={handleLikeRapido}
+                formatoCarta={formatoCarta}
               />
             </div>
           </div>
@@ -220,6 +230,7 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
           deviceId={deviceId}
           liked={openItem ? likedSet.has(openItem.id) : false}
           likesCount={openItemFinal}
+          proporcion={proporcionAbierta}
           onClose={() => setOpenItem(null)}
           onToggleLocalLike={handleToggleLocalLike}
         />

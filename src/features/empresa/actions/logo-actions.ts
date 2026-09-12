@@ -171,6 +171,8 @@ export async function getEmpresaColors(): Promise<Record<string, string>> {
 }
 
 export type EstiloCards = "plana" | "sombra" | "borde";
+/** Proporción con la que se enseñan las fotos de la carta. */
+export type FormatoFoto = "cuadrada" | "horizontal" | "vertical";
 export type ModoCarta = "claro" | "oscuro" | "auto";
 
 export interface BrandConfig {
@@ -188,6 +190,7 @@ export interface BrandConfig {
   cartaFuenteCuerpo: string | null;
   cartaHeroUrl: string | null;
   cartaEstiloCards: EstiloCards | null;
+  cartaFormatoFoto: FormatoFoto | null;
   cartaModo: ModoCarta | null;
 }
 
@@ -197,7 +200,7 @@ export async function getBrandConfig(empresaSlug: string): Promise<BrandConfig |
   const { data, error } = await supabase
     .from("empresas")
     .select(
-      "logo_url, logo_alt_url, isotipo_url, color, color_secundario, color_texto, fuente_titulos, fuente_cuerpo, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo",
+      "logo_url, logo_alt_url, isotipo_url, color, color_secundario, color_texto, fuente_titulos, fuente_cuerpo, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo, carta_formato_foto",
     )
     .eq("slug", empresaSlug)
     .maybeSingle();
@@ -221,6 +224,7 @@ export async function getBrandConfig(empresaSlug: string): Promise<BrandConfig |
     cartaFuenteCuerpo: (data.carta_fuente_cuerpo as string | null) ?? null,
     cartaHeroUrl: (data.carta_hero_url as string | null) ?? null,
     cartaEstiloCards: (data.carta_estilo_cards as EstiloCards | null) ?? null,
+    cartaFormatoFoto: (data.carta_formato_foto as FormatoFoto | null) ?? null,
     cartaModo: (data.carta_modo as ModoCarta | null) ?? null,
   };
 }
@@ -236,6 +240,7 @@ export interface BrandConfigUpdate {
   cartaFuenteTitulos?: string | null;
   cartaFuenteCuerpo?: string | null;
   cartaEstiloCards?: EstiloCards | null;
+  cartaFormatoFoto?: FormatoFoto | null;
   cartaModo?: ModoCarta | null;
 }
 
@@ -253,6 +258,7 @@ export async function saveBrandColors(empresaSlug: string, cfg: BrandConfigUpdat
   if (cfg.cartaFuenteTitulos !== undefined) updates.carta_fuente_titulos = cfg.cartaFuenteTitulos;
   if (cfg.cartaFuenteCuerpo !== undefined) updates.carta_fuente_cuerpo = cfg.cartaFuenteCuerpo;
   if (cfg.cartaEstiloCards !== undefined) updates.carta_estilo_cards = cfg.cartaEstiloCards;
+  if (cfg.cartaFormatoFoto !== undefined) updates.carta_formato_foto = cfg.cartaFormatoFoto;
   if (cfg.cartaModo !== undefined) updates.carta_modo = cfg.cartaModo;
   if (Object.keys(updates).length === 0) return;
 

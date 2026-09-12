@@ -13,6 +13,7 @@ import type {
   CartaEmpresaPublica,
   EstiloCards,
   ModoCarta,
+  FormatoFoto,
   Alergeno,
   CartaFamilia,
 } from "../types";
@@ -51,10 +52,12 @@ interface EmpresaRow {
   carta_hero_url: string | null;
   config_operativa: { zonaHoraria?: string } | null;
   carta_estilo_cards: string | null;
+  carta_formato_foto: string | null;
   carta_modo: string | null;
 }
 
 interface CategoriaRow {
+  formato_foto: string | null;
   id: string;
   empresa_id: string;
   nombre: string;
@@ -103,6 +106,7 @@ function rowToCategoria(r: CategoriaRow): CartaCategoria {
     orden: r.orden,
     visible: r.visible,
     familia: (r.familia as CartaCategoria["familia"]) ?? null,
+    formato_foto: (r.formato_foto as FormatoFoto | null) ?? null,
     destacada: r.destacada ?? false,
     dias_semana: r.dias_semana,
     hora_desde: r.hora_desde,
@@ -242,7 +246,7 @@ export async function fetchCartaPorSlug(
     const { data: empresa, error: empresaErr } = await supabase
       .from("empresas")
       .select(
-        "id, nombre, carta_slug, carta_publicada, carta_descripcion, config_operativa, logo_url, logo_alt_url, isotipo_url, color, color_secundario, color_texto, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo",
+        "id, nombre, carta_slug, carta_publicada, carta_descripcion, config_operativa, logo_url, logo_alt_url, isotipo_url, color, color_secundario, color_texto, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo, carta_formato_foto",
       )
       .eq("carta_slug", slug)
       .eq("carta_publicada", true)
@@ -273,6 +277,7 @@ export async function fetchCartaPorSlug(
       carta_hero_url: empresa.carta_hero_url,
       carta_estilo_cards: (empresa.carta_estilo_cards as EstiloCards | null) ?? null,
       carta_modo: (empresa.carta_modo as ModoCarta | null) ?? null,
+      carta_formato_foto: (empresa.carta_formato_foto as FormatoFoto | null) ?? null,
     };
 
     const [categoriasRes, itemsRes, familiasRes] = await Promise.all([
