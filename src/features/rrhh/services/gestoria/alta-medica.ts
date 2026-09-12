@@ -80,6 +80,11 @@ function sumarDias(iso: string, n: number): string {
  * calcula con el motor de horarios real, el mismo que usa RRHH, para no decirle
  * al trabajador un día que luego no le toca.
  *
+ * NUNCA devuelve un día pasado. El parte de alta puede ser de hace unos días
+ * —te la dan el viernes y lo comunicas el lunes— y decir «te reincorporas el
+ * viernes» no significa nada: ese día ya pasó. Cuando el alta es anterior a hoy,
+ * se busca a partir de HOY.
+ *
  * Devuelve null si en dos meses no tiene ningún turno asignado: eso no es un día
  * de descanso, es que no tiene horario, y entonces lo decide RRHH a mano.
  */
@@ -88,9 +93,14 @@ export async function calcularReincorporacion(
   empresaId: string,
   empleadoId: string,
   altaIso: string,
+  /** Suelo: ningún día anterior a este. Por defecto, hoy. */
+  noAntesDe?: string,
 ): Promise<string | null> {
+  const suelo = noAntesDe ?? new Date().toISOString().slice(0, 10);
+  const arranque = altaIso > suelo ? altaIso : suelo;
+
   for (let i = 0; i < DIAS_BUSQUEDA_REINCORPORACION; i++) {
-    const dia = sumarDias(altaIso, i);
+    const dia = sumarDias(arranque, i);
     const horario = await getHorarioDia(supabase, empresaId, empleadoId, dia);
     if (horario.tipo !== "ninguno") return dia;
   }
@@ -141,6 +151,12 @@ export async function comunicarAltaMedica(args: {
       ok: false,
       error: `El alta no puede ser anterior al primer día de la baja (${fechaEs(fechaInicio)}).`,
     };
+  }
+  // Un parte de alta se comunica cuando te lo dan, no con meses de antelación.
+  // El tope evita que un dedazo en el año cierre la baja en 2030.
+  const tope = sumarDias(new Date().toISOString().slice(0, 10), 90);
+  if (args.altaIso > tope) {
+    return { ok: false, error: "Esa fecha de alta está demasiado lejos. Revísala." };
   }
 
   const { data: emp } = await admin
