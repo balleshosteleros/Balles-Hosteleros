@@ -17,12 +17,19 @@
  * y, sobre todo, **quién ha entrado en la app y aun así no lo ha hecho**, que es
  * la lista que de verdad hace falta para poder reclamar.
  *
- * «Ha entrado» sale del ÚLTIMO INICIO DE SESIÓN que guarda el propio Supabase
- * (`auth.users.last_sign_in_at`), no de `usuarios.ultima_actividad`: ese campo
- * está VACÍO en casi todo el mundo —lo mantiene la app y apenas se escribe—, y
- * apoyarse en él dejaba la lista de «han entrado y no lo han subido» siempre a
- * cero, que es justo la que sirve para reclamar. `last_sign_in_at` lo escribe
- * Supabase en cada login y está relleno para todos.
+ * «Ha entrado» mira DOS señales, y hace falta mirar las dos:
+ *
+ *   · `auth.users.last_sign_in_at` — el último inicio de sesión. Lo escribe
+ *     Supabase, está relleno para todos, pero SOLO cambia cuando alguien vuelve
+ *     a identificarse. La plantilla lleva la sesión abierta en el móvil durante
+ *     semanas, así que este campo dice «no ha entrado» de gente que usa la app
+ *     a diario: de 17 personas, 14 habían fichado en septiembre y casi ninguna
+ *     tenía un login reciente.
+ *   · Su último FICHAJE. Para fichar hay que abrir la app, o sea que un fichaje
+ *     posterior al aviso demuestra que lo ha tenido delante. Es la señal que de
+ *     verdad sirve para reclamar.
+ *
+ * No se usa `usuarios.ultima_actividad`: está VACÍO en casi todo el mundo.
  *
  * Se apaga solo: cuando no queda nadie pendiente manda un último correo diciendo
  * que está cerrado y deja de escribir. No hay que acordarse de quitarlo.
@@ -136,11 +143,26 @@ export async function GET(request: Request) {
     }
   }
 
-  // Última vez que cada persona inició sesión, según el propio Supabase.
+  // Última vez que se le vio en la app: el último inicio de sesión o, mejor
+  // aún, el último fichaje (para fichar hay que abrirla). Se queda el más
+  // reciente de los dos.
   const actividad = new Map<string, string | null>();
   const { data: cuentas } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
   for (const u of cuentas?.users ?? []) {
     actividad.set(u.id, u.last_sign_in_at ?? null);
+  }
+
+  const { data: fichajes } = await supabase
+    .from("fichajes")
+    .select("empleado_id, hora_entrada")
+    .gte("hora_entrada", AVISO_DESDE);
+  // `fichajes.empleado_id` apunta a `auth.users`, no a `empleados`: es la misma
+  // clave con la que se guarda el inicio de sesión, así que se comparan directas.
+  for (const f of fichajes ?? []) {
+    const id = String(f.empleado_id);
+    const cuando = String(f.hora_entrada);
+    const previa = actividad.get(id);
+    if (!previa || cuando > previa) actividad.set(id, cuando);
   }
 
   const completos: string[] = [];
@@ -162,9 +184,9 @@ export async function GET(request: Request) {
 
     if (haEntrado) {
       const dia = String(ultima).slice(0, 10).split("-").reverse().join("-");
-      vistoSinHacer.push(fila(p.nombre, empresas, `${detalle} · entró el ${dia}`));
+      vistoSinHacer.push(fila(p.nombre, empresas, `${detalle} · usó la app el ${dia}`));
     } else {
-      sinEntrar.push(fila(p.nombre, empresas, `${detalle} · no ha entrado`));
+      sinEntrar.push(fila(p.nombre, empresas, `${detalle} · no ha abierto la app`));
     }
   }
 
@@ -200,12 +222,13 @@ export async function GET(request: Request) {
       }
     </p>
     ${tabla("Han entrado y NO lo han rellenado", "#b91c1c", vistoSinHacer)}
-    ${tabla("Todavía no han entrado", "#a16207", sinEntrar)}
+    ${tabla("Todavía no han abierto la app", "#a16207", sinEntrar)}
     ${tabla("Ficha completa", "#15803d", completos)}
     ${tabla("Lo ponemos NOSOTROS: condiciones sin salario", "#1d4ed8", sinCondiciones)}
     <p style="margin:24px 0 0;color:#999;font-size:11px">
-      Los de la primera lista han visto el aviso en la app y han seguido sin rellenarlo. El aviso
-      les tapa el software entero: solo pueden fichar.
+      Los de la primera lista han abierto la app —han fichado o se han identificado— después de
+      que saltara el aviso, y han seguido sin rellenarlo. El aviso les tapa el software entero:
+      lo único que pueden hacer es fichar.
     </p>`;
 
   // El parte deja de mandarse cuando no queda NADA que reclamar, ni a ellos ni a
