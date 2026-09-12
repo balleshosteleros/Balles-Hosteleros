@@ -50,7 +50,21 @@ export const ToolTooltip = React.forwardRef<
   { label, children, side = "bottom", sideOffset = 8, className, ...triggerProps },
   ref,
 ) {
-  if (label === null || label === undefined || label === "") return <>{children}</>;
+  // SIN ETIQUETA que enseñar, este componente se aparta... pero NO puede
+  // soltar lo que le hayan inyectado desde fuera. Antes devolvia el hijo
+  // "pelado" y con el se iban el `onClick` y la `ref` de quien lo envuelve:
+  // una mesa del plano solo lleva etiqueta mientras se mueve una reserva, asi
+  // que en el uso normal el desplegable de la mesa no abria (en el listado si,
+  // porque alli no hay etiqueta de por medio). El `Slot` mantiene el puente.
+  if (label === null || label === undefined || label === "") {
+    const hayQueReenviar = ref !== null || Object.keys(triggerProps).length > 0;
+    if (!hayQueReenviar) return <>{children}</>;
+    return (
+      <Slot ref={ref} {...triggerProps}>
+        {children}
+      </Slot>
+    );
+  }
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>

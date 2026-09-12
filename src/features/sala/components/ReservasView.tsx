@@ -7091,6 +7091,12 @@ export function ReservasView() {
                         un desplegable no tiene "terminar de escribir". */}
                     <SelectorHoraCuartos
                       value={horaEdit}
+                      // La caja de la hora nace EN LÍNEA (se usa suelta dentro
+                      // de una frase en Configuración), y aquí eso la ponía al
+                      // lado del rótulo HORA mientras Fecha, Personas y
+                      // Duración lo llevaban encima: la fila salía descuadrada.
+                      // En la ficha ocupa su columna entera, como las demás.
+                      className="flex w-full"
                       disabled={guardandoCuando}
                       horasPermitidas={horasEdit ?? undefined}
                       onChange={setHoraEdit}
