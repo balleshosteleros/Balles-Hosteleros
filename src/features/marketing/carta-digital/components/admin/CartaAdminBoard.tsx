@@ -45,6 +45,9 @@ export function CartaAdminBoard({
   const auth = useContext(AuthContext);
   const puedeVerAjustes = auth?.puedeVer?.("AJUSTES") ?? false;
   const [nuevaCat, setNuevaCat] = useState("");
+  // Forma de las fotos de la categoría nueva: se decide al crearla, que es
+  // cuando se sabe qué va dentro (platos anchos o copas altas).
+  const [nuevaCatFormato, setNuevaCatFormato] = useState<"cuadrada" | "vertical">("cuadrada");
   const [pending, startTransition] = useTransition();
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CartaItem | null>(null);
@@ -82,7 +85,7 @@ export function CartaAdminBoard({
   const handleCreateCat = () => {
     if (!nuevaCat.trim()) return;
     startTransition(async () => {
-      const res = await crearCategoria({ nombre: nuevaCat.trim() });
+      const res = await crearCategoria({ nombre: nuevaCat.trim(), formatoFoto: nuevaCatFormato });
       if (res.ok) setNuevaCat("");
     });
   };
@@ -190,6 +193,29 @@ export function CartaAdminBoard({
               <Plus className="h-5 w-5" />
               Crear
             </Button>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase text-muted-foreground">Fotos</span>
+            {([
+              { v: "cuadrada" as const, t: "Cuadrada" },
+              { v: "vertical" as const, t: "Vertical" },
+            ]).map(({ v, t }) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setNuevaCatFormato(v)}
+                className={`rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+                  nuevaCatFormato === v
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "text-muted-foreground hover:bg-muted/40"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+            <span className="text-xs text-muted-foreground">
+              Todas las fotos de la categoría se verán así. Se puede cambiar después.
+            </span>
           </div>
         </CardContent>
       </Card>

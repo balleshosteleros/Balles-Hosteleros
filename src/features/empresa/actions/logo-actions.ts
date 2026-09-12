@@ -172,7 +172,7 @@ export async function getEmpresaColors(): Promise<Record<string, string>> {
 
 export type EstiloCards = "plana" | "sombra" | "borde";
 /** Proporción con la que se enseñan las fotos de la carta. */
-export type FormatoFoto = "cuadrada" | "horizontal" | "vertical";
+export type FormatoFoto = "cuadrada" | "vertical";
 export type ModoCarta = "claro" | "oscuro" | "auto";
 
 export interface BrandConfig {

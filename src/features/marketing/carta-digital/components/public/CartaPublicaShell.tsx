@@ -21,9 +21,9 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
   );
 
   const deviceId = useDeviceId();
-  // Formato de foto: lo elige la casa en Ajustes. Por defecto horizontal, que
-  // es como nació la carta.
-  const formatoCarta = (carta.empresa.carta_formato_foto ?? "horizontal") as FormatoFoto;
+  // Formato de foto: lo elige la casa en Ajustes; cuadrada si no dice nada.
+  const formatoCarta: FormatoFoto =
+    carta.empresa.carta_formato_foto === "vertical" ? "vertical" : "cuadrada";
   // Familia activa: la carta se navega primero por COMIDA / BEBIDA.
   // Arranca por el primer apartado configurado: HABANA es coctelería y abre
   // por BEBIDA, no por comida.

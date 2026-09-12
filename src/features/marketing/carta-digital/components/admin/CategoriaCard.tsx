@@ -161,7 +161,6 @@ export function CategoriaCard({
           {([
             { v: null, t: "Por defecto" },
             { v: "cuadrada" as const, t: "Cuadrada" },
-            { v: "horizontal" as const, t: "Horizontal" },
             { v: "vertical" as const, t: "Vertical" },
           ]).map(({ v, t }) => (
             <button

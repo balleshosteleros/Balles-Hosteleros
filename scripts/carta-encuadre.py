@@ -1,7 +1,9 @@
 """Recorta una foto al formato que pide su categoria, sin deformarla."""
 from PIL import Image
 
-RATIOS = {"cuadrada": 1.0, "horizontal": 4/3, "vertical": 3/4}
+# Ninguna apaisada: la foto necesita altura en la tarjeta para que el plato
+# se vea. Cuadrada para comida, vertical para copas y botellas.
+RATIOS = {"cuadrada": 1.0, "vertical": 2/3}
 
 def recortar(src, dst, formato, ancho_max=1000):
     r = RATIOS[formato]

@@ -110,16 +110,22 @@ export type CartaItemLike = {
  *
  * Lo decide la casa, no el archivo: con la proporción de cada foto, las
  * tarjetas de una misma fila salían a distinta altura y la rejilla quedaba
- * descuadrada. Se elige por categoría porque no todo se fotografía igual —una
- * botella pide vertical y un plato horizontal—, y dentro de cada una todas
- * comparten formato, que es lo que hace que la fila cuadre.
+ * descuadrada. Se elige por categoría porque no todo se fotografía igual, y
+ * dentro de cada una todas comparten formato: eso es lo que hace que la fila
+ * cuadre.
+ *
+ * Solo dos formas, y ninguna apaisada: la foto tiene que ganar altura en la
+ * tarjeta para que el plato se vea. La cuadrada va bien a la comida, que se
+ * fotografía a lo ancho, y la vertical a copas y botellas.
  */
-export type FormatoFoto = "cuadrada" | "horizontal" | "vertical";
+export type FormatoFoto = "cuadrada" | "vertical";
 
 export const PROPORCION_FORMATO: Record<FormatoFoto, number> = {
   cuadrada: 1,
-  horizontal: 4 / 3,
-  vertical: 3 / 4,
+  // 2:3, que es justo como se disparan las fotos de copa. A 3:4 había que
+  // recortar y lo que se perdía era el pie de la copa: el cóctel salía
+  // flotando. Así entran enteras, sin tocar nada.
+  vertical: 2 / 3,
 };
 
 export type EstiloCards = "plana" | "sombra" | "borde";

@@ -38,6 +38,8 @@ function revalidar(slug: string | null) {
 export async function crearCategoria(input: {
   nombre: string;
   descripcion?: string;
+  /** Forma de las fotos de esta categoría. Se elige ya al crearla. */
+  formatoFoto?: "cuadrada" | "vertical";
 }): Promise<ActionResult<{ id: string }>> {
   try {
     const { supabase, empresaId } = await getAppContext();
@@ -60,6 +62,7 @@ export async function crearCategoria(input: {
         empresa_id: empresaId,
         nombre,
         descripcion: input.descripcion?.trim() || null,
+        formato_foto: input.formatoFoto ?? null,
         orden,
       })
       .select("id")
@@ -85,7 +88,7 @@ export async function actualizarCategoria(input: {
   visible?: boolean;
   orden?: number;
   /** null = esta categoría usa el formato de foto de la carta. */
-  formatoFoto?: "cuadrada" | "horizontal" | "vertical" | null;
+  formatoFoto?: "cuadrada" | "vertical" | null;
 }): Promise<ActionResult> {
   try {
     const { supabase, empresaId } = await getAppContext();

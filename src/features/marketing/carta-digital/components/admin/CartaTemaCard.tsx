@@ -73,7 +73,7 @@ const DEFAULT_ESTADO: Estado = {
   fuenteTitulos: "Cormorant Garamond",
   fuenteCuerpo: "Inter",
   estiloCards: "sombra",
-  formatoFoto: "horizontal",
+  formatoFoto: "cuadrada",
   modo: "claro",
   heroUrl: null,
 };
@@ -335,7 +335,6 @@ export function CartaTemaCard({ empresaSlug, nombreEmpresa }: { empresaSlug: str
               <div className="flex gap-2">
                 {([
                   { v: "cuadrada", t: "Cuadrada" },
-                  { v: "horizontal", t: "Horizontal" },
                   { v: "vertical", t: "Vertical" },
                 ] as { v: FormatoFoto; t: string }[]).map(({ v, t }) => (
                   <button

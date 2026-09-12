@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Heart, Star } from "lucide-react";
 import { AlergenoIcon } from "./FiltroAlergenos";
 import type { CartaItem } from "../../types";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Ficha de plato — formato fotográfico.
@@ -137,18 +138,19 @@ export function ItemCard({
 
         {item.destacado && !agotado ? (
           // Estrella + rótulo: la estrella sola no dice por qué está ahí.
-          <span
-            // En móvil la etiqueta llegaba a tocar el contador de la esquina
-            // opuesta: aquí va compacta, y el rótulo solo aparece cuando hay
-            // ancho para los dos.
-            className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/45 px-1.5 py-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.4)] ring-1 ring-white/25 backdrop-blur-md sm:gap-1.5 sm:pl-1.5 sm:pr-2.5 sm:py-1"
-            title="Uno de los más pedidos"
-          >
-            <Star className="h-3 w-3 fill-amber-400 text-amber-400 sm:h-3.5 sm:w-3.5" strokeWidth={1.5} />
-            <span className="hidden text-[9px] font-bold uppercase tracking-[0.12em] text-white sm:inline">
-              Best seller
+          <ToolTooltip label="Uno de los más pedidos">
+            <span
+              // En móvil la etiqueta llegaba a tocar el contador de la esquina
+              // opuesta: aquí va compacta, y el rótulo solo aparece cuando hay
+              // ancho para los dos.
+              className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/45 px-1.5 py-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.4)] ring-1 ring-white/25 backdrop-blur-md sm:gap-1.5 sm:pl-1.5 sm:pr-2.5 sm:py-1"
+            >
+              <Star className="h-3 w-3 fill-amber-400 text-amber-400 sm:h-3.5 sm:w-3.5" strokeWidth={1.5} />
+              <span className="hidden text-[9px] font-bold uppercase tracking-[0.12em] text-white sm:inline">
+                Best seller
+              </span>
             </span>
-          </span>
+          </ToolTooltip>
         ) : null}
 
         {/* Corazón SIEMPRE visible, no solo cuando ya hay votos: si aparece al
@@ -195,18 +197,18 @@ export function ItemCard({
         {item.alergenos.length > 0 ? (
           <span className="mt-2 flex flex-wrap items-center gap-1.5">
             {item.alergenos.map((a) => (
-              <span
-                key={a}
-                title={a}
-                className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] leading-none"
-                style={{
-                  color: "var(--carta-texto-suave)",
-                  border: "1px solid var(--carta-borde)",
-                }}
-              >
-                <AlergenoIcon alergeno={a} className="h-3 w-3" />
-                <span className="sr-only">{a}</span>
-              </span>
+              <ToolTooltip key={a} label={a}>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] leading-none"
+                  style={{
+                    color: "var(--carta-texto-suave)",
+                    border: "1px solid var(--carta-borde)",
+                  }}
+                >
+                  <AlergenoIcon alergeno={a} className="h-3 w-3" />
+                  <span className="sr-only">{a}</span>
+                </span>
+              </ToolTooltip>
             ))}
           </span>
         ) : null}
