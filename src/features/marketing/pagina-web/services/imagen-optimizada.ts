@@ -31,7 +31,13 @@ export function imagenOptimizada(url: string, opts: OpcionesImagen): string {
   const base = url.replace(PATRON_PUBLICO, PATRON_RENDER);
   const sep = base.includes("?") ? "&" : "?";
   const q = Math.min(100, Math.max(20, opts.quality ?? 70));
-  return `${base}${sep}width=${Math.round(opts.width)}&quality=${q}`;
+  // `resize=contain` NO es un detalle: pidiendo solo el ancho, Supabase aplica
+  // su modo por defecto (`cover`) contra el alto original y devuelve la foto
+  // RECORTADA por el centro. La cantante de la experiencia llegaba a la web ya
+  // sin micrófono, y ningún encuadre del CSS podía recuperarlo porque el
+  // recorte venía hecho de origen. Con `contain` llega entera y es la página
+  // la que decide qué se ve.
+  return `${base}${sep}width=${Math.round(opts.width)}&quality=${q}&resize=contain`;
 }
 
 /**

@@ -147,6 +147,7 @@ export default async function PublicCatchAllPage({ params, searchParams }: PageP
         redes: match.redes,
         empleoActivo: match.empleo_activo,
         reservasActivas: match.reservas_activas,
+        cartaActiva: match.carta_activa,
       }}
       hrefPoliticaCookies="/politica-de-cookies"
     />

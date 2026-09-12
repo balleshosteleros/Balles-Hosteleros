@@ -37,6 +37,12 @@ export interface PaginaContexto {
    * que abría el formulario de reservar mesa de un restaurante.
    */
   reservasActivas?: boolean;
+  /**
+   * La empresa tiene carta digital. `false` quita la sección de la carta y su
+   * enlace del menú: el portal de la carta no responde, y anunciarlo llevaría
+   * al visitante a una página que no existe.
+   */
+  cartaActiva?: boolean;
   /** Enlaces ya normalizados desde Ajustes → datos generales. */
   redes?: {
     instagram: string | null;
@@ -159,12 +165,29 @@ export function PaginaPublicaShell({
       : b,
   );
 
+  // Sin portal de reservas no hay dónde reservar: la ventana incrustada se cae
+  // con la sección entera, igual que la llamada a empleo. Dejarla pintada sería
+  // ofrecer mesa en un sitio que no la da.
+  const sinReservas = contexto?.reservasActivas === false;
+  const conReservasVisibles = sinReservas
+    ? conEmpleoResuelto.map((b) => (b.tipo === "reservas" ? { ...b, visible: false } : b))
+    : conEmpleoResuelto;
+
+  // Sin carta digital se cae la sección de la carta: su botón lleva al portal
+  // de la carta, que en esa empresa no responde.
+  const sinCarta = contexto?.cartaActiva === false;
+  const conCartaResuelta = sinCarta
+    ? conReservasVisibles.map((b) =>
+        b.tipo === "collage_carta" || b.tipo === "menu" ? { ...b, visible: false } : b,
+      )
+    : conReservasVisibles;
+
   // El cliente reserva DENTRO de la web, en la ventana incrustada de la sección
   // de reservas. El botón de la barra lleva además al portal a pantalla
   // completa, para quien prefiera verlo entero.
   const conReservasResuelto = contexto?.empresaSlug
-    ? conEmpleoResuelto.map((b) => reescribirReservas(b))
-    : conEmpleoResuelto;
+    ? conCartaResuelta.map((b) => reescribirReservas(b))
+    : conCartaResuelta;
 
   // Anclas que EXISTEN en esta web. Un botón que apunta a "#mapa" cuando el
   // cliente ha quitado el mapa deja al visitante donde estaba, sin que nada se
@@ -214,7 +237,7 @@ export function PaginaPublicaShell({
     bloquesLimpios.some(
       (b) => b.tipo === "collage_carta" && b.visible && (b.datos.imagenes?.length ?? 0) > 0,
     ) || visible("menu");
-  if (contexto?.empresaSlug && hayCarta) {
+  if (contexto?.empresaSlug && hayCarta && !sinCarta) {
     nav.push({ href: `/carta`, label: "Carta" });
   }
   if (visible("mapa")) nav.push({ href: "#mapa", label: "Ubicación" });
