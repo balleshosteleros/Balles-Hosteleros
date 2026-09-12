@@ -145,7 +145,7 @@ export async function comunicarAltaMedica(args: {
 
   const { data: emp } = await admin
     .from("empleados")
-    .select("id, nombre, apellidos, dni_nie, numero_ss, telefono, puesto, locales(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
+    .select("id, nombre, apellidos, dni_nie, numero_ss, telefono, puesto, locales!empleados_centro_id_fkey(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
     .eq("empresa_id", empresaId)
     .eq("user_id", sol.user_id as string)
     .maybeSingle();

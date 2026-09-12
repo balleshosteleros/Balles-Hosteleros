@@ -19,7 +19,6 @@ import {
   createVacante, updateVacante, getVacanteById,
   listPuestosCatalogo, listDepartamentosCatalogo,
 } from "@/features/rrhh/actions/vacantes-actions";
-import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { listJornadas, type JornadaRow } from "@/features/rrhh/actions/jornadas-actions";
 import { listTiposContrato, type TipoContratoRow } from "@/features/rrhh/actions/tipos-contrato-actions";
 import { listCuestionariosVacante } from "@/features/rrhh/actions/cuestionarios-vacante-actions";
@@ -36,15 +35,12 @@ type EstadoPub = "publicada" | "borrador" | "cerrada" | "archivada";
 
 interface PuestoRef { id: string; nombre: string; departamento_id?: string | null }
 interface DepartamentoRef { id: string; nombre: string }
-interface LocalRef { id: string; nombre: string; activo?: boolean }
 
 interface FormState {
   titulo: string;
   descripcion: string;
   puesto_id: string;
   departamento_id: string;
-  /** Centro de trabajo del alta: de él salen dirección y CCC para la gestoría. */
-  local_id: string;
   tipo_jornada: string;
   tipo_contrato: string;
   salario_rango: string;
@@ -61,7 +57,6 @@ const FORM_VACIO: FormState = {
   descripcion: "",
   puesto_id: "",
   departamento_id: "",
-  local_id: "",
   tipo_jornada: "",
   tipo_contrato: "",
   salario_rango: "",
@@ -84,7 +79,6 @@ interface Props {
 export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill, onSaved }: Props) {
   const [form, setForm] = useState<FormState>(FORM_VACIO);
   const [puestos, setPuestos] = useState<PuestoRef[]>([]);
-  const [locales, setLocales] = useState<LocalRef[]>([]);
   const [departamentos, setDepartamentos] = useState<DepartamentoRef[]>([]);
   const [jornadas, setJornadas] = useState<JornadaRow[]>([]);
   const [tiposContrato, setTiposContrato] = useState<TipoContratoRow[]>([]);
@@ -100,11 +94,9 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
     if (!open) return;
     void Promise.all([
       listPuestosCatalogo(), listDepartamentosCatalogo(), listJornadas(), listCuestionariosVacante(),
-      listPlantillasEstado(), listTiposContrato(), listLocales(),
-    ]).then(([p, d, j, c, pe, tc, lo]) => {
+      listPlantillasEstado(), listTiposContrato(),
+    ]).then(([p, d, j, c, pe, tc]) => {
       setPuestos((p.data ?? []) as PuestoRef[]);
-      const locs = ((lo.data ?? []) as LocalRef[]).filter((l) => l.activo !== false);
-      setLocales(locs);
       setDepartamentos((d.data ?? []) as DepartamentoRef[]);
       setJornadas((j.data ?? []) as JornadaRow[]);
       setTiposContrato((tc.data ?? []) as TipoContratoRow[]);
@@ -121,8 +113,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
           ...f,
           cuestionario_plantilla_id: f.cuestionario_plantilla_id || (def?.id ?? ""),
           plantilla_estado_id: f.plantilla_estado_id || (predeterminada?.id ?? ""),
-          // Con un solo local no hay nada que elegir: se da por hecho.
-          local_id: f.local_id || (locs.length === 1 ? locs[0].id : ""),
         }));
       }
     });
@@ -139,7 +129,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
       const v = res.data as {
         titulo?: string; descripcion?: string | null;
         puesto_id?: string | null; departamento_id?: string | null;
-        local_id?: string | null;
         tipo_jornada?: string | null;
         tipo_contrato?: string | null;
         salario_rango?: string | null;
@@ -153,7 +142,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
           descripcion: v.descripcion ?? "",
           puesto_id: v.puesto_id ?? "",
           departamento_id: v.departamento_id ?? "",
-          local_id: v.local_id ?? "",
           tipo_jornada: v.tipo_jornada ?? "",
           tipo_contrato: v.tipo_contrato ?? "",
           salario_rango: v.salario_rango ?? "",
@@ -199,7 +187,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
         descripcion: form.descripcion.trim() || null,
         puesto_id: form.puesto_id || null,
         departamento_id: form.departamento_id || null,
-        local_id: form.local_id || null,
         tipo_jornada: form.tipo_jornada || null,
         tipo_contrato: form.tipo_contrato || null,
         salario_rango: form.salario_rango.trim() || null,
@@ -290,29 +277,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            {/* Centro de trabajo del alta: de este local salen la dirección y el
-                CCC que viajan a la gestoría al contratar. */}
-            <div className="space-y-1.5">
-              <Label>Local</Label>
-              <Select value={form.local_id} onValueChange={(v) => setForm({ ...form, local_id: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder={locales.length ? "Selecciona…" : "Sin locales dados de alta"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {locales.length === 0 ? (
-                    <SelectItem value="__none__" disabled>Créalos en Ajustes → Locales</SelectItem>
-                  ) : (
-                    locales.map((l) => (
-                      <SelectItem key={l.id} value={l.id}>{l.nombre}</SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] leading-snug text-muted-foreground">
-                Centro donde se dará el alta. De él salen la dirección y el CCC para la gestoría.
-              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

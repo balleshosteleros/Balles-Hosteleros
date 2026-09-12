@@ -75,6 +75,54 @@ function fmtFecha(iso: string): string {
   return d && m && y ? `${d}/${m}/${y}` : iso;
 }
 
+// Día anterior a una fecha YYYY-MM-DD. En UTC puro: la fecha es un día de
+// calendario, no un instante, y no debe moverse con la zona horaria.
+function diaAnteriorISO(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return dt.toISOString().split("T")[0];
+}
+
+// Quién tiene puesto un horario de esta familia (cualquier versión) y sigue
+// vivo a partir de `desde`: sin fecha de fin, o con una posterior a ese día.
+// Las asignaciones ya cerradas antes de esa fecha son histórico y no se tocan.
+type AsignacionViva = {
+  patron_id: string;
+  empleado_id: string;
+  vigente_desde: string;
+  vigente_hasta: string | null;
+};
+
+async function getAsignacionesVivasDeFamilia(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  familiaId: string,
+  empresaId: string,
+  desde: string,
+): Promise<AsignacionViva[]> {
+  const { data: versiones } = await supabase
+    .from("rrhh_patrones")
+    .select("id")
+    .eq("familia_id", familiaId)
+    .eq("empresa_id", empresaId);
+  const ids = (versiones ?? []).map((v) => v.id as string);
+  if (ids.length === 0) return [];
+
+  const { data: asignaciones } = await supabase
+    .from("rrhh_patron_empleados")
+    .select("patron_id, empleado_id, vigente_desde, vigente_hasta")
+    .in("patron_id", ids);
+
+  return (asignaciones ?? [])
+    .map((a) => ({
+      patron_id: a.patron_id as string,
+      empleado_id: a.empleado_id as string,
+      vigente_desde: a.vigente_desde as string,
+      vigente_hasta: (a.vigente_hasta as string | null) ?? null,
+    }))
+    .filter((a) => a.vigente_hasta === null || a.vigente_hasta >= desde);
+}
+
 // Regla: MANDA EL TURNO. Un patrón solo puede abarcar fechas en las que TODOS
 // sus turnos estén vigentes. Devuelve un mensaje de error si algún turno no
 // cubre por completo el rango [desde, hasta] del patrón; null si todo correcto.
@@ -650,10 +698,10 @@ export async function deletePatron(id: string) {
 // anterior queda como histórico no editable. La fecha de creación de cada
 // versión = created_at.
 //
-// REGLA (adjudicación = snapshot): los empleados YA asignados NO se arrastran a
-// la versión nueva. Cada empleado conserva la versión del patrón que tenía en el
-// momento de la adjudicación de su puesto. El cambio de patrón solo afecta a
-// nuevas asignaciones (nuevas contrataciones/adjudicaciones).
+// REGLA: la versión nueva entra en vigor el día que se le diga y se aplica SOLA
+// a todo el que tenga ese horario puesto. A cada uno se le cierra la asignación
+// anterior la víspera y se le abre la nueva ese día. Lo anterior a esa fecha no
+// se toca nunca: sigue calculándose con el horario que había.
 
 export async function crearVersionPatron(
   patronId: string,
@@ -662,6 +710,9 @@ export async function crearVersionPatron(
     tipo_jornada?: TipoJornada;
     departamento?: string | null;
     semanas: { orden: number; dias: (string | null)[] }[];
+    /** Día en que entra en vigor la versión nueva. Por defecto, hoy. */
+    vigente_desde?: string;
+    vigente_hasta?: string | null;
   },
 ) {
   try {
@@ -715,8 +766,31 @@ export async function crearVersionPatron(
     const creadorNombre =
       [profile?.nombre, profile?.apellidos].filter(Boolean).join(" ").trim() || "Usuario";
 
-    // 1) La versión oficial anterior deja de serlo.
-    await supabase.from("rrhh_patrones").update({ es_oficial: false }).eq("id", oficialId);
+    // Día en que arranca la versión nueva; la anterior termina la víspera.
+    const desde = input.vigente_desde || hoyISODate();
+    const vispera = diaAnteriorISO(desde);
+
+    // La versión nueva no puede arrancar antes de que empiece alguna asignación
+    // viva: dejaría un tramo al revés (empieza después de terminar).
+    const asignacionesFamilia = await getAsignacionesVivasDeFamilia(
+      supabase,
+      familiaId,
+      empresaId,
+      desde,
+    );
+    const conflicto = asignacionesFamilia.find((a) => a.vigente_desde >= desde);
+    if (conflicto) {
+      return {
+        ok: false,
+        error: `Hay quien ya tiene este horario desde el ${fmtFecha(conflicto.vigente_desde)}. La versión nueva tiene que empezar después de esa fecha.`,
+      };
+    }
+
+    // 1) La versión oficial anterior deja de serlo y se cierra la víspera.
+    await supabase
+      .from("rrhh_patrones")
+      .update({ es_oficial: false, vigente_hasta: vispera })
+      .eq("id", oficialId);
 
     // 2) Insertar la versión nueva oficial (misma familia).
     const { data: nuevo, error: eIns } = await supabase
@@ -733,12 +807,17 @@ export async function crearVersionPatron(
         creado_por_user_id: userId,
         creado_por_nombre: creadorNombre,
         activo: true,
+        vigente_desde: desde,
+        vigente_hasta: input.vigente_hasta ?? null,
       })
       .select()
       .single();
     if (eIns) {
       // Revertir el flag oficial si falla la inserción.
-      await supabase.from("rrhh_patrones").update({ es_oficial: true }).eq("id", oficialId);
+      await supabase
+        .from("rrhh_patrones")
+        .update({ es_oficial: true, vigente_hasta: null })
+        .eq("id", oficialId);
       throw eIns;
     }
 
@@ -760,11 +839,34 @@ export async function crearVersionPatron(
       }
     }
 
-    // 4) Los empleados ya asignados NO se mueven: conservan la versión anterior
-    //    (snapshot del momento de su adjudicación). La versión nueva solo se
-    //    hereda en futuras asignaciones/adjudicaciones de puesto.
+    // 4) Todo el que tenga este horario pasa a la versión nueva ese mismo día:
+    //    su asignación anterior se cierra la víspera y se le abre una nueva.
+    //    Lo anterior queda intacto, así que lo ya fichado no se toca.
+    const nuevoId = nuevo.id as string;
+    const empleados = [...new Set(asignacionesFamilia.map((a) => a.empleado_id))];
 
-    return { ok: true, data: nuevo as PatronRow };
+    if (empleados.length > 0) {
+      await supabase
+        .from("rrhh_patron_empleados")
+        .update({ vigente_hasta: vispera })
+        .in("patron_id", asignacionesFamilia.map((a) => a.patron_id))
+        .in("empleado_id", empleados)
+        .or(`vigente_hasta.is.null,vigente_hasta.gte.${desde}`);
+
+      const { error: eAsig } = await supabase.from("rrhh_patron_empleados").upsert(
+        empleados.map((empleadoId) => ({
+          patron_id: nuevoId,
+          empleado_id: empleadoId,
+          vigente_desde: desde,
+          vigente_hasta: input.vigente_hasta ?? null,
+          asignado_por_user_id: userId,
+        })),
+        { onConflict: "patron_id,empleado_id" },
+      );
+      if (eAsig) throw eAsig;
+    }
+
+    return { ok: true, data: nuevo as PatronRow, empleadosMovidos: empleados.length };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[patrones] crearVersionPatron:", msg);

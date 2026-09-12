@@ -78,7 +78,7 @@ export async function listCandidatos() {
     const { supabase, empresaId } = await getContext();
     const query = supabase
       .from("candidatos")
-      .select("*, vacantes(id,titulo,puesto_id,departamento_id,local_id)")
+      .select("*, vacantes(id,titulo,puesto_id,departamento_id)")
       .order("created_at", { ascending: false });
     if (empresaId) query.eq("empresa_id", empresaId);
     const { data, error } = await query;
@@ -104,7 +104,6 @@ interface VacanteRowReal {
   favorita: boolean;
   orden: number | null;
   puesto_id: string | null;
-  local_id: string | null;
   departamentos: { nombre: string; area: string | null } | null;
   puestos: { nombre: string } | null;
 }
@@ -179,7 +178,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         .select(`
           id, empresa_id, titulo, categoria, ubicacion, tipo_jornada,
           estado_publicacion, visible_publicamente, fecha_creacion,
-          cuestionario, favorita, orden, puesto_id, local_id,
+          cuestionario, favorita, orden, puesto_id,
           departamentos(nombre, area),
           puestos(nombre)
         `)
@@ -302,7 +301,6 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
         favorita: v.favorita,
         empresaId: v.empresa_id,
         puestoId: v.puesto_id ?? null,
-        localId: v.local_id ?? null,
         visiblePublicamente: v.visible_publicamente,
         orden: v.orden ?? null,
         area,

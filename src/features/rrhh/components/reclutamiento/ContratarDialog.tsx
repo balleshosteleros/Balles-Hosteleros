@@ -28,8 +28,6 @@ export interface ContratarCandidatoLite {
   apellidos: string | null;
   email: string;
   vacantePuestoId: string | null;
-  /** Local elegido en la vacante: sale ya seleccionado al contratar. */
-  vacanteLocalId?: string | null;
 }
 
 interface Props {
@@ -89,7 +87,6 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
   // un cambio manual de puesto con el valor por defecto en re-renders.
   const candidatoId = candidato?.id ?? null;
   const vacantePuestoId = candidato?.vacantePuestoId ?? null;
-  const vacanteLocalId = candidato?.vacanteLocalId ?? null;
   useEffect(() => {
     if (!open || !candidatoId) return;
     setPrimerDia(hoy());
@@ -112,13 +109,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
         setPuestos(res.data.puestos as PuestoRef[]);
         setDepartamentos(res.data.departamentos as DeptoRef[]);
         setLocales(res.data.locales);
-        // Manda el local de la VACANTE (allí se eligió el centro del alta); si
-        // ya no existe o la vacante no lo traía, se cae al único que haya.
-        const locs = res.data.locales;
-        const deVacante = vacanteLocalId && locs.some((l) => l.id === vacanteLocalId)
-          ? vacanteLocalId
-          : "";
-        setLocalId(deVacante || (locs.length === 1 ? locs[0].id : ""));
+        setLocalId(res.data.locales.length === 1 ? res.data.locales[0].id : "");
         if (!res.ok) setErrorMsg(res.error ?? "No se pudieron cargar los datos del formulario");
       })
       .finally(() => {
@@ -127,7 +118,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
     // Si se cierra el diálogo o se cambia de candidato antes de que llegue la
     // respuesta, no se pisan los datos del candidato nuevo con los del anterior.
     return () => { cancelado = true; };
-  }, [open, candidatoId, vacantePuestoId, vacanteLocalId]);
+  }, [open, candidatoId, vacantePuestoId]);
 
   // Valida los datos y, en la variante «iniciar», avanza al paso de confirmar los
   // correos (carga la vista previa de cada email con su destinatario real).

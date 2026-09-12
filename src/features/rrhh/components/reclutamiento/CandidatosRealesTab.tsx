@@ -73,7 +73,6 @@ interface CandidatoReal {
     titulo: string;
     departamento_id: string | null;
     puesto_id: string | null;
-    local_id: string | null;
   } | null;
   created_at: string;
 }
@@ -605,7 +604,6 @@ export function CandidatosRealesTab() {
           apellidos: contratarCand.apellidos,
           email: contratarCand.email,
           vacantePuestoId: contratarCand.vacantes?.puesto_id ?? null,
-          vacanteLocalId: contratarCand.vacantes?.local_id ?? null,
         } : null}
         onDone={() => void cargar()}
       />

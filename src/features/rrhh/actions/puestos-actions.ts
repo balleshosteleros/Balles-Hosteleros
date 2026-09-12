@@ -51,6 +51,8 @@ type SalarioEmbed = {
 type PuestoRow = {
   id: string; // puestos.id
   nombre: string | null;
+  local_id: string | null;
+  locales: { nombre: string | null } | null;
   departamentos: { id: string; nombre: string | null } | null;
   puesto_salarios: SalarioEmbed[] | SalarioEmbed | null;
   convenio_colectivo: string | null;
@@ -97,6 +99,8 @@ function rowToPuesto(r: PuestoRow, conCronograma: Set<string>): PuestoSalarial {
   const cab = niveles[0];
   return {
     id: r.id, // identificador del PUESTO (clave estable; el upsert es por puesto_id+nivel)
+    localId: r.local_id ?? null,
+    localNombre: r.locales?.nombre ?? null,
     departamento: r.departamentos?.nombre ?? "",
     departamentoId: r.departamentos?.id ?? "",
     puesto: r.nombre ?? "",
@@ -134,7 +138,7 @@ export async function listPuestosEmpresa(): Promise<{
       supabase
         .from("puestos")
         .select(
-          "id, nombre, convenio_colectivo, tipo_contrato_defecto, validador_departamento_id, validador_departamento:departamentos!validador_departamento_id(nombre), departamentos!departamento_id(id, nombre), puesto_salarios(nivel, modo_pago, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, coste_hora, precio_hora_extra, vacaciones, horario_semanal, observaciones, estado, updated_at)",
+          "id, nombre, local_id, locales(nombre), convenio_colectivo, tipo_contrato_defecto, validador_departamento_id, validador_departamento:departamentos!validador_departamento_id(nombre), departamentos!departamento_id(id, nombre), puesto_salarios(nivel, modo_pago, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, coste_hora, precio_hora_extra, vacaciones, horario_semanal, observaciones, estado, updated_at)",
         )
         .eq("empresa_id", empresaId),
       supabase

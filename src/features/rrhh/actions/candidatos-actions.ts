@@ -96,7 +96,7 @@ export async function listCandidatosReales() {
         genero, ubicacion, disponibilidad, experiencia_previa, carta_presentacion,
         como_nos_conocio,
         promovido_at, activo, created_at,
-        vacantes(id, titulo, departamento_id, puesto_id, local_id),
+        vacantes(id, titulo, departamento_id, puesto_id),
         candidato_resenas(puntuaciones)
       `)
       .eq("empresa_id", empresaId)

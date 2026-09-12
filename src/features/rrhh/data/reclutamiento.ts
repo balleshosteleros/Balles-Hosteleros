@@ -495,8 +495,6 @@ export interface Vacante {
   empresaId: string;
   /** Puesto plantilla del que es espejo la vacante (para contratar precargando el puesto). */
   puestoId?: string | null;
-  /** Local (centro de trabajo) donde se dará el alta de quien la ocupe. */
-  localId?: string | null;
   /** Posición manual fijada por drag & drop (mismo orden en el portal público). */
   orden?: number | null;
 }

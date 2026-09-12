@@ -626,6 +626,11 @@ function hoyISO(): string {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
+function fechaLarga(iso: string): string {
+  const [y, m, d] = (iso ?? "").slice(0, 10).split("-");
+  return d && m && y ? `${d}-${m}-${y}` : iso;
+}
+
 function borradorDesdePatron(patron: PatronCompleto): BorradorEditor {
   if (patron.tipo === "semanal") {
     return {
@@ -745,6 +750,8 @@ function PatronEditor({
           tipo_jornada: jornada,
           departamento,
           semanas,
+          vigente_desde,
+          vigente_hasta,
         })
       : await createPatron(
           {
@@ -763,7 +770,16 @@ function PatronEditor({
       toast.error(res?.error || "No se pudo guardar el patrón");
       return;
     }
-    if (patron) toast.success("Nueva versión del patrón creada");
+    if (patron) {
+      const movidos =
+        "empleadosMovidos" in res ? ((res as { empleadosMovidos?: number }).empleadosMovidos ?? 0) : 0;
+      const desdeTexto = vigente_desde ? fechaLarga(vigente_desde) : "hoy";
+      toast.success(
+        movidos > 0
+          ? `Horario nuevo desde el ${desdeTexto}. Se le ha puesto a ${movidos} ${movidos === 1 ? "persona" : "personas"}`
+          : `Horario nuevo desde el ${desdeTexto}`,
+      );
+    }
     await onSalir(true);
   };
 

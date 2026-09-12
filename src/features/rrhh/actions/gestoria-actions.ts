@@ -477,7 +477,7 @@ export async function enviarAltaGestoria(
 
     const { data: emp } = await supabase
       .from("empleados")
-      .select("nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta, locales(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
+      .select("nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta, locales!empleados_centro_id_fkey(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
       .eq("id", empleadoId)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -710,7 +710,7 @@ export async function enviarCambioPuestoGestoria(
     // Empresa del empleado (service role: sin sesión garantizada en el flujo).
     const { data: emp } = await admin
       .from("empleados")
-      .select("empresa_id, nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta, locales(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
+      .select("empresa_id, nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta, locales!empleados_centro_id_fkey(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
       .eq("id", empleadoId)
       .maybeSingle();
     if (!emp) return { ok: false, error: "Empleado no encontrado" };
@@ -885,7 +885,7 @@ export async function enviarBajaGestoria(
 
     const { data: emp } = await admin
       .from("empleados")
-      .select("empresa_id, nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta, locales(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
+      .select("empresa_id, nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta, locales!empleados_centro_id_fkey(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
       .eq("id", empleadoId)
       .maybeSingle();
     if (!emp) return { ok: false, error: "Empleado no encontrado" };

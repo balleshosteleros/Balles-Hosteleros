@@ -20,12 +20,6 @@ export interface VacanteInput {
   descripcion?: string | null;
   puesto_id?: string | null;
   departamento_id?: string | null;
-  /**
-   * Local (centro de trabajo) donde se dará de alta a quien ocupe la vacante.
-   * Se elige junto al puesto y se copia a `empleados.local_id` al contratar:
-   * de él salen la dirección y el CCC que viajan a la gestoría.
-   */
-  local_id?: string | null;
   categoria?: string | null;
   ubicacion?: string | null;
   tipo_jornada?: string | null;
@@ -113,7 +107,6 @@ export async function createVacante(input: VacanteInput) {
         titulo: input.titulo.trim(),
         descripcion: input.descripcion ?? null,
         puesto_id: input.puesto_id ?? null,
-        local_id: input.local_id ?? null,
         puesto_snapshot: puestoSnapshot,
         departamento_id: input.departamento_id ?? null,
         categoria: input.categoria ?? null,
@@ -247,7 +240,12 @@ export async function listDepartamentosCatalogo() {
   }
 }
 
-export async function createPuesto(input: { nombre: string; departamento_id?: string | null }) {
+export async function createPuesto(input: {
+  nombre: string;
+  departamento_id?: string | null;
+  /** Local al que pertenece: el empleado lo hereda al contratar. */
+  local_id?: string | null;
+}) {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
@@ -277,6 +275,7 @@ export async function createPuesto(input: { nombre: string; departamento_id?: st
         empresa_id: empresaId,
         nombre,
         departamento_id: input.departamento_id ?? null,
+        local_id: input.local_id ?? null,
       })
       .select()
       .single();
@@ -304,6 +303,7 @@ export async function updatePuesto(input: {
   id: string;
   nombre?: string;
   departamento_id?: string;
+  local_id?: string | null;
   // Datos de gestoría (compartidos por el puesto)
   convenio_colectivo?: string | null;
   tipo_contrato_defecto?: string | null;

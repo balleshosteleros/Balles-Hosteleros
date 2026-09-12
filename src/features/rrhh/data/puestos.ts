@@ -48,6 +48,10 @@ export interface PuestoSalarial {
   id: string;
   departamento: string;
   departamentoId: string;
+  /** Local (centro de trabajo) al que pertenece el puesto. */
+  localId: string | null;
+  /** Nombre del local, para pintarlo sin volver a consultar. */
+  localNombre: string | null;
   puesto: string;
   /** Nivel cabecera (el más bajo, normalmente 1). */
   nivel: number;

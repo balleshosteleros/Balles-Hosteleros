@@ -978,7 +978,6 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
           apellidos: contratarCand.apellidos,
           email: contratarCand.email,
           vacantePuestoId: vacante.puestoId ?? null,
-          vacanteLocalId: vacante.localId ?? null,
         } : null}
         onDone={() => {
           // Tras contratar (paso 1) el candidato queda promovido: refresca desde
@@ -1000,7 +999,6 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
           apellidos: iniciarContratacionCand.apellidos,
           email: iniciarContratacionCand.email,
           vacantePuestoId: vacante.puestoId ?? null,
-          vacanteLocalId: vacante.localId ?? null,
         } : null}
         onDone={() => onMoved?.()}
       />

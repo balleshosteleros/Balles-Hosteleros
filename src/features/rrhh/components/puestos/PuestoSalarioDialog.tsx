@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { jornadaDesdeHorario, formatHorasSemana } from "@/features/rrhh/services/jornada-desde-horario";
+import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { NumberInput } from "@/shared/components/NumberInput";
 import { formatEur } from "@/shared/lib/numero";
 import {
@@ -85,6 +86,8 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   // Datos compartidos del puesto
   const [nombre, setNombre] = useState("");
   const [departamentoId, setDepartamentoId] = useState("");
+  const [localId, setLocalId] = useState("");
+  const [locales, setLocales] = useState<{ id: string; nombre: string; activo?: boolean }[]>([]);
   // Datos de gestoría (compartidos por el puesto)
   const [convenio, setConvenio] = useState("");
   // Departamento que valida las solicitudes de quien ocupe este puesto.
@@ -173,6 +176,14 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   useEffect(() => {
     if (!open) return;
     let activo = true;
+    void listLocales().then((r) => {
+      if (!activo || !r.ok) return;
+      const activos = (r.data as { id: string; nombre: string; activo?: boolean }[])
+        .filter((l) => l.activo !== false);
+      setLocales(activos);
+      // Con un solo local no hay nada que elegir en un puesto nuevo.
+      setLocalId((prev) => prev || (activos.length === 1 ? activos[0].id : ""));
+    });
     void listDepartamentosCatalogo().then((r) => {
       if (activo && r.ok) setDepartamentos(r.data as Depto[]);
     });
@@ -182,6 +193,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     // Datos compartidos
     setNombre(editing?.puesto ?? "");
     setDepartamentoId(editing?.departamentoId ?? "");
+    setLocalId(editing?.localId ?? "");
     setConvenio(editing?.convenioColectivo ?? "");
     setValidadorDepartamentoId(editing?.validadorDepartamentoId ?? "");
     setIdx(0);
@@ -288,7 +300,11 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     try {
       let puestoId = editing?.id ?? "";
       if (esNuevo) {
-        const res = await createPuesto({ nombre: nombre.trim(), departamento_id: departamentoId });
+        const res = await createPuesto({
+          nombre: nombre.trim(),
+          departamento_id: departamentoId,
+          local_id: localId || null,
+        });
         if (!res.ok || !res.data) { toast.error(res.error ?? "No se pudo crear el puesto"); return; }
         puestoId = (res.data as { id: string }).id;
       } else {
@@ -296,6 +312,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           id: puestoId,
           nombre: nombre.trim(),
           departamento_id: departamentoId,
+          local_id: localId || null,
           convenio_colectivo: convenio,
         });
         if (!upd.ok) { toast.error(upd.error ?? "No se pudo actualizar el puesto"); return; }
@@ -416,6 +433,27 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* El puesto pertenece a un LOCAL: el mismo nombre no es el mismo
+              trabajo en dos centros (ni el sueldo ni el horario coinciden), y
+              quien lo ocupe hereda este local al contratar. */}
+          <div className="space-y-1.5">
+            <Label htmlFor="ps-local">Local</Label>
+            <select
+              id="ps-local"
+              value={localId}
+              onChange={(e) => setLocalId(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+            >
+              <option value="">{locales.length ? "Selecciona…" : "Sin locales dados de alta"}</option>
+              {locales.map((l) => (
+                <option key={l.id} value={l.id}>{l.nombre}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground">
+              Centro de trabajo del puesto. Quien lo ocupe entra en este local.
+            </p>
           </div>
 
           {/* Condiciones del puesto (niveles ocultos de momento: se edita uno solo) */}

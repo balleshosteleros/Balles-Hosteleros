@@ -159,7 +159,7 @@ export async function enviarBajaMedicaGestoria(args: {
 
   const { data: emp } = await admin
     .from("empleados")
-    .select("id, nombre, apellidos, dni_nie, numero_ss, fecha_nacimiento, telefono, email_personal, email_empresa, puesto, fecha_alta, locales(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
+    .select("id, nombre, apellidos, dni_nie, numero_ss, fecha_nacimiento, telefono, email_personal, email_empresa, puesto, fecha_alta, locales!empleados_centro_id_fkey(nombre, direccion, ciudad, provincia, codigo_postal, ccc, tipo_establecimiento, clase_restaurante, convenio)")
     .eq("empresa_id", empresaId)
     .eq("user_id", sol.user_id as string)
     .maybeSingle();
