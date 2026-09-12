@@ -99,3 +99,35 @@ número que ya deducía la fórmula. Los 58 puestos tienen ya su coste/hora expl
 Detalle en [[ratios_coste_personal]] (sección Pendiente): `fichajes.tipo` distingue
 NOR/EXT pero solo hay 3 fichajes marcados EXT en toda la base, y el bonus va como
 complemento mensual por persona, no repartido por día.
+
+## 6. Alberto Cieliczka — baja revisada (12/09/2026)
+
+**Bien:** Inactivo en las 2 empresas con `fecha_baja` 09/09/2026 en ambas; acceso al
+software bloqueado (`usuarios.estado_acceso = 'Inactivo'`); sin material pendiente de
+devolver (0 actas en `entregas_material`); nombre ya unificado en fichas, usuario,
+fichajes, pagos y —corregido hoy— las 2 tarjetas de `candidatos`, que seguían con "Albero".
+
+**Reclutamiento SÍ lo movió bien** (ojo: me equivoqué al leerlo la primera vez).
+La columna del tablero es **`estado`**, no `fase` — ver [[candidato_fase_columna_y_vacante]].
+Alberto está en `estado = 'empleado'` (columna **Empleado**) en las dos empresas, con su
+vacante publicada y `activo = true`, igual que los otros 14 con ficha (8 BACANAL + 7 HABANA).
+La columna Ex-empleados funciona: ya tiene 8 tarjetas (4 + 4, `estado = 'ex_empleado'`).
+
+**Por qué "no aparece en empleados":** la pantalla RRHH → Empleados **abre filtrada a
+Activos** (`FILTRO_DEFAULT_ESTADO_ACTIVO` en `EmpleadosView.tsx:36`, ver
+[[filtro_estado_default_activo]]). Alberto está Inactivo, así que no sale hasta cambiar el
+filtro a Inactivos. No es un fallo: es el filtro por defecto.
+
+**Pasado a Ex-empleados el 12/09/2026** con el sí de Iván. Las 2 tarjetas quedan en
+`fase = 'descartado'`, `estado = 'ex_empleado'`, con su apunte en `candidato_historial`
+(la Actividad de la ficha). **No se le tocó la `fecha_baja`**: sigue el 09/09/2026, la
+pactada, porque la regla dice que a quien ya está Inactivo no se le machaca con HOY
+(descuadraría con la gestoría) — ver [[ex_empleado_inactivo_regla]]. Acceso ya bloqueado
+y sin material que devolver.
+
+**Pendiente de Iván:**
+
+2. **Ficha sin completar**: le faltan `dni_nie`, `numero_ss`, `iban`, `direccion` y
+   `fecha_nacimiento` → `perfil_completado = false`. Datos que hay que pedir, no inventar.
+3. **`fecha_alta` no cuadra**: dice 15/05/2026 pero tiene pagos desde enero 2026.
+   O el alta real es anterior, o hubo un contrato previo.
