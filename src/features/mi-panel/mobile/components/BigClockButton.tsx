@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Fingerprint, Loader2, Coffee, Play, CheckCircle2, WifiOff, MapPin, House, TriangleAlert, Undo2 } from "lucide-react";
 import { toast } from "sonner";
+import { AvisoBajaMedicaDialog } from "@/features/mi-panel/components/AvisoBajaMedicaDialog";
 import { cn } from "@/shared/lib/utils";
 import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
 import {
@@ -222,6 +223,8 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
 
   // Fichaje de entrada con modo explícito. El teletrabajo no captura ubicación;
   // el presencial sí (y el server valida que estés dentro de un local).
+  const [avisoBaja, setAvisoBaja] = useState(false);
+
   const ficharEntrada = async (modo: ModoFichaje, tipoCodigo?: string) => {
     setEligiendoModo(false);
     setEligiendoTipo(false);
@@ -235,7 +238,11 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
       } else {
         const res = await ficharEntradaPersonal(geo ?? undefined, modo, codigo);
         if (!res.ok) {
-          if ((res as { fueraDeHora?: boolean }).fueraDeHora) {
+          if ((res as { bajaMedica?: boolean }).bajaMedica) {
+            // De baja no se ficha: se para en seco con un aviso propio, no con
+            // un mensaje que se desvanece en tres segundos.
+            setAvisoBaja(true);
+          } else if ((res as { fueraDeHora?: boolean }).fueraDeHora) {
             toast.error(res.error || "Estás fuera de hora", {
               duration: 9000,
               action: {
@@ -705,6 +712,12 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
           </div>
         </div>
       )}
+
+      <AvisoBajaMedicaDialog
+        open={avisoBaja}
+        onOpenChange={setAvisoBaja}
+        hrefComunicados="/m/comunicados"
+      />
     </div>
   );
 }

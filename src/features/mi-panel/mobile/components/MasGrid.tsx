@@ -65,7 +65,7 @@ export function MasGrid() {
     // fila). A partir de tablet sí se añaden columnas, porque ahí sobra ancho y
     // con 3 quedaban cuadros enormes en una banda estrecha.
     <div
-      className="grid grid-cols-3 gap-2.5 px-5 pt-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+      className="grid grid-cols-3 gap-2.5 px-5 pb-4 pt-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
       style={{ containerType: "inline-size" }}
     >
       {ITEMS.map((it, i) => {

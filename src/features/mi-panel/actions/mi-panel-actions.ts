@@ -724,7 +724,7 @@ export async function getTiposFichajeDisponibles(): Promise<{
 
 type EvalEntradaResultado =
   | { ok: true; tipoSel: { codigo: string } | null; horaEntradaOverrideISO: string | null }
-  | { ok: false; error: string; fueraDeHora?: boolean };
+  | { ok: false; error: string; fueraDeHora?: boolean; bajaMedica?: boolean };
 
 /**
  * ¿Puede el empleado fichar AHORA su entrada en esta empresa? Resuelve el tipo
@@ -780,9 +780,9 @@ async function evaluarEntradaFichaje(
     if (bajaAbierta) {
       return {
         ok: false,
+        bajaMedica: true,
         error:
-          "Estás de baja médica. Para volver a fichar, comunica primero tu alta " +
-          "desde el botón «Comunicar mi alta médica» de tu panel.",
+          "Estás de baja médica. Ve a Comunicados para comunicar tu alta médica.",
       };
     }
   }
@@ -1018,6 +1018,7 @@ export async function ficharEntradaPersonal(
         tipoCodigo,
       });
       if (!ev.ok) {
+        if (ev.bajaMedica) return { ok: false, error: ev.error, bajaMedica: true };
         return ev.fueraDeHora
           ? { ok: false, error: ev.error, fueraDeHora: true }
           : { ok: false, error: ev.error };
@@ -1044,7 +1045,7 @@ export async function ficharEntradaPersonal(
             horaEntradaOverrideISO: string | null;
           }
         | null = null;
-      let primerFallo: { error: string; fueraDeHora?: boolean } | null = null;
+      let primerFallo: { error: string; fueraDeHora?: boolean; bajaMedica?: boolean } | null = null;
       for (const c of pres.candidatos) {
         const ev = await evaluarEntradaFichaje(supabase, {
           empresaId: c.empresaId,
@@ -1062,12 +1063,13 @@ export async function ficharEntradaPersonal(
           };
           break;
         }
-        if (!primerFallo) primerFallo = { error: ev.error, fueraDeHora: ev.fueraDeHora };
+        if (!primerFallo) primerFallo = { error: ev.error, fueraDeHora: ev.fueraDeHora, bajaMedica: ev.bajaMedica };
       }
       if (!elegido) {
         const error =
           primerFallo?.error ??
           "No tienes turno a esta hora en ninguno de tus locales cercanos.";
+        if (primerFallo?.bajaMedica) return { ok: false, error, bajaMedica: true };
         return primerFallo?.fueraDeHora
           ? { ok: false, error, fueraDeHora: true }
           : { ok: false, error };

@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Fingerprint, Coffee, Play, Loader2, Plus, MapPin, House } from "lucide-react";
 import { toast } from "sonner";
+import { AvisoBajaMedicaDialog } from "@/features/mi-panel/components/AvisoBajaMedicaDialog";
 import {
   ficharEntradaPersonal,
   ficharSalidaPersonal,
@@ -59,6 +60,7 @@ export function FichajeBar({
   const [fichaje, setFichaje] = useState<MiFichajeHoy | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [avisoBaja, setAvisoBaja] = useState(false);
   const [tick, setTick] = useState(0);
   // Si el empleado puede teletrabajar, al fichar entrada le preguntamos el modo.
   const [permiteTeletrabajo, setPermiteTeletrabajo] = useState(false);
@@ -198,6 +200,11 @@ export function FichajeBar({
     const res = await ficharEntradaPersonal(geo, modo, codigo);
     setWorking(false);
     if (!res.ok) {
+      // De baja no se ficha: aviso propio que le lleva a comunicar su alta.
+      if ((res as { bajaMedica?: boolean }).bajaMedica) {
+        setAvisoBaja(true);
+        return;
+      }
       // Fuera de hora: solo avisar y, si procede, llevar a Solicitudes para
       // que el empleado pida trabajar en un horario no asignado.
       if ((res as { fueraDeHora?: boolean }).fueraDeHora) {
@@ -508,6 +515,8 @@ export function FichajeBar({
           </div>
         </DialogContent>
       </Dialog>
+
+      <AvisoBajaMedicaDialog open={avisoBaja} onOpenChange={setAvisoBaja} />
     </Card>
   );
 }

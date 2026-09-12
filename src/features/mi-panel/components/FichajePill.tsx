@@ -38,6 +38,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // para entrar, roja para salir.
 import { Fingerprint, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { AvisoBajaMedicaDialog } from "@/features/mi-panel/components/AvisoBajaMedicaDialog";
 import { cn } from "@/lib/utils";
 import {
   ficharEntradaPersonal,
@@ -65,6 +66,7 @@ export function FichajePill() {
   /** null = aún no se sabe; false = no puede fichar y no se pinta nada. */
   const [disponible, setDisponible] = useState<boolean | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [avisoBaja, setAvisoBaja] = useState(false);
   // ¿Esta persona tiene el teletrabajo permitido en esta empresa? Si lo tiene,
   // el desplegable pregunta —presencial o teletrabajo— en vez de dar por hecho
   // que está en el local, igual que hace la tarjeta de fichaje de Mi Panel.
@@ -158,6 +160,9 @@ export function FichajePill() {
         );
         await cargar();
         if (montado.current) setFijado(false);
+      } else if ((res as { bajaMedica?: boolean }).bajaMedica) {
+        // De baja no se ficha: aviso propio que le lleva a comunicar su alta.
+        setAvisoBaja(true);
       } else {
         toast.error(res.error ?? "No se pudo fichar");
       }
@@ -267,6 +272,8 @@ export function FichajePill() {
           )}
         </button>
       </span>
+
+      <AvisoBajaMedicaDialog open={avisoBaja} onOpenChange={setAvisoBaja} />
     </div>
   );
 }

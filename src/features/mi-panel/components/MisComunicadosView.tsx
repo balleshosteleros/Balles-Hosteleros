@@ -9,6 +9,7 @@ import {
 import { marcarComunicadosVistos } from "@/features/mi-panel/actions/comunicados-vistos-actions";
 import { formatFechaHoraEnZona, claveDiaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { tipoComunicado } from "@/features/rrhh/data/comunicados";
+import { BannerAltaMedica } from "@/features/mi-panel/components/BannerAltaMedica";
 import { ComunicadoTarjeta } from "@/features/gerencia/components/ComunicadoTarjeta";
 
 /**
@@ -121,6 +122,7 @@ export function MisComunicadosView() {
   if (items.length === 0) {
     return (
       <div className="mx-auto max-w-3xl p-6">
+        <BannerAltaMedica />
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center text-muted-foreground">
           <Inbox className="mb-3 h-8 w-8" />
           <p className="text-sm font-medium">Sin comunicados</p>
@@ -141,6 +143,7 @@ export function MisComunicadosView() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-7 p-4 md:p-6">
+      <BannerAltaMedica />
       {grupos.map((g, i) => (
         <section key={`${g.clave}-${i}`} className="space-y-3">
           <div className="flex items-center gap-3">
