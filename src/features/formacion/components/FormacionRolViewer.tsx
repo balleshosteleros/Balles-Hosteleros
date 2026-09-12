@@ -8,7 +8,7 @@
 
 import {
   ArrowRight, BookOpenCheck, Brain, Compass,
-  Package, Sparkles, Target,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,67 +80,12 @@ const TODOS_MODULOS: Modulo[] = [
   },
 ];
 
-interface MaterialPuesto {
-  puesto: string;
-  /** Nombre canónico del módulo cuyo permiso muestra este bloque de material. */
-  modulo: string;
-  items: string[];
-}
-
-const MATERIAL_POR_PUESTO: MaterialPuesto[] = [
-  {
-    puesto: "Sala",
-    modulo: "SALA",
-    items: [
-      "Uniforme de sala (camisa, pantalón, delantal y mandil)",
-      "Bolígrafo, libreta y abridor",
-      "Manual de carta vigente y fichas de alérgenos",
-      "PDA / TPV personal con credenciales",
-    ],
-  },
-  {
-    puesto: "Cocina",
-    modulo: "COCINA",
-    items: [
-      "Uniforme de cocina (chaquetilla, pantalón, gorro y zapato antideslizante)",
-      "Cuchillos básicos y funda",
-      "Termómetro y guantes anticorte",
-      "Acceso a escandallos y planning de partidas",
-    ],
-  },
-  {
-    puesto: "Logística",
-    modulo: "LOGÍSTICA",
-    items: [
-      "EPI: zapato de seguridad y guantes",
-      "Lectora de códigos / móvil corporativo",
-      "Acceso a Logística → Proveedores, Productos, Pedidos y Stock",
-      "Plantilla de control de subida de precios",
-    ],
-  },
-  {
-    puesto: "Gerencia / Mandos",
-    modulo: "GERENCIA",
-    items: [
-      "Móvil y portátil corporativo",
-      "Acceso a comunicados, mantenimiento y ratios",
-      "Tarjeta de gastos del local",
-      "Llaves o credenciales de apertura/cierre",
-    ],
-  },
-];
-
 export function FormacionRolViewer() {
   // Filtramos por los PERMISOS reales del rol (empresa_roles.permisos): cada
   // usuario repasa solo la formación de los módulos que tiene permitido ver.
   const { puedeVer, profile } = useAuth();
 
   const modulos = TODOS_MODULOS.filter((m) => puedeVer(m.modulo));
-  const materialFiltrado = MATERIAL_POR_PUESTO.filter((m) => puedeVer(m.modulo));
-  // Si su rol no casa con ningún bloque de material específico, mostramos todo
-  // (fallback informativo, no sensible).
-  const material = materialFiltrado.length > 0 ? materialFiltrado : MATERIAL_POR_PUESTO;
-
   const rolLabel = profile?.rol_label?.trim() || "General";
 
   return (
@@ -253,41 +198,6 @@ export function FormacionRolViewer() {
           </ul>
         </CardContent>
       </Card>
-
-      {/* Material por puesto */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Package className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold tracking-tight">
-            Material entregado el primer día
-          </h2>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Esto es lo que la empresa te entrega según tu puesto. Si te falta
-          algo, avisa a tu responsable.
-        </p>
-        <div className="grid gap-3 md:grid-cols-2">
-          {material.map((bloque) => (
-            <Card key={bloque.puesto}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold uppercase tracking-wide text-foreground">
-                  {bloque.puesto}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  {bloque.items.map((item) => (
-                    <li key={item} className="flex items-start gap-2">
-                      <Target className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                      <span className="text-muted-foreground">{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }
