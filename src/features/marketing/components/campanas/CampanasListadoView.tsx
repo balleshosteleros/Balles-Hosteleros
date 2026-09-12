@@ -8,6 +8,7 @@ import { SubmoduleToolbar, coincideBusquedaUniversal, type ToolbarColumna, type 
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { ESTADOS_CAMPANA, type CanalCampana, type EstadoCampana, type Campana } from "@/features/marketing/data/campanas";
 import { crearCampanaEmailVacia, crearCampanaWhatsAppVacia, crearCampanaSmsVacia } from "@/features/marketing/data/campanas";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -31,6 +32,9 @@ const COLUMNAS: ToolbarColumna[] = [
   { campo: "enviados", label: "Enviados" },
   { campo: "abiertos", label: "Abiertos" },
   { campo: "tasaApertura", label: "Tasa apertura" },
+  // El clic es lo que separa "lo leyó" de "le interesó".
+  { campo: "clics", label: "Clics" },
+  { campo: "rebotados", label: "Rebotes" },
   { campo: "reservasGeneradas", label: "Reservas generadas" },
   // Los comensales van al lado de las reservas: una mesa de diez del cumpleaños
   // y una de dos del correo del mes suman lo mismo si solo se cuentan mesas.
@@ -97,7 +101,11 @@ export function CampanasListadoView({ canal }: Props) {
     setEditorOpen(true);
   }
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({
-    nombre: true, enviados: true, abiertos: true, tasaApertura: true, reservasGeneradas: true, personasGeneradas: true, estado: true, ultimaEjecucion: true,
+    nombre: true, enviados: true, abiertos: true, tasaApertura: true, clics: true,
+    // Los rebotes no se enseñan de entrada: importan cuando hay, y hasta
+    // entonces solo ocupan una columna con ceros.
+    rebotados: false,
+    reservasGeneradas: true, personasGeneradas: true, estado: true, ultimaEjecucion: true,
   });
   const [columnasOrden, setColumnasOrden] = useState<string[]>(COLUMNAS.map((c) => c.campo));
 
@@ -168,6 +176,12 @@ export function CampanasListadoView({ canal }: Props) {
                 {ordenVisible.includes("abiertos") && (
                   <th className="px-3 py-2 w-24"><TableColumnHeader label="Abiertos" /></th>
                 )}
+                {ordenVisible.includes("clics") && (
+                  <th className="px-3 py-2 w-20"><TableColumnHeader label="Clics" /></th>
+                )}
+                {ordenVisible.includes("rebotados") && (
+                  <th className="px-3 py-2 w-24"><TableColumnHeader label="Rebotes" /></th>
+                )}
                 {ordenVisible.includes("tasaApertura") && (
                   <th className="px-3 py-2 w-28"><TableColumnHeader label="Tasa apertura" /></th>
                 )}
@@ -199,7 +213,17 @@ export function CampanasListadoView({ canal }: Props) {
                 </tr>
               )}
               {!loading && filtrados.map((r) => {
-                const tasa = r.enviados > 0 ? Math.round((r.abiertos / r.enviados) * 100) : null;
+                /**
+                 * Tasa de apertura sobre los ENTREGADOS, no sobre los enviados:
+                 * un correo que rebotó nadie lo pudo abrir, y contarlo baja la
+                 * tasa por algo que no tiene que ver con el correo.
+                 *
+                 * Y `null` mientras no haya llegado ningún aviso de apertura:
+                 * pintar un 0% en una campaña recién enviada se lee como "no la
+                 * abre nadie", cuando lo que pasa es que aún no sabemos.
+                 */
+                const base = r.entregados > 0 ? r.entregados : r.enviados;
+                const tasa = r.abiertos > 0 && base > 0 ? Math.round((r.abiertos / base) * 100) : null;
                 return (
                   <tr
                     key={r.campanaId}
@@ -227,6 +251,21 @@ export function CampanasListadoView({ canal }: Props) {
                     )}
                     {ordenVisible.includes("abiertos") && (
                       <td className="px-3 py-2 tabular-nums">{r.abiertos.toLocaleString("es-ES")}</td>
+                    )}
+                    {ordenVisible.includes("clics") && (
+                      <td className="px-3 py-2 tabular-nums">{r.clics.toLocaleString("es-ES")}</td>
+                    )}
+                    {ordenVisible.includes("rebotados") && (
+                      <td
+                        className={cn(
+                          "px-3 py-2 tabular-nums",
+                          // Los rebotes solo se pintan en rojo si hay: un cero en
+                          // rojo asusta sin motivo.
+                          r.rebotados > 0 && "text-red-700 dark:text-red-400",
+                        )}
+                      >
+                        {r.rebotados.toLocaleString("es-ES")}
+                      </td>
                     )}
                     {ordenVisible.includes("tasaApertura") && (
                       <td className="px-3 py-2 tabular-nums">{tasa === null ? "—" : `${tasa}%`}</td>

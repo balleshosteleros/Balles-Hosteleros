@@ -14,7 +14,15 @@ export interface CampanaAtribucionRow {
   /** Palabra que viaja en el enlace del correo (`?c=enero`). */
   palabra: string | null;
   enviados: number;
+  /** El servidor del destinatario lo aceptó. Entre enviado y entregado hay rebotes. */
+  entregados: number;
   abiertos: number;
+  /** Pulsó un enlace del correo: la señal de intención más fuerte que da un correo. */
+  clics: number;
+  /** Esa dirección ya no sirve. */
+  rebotados: number;
+  /** Lo marcó como spam. Vigilar: arrastra la reputación del dominio. */
+  quejas: number;
   reservasGeneradas: number;
   /** Comensales de esas reservas: una mesa de diez no vale lo que una de dos. */
   personasGeneradas: number;
@@ -33,7 +41,11 @@ function mapRow(row: Row): CampanaAtribucionRow {
     origen: (row.origen as string | null) ?? null,
     palabra: (row.palabra as string | null) ?? null,
     enviados: Number(row.enviados ?? 0),
+    entregados: Number(row.entregados ?? 0),
     abiertos: Number(row.abiertos ?? 0),
+    clics: Number(row.clics ?? 0),
+    rebotados: Number(row.rebotados ?? 0),
+    quejas: Number(row.quejas ?? 0),
     reservasGeneradas: Number(row.reservas_generadas ?? 0),
     personasGeneradas: Number(row.personas_generadas ?? 0),
   };
