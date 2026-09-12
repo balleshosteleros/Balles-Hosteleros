@@ -81,7 +81,7 @@ export function ProveedorCombobox({
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <input
               ref={inputRef}
-              type="search"
+              type="text"
               name={searchName}
               value={query}
               onChange={(e) => setQuery(e.target.value)}

@@ -16,6 +16,7 @@ import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { Trash2, Plus, Check, ChevronsUpDown, Search, AlertTriangle } from "lucide-react";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
 import { SelectorHora } from "@/components/ui/selector-hora";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** Reparto vigente de un proveedor: negociado con nosotros con prioridad; si no, el genérico. */
 type ProveedorOpcion = { id: string; nombre: string; reparto: RepartoProveedor };
@@ -133,10 +134,8 @@ function ProductoSearch({ value, productoId, onSelectProduct, onClear, proveedor
           {proveedor && (
             <div className="border-b px-3 py-2">
               <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={soloProveedor}
-                  onChange={(e) => setSoloProveedor(e.target.checked)}
+                <Checkbox checked={soloProveedor}
+                  onCheckedChange={(marcado) => setSoloProveedor(marcado === true)}
                   className="h-3 w-3"
                 />
                 <span>Solo de <span className="font-semibold text-foreground uppercase">{proveedor}</span></span>

@@ -17,6 +17,7 @@ import {
 } from "@/features/rrhh/data/campos-candidatura";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 import { Desplegable } from "@/components/ui/desplegable";
+import { CirculoOpcion } from "@/components/ui/circulo-opcion";
 
 interface Props {
   empresaSlug: string;
@@ -361,11 +362,7 @@ export function FormCandidaturaPublica({
                         checked ? "border-primary bg-primary/5" : "border-input hover:bg-accent"
                       }`}
                     >
-                      <input
-                        type="radio"
-                        name={p.id}
-                        value={o.id}
-                        checked={checked}
+                      <CirculoOpcion checked={checked}
                         onChange={() => setRespuestas((prev) => ({ ...prev, [p.id]: o.id }))}
                         className="mt-0.5 accent-primary"
                       />

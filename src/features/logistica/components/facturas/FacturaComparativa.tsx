@@ -12,6 +12,7 @@ import type {
   LineaFactura,
 } from "@/features/logistica/types/facturas";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Props {
   lineas: LineaFactura[];
@@ -262,14 +263,15 @@ function EditarLineaInline({
   busy?: boolean;
 }) {
   return (
-    <details className="inline-block">
-      <summary className="list-none cursor-pointer">
+    <Collapsible className="inline-block">
+      <CollapsibleTrigger className="cursor-pointer">
         <Button asChild size="sm" variant="outline" className="h-7 px-2 text-[10px] gap-1">
           <span>
             <Pencil className="h-3 w-3" /> Editar
           </span>
         </Button>
-      </summary>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
       <form
         className="absolute right-2 mt-1 z-10 flex gap-1 rounded-md border bg-popover p-2 shadow-md"
         onSubmit={(e) => {
@@ -310,6 +312,7 @@ function EditarLineaInline({
           OK
         </Button>
       </form>
-    </details>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

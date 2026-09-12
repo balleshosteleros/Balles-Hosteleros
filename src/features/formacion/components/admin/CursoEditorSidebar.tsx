@@ -30,6 +30,7 @@ import {
 import type { Leccion, Seccion } from "@/features/formacion/types";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { CirculoOpcion } from "@/components/ui/circulo-opcion";
 
 interface Props {
   cursoId: string;
@@ -525,7 +526,7 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
                     {q.opciones.map((op, oi) => (
                       <div key={oi} className="flex items-center gap-2">
                         <ToolTooltip label="Marcar como correcta">
-                          <input type="radio" checked={op.correcta} onChange={() => setOpcionCorrecta(qi, oi)}
+                          <CirculoOpcion checked={op.correcta} onChange={() => setOpcionCorrecta(qi, oi)}
                             className="accent-emerald-600" aria-label="Marcar como correcta" />
                         </ToolTooltip>
                         <Input value={op.texto} onChange={(e) => setOpcionTexto(qi, oi, e.target.value)}

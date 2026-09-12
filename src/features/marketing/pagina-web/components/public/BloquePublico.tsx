@@ -13,6 +13,7 @@ import type { Bloque } from "../../types";
 import { imagenOptimizada, srcSetOptimizado } from "../../services/imagen-optimizada";
 import type { PaginaContexto } from "./PaginaPublicaShell";
 import { Loader2, AtSign, ThumbsUp, MessageCircle, Music2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function BloquePublico({
   bloque,
@@ -1571,12 +1572,12 @@ function FormularioPublico({
               La casilla NO puede venir premarcada: el consentimiento tiene que
               ser un acto afirmativo. */}
           <label className="flex items-start gap-2 pt-1 text-xs leading-snug opacity-80">
-            <input
-              type="checkbox"
+            {/* La casilla, del color de la web del restaurante. */}
+            <Checkbox
               name="consentimiento_privacidad"
               required
               disabled={enviando}
-              className="mt-0.5 shrink-0"
+              className="mt-0.5 shrink-0 border-[var(--pw-primario)] data-[state=checked]:border-[var(--pw-primario)] data-[state=checked]:bg-[var(--pw-primario)]"
             />
             <span>
               He leído y acepto la{" "}

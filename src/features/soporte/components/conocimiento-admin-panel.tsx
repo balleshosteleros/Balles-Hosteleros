@@ -18,6 +18,7 @@ import type {
   RecursoVideo,
 } from "@/features/soporte/types";
 import { Desplegable } from "@/components/ui/desplegable";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const EMPTY_INPUT: ConocimientoManualInput = {
   modulo: "GENERAL",
@@ -193,10 +194,8 @@ export function ConocimientoAdminPanel({
             </div>
             <div className="flex items-end">
               <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={form.activo ?? true}
-                  onChange={(e) => setForm({ ...form, activo: e.target.checked })}
+                <Checkbox checked={form.activo ?? true}
+                  onCheckedChange={(marcado) => setForm({ ...form, activo: marcado === true })}
                   className="h-4 w-4 rounded border"
                 />
                 Activo (el asistente lo usa)

@@ -26,6 +26,7 @@ import type {
 import { QrViewerDialog } from "./QrViewerDialog";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFechaHora } from "@/components/ui/selector-fecha-hora";
 
 // Limpia sufijos del nombre de la plantilla (" — versión 2", " — V3",
 // " — 2023"...) para mostrar el título de forma neutra. El badge V# va aparte.
@@ -447,7 +448,7 @@ function PreguntaInput({
       return <Textarea value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} rows={4} />;
     }
     case "fecha":
-      return <Input type="datetime-local" value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} />;
+      return <SelectorFechaHora value={(valor as string) ?? ""} onChange={onChange} />;
     case "telefono":
       return <Input type="tel" value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} placeholder="+34 ..." />;
     case "escala": {

@@ -55,6 +55,8 @@ import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { Desplegable } from "@/components/ui/desplegable";
 import { SelectorHora } from "@/components/ui/selector-hora";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CirculoOpcion } from "@/components/ui/circulo-opcion";
 
 const DIAS: DiaSemana[] = ["L", "M", "X", "J", "V", "S", "D"];
 
@@ -516,20 +518,14 @@ function DescansoEditDialog({
                 ¿Cuándo podrán fichar con este descanso?
               </p>
               <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="cuandoFichar"
-                  className="mt-1"
+                <CirculoOpcion className="mt-1"
                   checked={descanso.cuandoFichar === "cualquier"}
                   onChange={() => update({ cuandoFichar: "cualquier" })}
                 />
                 <span className="text-sm">Cualquier momento del día</span>
               </label>
               <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="cuandoFichar"
-                  className="mt-1"
+                <CirculoOpcion className="mt-1"
                   checked={descanso.cuandoFichar === "intervalo"}
                   onChange={() => update({ cuandoFichar: "intervalo" })}
                 />
@@ -561,10 +557,7 @@ function DescansoEditDialog({
                 ¿Cuánto tiempo podrá durar este descanso?
               </p>
               <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="duracionTipo"
-                  className="mt-1"
+                <CirculoOpcion className="mt-1"
                   checked={descanso.duracionTipo === "sin_limite"}
                   onChange={() => update({ duracionTipo: "sin_limite" })}
                 />
@@ -577,10 +570,7 @@ function DescansoEditDialog({
                 </div>
               </label>
               <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="duracionTipo"
-                  className="mt-1"
+                <CirculoOpcion className="mt-1"
                   checked={descanso.duracionTipo === "duracion"}
                   onChange={() =>
                     update({
@@ -757,10 +747,8 @@ function TurnosSelectDialog({
                   className="flex items-center justify-between gap-2 rounded-md px-3 py-2 hover:bg-muted cursor-pointer"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggle(t.id)}
+                    <Checkbox checked={checked}
+                      onCheckedChange={(marcado) => toggle(t.id)}
                     />
                     <div
                       className="h-3 w-3 rounded-full shrink-0"

@@ -28,6 +28,7 @@ import {
   IMAGEN_FORMATOS_TEXTO,
   esImagenPermitida,
 } from "@/shared/lib/documentos";
+import { SelectorColor } from "@/components/ui/selector-color";
 
 const MAX_LOGO_BYTES = MAX_IMAGEN_BYTES; // 10 MB (tope de imágenes)
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -511,10 +512,8 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
     <div className="space-y-1.5">
       <Label className="text-xs font-bold uppercase">{label}</Label>
       <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={valid ? value : "#000000"}
-          onChange={(e) => onChange(e.target.value.toUpperCase())}
+        <SelectorColor value={valid ? value : "#000000"}
+          onChange={(valor) => onChange(valor.toUpperCase())}
           className="h-9 w-12 cursor-pointer rounded border bg-background"
           aria-label={`Selector ${label}`}
         />

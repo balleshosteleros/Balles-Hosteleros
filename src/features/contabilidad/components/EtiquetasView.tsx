@@ -41,6 +41,7 @@ import {
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { SelectorColor } from "@/components/ui/selector-color";
 
 const TABS: { label: string; tipo: EtiquetaTipo }[] = [
   { label: "Categorías",   tipo: "CATEGORIA" },
@@ -478,10 +479,8 @@ export function EtiquetasView() {
                 <div>
                   <Label>Color (se aplica también a sus sub-etiquetas)</Label>
                   <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={dialogEditar.color}
-                      onChange={(e) => setDialogEditar((d) => ({ ...d, color: e.target.value }))}
+                    <SelectorColor value={dialogEditar.color}
+                      onChange={(valor) => setDialogEditar((d) => ({ ...d, color: valor }))}
                       className="h-10 w-14 rounded border cursor-pointer"
                     />
                     <Input

@@ -95,6 +95,7 @@ import { formatearFechaEs } from "@/shared/lib/fecha";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** Filas por hoja en la tabla de clientes. */
 const POR_PAGINA = 50;
@@ -1337,14 +1338,12 @@ export function ClientesView() {
                         <label
                           className="flex items-center gap-2 text-sm"
                         >
-                          <input
-                            type="checkbox"
-                            disabled={esBaja}
+                          <Checkbox disabled={esBaja}
                             checked={estado === "acepta"}
-                            onChange={(e) =>
+                            onCheckedChange={(marcado) =>
                               setBorrador({
                                 ...borrador,
-                                [campo]: e.target.checked ? "acepta" : "sin_preguntar",
+                                [campo]: marcado === true ? "acepta" : "sin_preguntar",
                               })
                             }
                           />
@@ -1735,13 +1734,11 @@ export function ClientesView() {
                               Un cliente con veinte visitas llenaba la pestaña
                               entera de texto.
                             */}
-                            <details className="group rounded-md border px-3 py-2">
-                              <summary
+                            <Collapsible className="group rounded-md border px-3 py-2">
+                              <CollapsibleTrigger
                                 className={cn(
-                                  "flex items-center gap-2",
-                                  tieneDetalle
-                                    ? "cursor-pointer"
-                                    : "cursor-default list-none",
+                                  "flex w-full items-center gap-2 text-left",
+                                  tieneDetalle ? "cursor-pointer" : "cursor-default",
                                 )}
                               >
                                 {nota !== null && (
@@ -1756,11 +1753,12 @@ export function ClientesView() {
                                   {formatFechaEnZona(r.fecha, zonaHoraria)}
                                 </span>
                                 {tieneDetalle && (
-                                  <span className="ml-auto text-xs text-muted-foreground group-open:hidden">
+                                  <span className="ml-auto text-xs text-muted-foreground group-data-[state=open]:hidden">
                                     Ver detalle
                                   </span>
                                 )}
-                              </summary>
+                              </CollapsibleTrigger>
+                    <CollapsibleContent>
                               {/* Desglose: dice QUÉ falló, no solo cuánto. */}
                               {(r.comida !== null ||
                                 r.servicio !== null ||
@@ -1790,7 +1788,8 @@ export function ClientesView() {
                                   {r.comentario}
                                 </p>
                               )}
-                            </details>
+                            </CollapsibleContent>
+                            </Collapsible>
                           </li>
                           );
                         })}

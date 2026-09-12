@@ -26,6 +26,7 @@ import {
 } from "@/features/empresa/actions/logo-actions";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { SelectorColor } from "@/components/ui/selector-color";
 
 const MAX_HERO_BYTES = 8 * 1024 * 1024;
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -426,10 +427,8 @@ function ColorField({
         {hint ? <p className="text-[10px] text-muted-foreground">{hint}</p> : null}
       </div>
       <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={valid ? value : "#000000"}
-          onChange={(e) => onChange(e.target.value.toUpperCase())}
+        <SelectorColor value={valid ? value : "#000000"}
+          onChange={(valor) => onChange(valor.toUpperCase())}
           className="h-9 w-12 cursor-pointer rounded border bg-background"
           aria-label={`Selector ${label}`}
         />

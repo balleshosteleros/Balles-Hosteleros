@@ -67,6 +67,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Trash2, Save, X, Loader2, Info, ChevronDown, UserRound, Users, Layers, Pencil, Check } from "lucide-react";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorColor } from "@/components/ui/selector-color";
 
 /**
  * Etiquetas reales de la estructura (departamentos + puestos por departamento).
@@ -908,10 +909,8 @@ export function EstructuraView() {
                       })}
                     </div>
                     <div className="flex items-center gap-2 pt-1">
-                      <input
-                        type="color"
-                        value={editColor || "#3b82f6"}
-                        onChange={(e) => setEditColor(e.target.value)}
+                      <SelectorColor value={editColor || "#3b82f6"}
+                        onChange={setEditColor}
                         className="h-8 w-10 rounded border border-border bg-transparent cursor-pointer"
                         aria-label="Selector de color personalizado"
                       />

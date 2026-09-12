@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Palette, Loader2, Check } from "lucide-react";
 import { Card } from "@/shared/components/ui/card";
@@ -13,6 +13,7 @@ import {
 } from "@/features/rrhh/actions/departamento-colores-actions";
 import { pillStyleDepartamento } from "@/features/rrhh/data/horarios";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorColor } from "@/components/ui/selector-color";
 
 // Paleta sugerida (clics rápidos). El usuario puede elegir cualquier hex con el
 // selector nativo; estas son las teclas que cubren bien el catálogo canónico.
@@ -131,7 +132,6 @@ function FilaDepartamento({
   guardando: boolean;
   onChange: (color: string) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const color = departamento.color;
 
   return (
@@ -147,24 +147,18 @@ function FilaDepartamento({
         {departamento.nombre}
       </span>
 
-      {/* Selector nativo de color (cualquier hex). */}
+      {/* Cualquier color: antes esto abría la ventana de colores del sistema
+          —había que esconder el campo nativo debajo del botón—; ahora abre el
+          selector del software. */}
       <ToolTooltip label="Elegir color personalizado">
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="relative h-8 w-8 shrink-0 rounded-md border shadow-sm transition-transform hover:scale-105"
-          style={{ backgroundColor: color }}
-          aria-label={`Color de ${departamento.nombre}`}
-        >
-          <input
-            ref={inputRef}
-            type="color"
+        <span className="inline-flex">
+          <SelectorColor
             value={color}
-            onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            tabIndex={-1}
+            onChange={onChange}
+            className="h-8 w-8 transition-transform hover:scale-105"
+            aria-label={`Color de ${departamento.nombre}`}
           />
-        </button>
+        </span>
       </ToolTooltip>
 
       {/* Paleta de clics rápidos. */}

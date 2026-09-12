@@ -89,6 +89,7 @@ import { refreshDailyCounts } from "./useDailyCounts";
 import { loadUserPref, saveUserPref } from "@/shared/io/user-preferences";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** Clave del estilo personal de redacción en `usuario_preferencias.prefs`. */
 const PREF_ESTILO_IA = "email.estiloIA";
@@ -1388,10 +1389,8 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                 {firmaHtml ? (
                   <div className="rounded-md border bg-muted/30 px-3 py-2">
                     <label className="flex cursor-pointer items-center gap-2 text-[11px] font-medium">
-                      <input
-                        type="checkbox"
-                        checked={incluirFirma}
-                        onChange={(e) => setIncluirFirma(e.target.checked)}
+                      <Checkbox checked={incluirFirma}
+                        onCheckedChange={(marcado) => setIncluirFirma(marcado === true)}
                         className="h-3.5 w-3.5 cursor-pointer"
                       />
                       Incluir firma corporativa de Gmail

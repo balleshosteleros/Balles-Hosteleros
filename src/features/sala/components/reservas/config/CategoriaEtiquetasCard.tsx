@@ -23,6 +23,7 @@ import {
 } from "@/features/sala/actions/sala-etiquetas-actions";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorColor } from "@/components/ui/selector-color";
 
 interface Props {
   /** `null` = tarjeta de las etiquetas que se quedaron sin grupo. */
@@ -199,10 +200,8 @@ function EtiquetaItem({
           </div>
           <div className="flex gap-1.5 items-center">
             <EmojiPicker value={emoji} onChange={setEmoji} />
-            <Input
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
+            <SelectorColor value={color}
+              onChange={setColor}
               className="h-8 w-14 p-0.5 cursor-pointer"
             />
             <Input
@@ -302,10 +301,8 @@ function EtiquetaCrearInline({
   return (
     <div className="flex items-center gap-1 rounded-md border border-dashed px-1.5 py-1 bg-muted/30">
       <EmojiPicker value={emoji} onChange={setEmoji} size="sm" />
-      <Input
-        type="color"
-        value={color}
-        onChange={(e) => setColor(e.target.value)}
+      <SelectorColor value={color}
+        onChange={setColor}
         className="h-6 w-10 p-0.5 cursor-pointer"
       />
       <Input

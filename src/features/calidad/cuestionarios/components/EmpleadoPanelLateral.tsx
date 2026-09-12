@@ -32,6 +32,7 @@ import { getPlantilla } from "@/features/calidad/cuestionarios/actions";
 import type { PlantillaCuestionario } from "@/features/calidad/cuestionarios/types";
 import { Desplegable } from "@/components/ui/desplegable";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Props {
   envioId: string | null;
@@ -227,11 +228,9 @@ function ReunionTab({
               key={p.id}
               className="flex items-start gap-2 py-1.5 px-2 rounded hover:bg-muted/40 group"
             >
-              <input
-                type="checkbox"
-                checked={p.estado === "cerrado"}
-                onChange={(e) =>
-                  togglePunto(p.id, e.target.checked ? "cerrado" : "pendiente")
+              <Checkbox checked={p.estado === "cerrado"}
+                onCheckedChange={(marcado) =>
+                  togglePunto(p.id, marcado === true ? "cerrado" : "pendiente")
                 }
                 className="mt-1"
               />

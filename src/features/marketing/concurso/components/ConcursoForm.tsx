@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { participarAction } from "@/features/marketing/actions/concurso-actions";
 import type { EdicionPublica, ResultadoParticipacion } from "@/features/marketing/services/concurso";
+import { CirculoOpcion } from "@/components/ui/circulo-opcion";
 
 interface Props {
   empresaSlug: string;
@@ -119,13 +120,10 @@ export function ConcursoForm({ empresaSlug, edicion }: Props) {
                       background: marcada ? `${primario}14` : undefined,
                     }}
                   >
-                    <input
-                      type="radio"
-                      name={`p${p.orden}`}
+                    <CirculoOpcion
                       checked={marcada}
                       onChange={() => setRespuestas((r) => ({ ...r, [p.orden]: i }))}
-                      className="h-4 w-4 shrink-0 accent-current"
-                      style={{ color: primario }}
+                      color={primario}
                     />
                     <span>{opcion}</span>
                   </label>

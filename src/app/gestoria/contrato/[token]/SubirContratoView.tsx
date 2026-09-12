@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { UploadCloud, FileText, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Props {
   /** Endpoint POST al que se sube el contrato (por-token o por-hash). */
@@ -131,10 +132,8 @@ export function SubirContratoView({ endpoint, trabajador, empresaNombre }: Props
         {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
 
         <label className="mt-4 flex items-start gap-2 text-sm text-zinc-700 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={confirmado}
-            onChange={(e) => setConfirmado(e.target.checked)}
+          <Checkbox checked={confirmado}
+            onCheckedChange={(marcado) => setConfirmado(marcado === true)}
             className="mt-0.5"
           />
           <span>

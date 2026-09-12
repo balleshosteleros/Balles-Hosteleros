@@ -50,6 +50,7 @@ import {
   registrarVideoMetaAction,
   subirImagenMetaAction,
 } from "@/features/marketing/meta-ads/actions/medios-actions";
+import { SelectorFechaHora } from "@/components/ui/selector-fecha-hora";
 
 /** Los mismos objetivos que entiende el servidor, contados en cristiano. */
 const OBJETIVOS = [
@@ -618,10 +619,10 @@ export function AsistenteCampana({
               {publicacion === "programar" && (
                 <div className="space-y-1.5">
                   <Label>¿Cuándo quieres que arranque?</Label>
-                  <Input
-                    type="datetime-local"
+                  <SelectorFechaHora
                     value={programarPara}
-                    onChange={(e) => setProgramarPara(e.target.value)}
+                    onChange={setProgramarPara}
+                    paso={15}
                   />
                   <p className="text-xs text-muted-foreground">
                     Es la hora del restaurante, no la de tu ordenador.

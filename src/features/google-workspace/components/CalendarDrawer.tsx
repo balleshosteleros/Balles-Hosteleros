@@ -56,6 +56,7 @@ import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
 import { SelectorHora } from "@/components/ui/selector-hora";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type GoogleCalendar = {
   id: string;
@@ -1490,11 +1491,9 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
 
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="allday"
+                    <Checkbox id="allday"
                       checked={form.allDay}
-                      onChange={(e) => setForm({ ...form, allDay: e.target.checked })}
+                      onCheckedChange={(marcado) => setForm({ ...form, allDay: marcado === true })}
                     />
                     <Label htmlFor="allday" className="text-xs cursor-pointer">
                       Todo el día
@@ -1502,11 +1501,9 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                   </div>
                   {!form.id && (
                     <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="addmeet"
+                      <Checkbox id="addmeet"
                         checked={form.addMeet}
-                        onChange={(e) => setForm({ ...form, addMeet: e.target.checked })}
+                        onCheckedChange={(marcado) => setForm({ ...form, addMeet: marcado === true })}
                       />
                       <Label htmlFor="addmeet" className="flex items-center gap-1 text-xs cursor-pointer">
                         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">

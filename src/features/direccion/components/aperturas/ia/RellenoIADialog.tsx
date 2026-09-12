@@ -24,6 +24,7 @@ import {
   type DraftIAEstudio,
 } from "@/features/direccion/types/aperturas-ia";
 import { RellenoIADropzone, type ArchivoCargado } from "./RellenoIADropzone";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Modo =
   | { tipo: "bloque"; bloque: BloqueIAKey }
@@ -162,10 +163,8 @@ export function RellenoIADialog({ open, onOpenChange, modo, onDraft }: Props) {
 
           {modo.tipo === "completa" && (
             <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs">
-              <input
-                type="checkbox"
-                checked={incluirCifras}
-                onChange={(e) => setIncluirCifras(e.target.checked)}
+              <Checkbox checked={incluirCifras}
+                onCheckedChange={(marcado) => setIncluirCifras(marcado === true)}
                 disabled={isPending}
                 className="mt-0.5 h-3.5 w-3.5 rounded border-amber-300 text-amber-600 focus:ring-amber-400"
               />

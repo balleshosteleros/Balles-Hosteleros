@@ -39,6 +39,7 @@ import { VigenciaSelector } from "@/features/sala/reglas/components/VigenciaSele
 import { VigenciaBadge } from "@/features/sala/reglas/components/VigenciaBadge";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { Desplegable } from "@/components/ui/desplegable";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** Deriva el turno (COMIDA/CENA/AMBOS) a partir de los flags del plano. */
 function planoToTurno(p: Plano): TurnoRegla {
@@ -362,10 +363,8 @@ function NuevoPlanoModal({
             />
           </div>
           <label className="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={esPrincipal}
-              onChange={(e) => setEsPrincipal(e.target.checked)}
+            <Checkbox checked={esPrincipal}
+              onCheckedChange={(marcado) => setEsPrincipal(marcado === true)}
             />
             <span>Marcar como plano principal (se usa cuando ningún otro aplica)</span>
           </label>
@@ -465,10 +464,8 @@ function RenombrarPlanoModal({
 
           {!plano.esPrincipal && (
             <label className="flex items-center gap-2 text-xs cursor-pointer">
-              <input
-                type="checkbox"
-                checked={esPrincipal}
-                onChange={(e) => setEsPrincipal(e.target.checked)}
+              <Checkbox checked={esPrincipal}
+                onCheckedChange={(marcado) => setEsPrincipal(marcado === true)}
               />
               <span>Marcar como principal (se usa cuando ningún otro aplica)</span>
             </label>

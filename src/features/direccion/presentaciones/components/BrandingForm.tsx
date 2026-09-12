@@ -19,6 +19,7 @@ import type { Branding } from "../types/presentaciones";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 import { TIPOGRAFIAS } from "../data/layouts";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { SelectorColor } from "@/components/ui/selector-color";
 
 const DEFAULT: Branding = {
   empresa_id: "",
@@ -283,10 +284,8 @@ function ColorField({
     <div className="space-y-1.5">
       <Label>{label}</Label>
       <div className="flex gap-2">
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+        <SelectorColor value={value}
+          onChange={(valor) => onChange(valor)}
           className="h-10 w-16 rounded border cursor-pointer"
         />
         <Input value={value} onChange={(e) => onChange(e.target.value)} className="font-mono" />

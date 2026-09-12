@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Check, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Props = {
   empresaId: string;
@@ -228,9 +229,7 @@ export function CapturaModal({
               </div>
 
               <label className="flex items-start gap-2 text-[11px] text-gray-600">
-                <input
-                  type="checkbox"
-                  name="consentimiento"
+                <Checkbox name="consentimiento"
                   className="mt-0.5 h-3.5 w-3.5"
                 />
                 <span>

@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Phone, Info, Wifi, WifiOff, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { CirculoOpcion } from "@/components/ui/circulo-opcion";
 
 /**
  * Genera el email plantilla que se envía a B2COM para pedir las credenciales
@@ -140,10 +141,7 @@ export function TelefonoConfigPanel() {
                   : "border-border hover:border-sky-300"
               }`}
             >
-              <input
-                type="radio"
-                name="proveedor-telefonia"
-                checked={t.proveedor === p.id}
+              <CirculoOpcion checked={t.proveedor === p.id}
                 onChange={() => set("proveedor", p.id)}
                 className="mt-1 accent-sky-600"
               />

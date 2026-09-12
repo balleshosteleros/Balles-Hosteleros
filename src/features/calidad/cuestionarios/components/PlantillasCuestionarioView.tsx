@@ -39,6 +39,7 @@ import {
 } from "@/features/calidad/cuestionarios/actions";
 import type { PlantillaCuestionario } from "@/features/calidad/cuestionarios/types";
 import { Desplegable } from "@/components/ui/desplegable";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const columnasDef: ToolbarColumna[] = [
   { campo: "nombre", label: "Nombre", bloqueada: true },
@@ -386,10 +387,8 @@ function PlantillaDialog({ open, onOpenChange, plantilla, onGuardada }: Plantill
                 <div className="space-y-2 flex flex-col">
                   <Label>Estado</Label>
                   <label className="flex items-center gap-2 text-sm h-9">
-                    <input
-                      type="checkbox"
-                      checked={archivada}
-                      onChange={(e) => setArchivada(e.target.checked)}
+                    <Checkbox checked={archivada}
+                      onCheckedChange={(marcado) => setArchivada(marcado === true)}
                     />
                     Archivada
                   </label>

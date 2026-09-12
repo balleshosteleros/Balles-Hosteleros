@@ -21,6 +21,7 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { BadgeSugerenciaIA } from "@/features/direccion/components/aperturas/shared/BadgeSugerenciaIA";
 import type { DraftMarca } from "@/features/direccion/types/aperturas-ia";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { SelectorColor } from "@/components/ui/selector-color";
 
 type CampoMarcaIA =
   | "claim"
@@ -263,11 +264,9 @@ export function MarcaTab({
                   style={{ backgroundColor: c.hex }}
                 />
                 <div className="flex items-center gap-2">
-                  <input
-                    disabled={readOnly}
-                    type="color"
+                  <SelectorColor disabled={readOnly} 
                     value={c.hex}
-                    onChange={(e) => updateColor(c.id, { hex: e.target.value })}
+                    onChange={(valor) => updateColor(c.id, { hex: valor })}
                     className="h-8 w-10 rounded border cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                   />
                   <Input

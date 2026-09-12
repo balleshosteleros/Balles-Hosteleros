@@ -38,6 +38,7 @@ import { Input } from "@/components/ui/input";
 import { anadirDominio, verificarDominio } from "../../../actions/dominios-actions";
 import type { ProveedorDns, RegistroDns } from "../../../services/vercel-domains";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 type Paso = "DIRECCION" | "DNS" | "VERIFICAR" | "LISTO";
 
@@ -395,12 +396,14 @@ function PasoDns({
         onCopiar={onCopiar}
       />
 
-      <details className="rounded-lg border bg-muted/10 px-4 py-3 text-sm">
-        <summary className="cursor-pointer font-medium">
+      <Collapsible className="rounded-lg border bg-muted/10 px-4 py-3 text-sm">
+        <CollapsibleTrigger className="w-full cursor-pointer text-left font-medium">
           ¿Dónde pego esto? (paso a paso)
-        </summary>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
         <InstruccionesProveedor proveedor={proveedor} registros={registros} />
-      </details>
+        </CollapsibleContent>
+      </Collapsible>
 
       <div className="flex justify-between gap-2 pt-2">
         <Button variant="ghost" onClick={onAtras}>

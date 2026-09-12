@@ -52,6 +52,7 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { loadEstructuraContext } from "@/features/sala/actions/estructura-context";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function EstructuraTab() {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
@@ -679,10 +680,8 @@ function SalaModal({
           )}
           {sala && !yaEsPrincipal && (
             <label className="flex items-center gap-2 text-xs cursor-pointer">
-              <input
-                type="checkbox"
-                checked={esPrincipal}
-                onChange={(e) => setEsPrincipal(e.target.checked)}
+              <Checkbox checked={esPrincipal}
+                onCheckedChange={(marcado) => setEsPrincipal(marcado === true)}
               />
               <span>Marcar como principal</span>
             </label>

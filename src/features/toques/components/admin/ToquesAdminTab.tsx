@@ -42,6 +42,7 @@ import {
   eliminarRecompensa,
 } from "@/features/toques/actions/toques-admin-actions";
 import type { Nivel, Recompensa, Regla, RecompensaTipo } from "@/features/toques/types/toques.types";
+import { SelectorColor } from "@/components/ui/selector-color";
 
 const TIPOS_RECOMPENSA: { value: RecompensaTipo; label: string }[] = [
   { value: "hora_libre", label: "Hora libre" },
@@ -541,13 +542,11 @@ export function ToquesAdminTab() {
                           />
                         </td>
                         <td className="py-2 pr-3">
-                          <Input
-                            type="color"
-                            value={draft.badgeColor}
-                            onChange={(e) =>
+                          <SelectorColor value={draft.badgeColor}
+                            onChange={(valor) =>
                               setNivelesDraft((prev) => ({
                                 ...prev,
-                                [nv.id]: { ...draft, badgeColor: e.target.value },
+                                [nv.id]: { ...draft, badgeColor: valor },
                               }))
                             }
                             className="h-8 p-1"

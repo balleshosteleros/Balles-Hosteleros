@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { UploadCloud, FileText, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Props {
   endpoint: string;
@@ -108,10 +109,8 @@ export function SubirComprobanteView({
         ) : (
           <>
             <label className="mt-5 flex items-start gap-2 text-sm text-zinc-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={confirmado}
-                onChange={(e) => setConfirmado(e.target.checked)}
+              <Checkbox checked={confirmado}
+                onCheckedChange={(marcado) => setConfirmado(marcado === true)}
                 className="mt-0.5"
               />
               <span>

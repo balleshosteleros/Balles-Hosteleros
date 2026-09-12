@@ -34,6 +34,7 @@ import type {
   PlanTurno,
   TurnoCelda,
 } from "@/features/rrhh/actions/planificacion-actions";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export type Agrupacion = "departamentos" | "empleados" | "turnos";
 export type AreaValor = "operativa" | "administrativa";
@@ -268,10 +269,8 @@ function CheckRow({
 }) {
   return (
     <label className="flex cursor-pointer select-none items-center gap-2 rounded px-1.5 py-1 text-sm font-normal hover:bg-muted">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
+      <Checkbox checked={checked}
+        onCheckedChange={(marcado) => onChange(marcado === true)}
         className="rounded accent-primary"
       />
       <span className="truncate">{children}</span>
@@ -391,10 +390,8 @@ function FiltrosMenu({
         <div className="max-h-[60vh] space-y-3 overflow-y-auto">
           {/* Mostrar/ocultar empleados sin ningún turno en el rango */}
           <label className="flex cursor-pointer select-none items-center gap-2 rounded px-1.5 py-1.5 text-xs font-medium hover:bg-muted">
-            <input
-              type="checkbox"
-              checked={ocultarSinTurno}
-              onChange={(e) => onOcultarSinTurnoChange(e.target.checked)}
+            <Checkbox checked={ocultarSinTurno}
+              onCheckedChange={(marcado) => onOcultarSinTurnoChange(marcado === true)}
               className="rounded accent-primary"
             />
             <span>Ocultar empleados sin turno</span>
@@ -886,9 +883,11 @@ function TurnosBody({
     return map;
   }, [turnos, empleados, celdas]);
 
-  const turnosFiltrados = [...turnos].sort((a, b) =>
-    a.nombre.localeCompare(b.nombre, "es"),
-  );
+  // Los turnos vigentes siempre; los de versiones anteriores solo si esa semana
+  // todavía tienen a alguien, para no llenar la vista de versiones viejas.
+  const turnosFiltrados = [...turnos]
+    .filter((t) => t.esOficial || (conteo.get(t.id)?.size ?? 0) > 0)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 
   if (turnosFiltrados.length === 0) {
     return (

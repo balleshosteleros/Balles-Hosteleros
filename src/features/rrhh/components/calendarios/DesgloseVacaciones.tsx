@@ -18,6 +18,7 @@
 
 import { Banknote, CalendarX, Plane } from "lucide-react";
 import type { MovimientoVacaciones } from "@/features/rrhh/actions/calendarios-vacaciones-actions";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Props {
   anio: number;
@@ -91,14 +92,15 @@ export function DesgloseVacaciones({
       {/* Histórico: por qué el cupo ya no está entero. Plegado por defecto —
           quien mira el desglose quiere el número; el detalle solo si lo pide. */}
       {movimientos && movimientos.length > 0 && (
-        <details className="group">
-          <summary
-            className={`${etiqueta} cursor-pointer list-none text-center text-muted-foreground hover:text-foreground`}
+        <Collapsible className="group">
+          <CollapsibleTrigger
+            className={`${etiqueta} w-full cursor-pointer text-center text-muted-foreground hover:text-foreground`}
           >
             <span className="underline underline-offset-2">
               Ver los {movimientos.length} movimientos del año
             </span>
-          </summary>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
           <ul className="mt-2 space-y-1.5">
             {movimientos.map((m, i) => (
               <li key={`${m.fecha}-${i}`} className="flex items-start gap-2">
@@ -118,7 +120,8 @@ export function DesgloseVacaciones({
               </li>
             ))}
           </ul>
-        </details>
+          </CollapsibleContent>
+        </Collapsible>
       )}
     </div>
   );

@@ -46,6 +46,7 @@ import {
   getEstadoFirma,
   type AbrirDocumentoResult,
 } from "./actions";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Documento = Extract<AbrirDocumentoResult, { ok: true }>["documento"];
 
@@ -410,10 +411,8 @@ export function FirmaPublicaView({
                   el recibí, o se cierra la página sin firmar. */}
               {!esAcuseRecibo && (
                 <label className="flex items-start gap-2 text-sm text-zinc-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={acepto}
-                    onChange={(e) => setAcepto(e.target.checked)}
+                  <Checkbox checked={acepto}
+                    onCheckedChange={(marcado) => setAcepto(marcado === true)}
                     className="mt-0.5"
                   />
                   <span>

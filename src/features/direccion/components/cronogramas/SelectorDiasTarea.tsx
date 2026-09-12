@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import type { Frecuencia, TerminaTipo } from "../../hooks/useCronogramasOperativos";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { CirculoOpcion } from "@/components/ui/circulo-opcion";
 
 type CalendarioPatch = {
   frecuencia?: Frecuencia;
@@ -373,10 +374,7 @@ export function SelectorDiasTarea({
             </Label>
             <div className="space-y-1.5 mt-1.5">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="termina"
-                  checked={termina_tipo == null}
+                <CirculoOpcion checked={termina_tipo == null}
                   onChange={() => setTermina(null)}
                   className="w-4 h-4 text-primary"
                 />
@@ -384,10 +382,7 @@ export function SelectorDiasTarea({
               </label>
 
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="termina"
-                  checked={termina_tipo === "fecha"}
+                <CirculoOpcion checked={termina_tipo === "fecha"}
                   onChange={() => setTermina("fecha")}
                   className="w-4 h-4 text-primary"
                 />
@@ -400,10 +395,7 @@ export function SelectorDiasTarea({
               </label>
 
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="termina"
-                  checked={termina_tipo === "repeticiones"}
+                <CirculoOpcion checked={termina_tipo === "repeticiones"}
                   onChange={() => setTermina("repeticiones")}
                   className="w-4 h-4 text-primary"
                 />

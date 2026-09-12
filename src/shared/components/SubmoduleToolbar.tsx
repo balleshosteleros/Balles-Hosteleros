@@ -60,6 +60,7 @@ import {
 import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export type ToolbarFiltroTipo =
   | "lista"
@@ -506,12 +507,10 @@ function FiltrosPopover({
                     key={opt}
                     className="flex items-center gap-2 text-sm px-1.5 py-1 rounded hover:bg-muted cursor-pointer select-none"
                   >
-                    <input
-                      type="checkbox"
-                      checked={tempValores.includes(opt)}
-                      onChange={(e) =>
+                    <Checkbox checked={tempValores.includes(opt)}
+                      onCheckedChange={(marcado) =>
                         setTempValores(
-                          e.target.checked
+                          marcado === true
                             ? [...tempValores, opt]
                             : tempValores.filter((v) => v !== opt),
                         )

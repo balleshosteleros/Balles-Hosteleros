@@ -56,6 +56,7 @@ import {
 } from "@/features/ajustes/data/establecimiento";
 import { CCC_LONGITUD, normalizarCcc, errorCcc } from "@/features/ajustes/lib/ccc";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Slider } from "@/components/ui/slider";
 
 interface Local {
   id: string;
@@ -514,16 +515,17 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
                 <Label className="text-xs">
                   Radio permitido para fichar: <strong>{draft.radio_metros} m</strong>
                 </Label>
-                <Input
-                  type="range"
+                {/* La barra del navegador la pinta el sistema: gris y con un
+                    tirador distinto en cada equipo. Esta es la nuestra. */}
+                <Slider
                   min={20}
                   max={1000}
                   step={10}
-                  value={draft.radio_metros}
-                  onChange={(e) =>
-                    setDraft({ ...draft, radio_metros: parseInt(e.target.value, 10) })
+                  value={[draft.radio_metros]}
+                  onValueChange={([metros]) =>
+                    setDraft({ ...draft, radio_metros: metros })
                   }
-                  className="cursor-pointer"
+                  className="cursor-pointer py-1"
                 />
               </div>
             </div>

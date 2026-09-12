@@ -47,6 +47,7 @@ import {
   MAX_COMENSALES_SIN_REGLA,
 } from "@/features/sala/data/reservas";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Props {
   empresaSlug: string;
@@ -930,12 +931,12 @@ export function ReservaPublicaForm({
               cierran la reserva entera, no una de las dos mitades. */}
           <div className="mx-auto w-full max-w-md space-y-3 md:pt-1">
           <label className="flex items-start gap-2 text-[11px] leading-snug text-zinc-500">
-            <input
-              type="checkbox"
+            {/* En la web del restaurante, la casilla va de SU color. */}
+            <Checkbox
               checked={aceptaPrivacidad}
-              onChange={(e) => setAceptaPrivacidad(e.target.checked)}
+              onCheckedChange={(marcado) => setAceptaPrivacidad(marcado === true)}
               disabled={enviando}
-              className="mt-0.5 shrink-0"
+              className="mt-0.5 shrink-0 border-[var(--brand)] data-[state=checked]:border-[var(--brand)] data-[state=checked]:bg-[var(--brand)] data-[state=checked]:text-[var(--brand-fg)]"
             />
             <span>
               He leído y acepto la{" "}
@@ -954,12 +955,11 @@ export function ReservaPublicaForm({
           {/* Comercial: consentimiento distinto del de privacidad y opcional.
               Exigirlo para reservar lo invalidaria (RGPD art. 7.4). */}
           <label className="flex items-start gap-2 text-[11px] leading-snug text-zinc-500">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={aceptaMarketing}
-              onChange={(e) => setAceptaMarketing(e.target.checked)}
+              onCheckedChange={(marcado) => setAceptaMarketing(marcado === true)}
               disabled={enviando}
-              className="mt-0.5 shrink-0"
+              className="mt-0.5 shrink-0 border-[var(--brand)] data-[state=checked]:border-[var(--brand)] data-[state=checked]:bg-[var(--brand)] data-[state=checked]:text-[var(--brand-fg)]"
             />
             <span>
               Quiero enterarme de las novedades.
