@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useGoogleConnection, type CuentaGoogle } from "./useGoogleConnection";
-import { ToolTooltip } from "@/features/layout/components/ToolTooltip";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const GOOGLE_RING_BG =
   "conic-gradient(from 0deg, #4285F4 0deg, #4285F4 90deg, #EA4335 90deg, #EA4335 180deg, #FBBC05 180deg, #FBBC05 270deg, #34A853 270deg, #34A853 360deg)";

@@ -46,7 +46,7 @@ import {
   AccesosDrawer,
 } from "@/features/layout/components/AccesosDrawers";
 import { ToolsAvisoPopups } from "@/features/layout/components/ToolsAvisoPopups";
-import { ToolTooltip } from "@/features/layout/components/ToolTooltip";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CamarasDrawer } from "@/features/camaras/components/CamarasDrawer";
 import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";

@@ -6,7 +6,7 @@ import { useRecorder } from "../contexts/recorder-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { cn } from "@/lib/utils";
 import { HERRAMIENTA, toolTextColor } from "@/features/layout/data/herramientas";
-import { ToolTooltip } from "@/features/layout/components/ToolTooltip";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export function RecordingTrigger() {
   const { setDrawerOpen, state } = useRecordingStore();

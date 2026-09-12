@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Settings, CalendarDays, Download } from "lucide-react";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Button } from "@/shared/components/ui/button";
 import { Calendar } from "@/shared/components/ui/calendar";
 import {
@@ -54,26 +55,28 @@ export function HorariosToolbar({
         textoNuevo="Nuevo"
         extraDerecha={
           <>
-            <Button
-              size="icon"
-              variant="outline"
-              className="h-9 w-9"
-              onClick={onDescargarPDF}
-              title="Descargar PDF"
-              aria-label="Descargar PDF"
-            >
-              <Download className="h-4 w-4" strokeWidth={1.75} />
-            </Button>
-            <Button
-              size="icon"
-              variant="outline"
-              className="h-9 w-9"
-              onClick={onAbrirConfig}
-              title="Configuración"
-              aria-label="Configuración"
-            >
-              <Settings className="h-4 w-4" strokeWidth={1.75} />
-            </Button>
+            <ToolTooltip label="Descargar PDF">
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-9 w-9"
+                onClick={onDescargarPDF}
+                aria-label="Descargar PDF"
+              >
+                <Download className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+            </ToolTooltip>
+            <ToolTooltip label="Configuración">
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-9 w-9"
+                onClick={onAbrirConfig}
+                aria-label="Configuración"
+              >
+                <Settings className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+            </ToolTooltip>
           </>
         }
       />

@@ -12,6 +12,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/shared/components/ui/popover";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import {
   Select,
   SelectContent,
@@ -365,25 +366,26 @@ function FiltrosMenu({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="icon"
-          className="relative h-7 w-7 shrink-0"
-          title="Filtrar"
-          aria-label="Filtrar"
-        >
-          <Filter
-            className={cn(
-              "h-3.5 w-3.5",
-              nActivos > 0 ? "fill-current text-primary" : "text-muted-foreground",
+        <ToolTooltip label="Filtrar">
+          <Button
+            variant="outline"
+            size="icon"
+            className="relative h-7 w-7 shrink-0"
+            aria-label="Filtrar"
+          >
+            <Filter
+              className={cn(
+                "h-3.5 w-3.5",
+                nActivos > 0 ? "fill-current text-primary" : "text-muted-foreground",
+              )}
+            />
+            {nActivos > 0 && (
+              <span className="absolute -right-1 -top-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold text-primary-foreground">
+                {nActivos}
+              </span>
             )}
-          />
-          {nActivos > 0 && (
-            <span className="absolute -right-1 -top-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold text-primary-foreground">
-              {nActivos}
-            </span>
-          )}
-        </Button>
+          </Button>
+        </ToolTooltip>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-2">
         <div className="max-h-[60vh] space-y-3 overflow-y-auto">
@@ -509,54 +511,74 @@ function TurnoPill({
     : 0;
   // Turno partido = más de un tramo el mismo día → se apilan entrada/salida.
   const tramos = turno.tramos;
-  const titulo = `${turno.codigo} · ${turno.nombre}${
-    esFlexible
-      ? horasDia > 0
-        ? " · " + formatHoras(horasDia)
-        : ""
-      : tramos.length
-        ? " · " + tramos.map(formatTramo).join(" / ")
-        : ""
-  }`;
-  return (
-    <div
-      className="group/pill relative rounded-md px-1.5 py-1 text-center leading-tight"
-      style={pillStyleDepartamento(turno.colorHex)}
-      title={titulo}
-    >
-      <span className="block text-[11px] font-semibold tracking-wide truncate">
-        {turno.codigo}
-      </span>
-      {!compacto && esFlexible && horasDia > 0 && (
-        <span className="block text-[10px] font-medium opacity-90 tabular-nums truncate">
-          {formatHoras(horasDia)}
-        </span>
-      )}
-      {!compacto &&
-        !esFlexible &&
-        tramos.map((tr, i) => (
-          <span
-            key={i}
-            className="block text-[10px] opacity-80 tabular-nums truncate"
-          >
-            {tr.inicio}–{tr.fin}
-          </span>
-        ))}
-      {quitable && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onQuitar!(asignacionId!);
-          }}
-          className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-foreground/80 text-background shadow group-hover/pill:flex hover:bg-destructive"
-          aria-label="Quitar asignación"
-          title="Quitar"
-        >
-          <X className="h-2.5 w-2.5" />
-        </button>
+  // Detalle al pasar por encima. Antes era el `title=` nativo: un recuadro gris
+  // del sistema operativo, cuadrado y con la letra del equipo de cada uno.
+  // Ahora es la etiqueta del software, con el color del departamento.
+  const detalle = (
+    <div className="flex flex-col gap-1 text-left">
+      <div className="flex items-center gap-2">
+        <span
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={dotStyleDepartamento(turno.colorHex)}
+        />
+        <span className="text-xs font-semibold">{turno.codigo}</span>
+        <span className="text-xs font-normal opacity-70">{turno.nombre}</span>
+      </div>
+      {esFlexible
+        ? horasDia > 0 && (
+            <span className="pl-4 text-[11px] tabular-nums opacity-80">
+              {formatHoras(horasDia)}
+            </span>
+          )
+        : tramos.map((tr, i) => (
+            <span key={i} className="pl-4 text-[11px] tabular-nums opacity-80">
+              {formatTramo(tr)}
+            </span>
+          ))}
+      {!esFlexible && tramos.length > 1 && (
+        <span className="pl-4 text-[11px] opacity-70">Turno partido</span>
       )}
     </div>
+  );
+  return (
+    <ToolTooltip label={detalle} side="top" className="rounded-2xl px-3 py-2">
+      <div
+        className="group/pill relative rounded-md px-1.5 py-1 text-center leading-tight"
+        style={pillStyleDepartamento(turno.colorHex)}
+      >
+        <span className="block text-[11px] font-semibold tracking-wide truncate">
+          {turno.codigo}
+        </span>
+        {!compacto && esFlexible && horasDia > 0 && (
+          <span className="block text-[10px] font-medium opacity-90 tabular-nums truncate">
+            {formatHoras(horasDia)}
+          </span>
+        )}
+        {!compacto &&
+          !esFlexible &&
+          tramos.map((tr, i) => (
+            <span
+              key={i}
+              className="block text-[10px] opacity-80 tabular-nums truncate"
+            >
+              {tr.inicio}–{tr.fin}
+            </span>
+          ))}
+        {quitable && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onQuitar!(asignacionId!);
+            }}
+            className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-foreground/80 text-background shadow group-hover/pill:flex hover:bg-destructive"
+            aria-label="Quitar asignación"
+          >
+            <X className="h-2.5 w-2.5" />
+          </button>
+        )}
+      </div>
+    </ToolTooltip>
   );
 }
 

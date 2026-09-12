@@ -33,7 +33,7 @@ import { getTipoMeta } from "@/features/notificaciones/lib/catalogo";
 import { getIconoTipo } from "@/features/notificaciones/lib/catalogo-iconos";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
-import { ToolTooltip } from "@/features/layout/components/ToolTooltip";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 function fmtFecha(iso: string, tz: string): string {
   return formatFechaEnZona(iso, tz, { day: "2-digit", month: "short", year: undefined });
