@@ -45,7 +45,7 @@ def _centro(perf, sesgo):
             return i / max(1, len(perf) - 1)
     return 0.5
 
-def recuadro(im, sesgo=0.62):
+def recuadro(im, sesgo=0.70):
     w, h = im.size
     actual = w / h
     if abs(actual - RATIO) < 0.02:
@@ -77,3 +77,33 @@ def recortar(src, dst, ancho_max=1200):
         im = im.resize((ancho_max, int(round(ancho_max / RATIO))), Image.LANCZOS)
     im.save(dst, 'JPEG', quality=90, optimize=True)
     return im.size
+
+
+def encajar(src, dst, ancho_max=1200):
+    """
+    Copa entera dentro del marco 4:3, con el propio fondo difuminado detras.
+
+    Una foto vertical de coctel mide 2:3; al recortarla a 4:3 se pierde la
+    mitad de la altura y la copa sale partida —"fuera del marco"—. Aqui la
+    foto se mete ENTERA y el hueco de los lados se rellena con ella misma,
+    ampliada y desenfocada, que es como se presenta una copa alta en las
+    cartas buenas: se ve el trago completo y el marco no queda con bandas.
+    """
+    im = Image.open(src).convert('RGB')
+    W = ancho_max
+    H = int(round(W / RATIO))
+
+    # Fondo: la propia foto llenando el marco, borrosa y algo apagada.
+    fe = max(W / im.width, H / im.height)
+    fondo = im.resize((max(1, int(im.width * fe)), max(1, int(im.height * fe))), Image.LANCZOS)
+    izq = (fondo.width - W) // 2
+    arr = (fondo.height - H) // 2
+    fondo = fondo.crop((izq, arr, izq + W, arr + H)).filter(ImageFilter.GaussianBlur(28))
+    fondo = Image.blend(fondo, Image.new('RGB', (W, H), (12, 12, 14)), 0.35)
+
+    # Delante, la foto completa.
+    fd = min(W / im.width, H / im.height)
+    frente = im.resize((max(1, int(im.width * fd)), max(1, int(im.height * fd))), Image.LANCZOS)
+    fondo.paste(frente, ((W - frente.width) // 2, (H - frente.height) // 2))
+    fondo.save(dst, 'JPEG', quality=90, optimize=True)
+    return fondo.size

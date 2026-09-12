@@ -1,0 +1,13 @@
+-- Las fotos vuelven a llenar el marco: fuera las bandas laterales.
+--
+-- El intento anterior metia la foto vertical entera y rellenaba los lados con
+-- ella misma desenfocada. Se veia la copa completa, si, pero cada plato
+-- quedaba como un recuadro dentro de otro y la carta perdia fuerza: una foto
+-- de comida vende cuando ocupa TODO el hueco, no cuando flota en medio.
+--
+-- Se vuelve al recorte que llena el marco, con el punto de corte afinado.
+-- Se probaron tres valores sobre los platos que peor salian (Habanito, los
+-- zumos, Boom-boom, Papagayo): por debajo de 0,70 se corta el pie de la copa
+-- y por encima se pierde la decoracion de arriba. Queda en 0,70.
+--
+-- 133 platos reprocesados. Ver scripts/carta-encuadre.py.
