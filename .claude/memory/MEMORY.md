@@ -4,6 +4,7 @@
 - [AJUSTES vs CONFIGURACIÓN + coherencia visual](feedback/ajustes_vs_configuracion_y_diseno.md) — **texto literal de Iván, no reformular**. "Ajustes" = icono superior → Departamentos → departamento → módulo (90 %), o → Herramientas → herramienta si no pertenece a ningún departamento. "Configuración" = engranaje superior derecho del propio módulo/submódulo. No mezclar ambos. Y regla crítica de frontend: nunca inventar estilo nuevo si ya existe un patrón equivalente — consistencia > creatividad visual
 - [Ajustes = BARRERA de permisos](feedback/ajustes_barrera_de_permisos.md) — el permiso de un departamento NO abre sus Ajustes: son dos llaves distintas. Prohibido poner en un módulo cualquier enlace/botón que lleve a Ajustes (salta la barrera). El engranaje se queda aunque esté vacío ("No hay configuración propia por ahora"). Lo que sube a Ajustes desaparece del módulo, no se duplica
 
+- [⛔ Un horario asignado NUNCA desaparece](feedback/horario_asignado_nunca_desaparece.md) — **regla literal de Iván**. `es_oficial`/la versión solo decide qué se OFRECE al hacer un cambio; lo ya asignado se pinta siempre, sea la versión que sea. Un `.eq("es_oficial", true)` en una consulta que MUESTRA horario es un bug
 - [Estado Logística](project/logistica_estado.md) — BD poblada; pendiente reasignar proveedores y categorizar ingredientes
 - [Escandallos](project/escandallos.md) — son la composición interna del producto de venta, no lista aparte
 - [Modo autónomo](feedback/autonomia.md) — ejecutar sin pedir confirmación; elegir defaults sensatos
