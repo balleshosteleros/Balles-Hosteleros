@@ -716,7 +716,7 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
       <AvisoBajaMedicaDialog
         open={avisoBaja}
         onOpenChange={setAvisoBaja}
-        hrefComunicados="/m/comunicados"
+        hrefSolicitudes="/m/solicitudes"
       />
     </div>
   );

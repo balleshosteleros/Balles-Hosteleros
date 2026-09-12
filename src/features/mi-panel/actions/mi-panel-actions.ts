@@ -791,7 +791,7 @@ async function evaluarEntradaFichaje(
         ok: false,
         bajaMedica: true,
         error:
-          "Estás de baja médica. Ve a Comunicados para comunicar tu alta médica.",
+          "Estás de baja médica. Comunica tu alta desde Solicitudes para volver a fichar.",
       };
     }
   }

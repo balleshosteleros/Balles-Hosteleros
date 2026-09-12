@@ -10,7 +10,7 @@
  */
 
 import { useRouter } from "next/navigation";
-import { HeartPulse, Megaphone } from "lucide-react";
+import { HeartPulse, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,14 +24,14 @@ import {
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  /** Dónde vive Comunicados: cambia entre el móvil y el ordenador. */
-  hrefComunicados?: string;
+  /** Dónde vive Solicitudes: cambia entre el móvil y el ordenador. */
+  hrefSolicitudes?: string;
 }
 
 export function AvisoBajaMedicaDialog({
   open,
   onOpenChange,
-  hrefComunicados = "/mi-panel/comunicados",
+  hrefSolicitudes = "/mi-panel/ausencias",
 }: Props) {
   const router = useRouter();
 
@@ -44,8 +44,8 @@ export function AvisoBajaMedicaDialog({
             Estás de baja médica
           </DialogTitle>
           <DialogDescription>
-            Hoy figuras de baja, así que no puedes fichar. Cuando te den el alta, ve a
-            Comunicados para comunicar tu alta médica y podrás volver a fichar.
+            Hoy figuras de baja, así que no puedes fichar. Cuando te den el alta,
+            comunícala desde Solicitudes y podrás volver a fichar.
           </DialogDescription>
         </DialogHeader>
 
@@ -56,11 +56,11 @@ export function AvisoBajaMedicaDialog({
           <Button
             onClick={() => {
               onOpenChange(false);
-              router.push(hrefComunicados);
+              router.push(hrefSolicitudes);
             }}
           >
-            <Megaphone className="mr-2 h-4 w-4" />
-            Ir a Comunicados
+            <FileText className="mr-2 h-4 w-4" />
+            Comunicar mi alta
           </Button>
         </DialogFooter>
       </DialogContent>
