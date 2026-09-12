@@ -3,8 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { tieneHerramienta } from "@/features/auth/lib/herramienta-guard";
 
-/** Mensaje único cuando el rol no tiene videovigilancia. */
-export const SIN_PERMISO_CAMARAS = "Tu rol no tiene acceso a videovigilancia.";
+/** Mensaje único cuando el rol no tiene cámaras. */
+export const SIN_PERMISO_CAMARAS = "Tu rol no tiene acceso a cámaras.";
 
 type Ctx = {
   supabase: SupabaseClient;

@@ -195,7 +195,7 @@ export async function resetPassword(formData: FormData) {
 
 // Política de contraseña del sistema: exactamente 6 dígitos numéricos.
 // Tipo PIN: rápida de teclear y de recordar, también para reautenticar en la
-// bóveda de contraseñas. Fuente única de verdad (el HTML solo es ayuda visual).
+// bóveda de claves. Fuente única de verdad (el HTML solo es ayuda visual).
 const PIN_REGEX = /^\d{6}$/
 const PIN_ERROR = 'La contraseña debe tener exactamente 6 dígitos numéricos (ej. 042815).'
 

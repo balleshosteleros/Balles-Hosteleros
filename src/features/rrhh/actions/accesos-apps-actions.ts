@@ -18,7 +18,7 @@ import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 /** Minutos que dura una verificación de identidad antes de volver a pedirla. */
 const VERIFICACION_VALIDEZ_MIN = 5;
 
-/** Marca que sustituye a la contraseña en las listas (nunca se envía cifrada/clara al cliente sin verificar). */
+/** Marca que sustituye a la clave en las listas (nunca se envía cifrada/clara al cliente sin verificar). */
 const PWD_OCULTA = "";
 
 /** ¿El texto tiene formato cifrado AES (iv:tag:enc)? */
@@ -155,7 +155,7 @@ function normalizarAccesos(accesos?: AccesoCredencial[] | null): AccesoCredencia
 
 /**
  * Convierte una fila a AccesoApp para ENVIAR AL CLIENTE.
- * SEGURIDAD: nunca incluye contraseñas (ni cifradas ni en claro). El cliente
+ * SEGURIDAD: nunca incluye claves (ni cifradas ni en claro). El cliente
  * solo sabe si un acceso "tiene" contraseña (para pintar ••••). El revelado va
  * por `revelarAccesoApp` con verificación de identidad.
  */
@@ -203,7 +203,7 @@ function rowToApp(r: Row): AccesoApp {
 }
 
 /**
- * Construye la fila a guardar, CIFRANDO las contraseñas.
+ * Construye la fila a guardar, CIFRANDO las claves.
  * `prev` = accesos actuales en BD (cifrados). Si el cliente manda una contraseña
  * vacía para un acceso existente, se PRESERVA la cifrada previa (no se borra).
  * Si manda texto, se cifra. El emparejado con lo previo es por posición/etiqueta.
@@ -585,7 +585,7 @@ export async function updateAccesoApp(
   if (!user) throw new Error("No autorizado");
   await exigirPermisoEdicionAccesos(user.id);
 
-  // Lee los accesos actuales (cifrados) para preservar contraseñas no editadas.
+  // Lee los accesos actuales (cifrados) para preservar claves no editadas.
   const { data: prevRow } = await supabase
     .from("accesos_apps")
     .select("accesos")
@@ -787,7 +787,7 @@ export async function revelarAccesoApp(
   }
 
   const guardada = acc.contrasena ?? "";
-  if (!guardada) return { ok: false, error: "Este acceso no tiene contraseña" };
+  if (!guardada) return { ok: false, error: "Este acceso no tiene clave" };
   try {
     // Compat: si quedara alguna en claro (sin cifrar), devolverla tal cual.
     const claro = esCifrado(guardada) ? decrypt(guardada) : guardada;

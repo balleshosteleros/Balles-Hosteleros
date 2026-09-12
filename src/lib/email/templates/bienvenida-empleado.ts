@@ -2,7 +2,7 @@
  * Email de bienvenida tras promover un candidato a empleado (PRP-034).
  * Su objetivo es que el empleado ELIJA su propia contraseña: esa contraseña le
  * permite moverse por todo el sistema y es la que necesitará para acciones de
- * seguridad (ver contraseñas guardadas). Hasta que no la elija, no puede entrar
+ * seguridad (ver claves guardadas). Hasta que no la elija, no puede entrar
  * — ni siquiera con Google.
  * Inline-styles porque la mayoría de clientes de email no soportan <style>.
  */

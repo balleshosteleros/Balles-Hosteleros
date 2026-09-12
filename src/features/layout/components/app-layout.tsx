@@ -85,7 +85,7 @@ const ToolIcon = {
   chat: HERRAMIENTA.chat.Icon,
   telefono: HERRAMIENTA.telefono.Icon,
   agenda: HERRAMIENTA.agenda.Icon,
-  videovigilancia: HERRAMIENTA.videovigilancia.Icon,
+  camaras: HERRAMIENTA.camaras.Icon,
   aplicaciones: HERRAMIENTA.aplicaciones.Icon,
   accesos: HERRAMIENTA.accesos.Icon,
 };
@@ -481,22 +481,22 @@ function AppLayoutInterno({
                       </AgendaDrawer>
                       )}
 
-                      {/* Videovigilancia — solo si el rol tiene CÁMARAS activado. */}
+                      {/* Cámaras — solo si el rol tiene CÁMARAS activado. */}
                       {verCamaras && (
                         <CamarasDrawer>
-                          <ToolTooltip label="Videovigilancia">
+                          <ToolTooltip label="Cámaras">
                             <Button
                               variant="ghost" size="icon"
                               className="relative h-8 w-8"
                             >
-                              <ToolIcon.videovigilancia className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.videovigilancia.colorKey)}`} />
+                              <ToolIcon.camaras className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.camaras.colorKey)}`} />
                             </Button>
                           </ToolTooltip>
                         </CamarasDrawer>
                       )}
 
                       {/* Separador visual — solo si detrás viene algo. Sin apps
-                          ni contraseñas permitidas, la barra termina en el icono
+                          ni claves permitidas, la barra termina en el icono
                           anterior, sin raya colgando. */}
                       {(verAplicaciones || verAccesos) && (
                         <span className="w-px h-5 bg-border mx-0.5" />
@@ -504,7 +504,7 @@ function AppLayoutInterno({
 
                       {/* Apps externas — dos permisos independientes:
                            · Aplicaciones (cohete): enlaces + usuario, sin secretos → HERR_APLICACIONES.
-                           · Contraseñas (candado): bóveda segura con
+                           · Claves (candado): bóveda segura con
                              revelado bajo verificación de identidad → HERR_ACCESOS. */}
                       {verAplicaciones && (
                         <AplicacionesDrawer empresaSlug={empresaActual.id}>
@@ -520,7 +520,7 @@ function AppLayoutInterno({
                       )}
                       {verAccesos && (
                         <AccesosDrawer empresaSlug={empresaActual.id}>
-                          <ToolTooltip label="Contraseñas">
+                          <ToolTooltip label="Claves">
                             <Button
                               variant="ghost" size="icon"
                               className="relative h-8 w-8"

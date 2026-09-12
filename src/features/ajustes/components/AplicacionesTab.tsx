@@ -3,7 +3,7 @@
 // APLICACIONES (Ajustes → Herramientas → Aplicaciones)
 //
 // Solo el ENLACE: nombre, logo, URL, categoría, estado y qué departamentos ven
-// la app en el panel del cohete. Las CONTRASEÑAS viven en el apartado «Accesos»
+// la app en el panel del cohete. Las CLAVES viven en el apartado «Claves»
 // (AccesosTab.tsx) — aquí no se muestran ni se editan.
 
 import { useEffect, useState, useRef , useMemo } from "react";
@@ -153,7 +153,7 @@ export function AplicacionesTab() {
   };
 
   // Universo real de esta pantalla: solo las entradas con enlace web. El resto
-  // (caja fuerte, PIN de TPV, wifi…) vive en «Contraseñas», así que
+  // (caja fuerte, PIN de TPV, wifi…) vive en «Claves», así que
   // el contador no debe compararlas contra el total o parecerá que faltan apps.
   const appsConEnlace = apps.filter(tieneEnlaceWeb);
   const sinEnlace = apps.length - appsConEnlace.length;
@@ -161,7 +161,7 @@ export function AplicacionesTab() {
   const filteredApps = apps.filter((a) => {
     // Solo son APLICACIONES las que tienen enlace web real. Las entradas sin
     // URL (caja fuerte, PIN de TPV, wifi, SIM…) son credenciales sueltas y
-    // viven en «Contraseñas», no aquí.
+    // viven en «Claves», no aquí.
     if (!tieneEnlaceWeb(a)) return false;
     if (filtroCategoria !== "todas" && a.categoria !== filtroCategoria) return false;
     if (buscar) {
@@ -185,7 +185,7 @@ export function AplicacionesTab() {
     setEditingId(app.id);
     // Las credenciales NO se editan aquí (viven en «Accesos»), pero hay que
     // mandarlas de vuelta intactas en el payload: valor vacío = "no cambiar",
-    // así la action preserva la contraseña cifrada previa.
+    // así la action preserva la clave cifrada previa.
     const accesos = app.accesos.map((a) => ({
       ...a,
       contrasena: "",
@@ -385,7 +385,7 @@ export function AplicacionesTab() {
           <>
             {" "}· {sinEnlace} entrada{sinEnlace === 1 ? "" : "s"} sin enlace (caja
             fuerte, PIN, wifi…) se {sinEnlace === 1 ? "gestiona" : "gestionan"} en
-            «Contraseñas»
+            «Claves»
           </>
         )}
       </p>

@@ -1,4 +1,4 @@
-// PRP-061: Conector Balles — tipos del dominio de videovigilancia (appliance push).
+// PRP-061: Conector Balles — tipos del dominio de cámaras (appliance push).
 
 export const CONECTOR_ESTADOS = [
   "pendiente",

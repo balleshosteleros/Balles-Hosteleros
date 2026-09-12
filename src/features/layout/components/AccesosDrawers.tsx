@@ -7,7 +7,7 @@
 //    el usuario (no sensible) y el botón para abrir la web. Pensado para uso
 //    diario sin fricción de seguridad.
 //
-//  • AccesosDrawer (candado Lock) — BÓVEDA SEGURA. Revela contraseñas, PINs y
+//  • AccesosDrawer (candado Lock) — BÓVEDA SEGURA. Revela claves, PINs y
 //    datos sensibles SOLO tras verificación de identidad y según el rol del
 //    usuario (la action revelarAccesoApp aplica el control). El cliente nunca
 //    recibe secretos hasta pulsar "ver".
@@ -128,7 +128,7 @@ function PasswordCell({
         <button
           onClick={() => {
             navigator.clipboard.writeText(valor);
-            toast.success(nombreExtra ? `${nombreExtra} copiado` : "Contraseña copiada");
+            toast.success(nombreExtra ? `${nombreExtra} copiado` : "Clave copiada");
           }}
           className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
           title="Copiar"
@@ -395,7 +395,7 @@ export function AplicacionesDrawer({
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// 2) CONTRASEÑAS — bóveda segura (Lock)
+// 2) CLAVES — bóveda segura (Lock)
 // ════════════════════════════════════════════════════════════════════════
 export function AccesosDrawer({
   empresaSlug,
@@ -415,7 +415,7 @@ export function AccesosDrawer({
   // ÍNDICE ORIGINAL de cada acceso (revelarAccesoApp lo usa posicionalmente).
   // PRIVACIDAD: un acceso solo aparece si soy director/admin, o si su lista `roles`
   // incluye mi rol. Sin rol marcado = solo dirección. Así nadie ve siquiera la fila
-  // (••••) de una contraseña de otro departamento. El servidor vuelve a comprobarlo
+  // (••••) de una clave de otro departamento. El servidor vuelve a comprobarlo
   // al revelar (defensa en profundidad).
   const puedoVerAcceso = (roles?: string[]) => {
     if (soyDirector) return true;
@@ -430,7 +430,7 @@ export function AccesosDrawer({
           accesos: app.accesos
             // `indiceReal` viene del servidor: la posición en BD. Desde PRP-075
             // el servidor filtra por rol, así que la posición del array ya NO
-            // coincide con la de BD y usarla revelaría otra contraseña.
+            // coincide con la de BD y usarla revelaría otra clave.
             .map((acc, i) => ({ acc, indiceOriginal: acc.indiceReal ?? i }))
             .filter(
               ({ acc }) =>
@@ -456,7 +456,7 @@ export function AccesosDrawer({
           <SheetHeader className="border-b py-3 pl-5 pr-14 shrink-0">
             <SheetTitle className="flex items-center gap-2 text-base">
               <Lock className="h-4 w-4 text-red-500" />
-              Contraseñas
+              Claves
             </SheetTitle>
             <p className="text-xs text-muted-foreground">
               Bóveda segura. Cada revelado exige verificar tu identidad y respeta tu rol.
@@ -487,7 +487,7 @@ export function AccesosDrawer({
                   <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 ring-1 ring-red-100 dark:bg-red-950/30 dark:ring-red-900/40">
                     <Lock className="h-7 w-7 text-red-500" />
                   </div>
-                  <p className="text-sm font-semibold">Todavía no hay contraseñas</p>
+                  <p className="text-sm font-semibold">Todavía no hay claves</p>
                   <p className="max-w-[280px] text-xs leading-relaxed text-muted-foreground">
                     Aquí aparecerán las credenciales de la empresa que tu rol pueda ver. Se guardan en
                     Ajustes → Herramientas → Aplicaciones.
@@ -555,7 +555,7 @@ export function AccesosDrawer({
                             </div>
                           )}
                           {acc.accesoGoogle ? (
-                            // No hay contraseña: se entra con la cuenta de Google.
+                            // No hay clave: se entra con la cuenta de Google.
                             <div className="flex items-start justify-between gap-3 text-xs">
                               <span className="shrink-0 text-muted-foreground">Entrar:</span>
                               <span className="flex min-w-0 items-center gap-1.5 text-right text-muted-foreground">
@@ -566,7 +566,7 @@ export function AccesosDrawer({
                           ) : (
                             acc.tieneContrasena && (
                               <div className="flex items-start justify-between gap-3 text-xs">
-                                <span className="shrink-0 text-muted-foreground">Contraseña:</span>
+                                <span className="shrink-0 text-muted-foreground">Clave:</span>
                                 <PasswordCell appId={app.id} indice={indiceOriginal} tiene />
                               </div>
                             )

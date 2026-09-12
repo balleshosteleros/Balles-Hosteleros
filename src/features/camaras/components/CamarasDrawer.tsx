@@ -21,6 +21,8 @@ import {
   Check,
   X,
   Router,
+  ChevronUp,
+  Grid2x2,
 } from "lucide-react";
 import {
   Sheet,
@@ -46,9 +48,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
 import {
   listCamaras,
   createCamara,
@@ -81,6 +85,7 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
   const { empresaActual } = useEmpresa();
   const empresaDbId = empresaActual.dbId;
 
+  const esMovil = useIsMobile();
   const [open, setOpen] = useState(false);
   const [camaras, setCamaras] = useState<Camara[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -90,6 +95,9 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [conectoresOpen, setConectoresOpen] = useState(false);
+  // En el teléfono la lista de cámaras va PLEGADA: el directo se lleva la
+  // pantalla entera y la lista solo se despliega para elegir una.
+  const [listaAbierta, setListaAbierta] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [formNombre, setFormNombre] = useState("");
   const [formUbicacion, setFormUbicacion] = useState("");
@@ -124,10 +132,12 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
     };
   }, [open, empresaDbId]);
 
-  // Si la selección queda vacía y hay cámaras, marcamos la primera por defecto
+  // TODAS encendidas de entrada: al abrir se ven todas en directo, sin tener
+  // que ir marcándolas una a una (Iván, 12-sep). Solo se hace cuando no hay
+  // ninguna marcada, así que no pisa la elección de quien ya ha elegido una.
   useEffect(() => {
     if (camaras.length > 0 && seleccionadas.size === 0) {
-      setSeleccionadas(new Set([camaras[0].id]));
+      setSeleccionadas(new Set(camaras.map((c) => c.id)));
     }
   }, [camaras, seleccionadas.size]);
 
@@ -143,6 +153,12 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
   const layoutMeta = useMemo(
     () => LAYOUTS.find((l) => l.key === layout) ?? LAYOUTS[1],
     [layout],
+  );
+
+  /** En el teléfono no se recorta por el tamaño del mosaico: se ven todas. */
+  const camarasVisiblesMovil = useMemo(
+    () => camaras.filter((c) => seleccionadas.has(c.id)),
+    [camaras, seleccionadas],
   );
 
   const camarasMostradas = useMemo(() => {
@@ -166,6 +182,22 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
   const limpiarSeleccion = useCallback(() => {
     setSeleccionadas(new Set());
   }, []);
+
+  /** Ver SOLO esa cámara, a pantalla grande, y recoger la lista. */
+  const verSolo = useCallback((id: string) => {
+    setSeleccionadas(new Set([id]));
+    setLayout("1");
+    setListaAbierta(false);
+  }, []);
+
+  /** Volver al directo de todas. */
+  const verTodas = useCallback(() => {
+    setSeleccionadas(new Set(camaras.map((c) => c.id)));
+    setLayout("2x2");
+    setListaAbierta(false);
+  }, [camaras]);
+
+  const viendoUnaSola = seleccionadas.size === 1;
 
   function abrirNueva() {
     setEditId(null);
@@ -263,7 +295,7 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
           <div className="flex items-center justify-between gap-2">
             <SheetTitle className="flex items-center gap-2 text-base">
               <Cctv className="h-4 w-4 text-slate-700" />
-              Videovigilancia
+              Cámaras
             </SheetTitle>
             {/* En el teléfono el panel es de MIRAR: dar de alta cámaras y tocar
                 conectores es tarea de ordenador, y aquí esos botones se salían
@@ -302,21 +334,42 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                 No tienes permisos para ver las cámaras
               </h3>
               <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-                El acceso a videovigilancia está restringido para tu rol.
+                El acceso a cámaras está restringido para tu rol.
                 Habla con la dirección si necesitas acceso.
               </p>
             </div>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 grid grid-rows-[auto_minmax(0,1fr)] md:grid-rows-none md:grid-cols-[200px_minmax(0,1fr)]">
-            {/* Sidebar — lista de cámaras */}
-            <aside className="max-h-[34vh] overflow-y-auto border-b bg-muted/20 md:max-h-none md:border-b-0 md:border-r">
+          <div className="flex flex-1 min-h-0 flex-col md:grid md:grid-cols-[200px_minmax(0,1fr)]">
+            {/* Lista de cámaras. En el ordenador, columna fija a la izquierda.
+                En el teléfono va ABAJO y PLEGADA, para que el directo se lleve
+                toda la pantalla: se despliega solo para elegir cámara. */}
+            <aside
+              className={cn(
+                "order-2 shrink-0 border-t bg-muted/20 md:order-1 md:max-h-none md:border-t-0 md:border-r",
+                listaAbierta ? "max-h-[55vh] overflow-y-auto" : "overflow-hidden",
+                "md:overflow-y-auto",
+              )}
+            >
               <div className="px-3 py-2 border-b flex items-center justify-between gap-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Cámaras
-                </span>
+                {/* En el teléfono la cabecera ES el botón que despliega. */}
+                <button
+                  type="button"
+                  onClick={() => setListaAbierta((v) => !v)}
+                  className="flex flex-1 items-center gap-1.5 py-1 text-left md:pointer-events-none"
+                >
+                  <ChevronUp
+                    className={cn(
+                      "h-3.5 w-3.5 text-muted-foreground transition-transform md:hidden",
+                      listaAbierta && "rotate-180",
+                    )}
+                  />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Cámaras{camaras.length > 0 ? ` · ${camaras.length}` : ""}
+                  </span>
+                </button>
                 {camaras.length > 0 && (
-                  <div className="flex items-center gap-1">
+                  <div className="hidden items-center gap-1 md:flex">
                     <button
                       type="button"
                       onClick={seleccionarTodas}
@@ -336,6 +389,7 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                 )}
               </div>
 
+              <div className={cn(listaAbierta ? "block" : "hidden", "md:block")}>
               {cargando ? (
                 <p className="px-3 py-4 text-[11px] text-muted-foreground">
                   Cargando cámaras…
@@ -354,21 +408,38 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                         key={c.id}
                         className="group flex items-center gap-2 px-3 py-2 hover:bg-muted/40"
                       >
+                        {/* El interruptor es para componer el mosaico en el
+                            ordenador. En el teléfono no: allí se toca la cámara
+                            y se ve ella sola, grande. */}
                         <Switch
+                          className="hidden md:inline-flex"
                           checked={activa}
                           onCheckedChange={() => toggleSeleccion(c.id)}
                         />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium truncate">
-                            {c.nombre}
-                          </p>
-                          {c.ubicacion && (
-                            <p className="text-[10px] text-muted-foreground truncate">
-                              {c.ubicacion}
-                            </p>
-                          )}
-                        </div>
-                        <div className="opacity-0 group-hover:opacity-100 flex">
+                        <button
+                          type="button"
+                          onClick={() => verSolo(c.id)}
+                          className="flex flex-1 min-w-0 items-center gap-2 py-1 text-left md:pointer-events-none"
+                        >
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "h-2 w-2 shrink-0 rounded-full md:hidden",
+                              activa ? "bg-emerald-500" : "bg-muted-foreground/30",
+                            )}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-medium">
+                              {c.nombre}
+                            </span>
+                            {c.ubicacion && (
+                              <span className="block truncate text-[10px] text-muted-foreground">
+                                {c.ubicacion}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                        <div className="hidden opacity-0 group-hover:opacity-100 md:flex">
                           <button
                             type="button"
                             onClick={() => abrirEditar(c)}
@@ -391,12 +462,31 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                   })}
                 </ul>
               )}
+              </div>
             </aside>
 
             {/* Visor */}
-            <section ref={viewerRef} className="flex flex-col min-w-0 bg-black">
+            <section ref={viewerRef} className="order-1 flex min-h-0 flex-1 flex-col min-w-0 bg-black md:order-2">
               {/* Toolbar visor */}
               <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-zinc-900 px-3 py-2">
+                {/* En el teléfono esto es SOLO para ver en directo: nada de
+                    elegir mosaicos ni contadores. Si estás mirando una cámara
+                    sola, el único botón es volver a verlas todas. */}
+                {viendoUnaSola && camaras.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={verTodas}
+                    className="h-7 gap-1 text-white hover:bg-white/10 hover:text-white md:hidden"
+                  >
+                    <Grid2x2 className="h-3.5 w-3.5" />
+                    <span className="text-xs">Ver todas</span>
+                  </Button>
+                )}
+                {!viendoUnaSola && (
+                  <span className="text-[11px] text-white/60 md:hidden">En directo</span>
+                )}
+                <div className="hidden md:block">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -426,8 +516,10 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
+                </div>
+
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-white/60">
+                  <span className="hidden text-[11px] text-white/60 md:inline">
                     {camarasMostradas.length} / {layoutMeta.capacity}
                   </span>
                   <Button
@@ -447,9 +539,22 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
               </div>
 
               {/* Grid de tiles */}
-              <div className="flex-1 min-h-0 overflow-hidden p-2">
+              <div className={cn("flex-1 min-h-0 p-2", esMovil ? "overflow-y-auto" : "overflow-hidden")}>
                 {camarasMostradas.length === 0 ? (
                   <EmptyViewer hayCamaras={camaras.length > 0} />
+                ) : esMovil ? (
+                  // Teléfono: salen TODAS las encendidas, de dos en dos y
+                  // bajando; la que se elige sola ocupa la pantalla.
+                  <div
+                    className={cn(
+                      "grid gap-1.5",
+                      viendoUnaSola ? "h-full grid-cols-1" : "grid-cols-2 auto-rows-[32vw]",
+                    )}
+                  >
+                    {camarasVisiblesMovil.map((c) => (
+                      <Tile key={c.id} camara={c} />
+                    ))}
+                  </div>
                 ) : (
                   <MosaicoGrid layout={layout} camaras={camarasMostradas} />
                 )}

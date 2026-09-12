@@ -36,7 +36,7 @@ const MODULO_CAMARAS = "CÁMARAS";
 //    personales de los empleados dentro. Es dato sensible: sin este permiso no
 //    se ve la libreta, ni en la barra ni en el móvil ni en /agenda.
 //  · APLICACIONES (cohete) → enlaces/accesos directos a apps externas.
-//  · CONTRASEÑAS (candado) → bóveda de contraseñas, PINs y claves.
+//  · CLAVES (candado) → bóveda de claves, PINs y códigos.
 const MODULO_AGENDA = "HERR_AGENDA";
 const MODULO_APLICACIONES = "HERR_APLICACIONES";
 const MODULO_ACCESOS = "HERR_ACCESOS";
@@ -258,10 +258,10 @@ export function RolesTab() {
                   // misma columna y la pantalla no tenga bloques sueltos.
                   const herramientas = [
                     { modulo: MODULO_AJUSTES, label: "Ajustes", Icon: Settings, permiso: permisoAjustes },
-                    { modulo: MODULO_CAMARAS, label: "Videovigilancia", Icon: Cctv, permiso: permisoCamaras },
+                    { modulo: MODULO_CAMARAS, label: "Cámaras", Icon: Cctv, permiso: permisoCamaras },
                     { modulo: MODULO_AGENDA, label: "Agenda", Icon: Notebook, permiso: permisoAgenda },
                     { modulo: MODULO_APLICACIONES, label: "Aplicaciones", Icon: Rocket, permiso: permisoAplicaciones },
-                    { modulo: MODULO_ACCESOS, label: "Contraseñas", Icon: Lock, permiso: permisoAccesos },
+                    { modulo: MODULO_ACCESOS, label: "Claves", Icon: Lock, permiso: permisoAccesos },
                   ];
                   return (
                     <table className="w-full text-sm">

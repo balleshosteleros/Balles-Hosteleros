@@ -35,7 +35,7 @@ export function MobileBottomNav() {
   const { puedeVer } = useAuth();
   const { empresaActual } = useEmpresa();
 
-  // Las cámaras y las contraseñas del local son cosa de MANDO: solo las ve
+  // Las cámaras y las claves del local son cosa de MANDO: solo las ve
   // quien tiene GERENCIA o DIRECCIÓN entre los departamentos de su rol (Iván,
   // 12-sep). El resto de la plantilla sigue con la barra de siempre.
   //
@@ -79,7 +79,7 @@ export function MobileBottomNav() {
   // Una herramienta de la barra: no navega, abre su panel encima. Mismo icono y
   // mismo nombre que en el ordenador (catálogo único de herramientas).
   const herramienta = (
-    clave: "videovigilancia" | "accesos",
+    clave: "camaras" | "accesos",
     etiqueta: string,
     envoltura: (trigger: ReactNode) => ReactNode,
   ) => {
@@ -117,7 +117,7 @@ export function MobileBottomNav() {
       <ul className="mx-auto flex max-w-screen-sm items-stretch justify-around">
         {entrada(INICIO)}
         {verCamaras &&
-          herramienta("videovigilancia", "Cámaras", (trigger) => (
+          herramienta("camaras", "Cámaras", (trigger) => (
             <CamarasDrawer>{trigger}</CamarasDrawer>
           ))}
         {entrada(LLAMAR)}

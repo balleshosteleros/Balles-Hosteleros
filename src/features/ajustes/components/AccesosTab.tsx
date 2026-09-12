@@ -1,14 +1,14 @@
 "use client";
 
-// CONTRASEÑAS (Ajustes → Herramientas → Contraseñas)
+// CLAVES (Ajustes → Herramientas → Claves)
 //
 // Separación deliberada respecto a "Aplicaciones":
 //  · APLICACIONES (cohete) → el ENLACE: nombre, logo, URL, categoría, quién la ve.
-//  · ACCESOS (candado)     → las CREDENCIALES: usuario, contraseña, datos extra
+//  · ACCESOS (candado)     → las CREDENCIALES: usuario, clave, datos extra
 //                            (PIN, PUK…) y qué roles pueden revelarlas.
 //
 // Aquí NO se crean ni se borran aplicaciones: se eligen de las ya existentes y
-// se editan solo sus credenciales. Las contraseñas nunca viajan en claro al
+// se editan solo sus credenciales. Las claves nunca viajan en claro al
 // cliente; se revelan una a una con verificación de identidad (revelarAccesoApp).
 
 import { useEffect, useState } from "react";
@@ -102,7 +102,7 @@ function PasswordAdmin({
         <button
           onClick={() => {
             navigator.clipboard.writeText(valor);
-            toast.success(nombreExtra ? `${nombreExtra} copiado` : "Contraseña copiada");
+            toast.success(nombreExtra ? `${nombreExtra} copiado` : "Clave copiada");
           }}
           className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
           title="Copiar"
@@ -114,7 +114,7 @@ function PasswordAdmin({
           onClick={revelar}
           disabled={loading}
           className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50"
-          title="Ver contraseña"
+          title="Ver clave"
         >
           <Eye className="h-3.5 w-3.5" />
         </button>
@@ -192,7 +192,7 @@ function AccesosTabInner() {
       })
       .catch((e) => {
         console.error(e);
-        toast.error("No se pudieron cargar las contraseñas");
+        toast.error("No se pudieron cargar las claves");
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -311,7 +311,7 @@ function AccesosTabInner() {
     setAccesos(
       base.map((a) => ({
         ...a,
-        // La contraseña NUNCA viaja al cliente (viene oculta/cifrada). Al editar
+        // La clave NUNCA viaja al cliente (viene oculta/cifrada). Al editar
         // se muestra vacía; si se deja vacía, la action preserva la cifrada previa.
         contrasena: "",
         roles: a.roles?.length ? a.roles : [...(app.rolesAutorizados ?? [])],
@@ -386,7 +386,7 @@ function AccesosTabInner() {
         empresaId: editingApp.empresaId,
       });
       setApps((prev) => prev.map((a) => (a.id === editingApp.id ? updated : a)));
-      toast.success(`Contraseñas de "${updated.nombre}" actualizadas`);
+      toast.success(`Claves de "${updated.nombre}" actualizadas`);
       setModalOpen(false);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Error al guardar");
@@ -399,7 +399,7 @@ function AccesosTabInner() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Bóveda de contraseñas de <strong>{empresaActual.nombre}</strong>. Las
+        Bóveda de claves de <strong>{empresaActual.nombre}</strong>. Las
         aplicaciones (nombre, enlace, logo) se dan de alta en «Aplicaciones»;
         aquí solo se guardan sus credenciales y se decide qué roles pueden
         verlas. Para ver las de otra empresa, cambia de empresa arriba.
@@ -469,7 +469,7 @@ function AccesosTabInner() {
                     </div>
                   )}
                   {app.accesos[0]?.accesoGoogle ? (
-                    // Se entra con la cuenta de Google: no hay contraseña que
+                    // Se entra con la cuenta de Google: no hay clave que
                     // revelar, así que se dice en vez de pintar un candado vacío.
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <GoogleIcon />
@@ -538,7 +538,7 @@ function AccesosTabInner() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingApp ? `Contraseñas de ${editingApp.nombre}` : "Nueva contraseña"}
+              {editingApp ? `Claves de ${editingApp.nombre}` : "Nueva clave"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-2">
@@ -571,10 +571,10 @@ function AccesosTabInner() {
             </div>
 
             <Label className="text-xs font-semibold">
-              Accesos (usuario, contraseña y quién puede verla)
+              Accesos (usuario, clave y quién puede verla)
             </Label>
             <p className="text-xs text-muted-foreground">
-              Marca con un tick qué roles pueden ver cada contraseña. Solo esos
+              Marca con un tick qué roles pueden ver cada clave. Solo esos
               usuarios la verán y podrán revelarla. Sin ningún tick, solo la ve
               dirección.
             </p>
@@ -615,14 +615,14 @@ function AccesosTabInner() {
                         />
                       )}
                     </div>
-                    {/* Se entra con la cuenta de Google: solo el correo, sin contraseña. */}
+                    {/* Se entra con la cuenta de Google: solo el correo, sin clave. */}
                     <button
                       type="button"
                       onClick={() =>
                         updateAcceso(idx, {
                           accesoGoogle: !acc.accesoGoogle,
                           // Al activarlo se limpia lo que hubiera escrito: con Google
-                          // no hay contraseña. El servidor borra también la guardada.
+                          // no hay clave. El servidor borra también la guardada.
                           ...(acc.accesoGoogle ? {} : { contrasena: "" }),
                         })
                       }
@@ -649,7 +649,7 @@ function AccesosTabInner() {
                           <div className="flex flex-wrap gap-1 flex-1">
                             {(acc.roles ?? []).length === 0 ? (
                               <span className="text-muted-foreground">
-                                ¿Quién puede ver esta contraseña? — marca roles…
+                                ¿Quién puede ver esta clave? — marca roles…
                               </span>
                             ) : (
                               (acc.roles ?? []).map((rol) => (

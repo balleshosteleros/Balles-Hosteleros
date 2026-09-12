@@ -43,7 +43,7 @@ async function verificarPassword(email: string, password: string): Promise<boole
 }
 
 /**
- * Gate de verificación para visualizar contraseñas de accesos a apps.
+ * Gate de verificación para visualizar claves de accesos a apps.
  *
  * Aunque el rol del usuario tenga permiso para ver una credencial, ANTES de
  * revelar/copiar cualquier valor el sistema pide reconfirmar la contraseña de
@@ -125,7 +125,7 @@ export function VerificacionAccesosProvider({ children }: { children: React.Reac
               Verificación de seguridad
             </DialogTitle>
             <DialogDescription>
-              Para ver contraseñas, confirma tu contraseña de acceso. Quedará
+              Para ver claves, confirma tu contraseña de acceso. Quedará
               válida unos minutos.
             </DialogDescription>
           </DialogHeader>

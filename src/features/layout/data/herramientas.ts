@@ -63,7 +63,7 @@ export type HerramientaId =
   | "chat"
   | "telefono"
   | "agenda"
-  | "videovigilancia"
+  | "camaras"
   | "aplicaciones"
   | "accesos";
 
@@ -139,8 +139,8 @@ export const HERRAMIENTAS: HerramientaDef[] = [
     colorKey: "yellow",
   },
   {
-    id: "videovigilancia",
-    nombre: "Videovigilancia",
+    id: "camaras",
+    nombre: "Cámaras",
     Icon: Cctv,
     colorKey: "slate",
   },
@@ -152,7 +152,7 @@ export const HERRAMIENTAS: HerramientaDef[] = [
   },
   {
     id: "accesos",
-    nombre: "Contraseñas",
+    nombre: "Claves",
     Icon: Lock,
     colorKey: "red",
   },

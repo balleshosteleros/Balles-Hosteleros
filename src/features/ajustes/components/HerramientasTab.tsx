@@ -19,7 +19,7 @@ import { HERRAMIENTAS, toolTextColor } from "@/features/layout/data/herramientas
 import { ArchivosConfigPanel } from "@/features/google-workspace/components/ArchivosConfigPanel";
 
 // Iconos sin contador real → se oculta el toggle del círculo de aviso.
-const SIN_BADGE = new Set<ToolNotifKey>(["videovigilancia", "aplicaciones"]);
+const SIN_BADGE = new Set<ToolNotifKey>(["camaras", "aplicaciones"]);
 
 export function HerramientasTab() {
   // Al volver de Google tras dar el permiso de Drive se abre "Archivos" sola:

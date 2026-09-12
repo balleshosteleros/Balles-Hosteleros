@@ -178,7 +178,7 @@ export type ToolNotifKey =
   | "chat"
   | "telefono"
   | "agenda"
-  | "videovigilancia"
+  | "camaras"
   | "aplicaciones";
 
 export interface NotificacionesConfig {
@@ -190,7 +190,7 @@ export interface NotificacionesConfig {
   chat: ToolNotifConfig;
   telefono: ToolNotifConfig;
   agenda: AgendaNotifConfig;
-  videovigilancia: ToolNotifConfig;
+  camaras: ToolNotifConfig;
   aplicaciones: ToolNotifConfig;
 }
 
@@ -234,7 +234,7 @@ export function buildDefaultNotificaciones(): NotificacionesConfig {
     chat: defaultToolNotif(),
     telefono: defaultToolNotif(),
     agenda: { ...defaultToolNotif(), diasAnuncio: 7 },
-    videovigilancia: defaultToolNotif(),
+    camaras: defaultToolNotif(),
     aplicaciones: defaultToolNotif(),
   };
 }
@@ -244,6 +244,8 @@ export function mergeNotificaciones(
   stored: Partial<NotificacionesConfig> | undefined,
 ): NotificacionesConfig {
   const d = buildDefaultNotificaciones();
+  const legacyCamaras = (stored as { videovigilancia?: Partial<ToolNotifConfig> } | undefined)
+    ?.videovigilancia;
   const m = <T extends ToolNotifConfig>(def: T, s: Partial<T> | undefined): T => ({
     ...def,
     ...(s ?? {}),
@@ -257,7 +259,9 @@ export function mergeNotificaciones(
     chat: m(d.chat, stored?.chat),
     telefono: m(d.telefono, stored?.telefono),
     agenda: m(d.agenda, stored?.agenda),
-    videovigilancia: m(d.videovigilancia, stored?.videovigilancia),
+    // «camaras» se llamaba «videovigilancia»: si la empresa guardó la clave
+    // vieja, se sigue leyendo para no perder su configuración de avisos.
+    camaras: m(d.camaras, stored?.camaras ?? legacyCamaras),
     aplicaciones: m(d.aplicaciones, stored?.aplicaciones),
   };
 }
