@@ -35,6 +35,7 @@
 import { readFileSync } from "node:fs";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { altaContactoWhatsapp } from "@/features/sala/services/contacto-whatsapp";
+import { corregirDominio } from "@/shared/lib/validar-contacto";
 
 // ─── Cómo se lee una fase de GHL ─────────────────────────────
 /**
@@ -379,6 +380,7 @@ async function main() {
 
   let creadas = 0;
   let actualizadas = 0;
+  let corregidos = 0;
   let fichasCreadas = 0;
   let fichasExistentes = 0;
   let sinFicha = 0;
@@ -392,7 +394,13 @@ async function main() {
     }
 
     const telefono = (f["teléfono"] ?? "").trim() || null;
-    const email = (f["correo electrónico"] ?? "").trim() || null;
+    // El dominio mal tecleado se arregla AL ENTRAR. En Go High Level había 80
+    // correos con "@gmail.con" y parecidos: no llegan a ninguna parte, y son
+    // gente real —todos tenían su móvil— a la que se dejaría de escribir. Si no
+    // se corrige aquí, cada reimportación del CSV los vuelve a meter mal.
+    const emailBruto = (f["correo electrónico"] ?? "").trim();
+    const email = emailBruto ? corregirDominio(emailBruto.toLowerCase()) : null;
+    if (email && email !== emailBruto.toLowerCase()) corregidos++;
     const creadoAt = (f["Creado el"] ?? "").trim() || null;
 
     // 1) La ficha de la persona, por la puerta de siempre: descifra el nombre
@@ -477,6 +485,7 @@ async function main() {
   }
 
   console.log(`\nTarjetas: ${creadas} creadas, ${actualizadas} actualizadas.`);
+  if (corregidos) console.log(`Correos con el dominio mal escrito, arreglados al entrar: ${corregidos}.`);
   console.log(
     `Fichas de cliente: ${fichasCreadas} nuevas, ${fichasExistentes} ya estaban, ${sinFicha} sin datos de contacto.\n`,
   );

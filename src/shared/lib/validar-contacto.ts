@@ -114,8 +114,96 @@ const DOMINIOS_FALSOS = new Set([
 ]);
 
 /**
- * Un email vale si tiene forma real y no usa un dominio de relleno. No se
- * comprueba que exista de verdad: eso solo lo diría enviar un correo.
+ * Dominios tecleados mal, con el que se quiso escribir al lado.
+ *
+ * No es cosmética: un correo con el dominio mal escrito NO LLEGA. La migración
+ * de Go High Level (sept. 2026) trajo 43 fichas así —`@gmail.con`, `@gmai.com`,
+ * `@hotnail.com`— y ninguna había recibido nunca nada. Se rechaza en el momento
+ * de escribirlo, diciendo cuál era el bueno, que es cuando tiene arreglo:
+ * después ya no hay a quién preguntarle.
+ */
+const DOMINIOS_MAL_ESCRITOS: Record<string, string> = {
+  "gmai.com": "gmail.com",
+  "gmal.com": "gmail.com",
+  "gmall.com": "gmail.com",
+  "gmial.com": "gmail.com",
+  "gmil.com": "gmail.com",
+  "gmil.con": "gmail.com",
+  "gmeil.com": "gmail.com",
+  "gmeil.con": "gmail.com",
+  "gnail.com": "gmail.com",
+  "gemail.com": "gmail.com",
+  "gemail.vom": "gmail.com",
+  "gamil.com": "gmail.com",
+  "gmaill.com": "gmail.com",
+  "gmail.con": "gmail.com",
+  "gmail.vom": "gmail.com",
+  "gmail.xom": "gmail.com",
+  "gmail.cm": "gmail.com",
+  "hotmail.con": "hotmail.com",
+  "hotmail.cm": "hotmail.com",
+  "hotmail.vom": "hotmail.com",
+  "hotnail.com": "hotmail.com",
+  "hotmal.com": "hotmail.com",
+  "hotmaim.com": "hotmail.com",
+  "hotmaio.com": "hotmail.com",
+  "hotmaul.es": "hotmail.es",
+  "hotmial.com": "hotmail.com",
+  "hormail.com": "hotmail.com",
+  "hotmail.ess": "hotmail.es",
+  "yhaoo.es": "yahoo.es",
+  "yahho.com": "yahoo.com",
+  "yaoo.com": "yahoo.com",
+  "outlok.com": "outlook.com",
+  "outlook.con": "outlook.com",
+  "iclod.com": "icloud.com",
+  "icloud.con": "icloud.com",
+};
+
+/**
+ * Terminaciones que no existen y solo pueden ser un dedo al lado de la tecla
+ * buena. Vale para cualquier dominio, no solo los de correo conocidos:
+ * `creantedpais.con` es la web de una empresa real escrita con la n de al lado.
+ */
+const TERMINACIONES_MAL_ESCRITAS: Record<string, string> = {
+  con: "com", cm: "com", vom: "com", xom: "com", som: "com",
+  comm: "com", coom: "com", cpm: "com", clm: "com", ess: "es",
+};
+
+/**
+ * El dominio que se quiso escribir, si el que hay está mal tecleado. `null` si
+ * el dominio es correcto o no se puede saber qué se quiso poner.
+ *
+ * Primero los proveedores conocidos ("gnail.com" es Gmail, no un dominio con la
+ * terminación mal); después la terminación, que arregla el resto sin adivinar
+ * el nombre.
+ */
+export function dominioQueSeQuisoEscribir(valor: string | null | undefined): string | null {
+  const e = (valor ?? "").trim().toLowerCase();
+  const i = e.lastIndexOf("@");
+  if (i < 0) return null;
+  const dominio = e.slice(i + 1);
+
+  const conocido = DOMINIOS_MAL_ESCRITOS[dominio];
+  if (conocido) return conocido;
+
+  const punto = dominio.lastIndexOf(".");
+  if (punto < 0) return null;
+  const buena = TERMINACIONES_MAL_ESCRITAS[dominio.slice(punto + 1)];
+  return buena ? `${dominio.slice(0, punto)}.${buena}` : null;
+}
+
+/** El correo con el dominio ya corregido, o el mismo si no hacía falta. */
+export function corregirDominio(valor: string): string {
+  const bueno = dominioQueSeQuisoEscribir(valor);
+  if (!bueno) return valor;
+  return `${valor.slice(0, valor.lastIndexOf("@") + 1)}${bueno}`;
+}
+
+/**
+ * Un email vale si tiene forma real, no usa un dominio de relleno y no tiene el
+ * dominio mal tecleado. No se comprueba que exista de verdad: eso solo lo diría
+ * enviar un correo.
  */
 export function validarEmail(
   valor: string | null | undefined,
@@ -133,6 +221,10 @@ export function validarEmail(
   const dominio = e.slice(e.lastIndexOf("@") + 1);
   if (DOMINIOS_FALSOS.has(dominio)) {
     return { ok: false, error: "Ese correo no es válido. Escribe uno real." };
+  }
+  const bueno = dominioQueSeQuisoEscribir(e);
+  if (bueno) {
+    return { ok: false, error: `¿Querías decir @${bueno}? Ese dominio no existe.` };
   }
   const usuario = e.slice(0, e.indexOf("@"));
   if (/^(.)\1+$/.test(usuario) && usuario.length > 2) {
