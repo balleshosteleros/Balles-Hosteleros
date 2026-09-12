@@ -158,12 +158,17 @@ function bloqueCta(texto: string, url: string, colorMarca: string | null): strin
  * arrastra la reputación del dominio y acaba mandando también a la carpeta de
  * no deseados los correos de confirmación de reserva.
  */
+// Dice la verdad y solo la verdad: la mayoría de las fichas NO marcaron
+// ninguna casilla —vienen de reservas hechas por teléfono—, así que escribir
+// "nos diste permiso" sería mentirle al cliente en el único sitio del correo
+// donde se le explica por qué le escribimos. Lo que sí es cierto de todos es
+// que han reservado aquí; eso, y la baja a un clic, es lo que sostiene el envío.
 function bloqueBaja(urlBaja: string): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px;">
     <tr>
       <td style="padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;">
         <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.6;">
-          Recibes este correo porque nos diste permiso para escribirte al reservar.
+          Recibes este correo porque eres cliente nuestro y has reservado con nosotros.
           <br/>
           <a href="${escapeAttr(urlBaja)}" style="color:#94a3b8;text-decoration:underline;">Darme de baja de estos correos</a>
         </p>

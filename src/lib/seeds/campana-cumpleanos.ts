@@ -8,10 +8,10 @@
  *
  * ── Dos momentos, y cada uno hace una sola cosa ────────────────────────────
  *
- *   **Diez días antes — el aviso.** Misterioso a propósito: no nombra la fecha,
+ *   **Siete días antes — el aviso.** Misterioso a propósito: no nombra la fecha,
  *   la insinúa. Lleva el 10% con su código personal y, entre paréntesis, lo que
- *   de verdad llena una mesa: si viene con diez amigos, lo suyo lo invita la
- *   casa. Diez días y no tres porque juntar a once personas se decide con
+ *   de verdad llena una mesa: si viene con nueve amigos, lo suyo lo invita la
+ *   casa. Una semana y no tres días porque juntar a diez personas se decide con
  *   tiempo.
  *
  *   **El día — la felicitación.** No vende NADA. Ni código, ni mesa, ni oferta:
@@ -71,11 +71,11 @@ export interface CampanaCumpleanosSeed {
    * Amigos que hay que traer para que la casa invite al cumpleañero. La mesa
    * son estos MÁS la persona que cumple.
    *
-   * Diez amigos, mesa de once, y ahí está toda la gracia de la mecánica: una
-   * parte de once es el 9% de la cuenta, así que el 10% que lleva el cupón
-   * cubre justo lo suyo —y sobra un poco—. No son dos ofertas, es una contada
-   * de dos maneras: el porcentaje para quien viene en pareja, y "tú no pagas"
-   * para quien llena la mesa, que es la que se entiende sin pensar.
+   * Nueve amigos, mesa de diez, y ahí está toda la gracia de la mecánica: una
+   * parte de diez es EXACTAMENTE el 10% de la cuenta, así que el cupón le paga
+   * lo suyo al céntimo. No son dos ofertas, es una contada de dos maneras: el
+   * porcentaje para quien viene en pareja, y "tú no pagas" para quien llena la
+   * mesa, que es la que se entiende sin pensar.
    */
   amigosParaGratis: number;
   /**
@@ -124,27 +124,28 @@ export const MARCADORES_CUMPLEANOS = {
 export const CAMPANA_CUMPLEANOS_SEED: CampanaCumpleanosSeed = {
   clave: "CUMPLEANOS",
   claveFelicitacion: "CUMPLEANOS_FELICITACION",
-  diasAntes: 10,
-  diasValidezDespues: 10,
+  diasAntes: 7,
+  diasValidezDespues: 7,
   descuentoPorcentaje: 10,
-  // Diez amigos + quien cumple = once a la mesa, y ella no paga.
-  amigosParaGratis: 10,
+  // Nueve amigos + quien cumple = diez a la mesa. Con diez, el 10% del cupón es
+  // clavado lo que cuesta una parte: quien cumple no paga.
+  amigosParaGratis: 9,
   palabraClave: "EMAIL",
 
-  // ── Diez días antes ──────────────────────────────────────────────────────
+  // ── Siete días antes ─────────────────────────────────────────────────────
   aviso: {
-    nombre: "Cumpleaños · Aviso 10 días antes",
+    nombre: "Cumpleaños · Aviso 7 días antes",
     // El asunto no dice "cumpleaños": si lo dijera, se lee entero en la bandeja
     // y ya no hay nada que abrir.
     asunto: "Nos hemos acordado de una fecha",
-    preheader: "Un 10% de descuento por tu cumpleaños. Y si vienes con diez, no pagas nada.",
+    preheader: "Un 10% de descuento por tu cumpleaños. Y si venís diez, no pagas nada.",
     badge: "Falta poco",
     titular: "Hay una fecha tuya marcada en nuestro calendario",
     subtitulo: "Y viene con un 10% de descuento",
     entradilla:
       "No hace falta que nos digas cuál es, {{NOMBRE}}: ya la tenemos apuntada. Por tu cumpleaños te damos un {{DESCUENTO}}% de descuento en tu mesa.",
     cuerpo: [
-      "Tienes tres semanas para gastarlo: desde hoy —diez días antes— hasta diez días después de tu cumpleaños. El código lleva tu nombre y solo vale una vez.",
+      "Tienes 14 días para usarlo, desde hoy hasta una semana después de tu cumpleaños, y luego caduca. El código lleva tu nombre y solo vale una vez.",
       "Y si te presentas con {{AMIGOS}} amigos, ese {{DESCUENTO}}% eres tú: lo tuyo lo pagamos nosotros.",
     ],
     ctaTexto: "Reservar mi mesa",
@@ -187,6 +188,6 @@ export const CAMPANA_CUMPLEANOS_SEED: CampanaCumpleanosSeed = {
     plantilla: "cumpleanos_invitacion",
     idioma: "es",
     cuerpo:
-      "{{NOMBRE}}, por tu cumpleaños te damos un {{DESCUENTO}}% de descuento en {{EMPRESA}}. Tu código es {{CODIGO}} y puedes gastarlo hasta el {{CADUCIDAD}}, diez días después de tu cumpleaños. Y si te presentas con {{AMIGOS}} amigos, ese {{DESCUENTO}}% eres tú: lo tuyo lo pagamos nosotros. Reserva aquí: {{URL}}",
+      "{{NOMBRE}}, por tu cumpleaños te damos un {{DESCUENTO}}% de descuento en {{EMPRESA}}. Tu código es {{CODIGO}} y puedes gastarlo hasta el {{CADUCIDAD}}, siete días después de tu cumpleaños. Y si te presentas con {{AMIGOS}} amigos, ese {{DESCUENTO}}% eres tú: lo tuyo lo pagamos nosotros. Reserva aquí: {{URL}}",
   },
 };

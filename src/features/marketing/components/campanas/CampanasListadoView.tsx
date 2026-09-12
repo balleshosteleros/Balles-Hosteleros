@@ -32,6 +32,9 @@ const COLUMNAS: ToolbarColumna[] = [
   { campo: "abiertos", label: "Abiertos" },
   { campo: "tasaApertura", label: "Tasa apertura" },
   { campo: "reservasGeneradas", label: "Reservas generadas" },
+  // Los comensales van al lado de las reservas: una mesa de diez del cumpleaños
+  // y una de dos del correo del mes suman lo mismo si solo se cuentan mesas.
+  { campo: "personasGeneradas", label: "Personas" },
   { campo: "estado", label: "Estado" },
   { campo: "ultimaEjecucion", label: "Última ejecución" },
 ];
@@ -94,7 +97,7 @@ export function CampanasListadoView({ canal }: Props) {
     setEditorOpen(true);
   }
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({
-    nombre: true, enviados: true, abiertos: true, tasaApertura: true, reservasGeneradas: true, estado: true, ultimaEjecucion: true,
+    nombre: true, enviados: true, abiertos: true, tasaApertura: true, reservasGeneradas: true, personasGeneradas: true, estado: true, ultimaEjecucion: true,
   });
   const [columnasOrden, setColumnasOrden] = useState<string[]>(COLUMNAS.map((c) => c.campo));
 
@@ -171,6 +174,9 @@ export function CampanasListadoView({ canal }: Props) {
                 {ordenVisible.includes("reservasGeneradas") && (
                   <th className="px-3 py-2 w-36"><TableColumnHeader label="Reservas generadas" /></th>
                 )}
+                {ordenVisible.includes("personasGeneradas") && (
+                  <th className="px-3 py-2 w-24"><TableColumnHeader label="Personas" /></th>
+                )}
                 {ordenVisible.includes("estado") && (
                   <th className="px-3 py-2 w-28"><TableColumnHeader label="Estado" /></th>
                 )}
@@ -228,6 +234,11 @@ export function CampanasListadoView({ canal }: Props) {
                     {ordenVisible.includes("reservasGeneradas") && (
                       <td className="px-3 py-2 tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
                         {r.reservasGeneradas.toLocaleString("es-ES")}
+                      </td>
+                    )}
+                    {ordenVisible.includes("personasGeneradas") && (
+                      <td className="px-3 py-2 tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
+                        {r.personasGeneradas.toLocaleString("es-ES")}
                       </td>
                     )}
                     {ordenVisible.includes("estado") && (

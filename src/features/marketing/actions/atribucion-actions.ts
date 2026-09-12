@@ -16,6 +16,8 @@ export interface CampanaAtribucionRow {
   enviados: number;
   abiertos: number;
   reservasGeneradas: number;
+  /** Comensales de esas reservas: una mesa de diez no vale lo que una de dos. */
+  personasGeneradas: number;
 }
 
 type Row = Record<string, unknown>;
@@ -33,6 +35,7 @@ function mapRow(row: Row): CampanaAtribucionRow {
     enviados: Number(row.enviados ?? 0),
     abiertos: Number(row.abiertos ?? 0),
     reservasGeneradas: Number(row.reservas_generadas ?? 0),
+    personasGeneradas: Number(row.personas_generadas ?? 0),
   };
 }
 
