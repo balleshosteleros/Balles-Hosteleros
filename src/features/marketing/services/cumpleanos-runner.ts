@@ -84,6 +84,10 @@ interface ClienteCumple {
   acepta_marketing_email: boolean;
   acepta_marketing_sms: boolean;
   acepta_marketing_whatsapp: boolean;
+  /** Con fecha = pidió no recibir más por ese canal. No se le escribe. */
+  marketing_baja_email_at: string | null;
+  marketing_baja_sms_at: string | null;
+  marketing_baja_whatsapp_at: string | null;
 }
 
 // ── Fechas ────────────────────────────────────────────────────────────────
@@ -391,9 +395,24 @@ async function procesarMomento(
     }
 
     const telefono = telefonoE164(cliente);
-    const puedeWhatsapp = cliente.acepta_marketing_whatsapp && !!telefono && porCanal.has("whatsapp");
-    const puedeSms = cliente.acepta_marketing_sms && !!telefono && porCanal.has("sms");
-    const puedeEmail = cliente.acepta_marketing_email && !!cliente.email && porCanal.has("email");
+    // La baja va por delante del permiso: quien pidió no recibir más queda
+    // fuera de ese canal aunque alguien le vuelva a marcar la casilla en su
+    // ficha. Esa decisión solo la puede deshacer el propio cliente.
+    const puedeWhatsapp =
+      !cliente.marketing_baja_whatsapp_at &&
+      cliente.acepta_marketing_whatsapp &&
+      !!telefono &&
+      porCanal.has("whatsapp");
+    const puedeSms =
+      !cliente.marketing_baja_sms_at &&
+      cliente.acepta_marketing_sms &&
+      !!telefono &&
+      porCanal.has("sms");
+    const puedeEmail =
+      !cliente.marketing_baja_email_at &&
+      cliente.acepta_marketing_email &&
+      !!cliente.email &&
+      porCanal.has("email");
     if (!puedeWhatsapp && !puedeSms && !puedeEmail) {
       salida.omitidos++;
       continue;
