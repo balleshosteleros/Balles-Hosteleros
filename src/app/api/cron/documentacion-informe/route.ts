@@ -50,12 +50,18 @@ const DESTINO = "balleshosteleros@gmail.com";
  * código). Quien entró antes de esta fecha no pudo verlo, y marcarlo como «ha
  * entrado y ha pasado del aviso» sería acusarle de ignorar algo que no existía.
  *
- * 12-sep-2026: el aviso pasa a pedir la ficha entera y a taparlo todo. La hora
- * es la del despliegue, no la de medianoche: quien entró esta misma mañana lo
+ * 12-sep-2026, 05:00 UTC: el aviso pasa a pedir la ficha entera y a taparlo
+ * todo. La hora es la del despliegue, no la de medianoche: quien entró antes lo
  * hizo cuando todavía no se le pedía el teléfono, y sacarlo en la lista de «ha
  * pasado del aviso» sería acusarle de ignorar algo que aún no existía.
+ *
+ * OJO al poner esta fecha: el reloj del Mac desde el que se despliega puede ir
+ * DESFASADO (el 12-09-2026 iba 13 horas por detrás). Sacarla de `date` dejó aquí
+ * una hora del día anterior, y con ella salían como «han pasado del aviso»
+ * personas que habían entrado antes de que el aviso existiera. La hora buena es
+ * la de la base de datos: `select now()`.
  */
-const AVISO_DESDE = "2026-09-11T16:39:08Z";
+const AVISO_DESDE = "2026-09-12T05:00:00Z";
 
 function fila(nombre: string, empresa: string, detalle: string): string {
   return `<tr>
