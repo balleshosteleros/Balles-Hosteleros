@@ -29,7 +29,11 @@
  *     posterior al aviso demuestra que lo ha tenido delante. Es la señal que de
  *     verdad sirve para reclamar.
  *
- * No se usa `usuarios.ultima_actividad`: está VACÍO en casi todo el mundo.
+ *   · `usuarios.ultima_actividad` — la marca que escribe el proxy en cualquier
+ *     navegación. Estuvo rota hasta el 12-09-2026 (un atajo del proxy la
+ *     saltaba en las rutas sin módulo, que son justo las del móvil), así que de
+ *     26 usuarios solo 3 tenían dato. Ya arreglada, es la señal más fina de las
+ *     tres; las otras dos se quedan porque cubren el histórico anterior.
  *
  * Se apaga solo: cuando no queda nadie pendiente manda un último correo diciendo
  * que está cerrado y deja de escribir. No hay que acordarse de quitarlo.
@@ -143,13 +147,25 @@ export async function GET(request: Request) {
     }
   }
 
-  // Última vez que se le vio en la app: el último inicio de sesión o, mejor
-  // aún, el último fichaje (para fichar hay que abrirla). Se queda el más
-  // reciente de los dos.
+  // Última vez que se le vio en la app. Se queda la MÁS RECIENTE de las tres
+  // señales: el último inicio de sesión, la marca de navegación del proxy y el
+  // último fichaje (para fichar hay que abrir la app).
   const actividad = new Map<string, string | null>();
   const { data: cuentas } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
   for (const u of cuentas?.users ?? []) {
     actividad.set(u.id, u.last_sign_in_at ?? null);
+  }
+
+  const { data: navegacion } = await supabase
+    .from("usuarios")
+    .select("user_id, ultima_actividad")
+    .not("ultima_actividad", "is", null);
+  for (const u of navegacion ?? []) {
+    const id = u.user_id ? String(u.user_id) : null;
+    if (!id) continue;
+    const cuando = String(u.ultima_actividad);
+    const previa = actividad.get(id);
+    if (!previa || cuando > previa) actividad.set(id, cuando);
   }
 
   const { data: fichajes } = await supabase

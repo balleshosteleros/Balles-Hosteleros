@@ -142,30 +142,21 @@ async function proxyInterno(request: NextRequest) {
 
   if (!user) return sessionResponse
 
-  // ¿Hay que comprobar la puerta en esta petición?
-  //
-  // La puerta (estado_acceso / empresa) se comprueba una vez cada PUERTA_TTL_S
-  // por usuario, no en cada petición. El veredicto viaja en una cookie de
-  // sesión atada al `user.id`: si otro usuario entra en el mismo navegador la
-  // cookie no le sirve, y al caducar se vuelve a comprobar contra la BD.
-  //
-  // Las rutas de módulo (/rrhh, /gerencia…) SIEMPRE comprueban permisos abajo:
-  // la caché solo evita repetir la puerta, nunca el filtro por módulo.
-  const moduloReq = moduloRequerido(pathname)
-  const puertaCacheada = request.cookies.get(COOKIE_PUERTA)?.value === user.id
-  // Sin módulo que autorizar y con la puerta ya validada hace poco: no hay nada
-  // que consultar. Este es el atajo que devuelve el `return` temprano que el
-  // commit e0a87e95 había eliminado, pero SIN reabrir el agujero: la puerta se
-  // sigue comprobando, solo que una vez cada PUERTA_TTL_S en lugar de siempre.
-  if (!moduloReq && puertaCacheada) return sessionResponse
-
   const adminUrlActividad = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKeyActividad = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  // Paso 2: marca de actividad. Va ANTES del filtro por módulo a propósito: si
-  // solo se marcara en rutas de módulo (/rrhh, /gerencia…), quien entra desde el
-  // móvil (/m) o se queda en Mi Panel / Mis Departamentos / la portada nunca
-  // dejaría rastro y su "última conexión" saldría vacía para siempre.
+  // Paso 2: marca de actividad. Es LO PRIMERO que se hace con la sesión ya
+  // validada, y tiene que seguir siéndolo.
+  //
+  // Estaba unas líneas más abajo, detrás del atajo «puerta ya comprobada» que
+  // devuelve la respuesta sin seguir. Consecuencia: quien navegaba por rutas sin
+  // módulo —el móvil (/m), Mi Panel, la portada— salía por ese atajo y NUNCA
+  // dejaba rastro. Con la puerta cacheada, eso es casi toda la plantilla: de 26
+  // usuarios, solo 3 tenían «última conexión», y en el parte diario aparecían
+  // como «no ha entrado» personas que estaban fichando a diario desde el móvil.
+  //
+  // Por eso va aquí arriba: si solo se marcara en rutas de módulo (/rrhh,
+  // /gerencia…), quien vive en el móvil no contaría como que ha entrado.
   // Auto-throttled a 30s vía WHERE para que múltiples pestañas/recargas no
   // inflen la BD: si la última marca es reciente, el UPDATE no toca filas.
   if (adminUrlActividad && serviceKeyActividad) {
@@ -187,6 +178,23 @@ async function proxyInterno(request: NextRequest) {
         if (error) console.error('[proxy] marca de actividad:', error.message)
       })
   }
+
+  // ¿Hay que comprobar la puerta en esta petición?
+  //
+  // La puerta (estado_acceso / empresa) se comprueba una vez cada PUERTA_TTL_S
+  // por usuario, no en cada petición. El veredicto viaja en una cookie de
+  // sesión atada al `user.id`: si otro usuario entra en el mismo navegador la
+  // cookie no le sirve, y al caducar se vuelve a comprobar contra la BD.
+  //
+  // Las rutas de módulo (/rrhh, /gerencia…) SIEMPRE comprueban permisos abajo:
+  // la caché solo evita repetir la puerta, nunca el filtro por módulo.
+  const moduloReq = moduloRequerido(pathname)
+  const puertaCacheada = request.cookies.get(COOKIE_PUERTA)?.value === user.id
+  // Sin módulo que autorizar y con la puerta ya validada hace poco: no hay nada
+  // que consultar. Este es el atajo que devuelve el `return` temprano que el
+  // commit e0a87e95 había eliminado, pero SIN reabrir el agujero: la puerta se
+  // sigue comprobando, solo que una vez cada PUERTA_TTL_S en lugar de siempre.
+  if (!moduloReq && puertaCacheada) return sessionResponse
 
   // Cliente SSR solo para signOut si la cuenta está inactiva (abajo).
   const supabase = createServerClient(
