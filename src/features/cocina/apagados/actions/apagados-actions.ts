@@ -11,15 +11,16 @@
  * solo toque vale para los tres y nunca puede pasar que el comensal lo vea
  * agotado y el camarero lo siga cobrando.
  *
- * CUÁNDO VUELVE: solo, al arrancar el día de servicio siguiente (corte a las
- * 06:00: la madrugada es el mismo servicio). Un interruptor suelto se queda
- * encendido; una fecha caduca sola.
+ * CUÁNDO VUELVE: solo, pasadas las horas configuradas en Cocina → Comandas
+ * (12 por defecto). Un interruptor suelto se queda encendido; un plazo caduca
+ * solo, y en horas dura lo mismo se marque a las seis de la tarde o a las
+ * cinco de la madrugada.
  */
 
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
-import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
-import { diaNegocioHoy } from "@/features/sala/lib/dia-negocio";
+import { apagadoVigente } from "../lib/caducidad";
+import { getHorasApagado } from "../lib/horas-apagado-server";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export interface ProductoApagable {
@@ -38,17 +39,23 @@ export interface CategoriaApagable {
 
 type Resultado<T> = { ok: true; data: T } | { ok: false; error: string };
 
-/** Catálogo de venta agrupado por categoría, con lo que está apagado hoy. */
-export async function listarProductosApagables(): Promise<Resultado<CategoriaApagable[]>> {
+export interface CatalogoApagable {
+  categorias: CategoriaApagable[];
+  /** Horas que dura el apagado en esta empresa, para poder decirlo en el panel. */
+  horas: number;
+}
+
+/** Catálogo de venta agrupado por categoría, con lo que está apagado ahora. */
+export async function listarProductosApagables(): Promise<Resultado<CatalogoApagable>> {
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "Sin empresa." };
 
-    const diaServicio = diaNegocioHoy(await getZonaHorariaEmpresa(supabase, empresaId));
+    const horas = await getHorasApagado(supabase, empresaId);
 
     const { data, error } = await supabase
       .from("productos")
-      .select("id, nombre, categoria, agotado_dia, agotado_por")
+      .select("id, nombre, categoria, agotado_at, agotado_por")
       .eq("empresa_id", empresaId)
       .eq("tipo", "venta")
       // Un producto dado de baja no se vende ni encendido: enseñarlo aquí solo
@@ -66,7 +73,7 @@ export async function listarProductosApagables(): Promise<Resultado<CategoriaApa
       id: string;
       nombre: string;
       categoria: string | null;
-      agotado_dia: string | null;
+      agotado_at: string | null;
       agotado_por: string | null;
     }>;
 
@@ -93,7 +100,7 @@ export async function listarProductosApagables(): Promise<Resultado<CategoriaApa
         id: f.id,
         nombre: f.nombre,
         categoria,
-        apagado: !!f.agotado_dia && f.agotado_dia === diaServicio,
+        apagado: apagadoVigente(f.agotado_at, horas),
         apagadoPor: f.agotado_por ? nombres.get(f.agotado_por) ?? null : null,
       });
       porCategoria.set(categoria, lista);
@@ -103,10 +110,60 @@ export async function listarProductosApagables(): Promise<Resultado<CategoriaApa
       .map(([nombre, productos]) => ({ nombre, productos }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 
-    return { ok: true, data: categorias };
+    return { ok: true, data: { categorias, horas } };
   } catch (err) {
     console.error("[cocina][apagados][listar] fatal:", err);
     return { ok: false, error: friendlyError(err, "listarProductosApagables") };
+  }
+}
+
+/**
+ * Guarda de golpe todo lo que se ha marcado y desmarcado en el panel.
+ *
+ * Va en DOS consultas (una para apagar, otra para encender) y no una por
+ * producto: cocina marca cinco o seis cosas seguidas antes de guardar, y con
+ * una llamada por toque el panel se quedaba esperando entre pulsaciones.
+ */
+export async function guardarApagadosProductos(
+  cambios: Array<{ id: string; apagado: boolean }>,
+): Promise<Resultado<{ guardados: number }>> {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "Sin empresa." };
+    if (cambios.length === 0) return { ok: true, data: { guardados: 0 } };
+
+    const apagar = cambios.filter((c) => c.apagado).map((c) => c.id);
+    const encender = cambios.filter((c) => !c.apagado).map((c) => c.id);
+
+    if (apagar.length > 0) {
+      const { error } = await supabase
+        .from("productos")
+        .update({ agotado_por: userId, agotado_at: new Date().toISOString() })
+        .in("id", apagar)
+        .eq("empresa_id", empresaId);
+      if (error) {
+        console.error("[cocina][apagados][guardar/apagar]", error.message);
+        return { ok: false, error: "No se pudieron apagar los productos." };
+      }
+    }
+
+    if (encender.length > 0) {
+      const { error } = await supabase
+        .from("productos")
+        .update({ agotado_por: null, agotado_at: null })
+        .in("id", encender)
+        .eq("empresa_id", empresaId);
+      if (error) {
+        console.error("[cocina][apagados][guardar/encender]", error.message);
+        return { ok: false, error: "No se pudieron encender los productos." };
+      }
+    }
+
+    revalidatePath("/marketing/carta-digital");
+    return { ok: true, data: { guardados: cambios.length } };
+  } catch (err) {
+    console.error("[cocina][apagados][guardar] fatal:", err);
+    return { ok: false, error: friendlyError(err, "guardarApagadosProductos") };
   }
 }
 
@@ -119,14 +176,12 @@ export async function alternarApagadoProducto(
     const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "Sin empresa." };
 
-    const diaServicio = diaNegocioHoy(await getZonaHorariaEmpresa(supabase, empresaId));
-
     const { error } = await supabase
       .from("productos")
       .update(
         apagar
-          ? { agotado_dia: diaServicio, agotado_por: userId, agotado_at: new Date().toISOString() }
-          : { agotado_dia: null, agotado_por: null, agotado_at: null },
+          ? { agotado_por: userId, agotado_at: new Date().toISOString() }
+          : { agotado_por: null, agotado_at: null },
       )
       .eq("id", productoId)
       .eq("empresa_id", empresaId);

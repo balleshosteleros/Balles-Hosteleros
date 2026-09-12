@@ -2,6 +2,7 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { UMBRALES_DEFAULT, type UmbralesAlarma } from "../types";
+import { horasApagadoSeguras } from "@/features/cocina/apagados/lib/caducidad";
 
 interface UmbralesRow {
   empresa_id: string;
@@ -9,6 +10,7 @@ interface UmbralesRow {
   umbral_rojo_min: number;
   umbral_parpadeo_min: number;
   sonido_activo: boolean;
+  horas_apagado_producto: number | null;
   updated_at: string;
 }
 
@@ -19,6 +21,7 @@ function rowToUmbrales(r: UmbralesRow): UmbralesAlarma {
     umbralRojoMin: r.umbral_rojo_min,
     umbralParpadeoMin: r.umbral_parpadeo_min,
     sonidoActivo: r.sonido_activo,
+    horasApagadoProducto: horasApagadoSeguras(r.horas_apagado_producto),
     updatedAt: r.updated_at,
   };
 }
@@ -53,6 +56,60 @@ export async function getUmbralesAlarma(): Promise<
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[cocina][comandas] getUmbralesAlarma:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Cuánto dura el apagado de un producto agotado, en horas.
+ *
+ * Va aparte de los umbrales de alarma a propósito: es el único ajuste de
+ * Comandas que hoy tiene pantalla, y obligar a mandar los tres umbrales para
+ * cambiar las horas sería pedirle al que guarda datos que no ha tocado.
+ */
+export async function saveHorasApagadoProducto(
+  horas: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const seguras = horasApagadoSeguras(horas);
+    if (seguras !== Math.trunc(Number(horas))) {
+      return { ok: false, error: "Pon un número de horas entre 1 y 72." };
+    }
+
+    // Si ya hay configuración, se toca SOLO esta columna. Un upsert con los
+    // umbrales por defecto le habría devuelto sus alarmas al valor de fábrica
+    // a quien las tuviera ajustadas, sin haberlas tocado.
+    const { data: existente } = await supabase
+      .from("cocina_alarmas_config")
+      .select("empresa_id")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    const { error } = existente
+      ? await supabase
+          .from("cocina_alarmas_config")
+          .update({ horas_apagado_producto: seguras, updated_at: new Date().toISOString() })
+          .eq("empresa_id", empresaId)
+      : await supabase.from("cocina_alarmas_config").insert({
+          empresa_id: empresaId,
+          // Primera configuración de la empresa: los umbrales son obligatorios
+          // en la tabla, así que estrenan su valor de fábrica.
+          umbral_ambar_min: UMBRALES_DEFAULT.umbralAmbarMin,
+          umbral_rojo_min: UMBRALES_DEFAULT.umbralRojoMin,
+          umbral_parpadeo_min: UMBRALES_DEFAULT.umbralParpadeoMin,
+          sonido_activo: UMBRALES_DEFAULT.sonidoActivo,
+          horas_apagado_producto: seguras,
+          updated_at: new Date().toISOString(),
+        });
+
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[cocina][comandas] saveHorasApagadoProducto:", msg);
     return { ok: false, error: msg };
   }
 }

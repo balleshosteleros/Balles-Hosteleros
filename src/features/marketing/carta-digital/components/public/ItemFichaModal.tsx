@@ -101,7 +101,7 @@ export function ItemFichaModal({
             // Misma señal que en la rejilla: foto apagada y el motivo escrito.
             <span className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-[1px]">
               <span className="rounded-full bg-white/95 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-800 shadow-sm">
-                Agotado hoy
+                Agotado
               </span>
             </span>
           ) : null}

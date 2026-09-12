@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Sun, Moon, PowerOff } from "lucide-react";
+import { Sun, Moon, PowerOff, Settings } from "lucide-react";
 import {
   updateEstadoCocinaLinea,
   updateEstadoCocinaTicket,
@@ -29,6 +29,8 @@ import { cn } from "@/lib/utils";
 // dos pantallas que mira durante el servicio.
 import { useSalaTema } from "@/features/sala/hooks/useSalaTema";
 import { ApagadosPanel } from "@/features/cocina/apagados/components/ApagadosPanel";
+import { ConfiguracionComandasDialog } from "./ConfiguracionComandasDialog";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
 
 // ─── Tabla de siguiente/anterior estado ───────────────────────
 const SIGUIENTE: Record<ColumnaKDS, LineaEstadoCocina | null> = {
@@ -62,6 +64,8 @@ function ComandasBoardInner() {
   const [busqueda, setBusqueda] = useState("");
   const { esOscuro, alternarTema } = useSalaTema();
   const [apagadosAbierto, setApagadosAbierto] = useState(false);
+  const [configAbierta, setConfigAbierta] = useState(false);
+  const esMovil = useIsMobile();
   const comandasFiltradas = useMemo(() => {
     const base = aplicarFiltros(comandas, filtros);
     const q = busqueda.trim().toLowerCase();
@@ -246,6 +250,7 @@ function ComandasBoardInner() {
       </div>
 
       <ApagadosPanel abierto={apagadosAbierto} onCerrar={() => setApagadosAbierto(false)} />
+      <ConfiguracionComandasDialog abierto={configAbierta} onCerrar={() => setConfigAbierta(false)} />
 
       {/* Toolbar estándar (BARRA HORIZONTAL 1) */}
       <div className="px-2 pt-2 space-y-2">
@@ -254,22 +259,46 @@ function ComandasBoardInner() {
           onBusquedaChange={setBusqueda}
           placeholderBusqueda="Buscar"
           ocultarNuevo
+          // Configurar es tarea de escritorio: en móvil el engranaje no se
+          // pinta (norma del proyecto).
+          extraDerecha={
+            esMovil ? undefined : (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9"
+                onClick={() => setConfigAbierta(true)}
+                title="Configuración"
+                aria-label="Configuración"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            )
+          }
         />
         {/* Filtros específicos de comandas (fuera de la toolbar) */}
         <FiltrosBar value={filtros} onChange={setFiltros} />
       </div>
 
-      {/* Kanban 4 columnas */}
-      <div className="grid min-h-0 flex-1 grid-cols-4 gap-2 p-2">
+      {/* Kanban. En ORDENADOR, cuatro columnas a la vez. En MÓVIL no caben:
+          cuatro columnas en 390 px dejan cada tarjeta en una tira ilegible, y
+          además el grid las comprimía hasta romper los textos (Iván, 12-sep).
+          Aquí se pasan con el dedo, una casi a pantalla completa y anclada
+          (`snap`), que es como se usa un KDS en la mano. */}
+      <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-2 overflow-x-auto p-2 md:grid md:grid-cols-4 md:overflow-x-visible">
         {COLUMNAS_ORDEN.map((col) => (
-          <ColumnaEstado
+          <div
             key={col}
-            columna={col}
-            comandas={comandasFiltradas}
-            onAvanzar={(c) => void avanzarTicket(c, col)}
-            onRetroceder={(c) => void retrocederTicket(c, col)}
-            onLineaClick={handleLineaClick}
-          />
+            className="flex min-h-0 w-[86vw] shrink-0 snap-start flex-col md:w-auto md:shrink"
+          >
+            <ColumnaEstado
+              columna={col}
+              comandas={comandasFiltradas}
+              onAvanzar={(c) => void avanzarTicket(c, col)}
+              onRetroceder={(c) => void retrocederTicket(c, col)}
+              onLineaClick={handleLineaClick}
+            />
+          </div>
         ))}
       </div>
     </div>

@@ -46,7 +46,7 @@ export function ItemCard({
   // que el precio del menú lo diga el título de la categoría.
   const precio = item.precio > 0 ? `${item.precio.toFixed(2).replace(".", ",")}€` : null;
   const conFoto = !!item.foto_url;
-  // Agotado hoy: la tarjeta se apaga (gris y velada) pero NO desaparece. Que
+  // Agotado: la tarjeta se apaga (gris y velada) pero NO desaparece. Que
   // siga ahí es lo que evita que el comensal lo pida y el camarero tenga que
   // decir que no; borrarlo solo genera la pregunta "¿y el de la foto?".
   const agotado = item.agotado;
@@ -128,10 +128,11 @@ export function ItemCard({
 
         {agotado ? (
           // Banda sobre la foto: el gris solo puede leerse como "foto mala".
-          // El rótulo dice qué pasa, y "hoy" avisa de que mañana vuelve.
+          // El rótulo dice qué pasa. Sin plazos: al comensal no le importa
+          // cuántas horas lleva apagado, solo que ahora no hay.
           <span className="absolute inset-0 flex items-center justify-center bg-black/45 backdrop-blur-[1px]">
             <span className="rounded-full bg-white/95 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-800 shadow-sm">
-              Agotado hoy
+              Agotado
             </span>
           </span>
         ) : null}

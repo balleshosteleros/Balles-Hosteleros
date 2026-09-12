@@ -25,19 +25,29 @@ así **no hay que reimprimir ningún QR de mesa**.
 
 ## 2. "Agotado" lo marca cocina y vuelve solo
 
-- Se guarda en **`productos.agotado_dia`** (+ `agotado_por`, `agotado_at`), NO en
-  `carta_items`, porque el producto es lo único que comparten la carta del QR, la
-  tecla del TPV y la futura comanda del camarero. `carta_items` conserva las mismas
-  columnas solo para los ~20 platos escritos a mano que no tienen producto detrás.
-- El valor es el **día de SERVICIO** (`diaNegocioHoy`, corte 06:00 en la zona de la
-  empresa), no un booleano: un interruptor se queda encendido, una fecha caduca
-  sola. Al arrancar el día siguiente el producto vuelve sin que nadie lo toque y
-  sin proceso nocturno.
+- Se guarda en **`productos.agotado_at`** (+ `agotado_por`), NO en `carta_items`,
+  porque el producto es lo único que comparten la carta del QR, la tecla del TPV y
+  la futura comanda del camarero. `carta_items` conserva las mismas columnas solo
+  para los ~20 platos escritos a mano que no tienen producto detrás.
+- Dura un **plazo en HORAS** desde el marcado: **12 por defecto**, configurable por
+  empresa en **Cocina → Comandas → engranaje** (`cocina_alarmas_config.horas_apagado_producto`,
+  1–72). Se guarda CUÁNDO se marcó, no cuándo caduca: así, si se cambia el plazo, lo
+  ya marcado se rige por el plazo nuevo sin recalcular nada. Cálculo único en
+  `features/cocina/apagados/lib/caducidad.ts` (`apagadoVigente`) — no duplicarlo.
+- **Por qué horas y no "hasta mañana"** (cambio del 12-09-2026): con el corte del día
+  de servicio (06:00), apagar algo a las 05:50 duraba diez minutos y a las 06:10
+  duraba casi un día. Un plazo en horas dura lo mismo se marque cuando se marque.
 - En la carta el plato **NO desaparece**: sale en gris/nublado con el rótulo
-  "Agotado hoy" (decisión literal de Iván). Borrarlo genera la pregunta "¿y el de
+  "Agotado" (decisión literal de Iván; sin "hoy", porque el plazo es en horas). Borrarlo genera la pregunta "¿y el de
   la foto?"; verlo agotado evita que se pida.
 - Se opera desde **Cocina → Comandas → "Apagar productos"**: catálogo de venta por
-  categorías, un toque por producto, sin guardar ni confirmar.
+  categorías, se marca lo que falte y se pulsa **Guardar** una vez (no una llamada
+  por toque: cocina marca cinco cosas seguidas). En móvil ese panel va a **pantalla
+  completa y anclado a los cuatro bordes**: el diálogo normal se centra con
+  porcentajes y trae scroll propio, así que al abrirse el teclado del buscador el
+  panel entero saltaba de sitio.
+- Comandas en móvil: las 4 columnas del kanban **no caben**; se pasan con el dedo
+  (`snap-x`, 86vw cada una). En ordenador siguen siendo un grid de 4.
 
 ## Bug arreglado de paso
 

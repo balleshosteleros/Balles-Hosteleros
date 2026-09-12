@@ -4,7 +4,8 @@
  * RLS exige `carta_publicada=true` y `visible=true`.
  */
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { diaNegocioHoy } from "@/features/sala/lib/dia-negocio";
+import { apagadoVigente } from "@/features/cocina/apagados/lib/caducidad";
+import { getHorasApagado } from "@/features/cocina/apagados/lib/horas-apagado-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { categoriaEnHorario } from "../lib/horario";
 import { portalActivo } from "@/features/empresa/lib/portales";
@@ -94,7 +95,7 @@ interface ItemRow {
   oculto: boolean | null;
   oculto_desde: string | null;
   oculto_hasta: string | null;
-  agotado_dia: string | null;
+  agotado_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -119,7 +120,7 @@ function rowToCategoria(r: CategoriaRow): CartaCategoria {
 }
 
 
-function rowToItem(r: ItemRow, diaServicio: string): CartaItem {
+function rowToItem(r: ItemRow, horasApagado: number): CartaItem {
   return {
     id: r.id,
     empresa_id: r.empresa_id,
@@ -136,8 +137,8 @@ function rowToItem(r: ItemRow, diaServicio: string): CartaItem {
     destacado: r.destacado,
     likes_count: r.likes_count,
     likes_base: r.likes_base ?? 0,
-    // Agotado es "de hoy": la marca caduca sola al cambiar el día de servicio.
-    agotado: !!r.agotado_dia && r.agotado_dia === diaServicio,
+    // La marca caduca sola pasadas las horas configuradas por la empresa.
+    agotado: apagadoVigente(r.agotado_at, horasApagado),
     created_at: r.created_at,
     updated_at: r.updated_at,
   };
@@ -239,32 +240,31 @@ export async function fetchCartaPorSlug(
     );
     const productosOverride = new Map<
       string,
-      { carta_destacado: boolean; visible_carta: boolean; agotado_dia: string | null }
+      { carta_destacado: boolean; visible_carta: boolean; agotado_at: string | null }
     >();
     if (productoIds.length > 0) {
       const { data: prodRows } = await supabase
         .from("productos")
-        .select("id, carta_destacado, visible_carta, agotado_dia")
+        .select("id, carta_destacado, visible_carta, agotado_at")
         .in("id", productoIds);
       for (const p of (prodRows ?? []) as {
         id: string;
         carta_destacado: boolean | null;
         visible_carta: boolean | null;
-        agotado_dia: string | null;
+        agotado_at: string | null;
       }[]) {
         productosOverride.set(p.id, {
           carta_destacado: p.carta_destacado ?? false,
           visible_carta: p.visible_carta ?? false,
-          agotado_dia: p.agotado_dia,
+          agotado_at: p.agotado_at,
         });
       }
     }
 
     // Zona del restaurante, no la del móvil de quien mira la carta.
     const zona = (empresa.config_operativa?.zonaHoraria || "").trim() || "Europe/Madrid";
-    // Día de SERVICIO (corte a las 06:00): lo que cocina marcó agotado esta
-    // noche sigue agotado a la 1 de la madrugada, que es el mismo servicio.
-    const diaServicio = diaNegocioHoy(zona);
+    // Cuánto dura el apagado en esta empresa (12 h por defecto).
+    const horasApagado = await getHorasApagado(supabase, empresa.id);
     const hoy = hoyEnZona(zona);
 
     const items = itemsRows
@@ -282,7 +282,7 @@ export async function fetchCartaPorSlug(
       // ahí se dijo que no es de carta, no es de carta.
       .filter((row) => !row.producto_id || productosOverride.get(row.producto_id)?.visible_carta !== false)
       .map((row) => {
-      const item = rowToItem(row, diaServicio);
+      const item = rowToItem(row, horasApagado);
       if (row.producto_id) {
         const ov = productosOverride.get(row.producto_id);
         // La estrella destacada se gobierna desde la ficha del producto de venta.
@@ -291,7 +291,7 @@ export async function fetchCartaPorSlug(
         // toque vale para la carta, para la tecla del TPV y para la comanda
         // del camarero. El plato solo lleva marca propia cuando no tiene
         // producto detrás (los escritos a mano aquí).
-        if (ov?.agotado_dia && ov.agotado_dia === diaServicio) item.agotado = true;
+        if (apagadoVigente(ov?.agotado_at, horasApagado)) item.agotado = true;
       }
       return item;
     });

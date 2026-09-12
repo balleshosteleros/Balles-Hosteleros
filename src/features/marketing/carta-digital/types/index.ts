@@ -8,6 +8,11 @@ export type CartaAdminData = {
   empresa: CartaEmpresaPublica | null;
   categorias: CartaCategoria[];
   items: CartaItem[];
+  /**
+   * Horas que dura el estado "agotado" en esta empresa, para poder decirlo en
+   * el panel. Se configura en Cocina → Comandas.
+   */
+  horasApagado: number;
 };
 
 export type FamiliaCarta = "comida" | "bebida" | "otros";

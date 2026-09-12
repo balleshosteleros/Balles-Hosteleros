@@ -261,6 +261,7 @@ export function CartaAdminBoard({
         categorias={data.categorias}
         item={editingItem}
         defaultCategoriaId={defaultCatId}
+        horasApagado={data.horasApagado}
         onClose={() => setEditorOpen(false)}
       />
     </div>

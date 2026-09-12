@@ -30,31 +30,33 @@ import { FotoUploader } from "./FotoUploader";
  * propósito: "agotado" no es una variante de invisible, es lo contrario —el
  * plato sigue a la vista para que nadie lo pida y para que se sepa que existe.
  */
-const ESTADOS: Array<{
+function estadosDisponibles(horasApagado: number): Array<{
   valor: EstadoCartaItem;
   titulo: string;
   pie: string;
   claseActiva: string;
-}> = [
-  {
-    valor: "VISIBLE",
-    titulo: "Visible",
-    pie: "Se ve y se puede pedir.",
-    claseActiva: "border-emerald-400 bg-emerald-50",
-  },
-  {
-    valor: "AGOTADO",
-    titulo: "Agotado",
-    pie: "Se ve en gris, con la etiqueta. Vuelve solo mañana.",
-    claseActiva: "border-amber-400 bg-amber-50",
-  },
-  {
-    valor: "INVISIBLE",
-    titulo: "Invisible",
-    pie: "Desaparece de la carta.",
-    claseActiva: "border-stone-400 bg-stone-100",
-  },
-];
+}> {
+  return [
+    {
+      valor: "VISIBLE",
+      titulo: "Visible",
+      pie: "Se ve y se puede pedir.",
+      claseActiva: "border-emerald-400 bg-emerald-50",
+    },
+    {
+      valor: "AGOTADO",
+      titulo: "Agotado",
+      pie: `Se ve en gris, con la etiqueta. Vuelve solo a las ${horasApagado} h.`,
+      claseActiva: "border-amber-400 bg-amber-50",
+    },
+    {
+      valor: "INVISIBLE",
+      titulo: "Invisible",
+      pie: "Desaparece de la carta.",
+      claseActiva: "border-stone-400 bg-stone-100",
+    },
+  ];
+}
 
 export function ItemEditorModal({
   open,
@@ -62,6 +64,7 @@ export function ItemEditorModal({
   categorias,
   item,
   defaultCategoriaId,
+  horasApagado,
   onClose,
 }: {
   open: boolean;
@@ -69,6 +72,8 @@ export function ItemEditorModal({
   categorias: CartaCategoria[];
   item: CartaItem | null;
   defaultCategoriaId: string | null;
+  /** Cuánto dura el "agotado", para poder decirlo en el propio botón. */
+  horasApagado: number;
   onClose: () => void;
 }) {
   const [nombre, setNombre] = useState("");
@@ -353,7 +358,7 @@ export function ItemEditorModal({
               <div>
                 <Label className="mb-1.5 block">Cómo se ve en la carta</Label>
                 <div className="grid grid-cols-3 gap-2">
-                  {ESTADOS.map((op) => (
+                  {estadosDisponibles(horasApagado).map((op) => (
                     <button
                       key={op.valor}
                       type="button"

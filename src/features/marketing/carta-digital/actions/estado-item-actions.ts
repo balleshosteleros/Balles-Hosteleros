@@ -15,14 +15,12 @@
  * uno, porque el mismo apagado tiene que valer para la tecla del TPV y para la
  * comanda del camarero, no solo para la carta. Solo los platos escritos a mano
  * en la carta —los que no tienen producto detrás— lo llevan en su propia fila.
- * Ojo: esto NO es editar la ficha del producto; es el estado del servicio de
- * hoy, y caduca solo al día siguiente.
+ * Ojo: esto NO es editar la ficha del producto; es un estado que caduca solo,
+ * pasadas las horas configuradas en Cocina → Comandas (12 por defecto).
  */
 
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
-import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
-import { diaNegocioHoy } from "@/features/sala/lib/dia-negocio";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export type EstadoCartaItem = "VISIBLE" | "AGOTADO" | "INVISIBLE";
@@ -47,16 +45,15 @@ export async function cambiarEstadoItem(
 
     const productoId = (item as { producto_id: string | null }).producto_id;
     const agotar = estado === "AGOTADO";
-    const diaServicio = agotar
-      ? diaNegocioHoy(await getZonaHorariaEmpresa(supabase, empresaId))
-      : null;
+    // El plazo no se guarda aquí: se guarda CUÁNDO se marcó y las horas se
+    // leen al pintar. Así, si la empresa cambia el plazo, lo ya marcado se
+    // rige por el plazo nuevo sin tener que recalcular nada.
     const marca = agotar
-      ? { agotado_dia: diaServicio, agotado_por: userId, agotado_at: new Date().toISOString() }
-      : { agotado_dia: null, agotado_por: null, agotado_at: null };
+      ? { agotado_por: userId, agotado_at: new Date().toISOString() }
+      : { agotado_por: null, agotado_at: null };
 
     // "Invisible" también limpia el agotado: son tres estados excluyentes, y
-    // un plato que vuelve a la carta no debe reaparecer marcado de un día que
-    // ya pasó.
+    // un plato que vuelve a la carta no debe reaparecer marcado de antes.
     const { error: errItem } = await supabase
       .from("carta_items")
       .update({ visible: estado !== "INVISIBLE", ...marca })

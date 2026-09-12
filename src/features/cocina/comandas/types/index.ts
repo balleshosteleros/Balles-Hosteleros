@@ -1,3 +1,5 @@
+import { HORAS_APAGADO_DEFAULT } from "@/features/cocina/apagados/lib/caducidad";
+
 /**
  * Tipos del submódulo Cocina · Comandas (KDS).
  * Espejo en camelCase de las columnas añadidas a pos_ticket_lineas
@@ -51,6 +53,12 @@ export interface UmbralesAlarma {
   umbralRojoMin: number;
   umbralParpadeoMin: number;
   sonidoActivo: boolean;
+  /**
+   * Horas que dura el apagado de un producto agotado antes de volver solo a la
+   * carta y al TPV. 12 por defecto; el detalle, en
+   * `features/cocina/apagados/lib/caducidad.ts`.
+   */
+  horasApagadoProducto: number;
   updatedAt: string;
 }
 
@@ -60,6 +68,7 @@ export const UMBRALES_DEFAULT: Omit<UmbralesAlarma, "empresaId" | "updatedAt"> =
   umbralRojoMin: 15,
   umbralParpadeoMin: 20,
   sonidoActivo: true,
+  horasApagadoProducto: HORAS_APAGADO_DEFAULT,
 };
 
 // ─── Nivel de alerta derivado del tiempo transcurrido ────────

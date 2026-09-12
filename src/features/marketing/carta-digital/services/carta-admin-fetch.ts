@@ -2,8 +2,8 @@
  * Lectura admin de la carta — incluye items invisibles y descripción de empresa.
  */
 import { getAppContext } from "@/lib/supabase/get-context";
-import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
-import { diaNegocioHoy } from "@/features/sala/lib/dia-negocio";
+import { apagadoVigente, HORAS_APAGADO_DEFAULT } from "@/features/cocina/apagados/lib/caducidad";
+import { getHorasApagado } from "@/features/cocina/apagados/lib/horas-apagado-server";
 import type {
   CartaCategoria,
   CartaItem,
@@ -46,18 +46,18 @@ interface ItemRow {
   destacado: boolean;
   likes_count: number;
   likes_base: number | null;
-  agotado_dia: string | null;
+  agotado_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export async function fetchCartaAdmin(): Promise<CartaAdminData> {
   const { supabase, empresaId } = await getAppContext();
-  if (!empresaId) return { empresa: null, categorias: [], items: [] };
+  if (!empresaId)
+    return { empresa: null, categorias: [], items: [], horasApagado: HORAS_APAGADO_DEFAULT };
 
-  // "Agotado" caduca al cambiar el día de SERVICIO (corte 06:00), no a
-  // medianoche: a la 1 de la madrugada sigue siendo el servicio de anoche.
-  const diaServicio = diaNegocioHoy(await getZonaHorariaEmpresa(supabase, empresaId));
+  // "Agotado" caduca solo, pasadas las horas configuradas en Comandas.
+  const horasApagado = await getHorasApagado(supabase, empresaId);
 
   const [empresaRes, catRes, itemsRes] = await Promise.all([
     supabase
@@ -130,11 +130,11 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
   if (productoIds.length > 0) {
     const { data: prods } = await supabase
       .from("productos")
-      .select("id, nombre, agotado_dia")
+      .select("id, nombre, agotado_at")
       .in("id", productoIds);
-    for (const pr of (prods ?? []) as Array<{ id: string; nombre: string; agotado_dia: string | null }>) {
+    for (const pr of (prods ?? []) as Array<{ id: string; nombre: string; agotado_at: string | null }>) {
       nombresProducto.set(pr.id, pr.nombre);
-      if (pr.agotado_dia === diaServicio) agotadosProducto.add(pr.id);
+      if (apagadoVigente(pr.agotado_at, horasApagado)) agotadosProducto.add(pr.id);
     }
   }
 
@@ -155,12 +155,12 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
     likes_count: r.likes_count,
     likes_base: r.likes_base ?? 0,
     agotado:
-      (!!r.agotado_dia && r.agotado_dia === diaServicio) ||
+      apagadoVigente(r.agotado_at, horasApagado) ||
       (!!r.producto_id && agotadosProducto.has(r.producto_id)),
     producto_nombre: r.producto_id ? nombresProducto.get(r.producto_id) ?? null : null,
     created_at: r.created_at,
     updated_at: r.updated_at,
   }));
 
-  return { empresa, categorias, items };
+  return { empresa, categorias, items, horasApagado };
 }
