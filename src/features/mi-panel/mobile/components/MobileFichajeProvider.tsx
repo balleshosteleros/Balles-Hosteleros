@@ -93,17 +93,20 @@ function calcularDebe(
 }
 
 /**
- * Cuenta atrás en MM:SS, SIEMPRE en positivo. El menos delante ("-01:21") no lo
- * entendía nadie: se leía como "falta 1:21" cuando significaba justo lo
- * contrario, que llevabas 1:21 de retraso, y encima en verde y bajo el rótulo
- * "para tu entrada" (Iván, 12-09-2026). Ahora el número es el tiempo y quien
- * dice si falta o sobra es el rótulo de debajo.
+ * Cuenta atrás en MM:SS con el signo SIEMPRE delante, y el color acompañando:
+ *   · "+01:21" en VERDE  → llegas antes: te faltan 1 min 21 s para tu hora.
+ *   · "-01:21" en ROJO   → vas con 1 min 21 s de retraso.
+ *
+ * Antes el menos salía sin más y en verde bajo el rótulo "para tu entrada", y
+ * se leía justo al revés: como si faltara ese tiempo (Iván, 12-09-2026). El
+ * signo solo se entiende si el color va con él.
  */
 function formatoCuentaAtras(segundos: number): string {
+  const signo = segundos < 0 ? "-" : "+";
   const abs = Math.abs(segundos);
   const m = Math.floor(abs / 60);
   const sec = abs % 60;
-  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  return `${signo}${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
 function deriveEstado(f: MiFichajeHoy | null): Estado {
@@ -373,8 +376,9 @@ export function MobileFichajeProvider() {
     !ventana?.permitirFueraHorario &&
     restanteSeg < -(ventana?.margenDespuesMin ?? 0) * 60;
 
-  // Ya ha pasado su hora pero la cortesía aún aguanta: puede fichar, y el
-  // fichaje se redondea a la hora del turno. Ni verde ni rojo: ámbar.
+  // Ya ha pasado su hora pero la cortesía aún aguanta: sale en ROJO, porque va
+  // con retraso, pero todavía puede fichar (y el fichaje se redondea a la hora
+  // del turno). Lo que lo separa de "vas tarde" es el rótulo y el texto.
   const conRetraso = restanteSeg != null && restanteSeg < 0 && !llegaTarde;
 
   const posponer = () => setPospuestoHasta(Date.now() + POSPONER_MS);
@@ -458,11 +462,7 @@ export function MobileFichajeProvider() {
                 <span
                   className={cn(
                     "text-5xl font-bold leading-none tabular-nums",
-                    llegaTarde
-                      ? "text-rose-600"
-                      : conRetraso
-                        ? "text-amber-600"
-                        : "text-emerald-600",
+                    llegaTarde || conRetraso ? "text-rose-600" : "text-emerald-600",
                   )}
                 >
                   {formatoCuentaAtras(restanteSeg)}
@@ -470,11 +470,7 @@ export function MobileFichajeProvider() {
                 <span
                   className={cn(
                     "mt-1 text-xs font-medium uppercase tracking-wider",
-                    llegaTarde
-                      ? "text-rose-600"
-                      : conRetraso
-                        ? "text-amber-600"
-                        : "text-muted-foreground",
+                    llegaTarde || conRetraso ? "text-rose-600" : "text-muted-foreground",
                   )}
                 >
                   {llegaTarde
@@ -491,11 +487,7 @@ export function MobileFichajeProvider() {
             <p
               className={cn(
                 "px-5 pt-3 text-sm",
-                llegaTarde
-                  ? "text-rose-600"
-                  : conRetraso
-                    ? "text-amber-700 dark:text-amber-400"
-                    : "text-muted-foreground",
+                llegaTarde || conRetraso ? "text-rose-600" : "text-muted-foreground",
               )}
             >
               {llegaTarde

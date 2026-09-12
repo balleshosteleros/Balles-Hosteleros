@@ -98,11 +98,18 @@ test.describe("El fichaje nunca se queda sin responder", () => {
     expect(gate).toMatch(/if \(!actual \|\| ficharAhora\) return null;/);
   });
 
-  test("la cuenta atrás no enseña tiempos en negativo", () => {
+  test("la cuenta atrás dice con el signo y el color si falta tiempo o si sobra", () => {
     const src = codigo(PROVIDER);
-    // "-01:21" bajo el rótulo "para tu entrada" se leía como que faltaba ese
-    // tiempo, cuando era retraso. El número va en positivo y manda el rótulo.
-    expect(src).not.toContain('const signo = segundos < 0 ? "-" : ""');
+    // "+01:21" verde = te faltan. "-01:21" rojo = vas con retraso. El signo
+    // solo a secas y en verde se leía al revés (Iván, 12-09-2026).
+    expect(
+      src,
+      "La cuenta atrás tiene que llevar el signo delante: + si falta, - si va con retraso.",
+    ).toContain('const signo = segundos < 0 ? "-" : "+"');
+    expect(
+      src,
+      "Ir con retraso se pinta en ROJO, igual que ir tarde.",
+    ).toContain('llegaTarde || conRetraso ? "text-rose-600" : "text-emerald-600"');
     expect(src).toContain("De retraso");
   });
 });
