@@ -13,7 +13,7 @@ import {
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHoraEnZona, minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { cn } from "@/shared/lib/utils";
-import { setAvisoFichajeActivo } from "@/shared/lib/aviso-fichaje-activo";
+import { CapaFichaje } from "./CapaFichaje";
 import { BigClockButton } from "./BigClockButton";
 import { reproducirAvisoFichaje } from "../lib/aviso-fichaje";
 
@@ -93,15 +93,17 @@ function calcularDebe(
 }
 
 /**
- * Cuenta atrás en MM:SS. Negativo = ya pasó la hora, con un menos delante
- * ("-02:15" = dos minutos y cuarto de retraso).
+ * Cuenta atrás en MM:SS, SIEMPRE en positivo. El menos delante ("-01:21") no lo
+ * entendía nadie: se leía como "falta 1:21" cuando significaba justo lo
+ * contrario, que llevabas 1:21 de retraso, y encima en verde y bajo el rótulo
+ * "para tu entrada" (Iván, 12-09-2026). Ahora el número es el tiempo y quien
+ * dice si falta o sobra es el rótulo de debajo.
  */
 function formatoCuentaAtras(segundos: number): string {
-  const signo = segundos < 0 ? "-" : "";
   const abs = Math.abs(segundos);
   const m = Math.floor(abs / 60);
   const sec = abs % 60;
-  return `${signo}${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
 function deriveEstado(f: MiFichajeHoy | null): Estado {
@@ -334,14 +336,6 @@ export function MobileFichajeProvider() {
   const pospuesto = pospuestoHasta != null && Date.now() < pospuestoHasta;
   const mostrarFichar = cargado && habilitado && debeFichar && !pospuesto;
 
-  // Mientras hay aviso de fichar, los avisos de la app (comunicados,
-  // liquidaciones) se apartan: son diálogos modales de Radix y su
-  // `pointer-events: none` en el body dejaba el botón verde muerto al tacto.
-  useEffect(() => {
-    setAvisoFichajeActivo(mostrarFichar);
-    return () => setAvisoFichajeActivo(false);
-  }, [mostrarFichar]);
-
   // Segundero de la cuenta atrás: el tick lento de 20 s vale para decidir SI se
   // muestra el aviso, pero no para un contador que baja segundo a segundo.
   useEffect(() => {
@@ -378,6 +372,10 @@ export function MobileFichajeProvider() {
     restanteSeg != null &&
     !ventana?.permitirFueraHorario &&
     restanteSeg < -(ventana?.margenDespuesMin ?? 0) * 60;
+
+  // Ya ha pasado su hora pero la cortesía aún aguanta: puede fichar, y el
+  // fichaje se redondea a la hora del turno. Ni verde ni rojo: ámbar.
+  const conRetraso = restanteSeg != null && restanteSeg < 0 && !llegaTarde;
 
   const posponer = () => setPospuestoHasta(Date.now() + POSPONER_MS);
 
@@ -427,10 +425,7 @@ export function MobileFichajeProvider() {
 
       {/* Pop-up de fichar: solo dentro de la ventana horaria (±15 min) */}
       {mostrarFichar && (
-        <div
-          className="pointer-events-auto fixed inset-0 z-[60] flex flex-col justify-end bg-black/50"
-          onClick={posponer}
-        >
+        <CapaFichaje onFondo={posponer}>
           <div
             className="rounded-t-3xl bg-background pb-[max(env(safe-area-inset-bottom),16px)] pt-5"
             onClick={(e) => e.stopPropagation()}
@@ -463,7 +458,11 @@ export function MobileFichajeProvider() {
                 <span
                   className={cn(
                     "text-5xl font-bold leading-none tabular-nums",
-                    llegaTarde ? "text-rose-600" : "text-emerald-600",
+                    llegaTarde
+                      ? "text-rose-600"
+                      : conRetraso
+                        ? "text-amber-600"
+                        : "text-emerald-600",
                   )}
                 >
                   {formatoCuentaAtras(restanteSeg)}
@@ -471,10 +470,20 @@ export function MobileFichajeProvider() {
                 <span
                   className={cn(
                     "mt-1 text-xs font-medium uppercase tracking-wider",
-                    llegaTarde ? "text-rose-600" : "text-muted-foreground",
+                    llegaTarde
+                      ? "text-rose-600"
+                      : conRetraso
+                        ? "text-amber-600"
+                        : "text-muted-foreground",
                   )}
                 >
-                  {llegaTarde ? "Vas tarde" : debeSalida ? "Para tu salida" : "Para tu entrada"}
+                  {llegaTarde
+                    ? "Vas tarde"
+                    : conRetraso
+                      ? "De retraso"
+                      : debeSalida
+                        ? "Para tu salida"
+                        : "Para tu entrada"}
                 </span>
               </div>
             )}
@@ -482,14 +491,22 @@ export function MobileFichajeProvider() {
             <p
               className={cn(
                 "px-5 pt-3 text-sm",
-                llegaTarde ? "text-rose-600" : "text-muted-foreground",
+                llegaTarde
+                  ? "text-rose-600"
+                  : conRetraso
+                    ? "text-amber-700 dark:text-amber-400"
+                    : "text-muted-foreground",
               )}
             >
               {llegaTarde
                 ? "Ya se ha pasado tu hora de fichaje y llegas tarde. Si has asistido, tendrás que fichar por solicitud para que tu responsable lo valide."
-                : debeSalida
-                  ? "Es tu hora de salida. Registra tu salida para cerrar la jornada."
-                  : "Es tu hora de entrada. Registra tu entrada para empezar la jornada."}
+                : conRetraso
+                  ? debeSalida
+                    ? "Tu hora de salida ya ha pasado, pero aún estás a tiempo de fichar."
+                    : "Tu hora de entrada ya ha pasado, pero aún estás a tiempo de fichar."
+                  : debeSalida
+                    ? "Es tu hora de salida. Registra tu salida para cerrar la jornada."
+                    : "Es tu hora de entrada. Registra tu entrada para empezar la jornada."}
             </p>
             <BigClockButton
               fichajeId={debeSalida ? fichaje?.id ?? null : null}
@@ -497,14 +514,13 @@ export function MobileFichajeProvider() {
               onAction={onFichado}
             />
           </div>
-        </div>
+        </CapaFichaje>
       )}
 
       {/* Pop-up del indicador: tiempo + paralizar */}
       {indicadorOpen && trabajando && (
-        <div
-          className="pointer-events-auto fixed inset-0 z-[60] flex flex-col justify-end bg-black/50"
-          onClick={() => {
+        <CapaFichaje
+          onFondo={() => {
             setIndicadorOpen(false);
             setPidiendoMotivo(false);
           }}
@@ -596,7 +612,7 @@ export function MobileFichajeProvider() {
               Seguir trabajando
             </button>
           </div>
-        </div>
+        </CapaFichaje>
       )}
     </>
   );

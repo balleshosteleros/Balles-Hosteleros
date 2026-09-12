@@ -25,6 +25,7 @@ import { MOTIVO_MIN_CARACTERES } from "@/features/mi-panel/types";
 import { fichajeColorDot } from "@/features/rrhh/data/fichajes";
 import { enqueue } from "../lib/offline-fichaje-db";
 import { useOfflineFichajes } from "../hooks/use-offline-fichajes";
+import { CapaFichaje } from "./CapaFichaje";
 
 type Estado = "sin-fichar" | "trabajando" | "pausa" | "completado";
 
@@ -499,12 +500,12 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
       {/* Reconfirmar la entrada. Corta a propósito: si cada día hay que leerse
           un párrafo, se pulsa en automático y deja de servir de nada. */}
       {confirmandoEntrada && (
-        <div
-          className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
-          onClick={() => setConfirmandoEntrada(false)}
+        <CapaFichaje
+          encima
+          onFondo={() => setConfirmandoEntrada(false)}
         >
           <div
-            className="w-full max-w-md rounded-t-3xl bg-background p-5 pb-8"
+            className="w-full max-w-md self-center rounded-t-3xl bg-background p-5 pb-8"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
@@ -527,18 +528,18 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </CapaFichaje>
       )}
 
       {/* Recién entrado: cerrar aquí casi siempre es un error, y antes costaba
           el turno entero (jornada a 0 h y botón apagado el resto del día). */}
       {avisoPronto && (
-        <div
-          className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
-          onClick={() => setAvisoPronto(null)}
+        <CapaFichaje
+          encima
+          onFondo={() => setAvisoPronto(null)}
         >
           <div
-            className="w-full max-w-md rounded-t-3xl bg-background p-5 pb-8"
+            className="w-full max-w-md self-center rounded-t-3xl bg-background p-5 pb-8"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
@@ -575,17 +576,17 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
               Podrás fichar la salida a partir de los {avisoPronto.minimo} min.
             </p>
           </div>
-        </div>
+        </CapaFichaje>
       )}
 
       {/* Sale antes de su hora: se cierra igual, pero explicándose. */}
       {pidiendoMotivo && (
-        <div
-          className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
-          onClick={() => setPidiendoMotivo(false)}
+        <CapaFichaje
+          encima
+          onFondo={() => setPidiendoMotivo(false)}
         >
           <div
-            className="w-full max-w-md rounded-t-3xl bg-background p-5 pb-8"
+            className="w-full max-w-md self-center rounded-t-3xl bg-background p-5 pb-8"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
@@ -633,17 +634,17 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </CapaFichaje>
       )}
 
       {/* Hoja de elección de tipo (solo si hay más de un tipo disponible hoy). */}
       {eligiendoTipo && (
-        <div
-          className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
-          onClick={() => setEligiendoTipo(false)}
+        <CapaFichaje
+          encima
+          onFondo={() => setEligiendoTipo(false)}
         >
           <div
-            className="w-full max-w-md rounded-t-3xl bg-background p-5 pb-8"
+            className="w-full max-w-md self-center rounded-t-3xl bg-background p-5 pb-8"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
@@ -669,17 +670,17 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
               ))}
             </div>
           </div>
-        </div>
+        </CapaFichaje>
       )}
 
       {/* Hoja de elección de modo (solo si el empleado puede teletrabajar). */}
       {eligiendoModo && (
-        <div
-          className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-black/40"
-          onClick={() => setEligiendoModo(false)}
+        <CapaFichaje
+          encima
+          onFondo={() => setEligiendoModo(false)}
         >
           <div
-            className="w-full max-w-md rounded-t-3xl bg-background p-5 pb-8"
+            className="w-full max-w-md self-center rounded-t-3xl bg-background p-5 pb-8"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
@@ -710,7 +711,7 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </CapaFichaje>
       )}
 
       <AvisoBajaMedicaDialog
