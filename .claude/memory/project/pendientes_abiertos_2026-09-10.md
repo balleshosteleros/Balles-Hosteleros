@@ -2,19 +2,20 @@
 
 Los 5 puntos que quedaron en el aire, con el estado REAL comprobado en código y BD.
 
-## 1. Nóminas brutas, complementos y Seguridad Social — NADA QUE COMPLETAR
-Comprobado línea a línea el 12/09/2026 sobre las 168 líneas de `rrhh_pagos`
-(ene–ago 2026, HABANA y BACANAL).
+## 1. Pagos — COMPLETO, NO QUEDA NADA POR CARGAR (cerrado 12/09/2026)
+Iván: *"¿qué tabla de nóminas dices? se te pasó todo ya de pagos"*. Efectivamente:
+168 líneas de `rrhh_pagos`, enero–agosto 2026, BACANAL (93) y HABANA (75), una sola línea
+por empleado y mes, los 8 meses confirmados y **0 descuadradas**. BALLES no tiene ninguna
+porque no tiene empleados (0 activos): es la gestora, ver [[empresa_balles_hosteleros_gestora]].
 
-- El reparto nómina/complemento **no cambia ningún coste**: Ratios suma `total`, no los
-  conceptos sueltos.
+- El reparto nómina/complemento no cambia ningún coste: Ratios suma `total`.
 - ⚠️ **`ss_empresa` a 0 NO es un hueco de datos: es el valor REAL.** Las 46 líneas sin
   Seguridad Social son de gente que **no va por nómina**, cobra complemento y extras:
   Iván Ballesteros (1.250–1.500 €/mes), Sofía Terrón (100 €/mes, ver
-  [[sofia_terron_siempre_complemento]]), Albero Cieliczka (120–150 €/mes) y dos sueltas
+  [[sofia_terron_siempre_complemento]]), Alberto Cieliczka (120–150 €/mes) y dos sueltas
   de Alejandro Mojica y Ruth González. 43 de esas 46 tienen además la nómina a 0.
   **Sin nómina no hay Seguridad Social de empresa. Poner un número ahí sería inventarlo
-  e inflar el coste.** No tocar.
+  e inflar el coste.** No tocar, y no volver a pedir la tabla.
 
 ### Lo único de verdad roto que salió al mirar
 
