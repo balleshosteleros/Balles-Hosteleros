@@ -1,0 +1,7 @@
+-- Orange Oasis, Coco Colado, Pink Limonade y Papagayo -mas sus versiones sin
+-- alcohol- pasan a enseñar la foto ENTERA, sin recortar nada.
+--
+-- En esas fotos la copa ocupa casi todo el alto del original, asi que
+-- cualquier recorte, por pequeño que sea, se lleva el pie o la decoracion.
+-- Como la tarjeta ya toma la proporcion de su foto, no hace falta recortar:
+-- se guarda tal cual (2:3) y se ve el vaso completo.
