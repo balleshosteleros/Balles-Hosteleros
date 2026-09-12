@@ -265,8 +265,11 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
               <Cctv className="h-4 w-4 text-slate-700" />
               Videovigilancia
             </SheetTitle>
+            {/* En el teléfono el panel es de MIRAR: dar de alta cámaras y tocar
+                conectores es tarea de ordenador, y aquí esos botones se salían
+                de la pantalla (Iván, 12-sep). */}
             {!denegado && (
-              <div className="flex items-center gap-2">
+              <div className="hidden items-center gap-2 md:flex">
                 <Button
                   size="sm"
                   variant="outline"
@@ -305,9 +308,9 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
             </div>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 grid grid-cols-[200px_minmax(0,1fr)]">
+          <div className="flex-1 min-h-0 grid grid-rows-[auto_minmax(0,1fr)] md:grid-rows-none md:grid-cols-[200px_minmax(0,1fr)]">
             {/* Sidebar — lista de cámaras */}
-            <aside className="border-r overflow-y-auto bg-muted/20">
+            <aside className="max-h-[34vh] overflow-y-auto border-b bg-muted/20 md:max-h-none md:border-b-0 md:border-r">
               <div className="px-3 py-2 border-b flex items-center justify-between gap-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                   Cámaras
@@ -520,10 +523,19 @@ function EmptyViewer({ hayCamaras }: { hayCamaras: boolean }) {
             ? "Selecciona al menos una cámara"
             : "Aún no hay cámaras"}
         </p>
+        {/* En el teléfono no se dan de alta cámaras, así que no se manda a un
+            botón que allí no existe. */}
         <p className="mt-1 text-[11px] text-white/50 leading-relaxed">
-          {hayCamaras
-            ? "Marca las cámaras que quieres ver desde el panel lateral."
-            : "Añade tu primera cámara con el botón «Nueva cámara»."}
+          {hayCamaras ? (
+            "Marca arriba las cámaras que quieres ver."
+          ) : (
+            <>
+              <span className="md:hidden">Todavía no hay cámaras dadas de alta.</span>
+              <span className="hidden md:inline">
+                Añade tu primera cámara con el botón «Nueva cámara».
+              </span>
+            </>
+          )}
         </p>
       </div>
     </div>
