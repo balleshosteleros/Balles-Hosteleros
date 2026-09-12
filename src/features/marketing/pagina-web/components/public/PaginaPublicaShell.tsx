@@ -9,6 +9,7 @@ import { MedidorWeb } from "./MedidorWeb";
 import { SorteoMensual } from "./SorteoMensual";
 import { premioMensualDe } from "@/features/marketing/data/premio-mensual";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { Menu, X } from "lucide-react";
 
 export interface PaginaContexto {
   empresaId: string | null;
@@ -392,6 +393,10 @@ function NavPublica({
   enlaces: Array<{ href: string; label: string }>;
 }) {
   const [solida, setSolida] = useState(false);
+  // Menú del móvil: ahí no cabe la fila de enlaces, pero sin él la web se
+  // quedaba en logo y botón de reservar y no había forma de llegar a la carta
+  // ni a la ubicación.
+  const [abierto, setAbierto] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setSolida(window.scrollY > 80);
@@ -433,8 +438,8 @@ function NavPublica({
           <span className="font-semibold tracking-wide text-sm text-white/90">{titulo}</span>
         )}
         {/* Menú como el de GHL (Carta · Ubicación · Contacto · Trabaja con
-            nosotros), pero apuntando a NUESTROS portales. Se oculta en móvil:
-            ahí manda el botón de reservar, que es la acción principal. */}
+            nosotros), pero apuntando a NUESTROS portales. En el móvil la fila
+            no cabe y se abre desde el botón de menú. */}
         <nav
           className="ml-auto hidden items-center gap-8 md:flex"
         >
@@ -457,7 +462,41 @@ function NavPublica({
             Reservar
           </a>
         ) : null}
+        {enlaces.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setAbierto((v) => !v)}
+            aria-expanded={abierto}
+            aria-label={abierto ? "Cerrar menú" : "Abrir menú"}
+            className="ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/90 transition active:scale-90 md:hidden"
+            style={{ border: "1px solid rgba(255,255,255,0.25)" }}
+          >
+            {abierto ? <X className="h-5 w-5" strokeWidth={2} /> : <Menu className="h-5 w-5" strokeWidth={2} />}
+          </button>
+        ) : null}
       </div>
+
+      {/* Desplegable del móvil. Va dentro de la cabecera fija para que baje
+          por encima del contenido y no empuje la página. */}
+      {abierto ? (
+        <nav className="mx-auto mt-2 max-w-6xl px-5 md:hidden">
+          <div
+            className="overflow-hidden rounded-2xl bg-black/95 shadow-[0_12px_40px_rgba(0,0,0,0.6)] backdrop-blur-md"
+            style={{ border: "1px solid rgba(255,255,255,0.14)" }}
+          >
+            {enlaces.map((e) => (
+              <a
+                key={e.href}
+                href={e.href}
+                onClick={() => setAbierto(false)}
+                className="block border-b border-white/10 px-5 py-4 text-[13px] font-semibold uppercase tracking-wider text-white/90 transition-colors last:border-b-0 hover:text-white"
+              >
+                {e.label}
+              </a>
+            ))}
+          </div>
+        </nav>
+      ) : null}
     </header>
   );
 }
