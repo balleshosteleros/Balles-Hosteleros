@@ -249,6 +249,18 @@ export async function getMiNominaUrl(
     const empleadoId = emp?.id as string | undefined;
     if (!empleadoId) return { ok: false, error: "Sin ficha de empleado en esta empresa" };
 
+    // El mes tiene que estar confirmado: hasta entonces la nómina existe, pero
+    // no se le ha publicado.
+    const { data: mes } = await supabase
+      .from("rrhh_nominas_mes")
+      .select("confirmado_en")
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .maybeSingle();
+    if (!(mes as { confirmado_en: string | null } | null)?.confirmado_en) {
+      return { ok: false, error: "Nómina no disponible" };
+    }
+
     return await getNominaArchivoUrl(periodo, empleadoId);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Error" };
@@ -389,17 +401,32 @@ export async function listMisNominas(): Promise<{ ok: boolean; data: { periodo: 
     const empleadoId = emp?.id as string | undefined;
     if (!empleadoId) return { ok: true, data: [] };
 
-    // La RLS ya limita a los meses confirmados: lo no publicado no sale.
-    const { data: filas } = await supabase
-      .from("rrhh_pagos_nominas")
-      .select("periodo")
-      .eq("empresa_id", empresaId)
-      .eq("empleado_id", empleadoId)
-      .not("nomina_path", "is", null);
+    // Solo lo SUYO y solo de meses ya confirmados. La RLS acota los meses a
+    // quien es solo trabajador, pero a quien gestiona pagos le deja ver también
+    // los borradores: en su panel personal no pintan nada, porque todavía no se
+    // le han publicado.
+    const [filasR, mesesR] = await Promise.all([
+      supabase
+        .from("rrhh_pagos_nominas")
+        .select("periodo")
+        .eq("empresa_id", empresaId)
+        .eq("empleado_id", empleadoId)
+        .not("nomina_path", "is", null),
+      supabase
+        .from("rrhh_nominas_mes")
+        .select("periodo")
+        .eq("empresa_id", empresaId)
+        .not("confirmado_en", "is", null),
+    ]);
+
+    const confirmados = new Set(
+      (mesesR.data ?? []).map((m) => (m as { periodo: string }).periodo),
+    );
 
     const porMes = new Map<string, number>();
-    for (const f of filas ?? []) {
+    for (const f of filasR.data ?? []) {
       const p = f.periodo as string;
+      if (!confirmados.has(p)) continue;
       porMes.set(p, (porMes.get(p) ?? 0) + 1);
     }
 
