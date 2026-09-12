@@ -487,6 +487,14 @@ export interface SancionResumen {
   enviadoEn: string;
   expiraEn: string;
   firmadoEn: string | null;
+  /**
+   * Cuándo la ABRIÓ el trabajador (null = todavía no la ha abierto).
+   *
+   * Una sanción va a una sola persona, pero se persigue igual que cualquier
+   * comunicado: hace falta saber si la ha leído (Iván, 12-09-2026). Sale del
+   * acta del documento, que es lo único que lo prueba.
+   */
+  vistoEl: string | null;
 }
 
 /** Recupera la calificación de la falta del resumen guardado en `observaciones`. */
@@ -497,6 +505,35 @@ function gravedadDelResumen(resumen: string | null): GravedadSancion | null {
     ([, label]) => label.toLowerCase() === primera,
   );
   return par?.[0] ?? null;
+}
+
+/**
+ * Cuándo abrió el trabajador cada sanción, de su acta.
+ *
+ * Vale cualquiera de las tres huellas de que la tuvo delante: la abrió
+ * (`abierto`), la dio por leída sin firmar (`leido`) o la firmó (`firmado`).
+ * Se queda la PRIMERA de todas: interesa cuándo la vio por primera vez.
+ */
+async function aperturasDeSanciones(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  documentoIds: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (documentoIds.length === 0) return out;
+  const { data, error } = await supabase
+    .from("firmas_eventos")
+    .select("documento_id, ocurrido_en")
+    .in("documento_id", documentoIds)
+    .in("tipo", ["abierto", "leido", "firmado"])
+    .order("ocurrido_en", { ascending: true });
+  if (error) {
+    console.error("[sancion] aperturas:", error.message);
+    return out;
+  }
+  for (const row of (data ?? []) as { documento_id: string; ocurrido_en: string }[]) {
+    if (!out.has(row.documento_id)) out.set(row.documento_id, row.ocurrido_en);
+  }
+  return out;
 }
 
 /** Lista las sanciones disciplinarias emitidas por la empresa. */
@@ -528,7 +565,9 @@ export async function listSancionesDisciplinarias(): Promise<
       observaciones: string | null;
       empleados: { nombre: string | null; apellidos: string | null; departamentos: { nombre: string | null } | null } | null;
     };
-    const items: SancionResumen[] = (data as unknown as Row[]).map((r) => ({
+    const rows = data as unknown as Row[];
+    const abiertaEn = await aperturasDeSanciones(supabase, rows.map((r) => r.id));
+    const items: SancionResumen[] = rows.map((r) => ({
       id: r.id,
       empleadoId: r.empleado_id,
       empleadoNombre: `${r.empleados?.nombre ?? ""} ${r.empleados?.apellidos ?? ""}`.trim() || "—",
@@ -539,6 +578,9 @@ export async function listSancionesDisciplinarias(): Promise<
       enviadoEn: r.enviado_en,
       expiraEn: r.expira_en,
       firmadoEn: r.firmado_en,
+      // Si la firmó, la vio: el acta lo dice, pero la fecha de firma es la
+      // prueba definitiva cuando el evento de apertura no se pudo grabar.
+      vistoEl: abiertaEn.get(r.id) ?? r.firmado_en,
     }));
     return { ok: true, data: items };
   } catch (err) {

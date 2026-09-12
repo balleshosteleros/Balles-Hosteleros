@@ -195,7 +195,11 @@ function AlcanceCircle({
       </HoverCardTrigger>
       <HoverCardContent align="start" className="w-80 p-0">
         <div className="border-b px-3 py-2 text-xs font-semibold">
-          Lo han abierto {abiertos.length} de {lecturas.length}
+          {/* A una sola persona no se le habla en plural: una sanción va a una,
+              y "lo han abierto 0 de 1" no es castellano (Iván, 12-09-2026). */}
+          {lecturas.length === 1
+            ? abiertos.length === 1 ? "Lo ha abierto" : "Todavía no lo ha abierto"
+            : `Lo han abierto ${abiertos.length} de ${lecturas.length}`}
         </div>
         <div className="max-h-64 overflow-y-auto py-1">
           {abiertos.map((l, i) => (
@@ -1390,8 +1394,11 @@ function sancionAFila(s: SancionResumen): FilaComunicado {
     creadoEl: s.enviadoEn,
     envio: s.enviadoEn,
     recurrencia: "sin_repeticion",
-    alcancePct: 0,
-    lecturas: [],
+    // Una sanción va a UNA persona: su alcance es 0 % o 100 %, y se persigue
+    // igual que cualquier comunicado (Iván, 12-09-2026). La ruleta y el nombre
+    // salen de lo mismo: si consta que la abrió y cuándo.
+    alcancePct: s.vistoEl ? 100 : 0,
+    lecturas: [{ nombre: s.empleadoNombre, vistaAt: s.vistoEl }],
     rolesDestinatarios: [],
     todaEmpresa: false,
     departamentosDestinatarios: s.departamento && s.departamento !== "—" ? [s.departamento] : [],
@@ -1526,6 +1533,21 @@ export function ComunicadosView() {
     ];
     return filas.sort((a, b) => (b.creadoEl ?? "").localeCompare(a.creadoEl ?? ""));
   }, [comunicados, sanciones]);
+
+  /**
+   * El alcance medio de TODO lo que ha salido, sanciones incluidas.
+   *
+   * Cuenta cada comunicado con destinatarios de verdad, también los que están
+   * al 0 % y los que van a una sola persona: antes solo entraban los que ya
+   * tenían alguna lectura, así que la cifra siempre salía bonita y no decía la
+   * verdad (Iván, 12-09-2026). Lo que no ha salido todavía —borradores y
+   * programados— no tiene alcance que medir y no entra.
+   */
+  const alcanceMedio = useMemo(() => {
+    const medibles = listaCompleta.filter(c => c.lecturas.length > 0);
+    if (medibles.length === 0) return 0;
+    return Math.round(medibles.reduce((s, c) => s + c.alcancePct, 0) / medibles.length);
+  }, [listaCompleta]);
 
   const accesoComunicado = (c: Comunicado, campo: string): unknown => {
     if (campo === "estado") return c.estado;
@@ -2009,9 +2031,10 @@ export function ComunicadosView() {
       th: <TableHead key="recurrencia">Recurrencia</TableHead>,
       td: (c) => (
         <TableCell key="recurrencia">
-          {c.tipo === "sancion"
-            ? <span className="text-muted-foreground">—</span>
-            : <Badge variant="outline" className="text-xs">{RECURRENCIA_LABELS[c.recurrencia]}</Badge>}
+          {/* La sanción no se repite NUNCA y no se puede cambiar: pone "No",
+              como cualquier comunicado que sale una sola vez. Un guion dejaba
+              la duda de si faltaba el dato (Iván, 12-09-2026). */}
+          <Badge variant="outline" className="text-xs">{RECURRENCIA_LABELS[c.recurrencia]}</Badge>
         </TableCell>
       ),
     },
@@ -2019,9 +2042,9 @@ export function ComunicadosView() {
       th: <TableHead key="alcance">Alcance</TableHead>,
       td: (c) => (
         <TableCell key="alcance">
-          {c.tipo === "sancion"
-            ? <span className="text-muted-foreground">—</span>
-            : <AlcanceCircle pct={c.alcancePct} lecturas={c.lecturas} tz={tz} />}
+          {/* TODO lo que sale de aquí se persigue igual, aunque vaya a una sola
+              persona: sanciones incluidas (Iván, 12-09-2026). */}
+          <AlcanceCircle pct={c.alcancePct} lecturas={c.lecturas} tz={tz} />
         </TableCell>
       ),
     },
@@ -2064,7 +2087,7 @@ export function ComunicadosView() {
         <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{comunicados.filter(c => c.estado === "borrador").length}</p><p className="text-xs text-muted-foreground">Borradores</p></CardContent></Card>
         <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{comunicados.filter(c => c.estado === "publicado").length}</p><p className="text-xs text-muted-foreground">Publicados</p></CardContent></Card>
         <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{comunicados.filter(c => c.estado === "programado").length}</p><p className="text-xs text-muted-foreground">Programados</p></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{Math.round(comunicados.filter(c => c.alcancePct > 0).reduce((s, c) => s + c.alcancePct, 0) / Math.max(comunicados.filter(c => c.alcancePct > 0).length, 1))}%</p><p className="text-xs text-muted-foreground">Alcance medio</p></CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{alcanceMedio}%</p><p className="text-xs text-muted-foreground">Alcance medio</p></CardContent></Card>
       </div>
 
       <>
