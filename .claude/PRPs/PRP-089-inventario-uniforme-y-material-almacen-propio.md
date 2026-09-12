@@ -1,6 +1,6 @@
 # PRP-089: Inventario de uniforme y material (almacén propio de RRHH)
 
-> **Estado**: IMPLEMENTADO salvo la Fase 8 (carga de las 28 piezas), bloqueada a la espera de decidir firma y fecha
+> **Estado**: COMPLETADO (12-09-2026). Las 32 piezas reales cargadas y sus 32 actas enviadas a firmar.
 > **Fecha**: 2026-09-07
 > **Proyecto**: Balles-Hosteleros
 > **Módulo**: RRHH → Entregas
@@ -267,7 +267,7 @@ alter table public.entregas_material
 **Objetivo**: abrir recuento (congela el teórico), contar, ver diferencia por línea, confirmar → un `ajuste_recuento` por cada diferencia ≠ 0 con la referencia del recuento. Confirmación no destructiva con botón Aceptar, sin `confirm()` nativo.
 **Validación**: teórico 10, contado 8 → tras confirmar el saldo es 8 y hay un ajuste de −2 en el libro con su motivo.
 
-### Fase 8: Carga de las 28 piezas reales ⏳ BLOQUEADA: falta decidir firma y fecha
+### Fase 8: Carga de las 32 piezas reales ✅
 **Objetivo**: movimientos `inicial` para HABANA y BACANAL, cada pieza en su empresa, con tipo y talla reales, distinguiendo lo que está en el almacén de lo que ya está en manos de alguien. Migración versionada e idempotente.
 **Validación**: `material_saldos` cuadra pieza a pieza con el listado real; ejecutar la migración dos veces no duplica nada.
 
@@ -297,6 +297,21 @@ permite deshacer algo firmado, la corrección se escribe como línea contraria.
 no tuviera tipos: además "Camisa" no distinguía manga, y faltaban Americana y
 Ordenador para poder cargar las piezas reales. Se resolvió en la misma
 migración; la "Camisa" antigua se desactiva en vez de borrarse.
+
+**Eran 32 piezas, no 28.** Alejandro Mojica tiene llaves en los dos locales, y
+móvil y ordenador propios en cada uno (cuatro aparatos, no dos compartidos). Y la
+americana no traía talla: la confirmó Iván aparte (L).
+
+**El saldo inicial no era opcional.** Una entrega MUEVE una pieza del almacén a
+las manos; no la crea. Cargar las 32 entregas sin más habría dejado el almacén en
+−32 y el total de la empresa en 0, cuando tiene 32 piezas. Hizo falta un
+movimiento `inicial` de +1 por pieza para que las cuentas digan la verdad en los
+dos escenarios: antes de firmar (32 en almacén) y después (32 en manos).
+
+**La carpeta «Entregas» existía vacía.** `documentos_empleado` ya aceptaba la
+categoría y el portal del trabajador ya la pintaba, pero nada guardaba nada ahí:
+el acta solo vivía en el bucket de firmas, donde el trabajador no entra. Se
+añadió el archivado al firmar, igual que ya hacía el contrato.
 
 **`talla` NULL en la vista.** `group by ... talla` no agrupa los NULL entre sí de
 forma utilizable desde el cliente, así que la vista expone `talla_clave`
@@ -333,4 +348,4 @@ forma utilizable desde el cliente, así que la vista expone `talla_clave`
 
 ---
 
-*Implementado el 10-09-2026 salvo la Fase 8.*
+*Completado el 12-09-2026.*
