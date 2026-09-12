@@ -6,6 +6,7 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { diaNegocioHoy } from "@/features/sala/lib/dia-negocio";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { categoriaEnHorario } from "../lib/horario";
 import type {
   CartaPublica,
   CartaCategoria,
@@ -116,80 +117,6 @@ function rowToCategoria(r: CategoriaRow): CartaCategoria {
   };
 }
 
-/**
- * ¿Toca servir esta categoría ahora mismo?
- *
- * Se evalúa en el SERVIDOR con la hora del restaurante, no la del móvil del
- * comensal: si alguien abre la carta con el reloj en otra zona, debe ver lo
- * que la cocina está sirviendo aquí, no lo que marca su teléfono.
- */
-function categoriaEnHorario(c: CartaCategoria, zona: string): boolean {
-  if (!c.dias_semana?.length && !c.hora_desde && !c.hora_hasta) return true;
-
-  const ahora = new Date();
-  const fmt = new Intl.DateTimeFormat("es-ES", {
-    timeZone: zona,
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  const partes = Object.fromEntries(fmt.formatToParts(ahora).map((p) => [p.type, p.value]));
-
-  if (c.dias_semana?.length) {
-    // Intl da el día como texto; se traduce a 1=lunes … 7=domingo.
-    const dias: Record<string, number> = { lun: 1, mar: 2, mié: 3, mie: 3, jue: 4, vie: 5, sáb: 6, sab: 6, dom: 7 };
-    const clave = (partes.weekday ?? "").toLowerCase().slice(0, 3);
-    const hoy = dias[clave];
-    if (hoy && !c.dias_semana.includes(hoy)) return false;
-  }
-
-  if (c.hora_desde || c.hora_hasta) {
-    const minutos = Number(partes.hour) * 60 + Number(partes.minute);
-    const aMin = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
-    if (c.hora_desde && minutos < aMin(c.hora_desde)) return false;
-    if (c.hora_hasta && minutos > aMin(c.hora_hasta)) return false;
-  }
-
-  return true;
-}
-
-const DIAS_NOMBRE = ["", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
-
-/**
- * El horario de la categoría, escrito para que lo lea un cliente.
- *
- * Solo se usa en la carta abierta desde la WEB: si el menú del día se enseña
- * un domingo, tiene que quedar claro cuándo se sirve. Sin esta frase, enseñar
- * la categoría fuera de su horario sería exactamente la promesa falsa que la
- * ventana horaria venía a evitar.
- */
-function textoHorario(c: CartaCategoria): string | null {
-  const dias = c.dias_semana?.length ? [...c.dias_semana].sort((a, b) => a - b) : null;
-  let parteDias: string | null = null;
-
-  if (dias && dias.length < 7) {
-    const consecutivos = dias.every((d, i) => i === 0 || d === dias[i - 1] + 1);
-    if (dias.length === 1) {
-      parteDias = `los ${DIAS_NOMBRE[dias[0]]}`;
-    } else if (consecutivos) {
-      parteDias = `de ${DIAS_NOMBRE[dias[0]]} a ${DIAS_NOMBRE[dias[dias.length - 1]]}`;
-    } else {
-      const nombres = dias.map((d) => DIAS_NOMBRE[d]);
-      parteDias = `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
-    }
-  }
-
-  const hhmm = (h: string) => h.slice(0, 5);
-  let parteHoras: string | null = null;
-  if (c.hora_desde && c.hora_hasta) parteHoras = `de ${hhmm(c.hora_desde)} a ${hhmm(c.hora_hasta)}`;
-  else if (c.hora_desde) parteHoras = `a partir de las ${hhmm(c.hora_desde)}`;
-  else if (c.hora_hasta) parteHoras = `hasta las ${hhmm(c.hora_hasta)}`;
-
-  if (!parteDias && !parteHoras) return null;
-  const frase = [parteDias, parteHoras].filter(Boolean).join(", ");
-  return `Se sirve ${frase}`;
-}
 
 function rowToItem(r: ItemRow, diaServicio: string): CartaItem {
   return {
@@ -216,24 +143,16 @@ function rowToItem(r: ItemRow, diaServicio: string): CartaItem {
 }
 
 /**
- * Dónde se está leyendo la carta.
+ * La carta, tal y como se sirve AHORA MISMO.
  *
- *  · `local` (por defecto) — el QR de la mesa. Solo se enseña lo que la cocina
- *    sirve AHORA: un menú del día en la carta de un sábado por la noche es
- *    prometer algo que no existe, y el camarero acaba dando explicaciones.
- *  · `web` — el enlace desde la página del restaurante. Aquí manda lo
- *    contrario: quien mira la web un domingo por la tarde está decidiendo si
- *    viene el martes a comer, y el menú del día es justo lo que busca. Se
- *    enseña entero, con su horario escrito al lado.
- *
- * No hace falta reimprimir ningún QR: los de mesa ya apuntan al enlace pelado,
- * que es el modo `local`; es la web la que añade la marca.
+ * Hay un único enlace: el del QR de la mesa y el de la web del restaurante son
+ * el mismo, y lo que se enseña no depende de por dónde entre el cliente, sino
+ * del horario de cada categoría. Un menú del día en la carta de un sábado por
+ * la noche es prometer algo que no existe, y el camarero acaba dando
+ * explicaciones; para eso está la ventana horaria de la categoría.
  */
-export type ModoLectura = "local" | "web";
-
 export async function fetchCartaPorSlug(
   slug: string,
-  modo: ModoLectura = "local",
 ): Promise<CartaPublica | null> {
   try {
     // Carga inicial con service role (server-side, no llega al navegador).
@@ -374,18 +293,13 @@ export async function fetchCartaPorSlug(
 
     const categorias = categoriasRows
       .map(rowToCategoria)
-      // En la mesa solo se enseña lo que se sirve ahora. Desde la web se
-      // enseña todo, y lo que ahora no toca lleva su horario escrito.
-      .filter((c) => modo === "web" || categoriaEnHorario(c, zona))
-      .map((c) => {
-        const fuera = modo === "web" && !categoriaEnHorario(c, zona);
-        return {
-          ...c,
-          fuera_de_horario: fuera,
-          horario_texto: textoHorario(c),
-          items: items.filter((i) => i.categoria_id === c.id),
-        };
-      });
+      // Solo lo que se sirve ahora, se llegue por el QR de la mesa o desde la
+      // web: es la misma carta y un solo enlace.
+      .filter((c) => categoriaEnHorario(c, zona))
+      .map((c) => ({
+        ...c,
+        items: items.filter((i) => i.categoria_id === c.id),
+      }));
     const destacados = items.filter((i) => i.destacado);
 
     const familias: CartaFamilia[] =

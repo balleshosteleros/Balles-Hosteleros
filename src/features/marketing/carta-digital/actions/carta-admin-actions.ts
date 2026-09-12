@@ -89,6 +89,15 @@ export async function actualizarCategoria(input: {
   orden?: number;
   /** null = esta categoría usa el formato de foto de la carta. */
   formatoFoto?: "cuadrada" | "vertical" | null;
+  /** Apartado del primer nivel: comida, bebida u otros. */
+  familia?: "comida" | "bebida" | "otros";
+  /** Dietas especiales: llevan un filete de acento en la navegación. */
+  destacada?: boolean;
+  /** Días en los que se sirve (1 = lunes … 7 = domingo). Vacío = todos. */
+  diasSemana?: number[] | null;
+  /** Franja en la que se sirve, "12:30". null = a cualquier hora. */
+  horaDesde?: string | null;
+  horaHasta?: string | null;
 }): Promise<ActionResult> {
   try {
     const { supabase, empresaId } = await getAppContext();
@@ -101,6 +110,14 @@ export async function actualizarCategoria(input: {
     if (input.visible !== undefined) patch.visible = input.visible;
     if (input.orden !== undefined) patch.orden = input.orden;
     if (input.formatoFoto !== undefined) patch.formato_foto = input.formatoFoto;
+    if (input.familia !== undefined) patch.familia = input.familia;
+    if (input.destacada !== undefined) patch.destacada = input.destacada;
+    // Sin días o sin franja = se sirve siempre. Se guarda null y no una lista
+    // vacía para que la carta no tenga que distinguir entre "ninguno" y "todos".
+    if (input.diasSemana !== undefined)
+      patch.dias_semana = input.diasSemana && input.diasSemana.length > 0 ? input.diasSemana : null;
+    if (input.horaDesde !== undefined) patch.hora_desde = input.horaDesde || null;
+    if (input.horaHasta !== undefined) patch.hora_hasta = input.horaHasta || null;
 
     const { error } = await supabase
       .from("carta_categorias")
