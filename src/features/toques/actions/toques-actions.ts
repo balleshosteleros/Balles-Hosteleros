@@ -82,11 +82,16 @@ export async function canjearRecompensa(
       return { ok: false, error: "Esta recompensa solo puede otorgarla RRHH al Empleado del Año" };
     }
 
-    // Verificar saldo: suma de movimientos - reservado en pendientes
+    // Verificar saldo: suma de movimientos - reservado en pendientes, SIEMPRE
+    // dentro de esta empresa. Los points son de cada empresa y se canjean por
+    // separado: sin el filtro se pagaba un premio de una empresa con el saldo
+    // de la otra, y con dos empresas la consulta del saldo ni siquiera resolvía
+    // (dos filas para un `maybeSingle`).
     const { data: balData } = await admin
       .from("toques_balance")
       .select("toques_canjeables")
       .eq("user_id", user.id)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
     const canjeables = Number(balData?.toques_canjeables ?? 0);
 
@@ -94,6 +99,7 @@ export async function canjearRecompensa(
       .from("toques_canjes")
       .select("coste_toques")
       .eq("user_id", user.id)
+      .eq("empresa_id", empresaId)
       .eq("estado", "pendiente");
     const reservado = ((pendData ?? []) as Array<{ coste_toques: number }>).reduce(
       (acc, r) => acc + Number(r.coste_toques ?? 0),

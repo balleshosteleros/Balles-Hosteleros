@@ -361,12 +361,22 @@ export async function getHallOfFame(supabase: SupabaseClient, empresaId: string,
   return (data ?? []).map((r) => mapGanador(r as Row));
 }
 
-export async function getMisCanjes(supabase: SupabaseClient, userId: string): Promise<Canje[]> {
-  const { data, error } = await supabase
+/**
+ * Los canjes del trabajador EN UNA EMPRESA. Los points son de cada empresa y se
+ * canjean por separado, así que sin la empresa se mezclaban las peticiones de
+ * una con las de la otra.
+ */
+export async function getMisCanjes(
+  supabase: SupabaseClient,
+  userId: string,
+  empresaId?: string | null,
+): Promise<Canje[]> {
+  let consulta = supabase
     .from("toques_canjes")
     .select("*")
-    .eq("user_id", userId)
-    .order("solicitado_at", { ascending: false });
+    .eq("user_id", userId);
+  if (empresaId) consulta = consulta.eq("empresa_id", empresaId);
+  const { data, error } = await consulta.order("solicitado_at", { ascending: false });
   if (error) {
     console.error("[toques_canjes:read_own]", error);
     throw new Error(`No se pudo leer tus canjes: ${error.message}`);
@@ -388,15 +398,19 @@ export async function getCanjesPendientes(supabase: SupabaseClient, empresaId: s
   return (data ?? []).map((r) => mapCanje(r as Row));
 }
 
+/** Points ya comprometidos en canjes pendientes, EN ESTA EMPRESA. */
 export async function getReservadoEnCanjesPendientes(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  empresaId?: string | null,
 ): Promise<number> {
-  const { data, error } = await supabase
+  let consulta = supabase
     .from("toques_canjes")
     .select("coste_toques")
     .eq("user_id", userId)
     .eq("estado", "pendiente");
+  if (empresaId) consulta = consulta.eq("empresa_id", empresaId);
+  const { data, error } = await consulta;
   if (error) {
     console.error("[toques_canjes:read_reservado]", error);
     return 0;

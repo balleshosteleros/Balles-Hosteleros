@@ -130,8 +130,8 @@ export function ToquesView({ empresaIdInicial = null }: ToquesViewProps = {}) {
         getRecompensas(supabase, eId),
         getMiTimeline(supabase, user.id, 30),
         getHallOfFame(supabase, eId, 8),
-        getMisCanjes(supabase, user.id),
-        getReservadoEnCanjesPendientes(supabase, user.id),
+        getMisCanjes(supabase, user.id, eId),
+        getReservadoEnCanjesPendientes(supabase, user.id, eId),
         getCanjesPendientes(supabase, eId).catch(() => [] as Canje[]),
         getReglas(supabase, eId),
       ]);
