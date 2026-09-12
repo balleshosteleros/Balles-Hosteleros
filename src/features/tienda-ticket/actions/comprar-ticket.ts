@@ -19,6 +19,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { crearOrden } from "@/lib/revolut/merchant";
 import { getCredencialesRevolut } from "@/features/ajustes/actions/revolut-config-actions";
 import { getSiteUrl } from "@/lib/site-url";
+import { dominioPublicoDeEmpresa } from "@/features/marketing/pagina-web/services/dominio-empresa";
 import { enviarEmailCompraTicket } from "@/lib/email/tickets/enviar-compra";
 
 const inputSchema = z.object({
@@ -196,6 +197,8 @@ export async function comprarTicketAction(
     };
   }
 
+  const dominioPropio = await dominioPublicoDeEmpresa(empresaId);
+
   const orden = await crearOrden({
     secretKey: cred.secretKey,
     entorno: cred.entorno,
@@ -207,7 +210,12 @@ export async function comprarTicketAction(
       nombre: input.nombre.trim(),
       telefono: input.telefono?.trim() || undefined,
     },
-    redirectUrl: `${getSiteUrl()}/ticket/${input.empresaSlug}/gracias?compra=${compraId}`,
+    // La vuelta del pago cae en el dominio del RESTAURANTE: el cliente acaba
+    // de teclear su tarjeta y ver ahí el dominio de la gestora resta confianza
+    // justo en ese momento. Sin dominio propio se cae al del software.
+    redirectUrl: dominioPropio
+      ? `${dominioPropio.replace(/\/$/, "")}/ticket/gracias?compra=${compraId}`
+      : `${getSiteUrl()}/ticket/${input.empresaSlug}/gracias?compra=${compraId}`,
   });
 
   if (!orden.ok) {

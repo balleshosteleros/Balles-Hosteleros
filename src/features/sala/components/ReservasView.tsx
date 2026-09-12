@@ -160,7 +160,7 @@ import {
   type TipoReserva,
 } from "@/features/sala/lib/tipo-reserva";
 import { AvisoCobrosBanner } from "@/features/sala/components/reservas/AvisoCobrosBanner";
-import { CobroPoliticaBloque } from "@/features/sala/components/reservas/CobroPoliticaBloque";
+import { CobroPoliticaBloque, BotonDevolver } from "@/features/sala/components/reservas/CobroPoliticaBloque";
 import { ReservaTiempoCelda } from "@/features/sala/components/reservas/ReservaTiempoCelda";
 import {
   ColumnaListaHeader,
@@ -7381,6 +7381,17 @@ export function ReservasView() {
                         <p className="font-mono text-xs text-muted-foreground">
                           Código {selectedReserva.ticketCodigo}
                         </p>
+                      )}
+                      {/* Devolver lo que pagó por el ticket. Solo aparece si
+                          hay pago hecho y si el departamento de quien mira
+                          está autorizado en la configuración de Reservas. */}
+                      {selectedReserva.ticketPagadoAt && (
+                        <BotonDevolver
+                          reservaId={selectedReserva.id}
+                          concepto="ticket"
+                          cliente={selectedReserva.cliente || "el cliente"}
+                          onHecho={() => void loadReservas(fecha)}
+                        />
                       )}
                     </div>
                   </div>

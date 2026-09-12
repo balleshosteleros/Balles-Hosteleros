@@ -19,6 +19,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSiteUrl } from "@/lib/site-url";
+import { dominioPublicoDeEmpresa } from "@/features/marketing/pagina-web/services/dominio-empresa";
 import { getCredencialesRevolut } from "@/features/ajustes/actions/revolut-config-actions";
 import {
   crearOrden,
@@ -250,6 +251,9 @@ export async function iniciarPagoTarjeta(token: string): Promise<
     const importeOrden = retiene ? importe : 0;
 
     const cred = await getCredencialesRevolut(r.empresa_id as string);
+    const dominioTarjeta =
+      (await dominioPublicoDeEmpresa(r.empresa_id as string))?.replace(/\/$/, "") ??
+      getSiteUrl();
     if (!cred) {
       // Sin pasarela no se puede pedir la tarjeta. La reserva sigue en pie: el
       // restaurante la pedirá por teléfono.
@@ -283,7 +287,9 @@ export async function iniciarPagoTarjeta(token: string): Promise<
         nombre: [r.cliente_nombre, r.cliente_apellidos].filter(Boolean).join(" ") || undefined,
         telefono: (r.cliente_telefono as string | null) ?? undefined,
       },
-      redirectUrl: `${getSiteUrl()}/reserva/tarjeta/${parsed.data}?estado=vuelta`,
+      // Vuelve al dominio del restaurante: el cliente acaba de dar su tarjeta
+      // y ahí no pinta nada el dominio de la gestora.
+      redirectUrl: `${dominioTarjeta}/reserva/tarjeta/${parsed.data}?estado=vuelta`,
       // SIEMPRE en modo retención, nunca cobro inmediato.
       //
       //   · GARANTÍA    → retiene el importe de verdad: queda bloqueado en la

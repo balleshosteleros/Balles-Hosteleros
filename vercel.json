@@ -154,6 +154,10 @@
     {
       "path": "/api/cron/ayuda-faq",
       "schedule": "0 4 * * 1"
+    },
+    {
+      "path": "/api/cron/tickets-compras-caducar",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

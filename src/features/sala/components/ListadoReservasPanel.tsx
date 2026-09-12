@@ -1046,6 +1046,8 @@ export function ListadoReservasPanel({
     let cancelacionPendienteN = 0;
     let ticketCobrado = 0;
     let ticketSinCanjearN = 0;
+    // Compras que se quedaron a medias: gente que dejó sus datos y no pagó.
+    let ticketSinPagarN = 0;
     let pagado = 0;
     // Dinero que se PUEDE cobrar y que nadie ha cobrado ni perdonado.
     let sinDecidir = 0;
@@ -1076,8 +1078,19 @@ export function ListadoReservasPanel({
       }
 
       if (f.esTicket) {
-        ticketCobrado += f.ticketImporte ?? 0;
-        if (f.esCompraTicket) ticketSinCanjearN += 1;
+        // Una compra a medias enseña su importe en la tabla para saber qué
+        // iba a comprar, pero NO es dinero: sumarla aquí inflaría las ventas
+        // con pagos que nunca llegaron.
+        const cobrada =
+          !f.esCompraTicket ||
+          f.ticketEstadoCompra === "pagada" ||
+          f.ticketEstadoCompra === "canjeada";
+        if (cobrada) {
+          ticketCobrado += f.ticketImporte ?? 0;
+          if (f.esCompraTicket) ticketSinCanjearN += 1;
+        } else {
+          ticketSinPagarN += 1;
+        }
       }
 
       if (f.cobroSinDecidir) {
@@ -1090,9 +1103,11 @@ export function ListadoReservasPanel({
         sinDecidirN += 1;
       }
 
-      // El importe pagado de una compra sin canjear ya se cuenta como ticket:
-      // volver a sumarlo aquí lo contaría dos veces.
-      if (!f.esCompraTicket) pagado += f.importePagado ?? 0;
+      // El dinero de un ticket ya está en "Tickets vendidos" —tanto el de una
+      // compra sin canjear como el de una reserva canjeada—: sumarlo aquí
+      // enseñaría el mismo cobro dos veces y el total no cuadraría con el
+      // banco. En la fila sí se ve, que es donde hace falta.
+      if (!f.esCompraTicket && !f.esTicket) pagado += f.importePagado ?? 0;
     }
 
     return {
@@ -1107,6 +1122,7 @@ export function ListadoReservasPanel({
       cancelacionPendienteN,
       ticketCobrado,
       ticketSinCanjearN,
+      ticketSinPagarN,
       pagado,
       sinDecidir,
       sinDecidirN,
@@ -1221,9 +1237,18 @@ export function ListadoReservasPanel({
             titulo="Tickets vendidos"
             importe={resumen.ticketCobrado}
             detalle={
-              resumen.ticketSinCanjearN > 0
-                ? `${formatNumero(resumen.ticketSinCanjearN)} sin canjear`
-                : "Todos canjeados"
+              [
+                resumen.ticketSinCanjearN > 0
+                  ? `${formatNumero(resumen.ticketSinCanjearN)} sin canjear`
+                  : null,
+                // Se dice en la tarjeta, no solo en la tabla: son ventas casi
+                // hechas y nadie las mira si hay que buscarlas.
+                resumen.ticketSinPagarN > 0
+                  ? `${formatNumero(resumen.ticketSinPagarN)} sin pagar`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") || "Todos canjeados"
             }
             tono="bien"
           />

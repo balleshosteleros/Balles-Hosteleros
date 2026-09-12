@@ -143,6 +143,7 @@ export default async function PublicCatchAllPage({ params, searchParams }: PageP
         empresaSlug: match.empresa_slug,
         empresaNombre: match.nombre_empresa,
         logoUrl: match.isotipo_url,
+        esPortada,
         redes: match.redes,
         empleoActivo: match.empleo_activo,
         reservasActivas: match.reservas_activas,

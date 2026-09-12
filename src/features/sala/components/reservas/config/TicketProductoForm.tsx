@@ -39,6 +39,7 @@ interface Props {
 
 interface FormState {
   nombre: string;
+  clave: string;
   descripcion: string;
   precio: string;
   iva: string;
@@ -58,6 +59,7 @@ interface FormState {
 function toState(p: ReservaTicketProducto | null): FormState {
   return {
     nombre: p?.nombre ?? "",
+    clave: p?.clave ?? "",
     descripcion: p?.descripcion ?? "",
     precio: p ? String(p.precio) : "",
     iva: p ? String(p.iva) : "10",
@@ -89,6 +91,7 @@ export function TicketProductoForm({ producto, onSaved, onCancel }: Props) {
 
   const input: ReservaTicketProductoInput = useMemo(() => ({
     nombre: s.nombre,
+    clave: s.clave.trim().toUpperCase(),
     descripcion: s.descripcion.trim() || null,
     precio: Number(s.precio.replace(",", ".")),
     iva: Number(s.iva.replace(",", ".")),
@@ -147,6 +150,28 @@ export function TicketProductoForm({ producto, onSaved, onCancel }: Props) {
           className="h-9"
           autoFocus
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs">Palabra clave *</Label>
+        <Input
+          value={s.clave}
+          // Se teclea directamente en mayúsculas y sin espacios: si se deja
+          // escribir "cena de fin de año" y se arregla al guardar, el usuario
+          // no entiende por qué le sale otra cosa en la lista.
+          onChange={(e) =>
+            setS({
+              ...s,
+              clave: e.target.value.toUpperCase().replace(/[^A-ZÁÉÍÓÚÜÑ0-9_-]/g, ""),
+            })
+          }
+          placeholder="EXPERIENCIA"
+          maxLength={24}
+          className="h-9 font-mono"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Una sola palabra. Es la que identifica este ticket en los listados.
+        </p>
       </div>
 
       <div className="space-y-1.5">

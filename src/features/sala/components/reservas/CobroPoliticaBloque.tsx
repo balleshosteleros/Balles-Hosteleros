@@ -8,7 +8,7 @@
  * ofrece botones cuando de verdad hay algo que hacer.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, CreditCard, ShieldCheck, AlertTriangle } from "lucide-react";
 import {
@@ -19,6 +19,8 @@ import {
   perdonarCobro,
 } from "@/features/sala/actions/cobro-politicas-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { puedeDevolver } from "@/features/sala/actions/devolucion-actions";
+import { DevolverCobroDialog } from "@/features/sala/components/reservas/DevolverCobroDialog";
 
 /** 40 → "40,00 €" (coma decimal). */
 function eur(n: number | null | undefined): string {
@@ -87,7 +89,7 @@ function Garantia({
     // Mover dinero es irreversible desde aquí: se pregunta antes.
     const ok = await confirm({
       title: "Cobrar la garantía",
-      description: `Se cobrarán ${importe} al cliente. Desde el software no se puede deshacer: una devolución se hace en Revolut.`,
+      description: `Se cobrarán ${importe} al cliente. Si hay que devolvérselos, se hace desde aquí mismo.`,
       confirmLabel: "Cobrar",
     });
     if (!ok) return;
@@ -118,10 +120,18 @@ function Garantia({
     <Marco tono="garantia" titulo="Garantía">
       {dialog}
       {estado === "cobrada" ? (
-        <Texto>
-          Cobrados <b>{importe}</b>
-          {datos.garantiaCobradaAt ? ` el ${fecha(datos.garantiaCobradaAt)}` : ""}.
-        </Texto>
+        <>
+          <Texto>
+            Cobrados <b>{importe}</b>
+            {datos.garantiaCobradaAt ? ` el ${fecha(datos.garantiaCobradaAt)}` : ""}.
+          </Texto>
+          <BotonDevolver
+            reservaId={datos.reservaId}
+            concepto="garantia"
+            cliente="el cliente"
+            onHecho={onCambio}
+          />
+        </>
       ) : estado === "liberada" ? (
         <Texto>Liberada. No se le cobró nada al cliente.</Texto>
       ) : estado === "caducada" ? (
@@ -229,10 +239,18 @@ function Cancelacion({
     <Marco tono="cancelacion" titulo="Política de cancelación">
       {dialog}
       {estado === "cobrada" ? (
-        <Texto>
-          Cobrados <b>{importe}</b>
-          {datos.cancelacionCobradaAt ? ` el ${fecha(datos.cancelacionCobradaAt)}` : ""}.
-        </Texto>
+        <>
+          <Texto>
+            Cobrados <b>{importe}</b>
+            {datos.cancelacionCobradaAt ? ` el ${fecha(datos.cancelacionCobradaAt)}` : ""}.
+          </Texto>
+          <BotonDevolver
+            reservaId={datos.reservaId}
+            concepto="cancelacion"
+            cliente="el cliente"
+            onHecho={onCambio}
+          />
+        </>
       ) : estado === "fallida" ? (
         <>
           <Texto avisa>
@@ -353,5 +371,61 @@ function Boton({
       {cargando && <Loader2 className="h-3 w-3 animate-spin" />}
       {children}
     </button>
+  );
+}
+
+/**
+ * Botón de devolver, solo para quien tenga el permiso configurado.
+ *
+ * ⚠️ Esconderlo NO es la seguridad: el candado de verdad está en la acción de
+ * servidor, que vuelve a comprobar permiso y contraseña. Aquí se oculta para
+ * no ofrecerle a medio equipo un botón que les va a decir que no.
+ */
+export function BotonDevolver({
+  reservaId,
+  concepto,
+  cliente,
+  onHecho,
+}: {
+  reservaId: string;
+  concepto: "garantia" | "cancelacion" | "ticket";
+  cliente: string;
+  onHecho?: () => void;
+}) {
+  const [autorizado, setAutorizado] = useState<boolean | null>(null);
+  const [abierto, setAbierto] = useState(false);
+
+  // Se pregunta al servidor por el departamento: la respuesta no puede salir
+  // del navegador, donde cualquiera la cambiaría.
+  useEffect(() => {
+    puedeDevolver().then(setAutorizado);
+  }, []);
+
+  // Mientras no se sabe no se pinta nada: enseñar el botón y quitarlo medio
+  // segundo después es peor que tardar en enseñarlo.
+  if (autorizado !== true) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setAbierto(true)}
+        className="mt-1 text-[11px] underline text-muted-foreground hover:text-foreground"
+      >
+        Devolver
+      </button>
+      {/* Se monta solo al abrirlo: así los campos nacen vacíos y no hay que
+          limpiarlos a mano entre una devolución y la siguiente. */}
+      {abierto && (
+      <DevolverCobroDialog
+        abierto
+        onCerrar={() => setAbierto(false)}
+        reservaId={reservaId}
+        concepto={concepto}
+        cliente={cliente}
+        onHecho={onHecho}
+      />
+      )}
+    </>
   );
 }

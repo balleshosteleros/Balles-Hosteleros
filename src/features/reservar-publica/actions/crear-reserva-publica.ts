@@ -801,6 +801,37 @@ export async function crearReservaPublicaAction(
       }
       return { ok: false, error: "No pudimos validar tu código. Inténtalo de nuevo." };
     }
+
+    // ── El correo del código pasa a colgar de esta reserva ─────────
+    //
+    // Ese correo se mandó al COMPRAR, cuando no existía ninguna reserva, así
+    // que su apunte quedó sin dueño (`reserva_id` a NULL) con su copia y su
+    // seguimiento de lectura. Ahora que hay reserva, se le asigna: así en
+    // Comunicaciones se ven los DOS correos —el del código y el de la
+    // confirmación— y de los dos se puede abrir la copia real.
+    //
+    // Si falla no se toca la reserva: es histórico, no puede tumbar una
+    // reserva ya creada.
+    // Se busca por el correo del COMPRADOR, no por el de la reserva: puede
+    // comprar uno y reservar otro, y el apunte es de quien recibió el código.
+    const { data: compraEmail } = await admin
+      .from("reserva_ticket_compras")
+      .select("comprador_email")
+      .eq("id", ticketCompraId)
+      .maybeSingle();
+
+    if (compraEmail?.comprador_email) {
+      const { error: errHistorico } = await admin
+        .from("reserva_email_envios")
+        .update({ reserva_id: reservaId })
+        .eq("empresa_id", empresa.id)
+        .eq("tipo", "TICKET_COMPRA")
+        .is("reserva_id", null)
+        .eq("destinatario", compraEmail.comprador_email as string);
+      if (errHistorico) {
+        console.error("[reservar-publica] historico ticket:", errHistorico);
+      }
+    }
   }
 
   await admin.rpc("registrar_visita_cliente_sala", {

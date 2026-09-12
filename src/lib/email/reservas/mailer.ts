@@ -26,6 +26,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/send";
 import { getSiteUrl } from "@/lib/site-url";
+import { dominioPublicoDeEmpresa } from "@/features/marketing/pagina-web/services/dominio-empresa";
 import { tipoDeReserva } from "@/features/sala/lib/tipo-reserva";
 import { ESTADOS_NO_ASISTEN } from "@/features/sala/data/reservas";
 import {
@@ -289,12 +290,25 @@ export async function enviarReservaEmail(
     "NO_SHOW",
     "SOLICITUD_VALORACION",
   ];
+  // ── Dominio de los enlaces que abre el CLIENTE ────────────────────
+  //
+  // Van SIEMPRE al dominio del restaurante, no al del software: quien recibe
+  // el correo es cliente de BACANAL, y ver el dominio de la gestora en el
+  // botón de cancelar su mesa resta confianza justo donde más hace falta.
+  // Estas rutas llevan el token dentro y no necesitan el nombre del local, así
+  // que funcionan igual bajo cualquiera de los dos dominios (comprobado).
+  //
+  // Sin dominio propio verificado se cae al del software, que sigue
+  // funcionando: un local recién dado de alta no se queda sin correos.
+  const dominioCliente =
+    (await dominioPublicoDeEmpresa(empresaId))?.replace(/\/$/, "") ?? getSiteUrl();
+
   // Enlace donde el cliente pone su tarjeta (PRP-082). Solo se manda en los
   // correos que se lo piden: en el resto no hay nada que pagar.
   const tokenGarantia = (reservaData.garantia_token as string | null) ?? null;
   const urlTarjeta =
     tokenGarantia && (tipo === "GARANTIA_SOLICITUD" || tipo === "GARANTIA_PENDIENTE")
-      ? `${getSiteUrl()}/reserva/tarjeta/${tokenGarantia}`
+      ? `${dominioCliente}/reserva/tarjeta/${tokenGarantia}`
       : null;
 
   // Enlace de reconfirmación: la ACCIÓN que se le pide al cliente en este
@@ -311,13 +325,13 @@ export async function enviarReservaEmail(
         .eq("id", reservaId);
       if (errTok) return { ok: false, error: errTok.message };
     }
-    urlReconfirmar = `${getSiteUrl()}/reconfirmar/${token}`;
+    urlReconfirmar = `${dominioCliente}/reconfirmar/${token}`;
   }
 
   const tokenCancelar = (reservaData.cancelacion_token as string | null) ?? null;
   const urlCancelar =
     tokenCancelar && !SIN_ENLACE_CANCELAR.includes(tipo)
-      ? `${getSiteUrl()}/cancelar/${tokenCancelar}`
+      ? `${dominioCliente}/cancelar/${tokenCancelar}`
       : null;
 
   // Enlace de valoración: cada reserva estrena token la primera vez que se le
@@ -358,7 +372,7 @@ export async function enviarReservaEmail(
         .eq("id", reservaId);
       if (errTok) return { ok: false, error: errTok.message };
     }
-    urlValoracion = `${getSiteUrl()}/r/${token}`;
+    urlValoracion = `${dominioCliente}/r/${token}`;
   }
 
   // Idempotencia: si ya hay timestamp en la columna del tipo, no reenviar.

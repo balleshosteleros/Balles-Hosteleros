@@ -507,6 +507,11 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   generalSlotsInactivosCena:   string[];
   // Política de cancelación (texto fijo en código; solo estas dos cifras
   // y el mensaje opcional son configurables por empresa).
+  /**
+   * Departamentos autorizados a DEVOLVER dinero ya cobrado a un cliente.
+   * Vacío = nadie puede devolver. De fábrica, solo DIRECCIÓN.
+   */
+  devolucionDepartamentos: string[];
   cancelacionActiva: boolean;         // interruptor: si está apagada, no se aplica
   cancelacionHorasAntes: number;      // entero 1–168, horas completas
   cancelacionImporteEur: number;      // €, mín 1.00, máx 2 decimales

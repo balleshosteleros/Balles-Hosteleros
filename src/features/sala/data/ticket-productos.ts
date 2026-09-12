@@ -11,6 +11,8 @@ export interface ReservaTicketProducto {
   empresaId: string;
   numeroSecuencial: number;
   nombre: string;
+  /** Palabra que identifica el ticket en listados y enlaces. MAYÚSCULAS. */
+  clave: string | null;
   descripcion: string | null;
   precio: number;
   iva: number;
@@ -43,6 +45,8 @@ export interface ReservaTicketProducto {
 
 export interface ReservaTicketProductoInput {
   nombre: string;
+  /** Palabra que identifica el ticket. MAYÚSCULAS, sin espacios. */
+  clave?: string;
   descripcion?: string | null;
   precio: number;
   iva: number;
@@ -98,6 +102,16 @@ export function estaAgotado(p: Pick<ReservaTicketProducto, "stockModo" | "stockT
 
 export function validarTicketInput(input: ReservaTicketProductoInput): { ok: true } | { ok: false; error: string } {
   if (!input.nombre.trim()) return { ok: false, error: "El nombre es obligatorio" };
+  // La palabra clave es lo que identifica al ticket en los listados: sin ella
+  // la columna vuelve a enseñar la frase larga y deja de leerse.
+  const clave = (input.clave ?? "").trim();
+  if (!clave) return { ok: false, error: "La palabra clave es obligatoria" };
+  if (!/^[A-ZÁÉÍÓÚÜÑ0-9_-]{2,24}$/.test(clave)) {
+    return {
+      ok: false,
+      error: "La palabra clave va en mayúsculas, sin espacios, de 2 a 24 letras",
+    };
+  }
   if (input.precio == null || Number.isNaN(input.precio) || input.precio < 0) {
     return { ok: false, error: "El precio debe ser un número mayor o igual a 0" };
   }

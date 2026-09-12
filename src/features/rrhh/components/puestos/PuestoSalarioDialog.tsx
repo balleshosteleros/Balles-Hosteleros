@@ -58,6 +58,15 @@ const VACACIONES_DEFECTO = "30 días";
 /** Para quien cobra por hora: la parte de vacaciones ya va dentro de su precio. */
 const VACACIONES_INCLUIDAS = "Incluidas en salario";
 
+/**
+ * Cotización a cargo de la EMPRESA sobre el bruto: 23,60% contingencias comunes
+ * + 5,50 desempleo + 0,75 MEI + 0,80 IT + 0,70 IMS + 0,60 FP + 0,20 FOGASA.
+ */
+const TIPO_SS_EMPRESA = 0.3215;
+
+/** Cotización a cargo del TRABAJADOR: 4,70 contingencias + 1,55 desempleo + 0,10 FP + 0,15 MEI. */
+const TIPO_SS_TRABAJADOR = 0.065;
+
 /** Cabeceras de la vista previa del horario. */
 const DIAS_SEMANA = ["L", "M", "X", "J", "V", "S", "D"];
 
@@ -67,6 +76,11 @@ function nivelVacio(nivel: number): NivelSalarial {
     vacaciones: VACACIONES_DEFECTO,
     modoPago: "MENSUAL",
     salarioBruto: 0,
+    ssEmpresa: 0,
+    costeEmpresa: 0,
+    irpfPct: 0,
+    irpfImporte: 0,
+    ssTrabajador: 0,
     nominaNeta: 0,
     efectivoExtra: 0,
     salarioNeto: 0,
@@ -135,6 +149,17 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     return actual && !base.includes(actual) ? [actual, ...base] : base;
   }, [cur?.vacaciones]);
   const costeHoraSugerido = costeHoraDe(cur?.salarioBruto ?? 0, cur?.horasSemanales ?? 0) ?? 0;
+
+  // Lo que el puesto cuesta a la empresa: el bruto más la cotización patronal
+  // (32,15% en hostelería con contrato indefinido, el tipo de sus nóminas).
+  const brutoActual = cur?.salarioBruto ?? 0;
+  const irpfPct = cur?.irpfPct ?? 0;
+  const eur2 = (n: number) => Math.round(n * 100) / 100;
+  const ssTrabajador = eur2(brutoActual * TIPO_SS_TRABAJADOR);
+  const irpfImporte = eur2((brutoActual * irpfPct) / 100);
+  const netoActual = eur2(brutoActual - ssTrabajador - irpfImporte);
+  const ssEmpresa = eur2(brutoActual * TIPO_SS_EMPRESA);
+  const costeEmpresa = eur2(brutoActual + ssEmpresa);
 
   // Vista previa de la semana del horario elegido.
   const turnoById = useMemo(() => {
@@ -325,6 +350,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           puestoId,
           nivel: n.nivel,
           salarioBruto: n.salarioBruto,
+          irpfPct: n.irpfPct,
           jornadaContrato: n.jornadaContrato,
           horasSemanales: n.horasSemanales,
           diasLibres: n.diasLibres,
@@ -499,6 +525,58 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
                   por las horas que fiche.
                 </p>
               )}
+            </div>
+
+            {/* La nómina entera del puesto: lo que se le descuenta al trabajador
+                para llegar al neto, y lo que la empresa paga encima del bruto.
+                Solo se teclean el bruto y el IRPF; lo demás son tipos fijos. */}
+            <div className="rounded-md border border-border/60 bg-muted/40 p-3 space-y-3">
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <p className="text-[11px] text-muted-foreground">Bruto</p>
+                  <p className="text-sm font-semibold tabular-nums">{formatEur(brutoActual)}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-muted-foreground">SS trabajador (6,5%)</p>
+                  <p className="text-sm tabular-nums text-destructive">−{formatEur(ssTrabajador)}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="ps-irpf" className="text-[11px] font-normal text-muted-foreground">
+                    IRPF (%)
+                  </Label>
+                  <NumberInput
+                    id="ps-irpf"
+                    value={irpfPct}
+                    onValueChange={(v) => setCur({ irpfPct: v })}
+                    min={0}
+                    max={47}
+                    decimales
+                    className="h-8"
+                  />
+                  <p className="text-[11px] tabular-nums text-destructive">−{formatEur(irpfImporte)}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-muted-foreground">Neto</p>
+                  <p className="text-sm font-semibold tabular-nums">{formatEur(netoActual)}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-3 border-t pt-3">
+                <div className="col-span-2">
+                  <p className="text-[11px] text-muted-foreground">SS empresa (32,15%)</p>
+                  <p className="text-sm tabular-nums">+{formatEur(ssEmpresa)}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-[11px] text-muted-foreground">Coste total para la empresa</p>
+                  <p className="text-sm font-semibold tabular-nums">{formatEur(costeEmpresa)}</p>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                El IRPF es 0 mientras el sueldo anual no pasa de unos 15.900 €, y el 2% mínimo a
+                partir de ahí. El de cada persona depende de su modelo 145, así que la gestoría
+                puede aplicarle otro.
+              </p>
             </div>
 
             {/* Jornada, horas y días libres SALEN DEL HORARIO: no se teclean. */}

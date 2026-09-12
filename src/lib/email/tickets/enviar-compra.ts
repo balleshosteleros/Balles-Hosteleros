@@ -14,6 +14,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/send";
 import { getSiteUrl } from "@/lib/site-url";
+import { dominioPublicoDeEmpresa } from "@/features/marketing/pagina-web/services/dominio-empresa";
 import { getReservaEmailPlantillaSeed } from "@/lib/seeds/reserva-email-plantillas";
 import {
   AVISO_NO_REPLY,
@@ -94,7 +95,15 @@ export async function enviarEmailCompraTicket(
 
   const nombreCorto = primerNombre(compra.comprador_nombre as string);
   const slug = (empresa.data?.slug as string) ?? "";
-  const enlaceReserva = `${getSiteUrl()}/reservar/${slug}?ticket=${encodeURIComponent(codigo)}`;
+  // El botón va SIEMPRE al dominio del restaurante, no al del software: quien
+  // recibe este correo es cliente de BACANAL, y en un enlace suyo no pinta
+  // nada el dominio de la gestora. Con dominio propio el slug sobra
+  // (`bacanalmadrid.com/reservar` ya dice de qué local se trata); sin él se cae
+  // al software con slug, que sigue funcionando igual.
+  const dominioPropio = await dominioPublicoDeEmpresa(compra.empresa_id as string);
+  const enlaceReserva = dominioPropio
+    ? `${dominioPropio.replace(/\/$/, "")}/reservar?ticket=${encodeURIComponent(codigo)}`
+    : `${getSiteUrl()}/reservar/${slug}?ticket=${encodeURIComponent(codigo)}`;
 
   const vars: Record<string, string> = {
     nombre: (compra.comprador_nombre as string) ?? "",
@@ -226,10 +235,46 @@ export async function enviarEmailCompraTicket(
     AVISO_NO_REPLY,
   ].filter((l) => l !== "").join("\n");
 
+  const asuntoFinal = asunto || `Tu compra en ${marca.nombre}`;
+
+  // ── Histórico y seguimiento, igual que cualquier correo de reserva ──
+  //
+  // La fila se crea ANTES de enviar y todavía SIN reserva: el ticket se compra
+  // antes de elegir día, y hasta que no se canjea no hay reserva a la que
+  // colgarlo (al canjear se le pone). Sin esto, este correo no dejaba copia ni
+  // constaba si el cliente lo había abierto, y la ficha acababa diciendo "Sin
+  // abrir" de un correo que sí se había leído.
+  const { data: filaEnvio, error: errAlta } = await admin
+    .from("reserva_email_envios")
+    .insert({
+      reserva_id: null,
+      empresa_id: compra.empresa_id as string,
+      tipo: "TICKET_COMPRA",
+      destinatario: compra.comprador_email as string,
+      asunto: asuntoFinal,
+      origen: "PORTAL_PUBLICO",
+      enviado_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (errAlta) {
+    console.error("[tickets][enviar-compra] alta del histórico:", errAlta.message);
+  }
+  const envioId = (filaEnvio?.id as string | undefined) ?? null;
+
+  // Píxel de apertura al final del cuerpo. Si la fila no se pudo crear, el
+  // correo sale igual: mejor sin seguimiento que sin correo.
+  const htmlFinal = envioId
+    ? html.replace(
+        /<\/body>/i,
+        `<img src="${getSiteUrl()}/api/email/abierto/${envioId}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" /></body>`,
+      )
+    : html;
+
   const envio = await sendEmail({
     to: compra.comprador_email as string,
-    subject: asunto || `Tu compra en ${marca.nombre}`,
-    html,
+    subject: asuntoFinal,
+    html: htmlFinal,
     text: texto,
     fromName: marca.nombre || undefined,
     empresaId: compra.empresa_id as string,
@@ -237,7 +282,23 @@ export async function enviarEmailCompraTicket(
     brandHeader: false,
   });
 
-  if (!envio.ok) return { ok: false, error: "No se pudo enviar el correo" };
+  if (!envio.ok) {
+    // El correo no salió: se borra el apunte para no dejar en la ficha un
+    // envío que nunca ocurrió.
+    if (envioId) {
+      await admin.from("reserva_email_envios").delete().eq("id", envioId);
+    }
+    return { ok: false, error: "No se pudo enviar el correo" };
+  }
+
+  // La copia se guarda DESPUÉS de enviar, y con el píxel dentro: es el correo
+  // exacto que le llegó al cliente, no una reconstrucción.
+  if (envioId) {
+    await admin
+      .from("reserva_email_envios")
+      .update({ cuerpo_html: htmlFinal })
+      .eq("id", envioId);
+  }
 
   await admin
     .from("reserva_ticket_compras")

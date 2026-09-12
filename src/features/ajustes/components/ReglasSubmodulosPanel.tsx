@@ -24,6 +24,7 @@ import {
   type ProveedoresConfig,
 } from "@/features/logistica/actions/categorias-proveedor-actions";
 import { IvaDefaultConfig } from "@/features/logistica/components/productos/IvaDefaultConfig";
+import { DevolucionesReservasPanel } from "@/features/ajustes/components/DevolucionesReservasPanel";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { ValidadoresSolicitudesConfig } from "@/features/ajustes/components/RrhhConfigTab";
@@ -294,6 +295,15 @@ function SubmoduloRow({
               {submodulo.key === "proveedores" && <OperativaCompraProveedores />}
 
               {submodulo.key === "productos" && <IvaDefaultConfig />}
+
+              {/* Quién puede devolver dinero cobrado a un cliente. Está aquí,
+                  en Ajustes, y NO en el engranaje de Reservas: es dinero que
+                  sale de la cuenta, no un ajuste del día a día. */}
+              {submodulo.key === "reservas" && (
+                <div className="border-t pt-3">
+                  <DevolucionesReservasPanel />
+                </div>
+              )}
             </>
           )}
         </div>

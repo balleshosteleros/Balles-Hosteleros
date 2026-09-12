@@ -381,6 +381,53 @@ export async function capturarOrden(
 }
 
 /**
+ * Devuelve a la tarjeta dinero YA COBRADO.
+ *
+ * No es lo mismo que `liberarOrden`: aquella suelta una retención y el dinero
+ * vuelve al instante porque nunca llegó a salir. Aquí el cobro está hecho y la
+ * devolución tarda los días que tarde el banco del cliente.
+ *
+ * ⚠️ Revolut NO devuelve su comisión de cobro. Devolver 4 € de un cobro de
+ * 4 € deja al comercio en -0,24 €: salieron 4,00 € y solo habían entrado 3,76.
+ * Quien devuelva tiene que saberlo.
+ *
+ * El importe va en euros y se admite parcial: se puede devolver una parte de
+ * lo cobrado. Revolut rechaza devolver más de lo que queda sin devolver.
+ */
+export async function devolverOrden(input: {
+  secretKey: string;
+  entorno: RevolutEntorno;
+  orderId: string;
+  /** Importe en euros a devolver. */
+  importe: number;
+  /** Lo que verá el comercio en su extracto de Revolut. */
+  descripcion: string;
+}): Promise<{ ok: true; orden: RevolutOrder } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(
+      `${BASE_URL[input.entorno]}/orders/${input.orderId}/refund`,
+      {
+        method: "POST",
+        headers: headers(input.secretKey),
+        body: JSON.stringify({
+          amount: aCentimos(input.importe),
+          currency: "EUR",
+          description: input.descripcion,
+        }),
+        cache: "no-store",
+      },
+    );
+    if (!res.ok) return { ok: false, error: await leerError(res) };
+    const orden = (await res.json()) as RevolutOrder;
+    return { ok: true, orden };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    console.error("[revolut] devolverOrden:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
  * Suelta una retención sin cobrar nada: el dinero vuelve al cliente de
  * inmediato, no en los días que tarda una devolución.
  */

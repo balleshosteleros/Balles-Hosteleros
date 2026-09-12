@@ -32,6 +32,7 @@ function rowToTicket(row: Record<string, unknown>): ReservaTicketProducto {
     empresaId: row.empresa_id as string,
     numeroSecuencial: (row.numero_secuencial as number) ?? 0,
     nombre: row.nombre as string,
+    clave: (row.clave as string | null) ?? null,
     descripcion: (row.descripcion as string | null) ?? null,
     precio: Number(row.precio),
     iva: Number(row.iva),
@@ -62,6 +63,9 @@ function rowToTicket(row: Record<string, unknown>): ReservaTicketProducto {
 function inputToRow(input: Partial<ReservaTicketProductoInput>): Record<string, unknown> {
   const db: Record<string, unknown> = {};
   if (input.nombre !== undefined) db.nombre = input.nombre.trim();
+  // Siempre en mayúsculas: es lo que la hace reconocible de un vistazo y lo
+  // que impide dos claves iguales escritas distinto.
+  if (input.clave !== undefined) db.clave = input.clave.trim().toUpperCase() || null;
   if (input.descripcion !== undefined) db.descripcion = input.descripcion;
   if (input.precio !== undefined) db.precio = input.precio;
   if (input.iva !== undefined) db.iva = input.iva;

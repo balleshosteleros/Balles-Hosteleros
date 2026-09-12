@@ -14,11 +14,28 @@ import { friendlyError } from "@/shared/lib/friendly-errors";
  * por cliente a propósito: dos reservas del mismo cliente son dos líneas,
  * porque aquí se analizan reservas, no clientes.
  *
- * Además puede añadir las COMPRAS DE TICKET todavía sin canjear
- * (`reserva_ticket_compras` en estado `pagada`, sin `reserva_id`). Esas filas
- * NO son reservas: viajan marcadas con `esCompraTicket` para que la vista las
- * distinga y para que nunca entren en los totales de reservas.
+ * Además puede añadir las COMPRAS DE TICKET sin canjear (`reserva_ticket_compras`
+ * sin `reserva_id`): tanto las pagadas —dinero cobrado que nadie ha consumido—
+ * como las que se quedaron a medias, que son clientes con nombre y teléfono que
+ * quisieron comprar y no llegaron a pagar. Esas filas NO son reservas: viajan
+ * marcadas con `esCompraTicket` para que la vista las distinga y para que nunca
+ * entren en los totales de reservas.
  */
+
+/**
+ * Cómo se lee cada estado de compra en la columna Estado.
+ *
+ * ⚠️ Sin esto la fila salía con el estado en blanco y una compra a medias
+ * parecía una venta buena: mismo importe, misma pinta, sin nada que dijera que
+ * ese dinero nunca entró.
+ */
+const ESTADO_COMPRA_TEXTO: Record<string, string> = {
+  pagada: "Pagada",
+  pendiente: "Pago sin terminar",
+  caducada: "Pago caducado",
+  fallida: "Pago fallido",
+  cancelada: "Pago cancelado",
+};
 
 /** Qué es cada fila del listado. Una compra sin canjear no es una reserva. */
 export type ListadoTipoFila = "RESERVA" | "COMPRA_TICKET";
@@ -318,7 +335,11 @@ export async function getListadoReservas(params: {
           .from("reserva_ticket_compras")
           .select("*")
           .eq("empresa_id", empresaId)
-          .eq("estado", "pagada")
+          // Pagadas sin canjear (dinero cobrado que nadie ha consumido) y
+          // también las que se quedaron a medias: son clientes con nombre,
+          // correo y teléfono que quisieron comprar y no terminaron. Sin
+          // ellas no aparecían en ninguna pantalla del software.
+          .in("estado", ["pagada", "pendiente", "caducada", "fallida", "cancelada"])
           .is("reserva_id", null)
           .gte("created_at", `${params.desde}T00:00:00Z`)
           .lte("created_at", `${params.hasta}T23:59:59Z`)
@@ -349,7 +370,7 @@ export async function getListadoReservas(params: {
         : Promise.resolve({ data: [] as Record<string, unknown>[] }),
       supabase
         .from("reserva_ticket_productos")
-        .select("id, nombre")
+        .select("id, nombre, clave")
         .eq("empresa_id", empresaId),
       supabase
         .from("reserva_codigos")
@@ -375,9 +396,13 @@ export async function getListadoReservas(params: {
     for (const c of (clientesRes.data ?? []) as Record<string, unknown>[]) {
       clientesMap.set(s(c.id), c);
     }
+    // La columna Ticket enseña la PALABRA CLAVE del producto, no su nombre
+    // comercial: "EXPERIENCIA" identifica de un vistazo lo que una frase de
+    // ocho palabras hacía ilegible. El nombre completo sigue disponible para
+    // quien abra la ficha.
     const ticketsMap = new Map<string, string>();
     for (const t of (ticketsRes.data ?? []) as Record<string, unknown>[]) {
-      ticketsMap.set(s(t.id), s(t.nombre));
+      ticketsMap.set(s(t.id), s(t.clave) || s(t.nombre));
     }
     const cuponesMap = new Map<string, string>();
     for (const c of (cuponesRes.data ?? []) as Record<string, unknown>[]) {
@@ -447,7 +472,10 @@ export async function getListadoReservas(params: {
 
         tipoCategoria: s(r.tipo_categoria),
         tarjetaIntroducida: Boolean(r.tarjeta_introducida),
-        importePagado: num(r.importe_pagado),
+        // Una reserva de ticket se pagó al COMPRARLO, no al reservar: su
+        // `importe_pagado` viene vacío y la columna salía en blanco aunque el
+        // cliente hubiera pagado. Se cae al importe del ticket.
+        importePagado: num(r.importe_pagado) || num(r.ticket_importe),
         pagoPendiente: Boolean(r.pago_pendiente),
 
         tieneGarantia: Boolean(r.tiene_garantia),
@@ -547,6 +575,8 @@ export async function getListadoReservas(params: {
         // El formulario de compra pide un solo campo de nombre; se parte para
         // que las columnas Nombre y Apellidos del listado no queden vacías.
         const partes = nombreCompleto.split(/\s+/);
+        const estadoCompra = s(c.estado);
+        const pagada = estadoCompra === "pagada" || estadoCompra === "canjeada";
         return {
           ...filaBase(),
           esCompraTicket: true,
@@ -565,7 +595,14 @@ export async function getListadoReservas(params: {
           hora: "",
           turno: "",
 
-          estado: "",
+          // Todavía no hay día reservado, pero sí se sabe para cuánta gente
+          // pagó: la columna Comensales salía vacía sin motivo.
+          personas: num(c.unidades),
+
+          // El estado de la compra se enseña tal cual: quien mira la lista
+          // tiene que distinguir de un vistazo lo cobrado de lo que se quedó
+          // a medias.
+          estado: ESTADO_COMPRA_TEXTO[estadoCompra] ?? estadoCompra,
           origen: "Compra ticket",
 
           esTicket: true,
@@ -578,7 +615,10 @@ export async function getListadoReservas(params: {
           ticketCanjeHasta: s(c.canje_hasta),
           ticketPagadoAt: s(c.pagado_at),
 
-          importePagado: num(c.importe_total),
+          // Solo cuenta como dinero lo que Revolut confirmó. Una compra a
+          // medias lleva su importe en `ticketImporte` para saber qué iba a
+          // comprar, pero aquí un 0: nunca entró en caja.
+          importePagado: pagada ? num(c.importe_total) : 0,
 
           clienteId: ficha ? s(ficha.id) : null,
           clienteClasificacion: s(ficha?.clasificacion),

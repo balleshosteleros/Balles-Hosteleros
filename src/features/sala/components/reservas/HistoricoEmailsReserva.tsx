@@ -57,6 +57,8 @@ interface LineaComunicacion {
   fallido: boolean;
   /** Solo en correo: cuándo se abrió, o null si no consta. */
   abiertoAt: string | null;
+  /** `false` = no se guardó copia, así que no se sabe si lo abrió. */
+  conSeguimiento: boolean;
 }
 
 const TIPO_MENSAJERIA_LABEL: Record<string, string> = {
@@ -168,6 +170,7 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
           estado: null,
           fallido: false,
           abiertoAt: e.abiertoAt,
+          conSeguimiento: e.conSeguimiento,
         })),
         ...mensajes.data.map((m): LineaComunicacion => ({
           id: `msg-${m.id}`,
@@ -179,6 +182,7 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
           estado: ESTADO_LABEL[m.estado] ?? m.estado,
           fallido: m.estado === "FALLIDO",
           abiertoAt: null,
+          conSeguimiento: false,
         })),
       ].sort((a, b) => b.enviadoAt.localeCompare(a.enviadoAt));
 
@@ -266,7 +270,10 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
                     del propio correo: que conste es señal de que llegó a un
                     buzón real. Va con sobre abierto o cerrado, que se distingue
                     de un vistazo sin tener que leer. */}
-                {e.via === "CORREO" && (
+                {/* Sin copia guardada no hubo seguimiento, así que no se
+                    pinta nada: decir "Sin abrir" de un correo que nadie midió
+                    es afirmar algo que no consta. */}
+                {e.via === "CORREO" && e.conSeguimiento && (
                   <>
                     {e.destinatario ? " · " : ""}
                     <span
@@ -334,8 +341,8 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
             />
           ) : (
             <p className="py-8 text-center text-xs text-muted-foreground">
-              De este correo no se guardó una copia: se envió antes de que el
-              software empezara a guardarlas.
+              De este correo no se guardó una copia, así que no se puede
+              enseñar tal y como le llegó al cliente.
             </p>
           )}
         </DialogContent>

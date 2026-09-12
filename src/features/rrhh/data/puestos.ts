@@ -24,6 +24,21 @@ export interface NivelSalarial {
   nominaNeta: number;
   efectivoExtra: number;
   salarioNeto: number;
+  /**
+   * Lo que la empresa paga a la Seguridad Social POR este trabajador, encima del
+   * bruto: 32,15% en hostelería con contrato indefinido (23,60 contingencias
+   * comunes + 5,50 desempleo + 0,75 MEI + 0,80 IT + 0,70 IMS + 0,60 FP +
+   * 0,20 FOGASA), verificado contra las nóminas reales.
+   */
+  ssEmpresa: number;
+  /** Lo que cuesta el puesto de verdad: bruto + cotización de la empresa. */
+  costeEmpresa: number;
+  /** Retención de IRPF del puesto, en tanto por ciento (2 = 2%). */
+  irpfPct: number;
+  /** Euros de IRPF retenidos al mes. */
+  irpfImporte: number;
+  /** Cotización a cargo del trabajador: 6,50% del bruto. */
+  ssTrabajador: number;
   jornadaContrato: string;
   horasSemanales: number;
   diasLibres: number;
@@ -60,6 +75,14 @@ export interface PuestoSalarial {
   vacaciones: string;
   /** Salario BRUTO mensual: cifra principal del puesto. */
   salarioBruto: number;
+  /** Cotización a cargo de la empresa por este puesto (32,15% del bruto). */
+  ssEmpresa: number;
+  /** Coste real del puesto: bruto + cotización de la empresa. */
+  costeEmpresa: number;
+  /** Retención de IRPF del puesto, en tanto por ciento. */
+  irpfPct: number;
+  irpfImporte: number;
+  ssTrabajador: number;
   // Neto (interno): se conserva por compatibilidad con contratación/gestoría.
   nominaNeta: number;
   efectivoExtra: number;

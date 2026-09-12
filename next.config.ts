@@ -87,7 +87,11 @@ const PORTALES = [
   // restaurante la keyword se perdía y la reserva entraba SIN canal (origen
   // null), justo lo que estos enlaces existen para medir (08-sep).
   { ruta: 'reservar', campo: 'slug', ficha: true },
-  { ruta: 'ticket', campo: 'slug' },
+  // `ficha: true` por la vuelta del pago: Revolut devuelve al cliente a
+  // `/ticket/gracias`, y sin esta regla el dominio del restaurante tomaba
+  // "gracias" por el nombre del local y le mandaba de vuelta a la tienda, sin
+  // su código y sin saber si había pagado.
+  { ruta: 'ticket', campo: 'slug', ficha: true },
   // Concurso mensual de las campañas de email: la ficha es la clave del mes
   // (`/concurso/octubre_halloween`). Va en el dominio del restaurante porque el
   // enlace lo abre su cliente, y ahí no pinta nada la marca de la gestora.
@@ -163,8 +167,8 @@ async function portalesSinSlug() {
         // como aquí no había nada que le pusiera el slug, la redirección de
         // dominio propio tomaba el ID por el nombre del local y lo borraba: el
         // candidato tocaba una vacante y volvía siempre a la lista (05-sep).
-        // Solo en los portales que tienen ficha: en los demás (`carta`,
-        // `ticket`) esa ruta no existe y la regla sobraría.
+        // Solo en los portales que tienen ficha: en `carta` esa ruta no
+        // existe y la regla sobraría.
         if ('ficha' in portal && portal.ficha) {
           // El patrón excluye el propio slug: los rewrites se aplican en
           // CADENA, así que sin esa exclusión la regla volvía a capturar el

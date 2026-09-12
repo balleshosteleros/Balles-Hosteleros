@@ -27,6 +27,8 @@ export interface ReservaEmailEnvio {
    * Outlook y quien bloquea imágenes leen sin cargarlo.
    */
   abiertoAt: string | null;
+  /** `false` = de este correo no se guardó copia, así que no se sabe si lo abrió. */
+  conSeguimiento: boolean;
 }
 
 async function getCtx() {
@@ -51,7 +53,7 @@ export async function listReservaEmailEnvios(reservaId: string) {
     const { data, error } = await supabase
       .from("reserva_email_envios")
       .select(
-        "id, tipo, destinatario, asunto, usuario_nombre, origen, enviado_at, abierto_at",
+        "id, tipo, destinatario, asunto, usuario_nombre, origen, enviado_at, abierto_at, cuerpo_html",
       )
       .eq("reserva_id", reservaId)
       .eq("empresa_id", empresaId)
@@ -67,6 +69,10 @@ export async function listReservaEmailEnvios(reservaId: string) {
       origen: row.origen as ReservaEmailEnvio["origen"],
       enviadoAt: row.enviado_at as string,
       abiertoAt: (row.abierto_at as string | null) ?? null,
+      // Sin copia guardada no hubo seguimiento de lectura: de ese correo no
+      // se puede decir ni que se abrió ni que no. Se distingue de "enviado
+      // con seguimiento y todavía sin abrir", que sí es un dato.
+      conSeguimiento: row.cuerpo_html != null,
     }));
     return { ok: true, data: envios };
   } catch (err: unknown) {

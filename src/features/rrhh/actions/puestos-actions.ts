@@ -6,6 +6,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { costeHoraSegunModo, type ModoPago } from "@/features/rrhh/lib/coste-hora";
+
+/**
+ * Cotización a cargo de la EMPRESA sobre el bruto: 23,60% contingencias comunes
+ * + 5,50 desempleo + 0,75 MEI + 0,80 IT + 0,70 IMS + 0,60 FP + 0,20 FOGASA.
+ * Sale exactamente este 32,15% en las nóminas de las tres sociedades. El
+ * desempleo sube a 6,70% en contratos temporales, así que el día que un puesto
+ * cotice distinto se escribe su cifra en la fila en vez de tocar esto.
+ */
+const TIPO_SS_EMPRESA = 0.3215;
+
+/** Cotización a cargo del TRABAJADOR: 4,70 contingencias + 1,55 desempleo + 0,10 FP + 0,15 MEI. */
+const TIPO_SS_TRABAJADOR = 0.065;
+
+/** Retención mínima que se aplica una vez se pasa del umbral (art. 86 RIRPF). */
+const IRPF_MINIMO = 0.02;
+
+/** Retribución anual a partir de la cual hay obligación de retener (aprox.). */
+const UMBRAL_RETENCION = 15900;
+
+const round2 = (n: number) => (Number.isFinite(n) ? Math.round(n * 100) / 100 : 0);
 import {
   NORMAS_BASE,
   type PuestoSalarial,
@@ -35,6 +55,11 @@ type SalarioEmbed = {
   nomina_neta: number | string | null;
   efectivo_extra: number | string | null;
   salario_neto: number | string | null;
+  ss_empresa: number | string | null;
+  coste_empresa: number | string | null;
+  irpf_pct: number | string | null;
+  irpf_importe: number | string | null;
+  ss_trabajador: number | string | null;
   jornada_contrato: string | null;
   horas_semanales: number | string | null;
   dias_libres: number | null;
@@ -71,6 +96,15 @@ function embedToNivel(sal: SalarioEmbed): NivelSalarial {
     nominaNeta: Number(sal.nomina_neta) || 0,
     efectivoExtra: Number(sal.efectivo_extra) || 0,
     salarioNeto: Number(sal.salario_neto) || 0,
+    irpfPct: Number(sal.irpf_pct) || 0,
+    irpfImporte:
+      Number(sal.irpf_importe) ||
+      round2(Number(sal.salario_bruto) * (Number(sal.irpf_pct) || 0) / 100),
+    ssTrabajador:
+      Number(sal.ss_trabajador) || round2(Number(sal.salario_bruto) * TIPO_SS_TRABAJADOR),
+    ssEmpresa: Number(sal.ss_empresa) || round2(Number(sal.salario_bruto) * TIPO_SS_EMPRESA),
+    costeEmpresa:
+      Number(sal.coste_empresa) || round2(Number(sal.salario_bruto) * (1 + TIPO_SS_EMPRESA)),
     jornadaContrato: sal.jornada_contrato ?? "",
     horasSemanales: Number(sal.horas_semanales) || 0,
     // Si la fila aún no lo tiene escrito, se deduce para no enseñar un 0 falso.
@@ -111,6 +145,15 @@ function rowToPuesto(r: PuestoRow, conCronograma: Set<string>): PuestoSalarial {
     nominaNeta: Number(cab?.nomina_neta) || 0,
     efectivoExtra: Number(cab?.efectivo_extra) || 0,
     salarioNeto: Number(cab?.salario_neto) || 0,
+    irpfPct: Number(cab?.irpf_pct) || 0,
+    irpfImporte:
+      Number(cab?.irpf_importe) ||
+      round2(Number(cab?.salario_bruto) * (Number(cab?.irpf_pct) || 0) / 100),
+    ssTrabajador:
+      Number(cab?.ss_trabajador) || round2(Number(cab?.salario_bruto) * TIPO_SS_TRABAJADOR),
+    ssEmpresa: Number(cab?.ss_empresa) || round2(Number(cab?.salario_bruto) * TIPO_SS_EMPRESA),
+    costeEmpresa:
+      Number(cab?.coste_empresa) || round2(Number(cab?.salario_bruto) * (1 + TIPO_SS_EMPRESA)),
     jornadaContrato: cab?.jornada_contrato ?? "",
     horasSemanales: Number(cab?.horas_semanales) || 0,
     diasLibres: cab?.dias_libres ?? 0,
@@ -138,7 +181,7 @@ export async function listPuestosEmpresa(): Promise<{
       supabase
         .from("puestos")
         .select(
-          "id, nombre, local_id, locales(nombre), convenio_colectivo, tipo_contrato_defecto, validador_departamento_id, validador_departamento:departamentos!validador_departamento_id(nombre), departamentos!departamento_id(id, nombre), puesto_salarios(nivel, modo_pago, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, coste_hora, precio_hora_extra, vacaciones, horario_semanal, observaciones, estado, updated_at)",
+          "id, nombre, local_id, locales(nombre), convenio_colectivo, tipo_contrato_defecto, validador_departamento_id, validador_departamento:departamentos!validador_departamento_id(nombre), departamentos!departamento_id(id, nombre), puesto_salarios(nivel, modo_pago, salario_bruto, nomina_neta, efectivo_extra, salario_neto, ss_empresa, coste_empresa, irpf_pct, irpf_importe, ss_trabajador, jornada_contrato, horas_semanales, dias_libres, coste_hora, precio_hora_extra, vacaciones, horario_semanal, observaciones, estado, updated_at)",
         )
         .eq("empresa_id", empresaId),
       supabase
@@ -173,6 +216,12 @@ export interface UpsertSalarioInput {
   /** Sueldo fijo al mes (MENSUAL) o precio por hora (HORAS). */
   modoPago?: ModoPago;
   salarioBruto?: number;
+  /**
+   * Retención de IRPF del puesto en tanto por ciento. Si no viene se deduce:
+   * 0 mientras el bruto anual no pasa del umbral de retención, y el 2% mínimo
+   * a partir de ahí.
+   */
+  irpfPct?: number;
   nominaNeta?: number;
   efectivoExtra?: number;
   salarioNeto?: number;
@@ -227,15 +276,35 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
     if (!input.vacaciones?.trim()) return { ok: false, error: "Las vacaciones del puesto son obligatorias" };
     // Observaciones es el único campo que puede quedarse en blanco: es una nota
     // libre, no un dato que viaje al contrato del empleado.
+    // Tipo de IRPF del puesto: el que venga, o el mínimo que corresponda por su
+    // retribución anual. El real de cada persona depende de su modelo 145.
+    const irpfPct =
+      input.irpfPct != null && Number.isFinite(input.irpfPct)
+        ? input.irpfPct
+        : bruto * 12 >= UMBRAL_RETENCION
+          ? IRPF_MINIMO * 100
+          : 0;
+
     const payload = {
       empresa_id: empresaId,
       puesto_id: input.puestoId,
       nivel: input.nivel ?? 1,
       modo_pago: modoPago,
       salario_bruto: bruto,
+      // Lo que el puesto cuesta a la empresa. Se GUARDA calculado (no se deduce
+      // al leer) para que quede la cifra con la que se decidió: el tipo cambia
+      // en temporales y según la actividad.
+      ss_empresa: round2(bruto * TIPO_SS_EMPRESA),
+      coste_empresa: round2(bruto * (1 + TIPO_SS_EMPRESA)),
+      irpf_pct: irpfPct,
+      irpf_importe: round2((bruto * irpfPct) / 100),
+      ss_trabajador: round2(bruto * TIPO_SS_TRABAJADOR),
       nomina_neta: null,
       efectivo_extra: 0,
-      salario_neto: null,
+      // Neto orientativo del puesto con la misma regla que el coste: cotización
+      // del trabajador (6,50%) y el 2% de IRPF mínimo cuando el bruto anual pasa
+      // del umbral de retención. El neto REAL de cada persona depende de su 145.
+      salario_neto: round2(bruto * (1 - TIPO_SS_TRABAJADOR - irpfPct / 100)),
       jornada_contrato: input.jornadaContrato ?? null,
       horas_semanales: input.horasSemanales ?? null,
       dias_libres: input.diasLibres ?? null,

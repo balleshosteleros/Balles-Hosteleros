@@ -75,6 +75,7 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     generalSlotsInactivosCena: Array.isArray(row.general_slots_inactivos_cena)
       ? (row.general_slots_inactivos_cena as string[])
       : [],
+    devolucionDepartamentos:         (row.devolucion_departamentos as string[] | null) ?? ["DIRECCIÓN"],
     cancelacionActiva:               Boolean(row.cancelacion_activa ?? true),
     cancelacionHorasAntes:           (row.cancelacion_horas_antes as number) ?? CANCELACION_HORAS_DEFAULT,
     cancelacionImporteEur:           Number(row.cancelacion_importe_eur ?? CANCELACION_IMPORTE_DEFAULT),
@@ -197,6 +198,7 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("generalCerradoCena"   in updates) db.general_cerrado_cena   = updates.generalCerradoCena;
     if ("generalSlotsInactivosComida" in updates) db.general_slots_inactivos_comida = updates.generalSlotsInactivosComida ?? [];
     if ("generalSlotsInactivosCena"   in updates) db.general_slots_inactivos_cena   = updates.generalSlotsInactivosCena   ?? [];
+    if ("devolucionDepartamentos"         in updates) db.devolucion_departamentos         = updates.devolucionDepartamentos;
     if ("cancelacionActiva"               in updates) db.cancelacion_activa                = updates.cancelacionActiva;
     if ("cancelacionHorasAntes"           in updates) db.cancelacion_horas_antes           = updates.cancelacionHorasAntes;
     if ("cancelacionImporteEur"           in updates) db.cancelacion_importe_eur           = updates.cancelacionImporteEur;
@@ -362,5 +364,38 @@ async function barrerReconfirmacionesPendientesPorCambio(
         console.error("[reservas-config] barrido send:", e),
       );
     }
+  }
+}
+
+/**
+ * Departamentos de la empresa activa, para elegir quién puede devolver.
+ *
+ * Se devuelven por NOMBRE porque así se guarda la autorización: los
+ * departamentos se llaman igual en todas las empresas y guardar el nombre
+ * evita que la configuración se quede coja al montar una empresa nueva.
+ */
+export async function getDepartamentosEmpresa(): Promise<string[]> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return [];
+    const empresaId = await getEmpresaActivaForUser(
+      supabase as unknown as SupabaseClient,
+      user.id,
+    );
+    if (!empresaId) return [];
+
+    const { data } = await supabase
+      .from("departamentos")
+      .select("nombre")
+      .eq("empresa_id", empresaId)
+      .order("nombre", { ascending: true });
+
+    return [...new Set((data ?? []).map((d) => String(d.nombre)))];
+  } catch (err) {
+    console.error("[reservas-config] getDepartamentosEmpresa:", err);
+    return [];
   }
 }
