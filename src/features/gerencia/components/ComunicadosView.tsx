@@ -105,7 +105,7 @@ import { IOActions } from "@/shared/io";
 import { comunicadosIO } from "@/features/gerencia/io/comunicados.io";
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
-import { SancionDisciplinariaView } from "@/features/gerencia/components/SancionDisciplinariaView";
+import { SancionDisciplinariaView } from "@/features/gerencia/components/sancion-disciplinaria-piezas";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { getOpcionesSegmento } from "@/features/notificaciones/actions/aviso-manual-actions";
 import { ComunicadoTarjeta } from "@/features/gerencia/components/ComunicadoTarjeta";
