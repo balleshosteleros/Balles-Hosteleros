@@ -22,6 +22,13 @@ export interface PointsNivelPaso {
 /** Lo que enseña la píldora de Points: en qué nivel va y cuántos points tiene. */
 export interface PointsResumen {
   userId: string;
+  /**
+   * Empresa con la que se calculó. Es la que manda para saber si el marcador se
+   * ha quedado viejo: el logo de arriba lo pone el navegador y este resumen lo
+   * puede haber resuelto el servidor con OTRA empresa (la de la cookie), y
+   * entonces se enseñaban los points de una empresa con el logo de la otra.
+   */
+  empresaId: string;
   /** Saldo: los points que tiene ahora mismo para gastar. */
   saldo: number;
   /** Acumulados de siempre: son los que mandan en el nivel. */
@@ -81,6 +88,7 @@ export async function getPointsResumen(
 
   const comun = {
     userId,
+    empresaId,
     saldo: balance.toquesCanjeables,
     acumulados: balance.toquesAcumulados,
     escalera,

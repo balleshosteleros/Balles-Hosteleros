@@ -12,6 +12,7 @@ import { getMobileIdentidad } from "@/features/mi-panel/mobile/lib/mobile-identi
 import { getCatalogoEmpresa } from "@/features/empresa/lib/empresa-server";
 import { CatalogoEmpresaProvider } from "@/features/empresa/contexts/catalogo-empresa-context";
 import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate";
+import { EmpresaActivaSeed } from "@/features/empresa/components/EmpresaActivaSeed";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +103,10 @@ export default async function MobileLayout({ children }: { children: React.React
       esMatriz={catalogoEmpresa.esMatriz}
     >
     <MobileIdentidadProvider value={identidad}>
+    {/* Con qué empresa ha respondido el servidor. Sin esto, el teléfono se
+        quedaba con la empresa que recordaba el navegador y podía enseñar los
+        datos de una empresa con el rótulo de otra (Iván, 12-sep). */}
+    <EmpresaActivaSeed empresaActivaId={identidad.empresaActual?.id ?? null} />
     <div
       className="flex min-h-dvh flex-col overflow-x-clip bg-background text-foreground antialiased [--nav-h:calc(3.5rem+env(safe-area-inset-bottom))]"
     >

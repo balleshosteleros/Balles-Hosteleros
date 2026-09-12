@@ -74,8 +74,12 @@ interface Flotante {
  */
 export function PointsPill({ inicial = null, href = "/m/points", className }: Props) {
   const supabase = useMemo(() => createClient(), []);
-  const { empresaActual } = useEmpresa();
-  const empresaDbId = empresaActual?.dbId ?? null;
+  // `empresaVisible` es la empresa que el SERVIDOR dice estar sirviendo — la
+  // misma con la que se pinta el logotipo de arriba. La elegida en el navegador
+  // (`empresaActual`) puede ir por delante o por detrás un instante, y con ella
+  // se acababa enseñando el saldo de una empresa bajo el logo de otra.
+  const { empresaVisible, empresas } = useEmpresa();
+  const empresaDbId = empresaVisible?.dbId ?? null;
   const esMovil = useIsMobile();
   const router = useRouter();
 
@@ -111,19 +115,18 @@ export function PointsPill({ inicial = null, href = "/m/points", className }: Pr
     }
   }, [supabase, empresaDbId]);
 
-  // Sin datos del servidor, o al cambiar de empresa: los points son de CADA
-  // empresa, así que al cambiar de empresa el marcador cambia entero. Lo que
-  // viene del servidor vale para el primer pintado y no se vuelve a pedir.
-  const yaPintado = useRef(false);
+  // Los points son de CADA empresa, así que el marcador tiene que ser SIEMPRE
+  // el de la empresa que el usuario ve arriba. Lo que trae el servidor sirve
+  // para el primer pintado, pero si la empresa del selector es otra —pasa al
+  // cambiar de empresa, o cuando el navegador rearma su última empresa después
+  // de que el servidor ya haya resuelto la suya— se vuelve a pedir. Si no, se
+  // quedaba el saldo de una empresa debajo del logo de otra (Iván, 12-sep).
+  const empresaDeLosDatos = datos?.empresaId ?? null;
   useEffect(() => {
     if (!empresaDbId) return;
-    if (!yaPintado.current) {
-      yaPintado.current = true;
-      if (inicial) return;
-    }
+    if (empresaDeLosDatos === empresaDbId) return;
     void cargar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaDbId, cargar]);
+  }, [empresaDbId, empresaDeLosDatos, cargar]);
 
   // Cada point que entra se ve caer en el marcador, en el momento.
   useEffect(() => {
@@ -173,6 +176,12 @@ export function PointsPill({ inicial = null, href = "/m/points", className }: Pr
 
   const color = datos.nivelColor || COLOR_NIVEL_POR_DEFECTO;
   const pct = Math.min(100, Math.max(0, datos.progresoPct));
+  // El nombre que se enseña es el de la empresa CON LA QUE SE CALCULÓ el saldo,
+  // no el de la del selector: así el rótulo nunca miente sobre de quién son.
+  // Si la lista de empresas aún no ha llegado, no se pone nombre: mejor sin
+  // rótulo que con el de otra empresa.
+  const nombreEmpresaDeLosDatos =
+    empresas.find((e) => e.dbId === datos.empresaId)?.nombre ?? null;
 
   function abrir() {
     // En el teléfono Points tiene su pantalla; en el ordenador se abre encima
@@ -237,7 +246,7 @@ export function PointsPill({ inicial = null, href = "/m/points", className }: Pr
         <HoverCard openDelay={120} closeDelay={80}>
           <HoverCardTrigger asChild>{boton}</HoverCardTrigger>
           <HoverCardContent align="end" className="w-80 p-4">
-            <Escalera datos={datos} />
+            <Escalera datos={datos} empresa={nombreEmpresaDeLosDatos} />
           </HoverCardContent>
         </HoverCard>
       )}
@@ -245,7 +254,9 @@ export function PointsPill({ inicial = null, href = "/m/points", className }: Pr
       <Dialog open={ventanaAbierta} onOpenChange={setVentanaAbierta}>
         <DialogContent className="h-[90vh] max-w-5xl overflow-y-auto p-0">
           <DialogHeader className="sticky top-0 z-10 border-b bg-background px-5 py-3">
-            <DialogTitle className="text-base">Points</DialogTitle>
+            <DialogTitle className="text-base">
+              Points{nombreEmpresaDeLosDatos ? ` · ${nombreEmpresaDeLosDatos}` : ""}
+            </DialogTitle>
           </DialogHeader>
           <div className="p-4">{ventanaAbierta && <ToquesView />}</div>
         </DialogContent>
@@ -292,7 +303,7 @@ function Insignia({
 }
 
 /** La escalera de niveles: dónde está y qué le queda por delante. */
-function Escalera({ datos }: { datos: PointsResumen }) {
+function Escalera({ datos, empresa }: { datos: PointsResumen; empresa: string | null }) {
   const pct = Math.min(100, Math.max(0, datos.progresoPct));
   return (
     <div className="space-y-3">
@@ -303,6 +314,13 @@ function Escalera({ datos }: { datos: PointsResumen }) {
           <div className="text-xs text-muted-foreground">
             {datos.acumulados} points ganados · {datos.saldo} para gastar
           </div>
+          {/* De qué empresa son: cada una tiene los suyos, y sin decirlo parecía
+              un descuadre al cambiar de empresa (Iván, 12-sep). */}
+          {empresa && (
+            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {empresa}
+            </div>
+          )}
         </div>
       </div>
 
