@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect } from "react";
 import { X, Star, Utensils } from "lucide-react";
+import { proporcionFoto } from "../../lib/proporcion-foto";
 import type { CartaItem } from "../../types";
 import { LikeButton } from "./LikeButton";
 import { AlergenoIcon, alergenoLabel } from "./FiltroAlergenos";
@@ -64,8 +65,13 @@ export function ItemFichaModal({
 
         {/* Hero foto */}
         <div
-          className="relative aspect-[4/3] w-full overflow-hidden"
-          style={{ backgroundColor: "var(--carta-superficie-enfasis)" }}
+          className="relative w-full overflow-hidden"
+          style={{
+            backgroundColor: "var(--carta-superficie-enfasis)",
+            // La misma proporción que en la tarjeta: al abrir la ficha se ve
+            // la misma foto, no un recorte distinto del mismo plato.
+            aspectRatio: proporcionFoto(item.foto_url),
+          }}
         >
           {item.foto_url ? (
             <Image

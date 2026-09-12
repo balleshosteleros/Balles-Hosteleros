@@ -115,10 +115,14 @@ def componer(src, dst, seed=0):
     if bb:
         bot = bot.crop(bb)
 
-    # Lienzo 4:3 a la medida del original, sin ampliar nunca.
-    H = max(420, min(900, round(bot.height / 0.78)))
+    # Lienzo 4:3 a la medida del original. La botella ocupa siempre la misma
+    # parte del alto, para que todas se vean del mismo tamaño en la rejilla:
+    # el Tequila de frutas de la pasion venia a 225 px con mucho margen blanco
+    # y, al no ampliarlo nada, salia diminuto al lado de los demas. Se permite
+    # un estiron corto (1,4x) que no llega a verse borroso.
+    H = max(340, min(900, round(bot.height / 0.78)))
     W = round(H * 4 / 3)
-    alto = min(bot.height, int(H * 0.78))
+    alto = min(int(bot.height * 1.4), int(H * 0.78))
     ancho = round(bot.width * alto / bot.height)
     if ancho > W * 0.58:
         ancho = int(W * 0.58)

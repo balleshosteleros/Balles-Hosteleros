@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { Heart, Star } from "lucide-react";
 import { AlergenoIcon } from "./FiltroAlergenos";
+import { proporcionFoto } from "../../lib/proporcion-foto";
 import type { CartaItem } from "../../types";
 
 /**
@@ -67,8 +68,13 @@ export function ItemCard({
     >
       {/* ── Foto ────────────────────────────────────────────────────── */}
       <div
-        className="relative aspect-[4/3] w-full overflow-hidden"
-        style={{ backgroundColor: "var(--carta-superficie-enfasis)" }}
+        className="relative w-full overflow-hidden"
+        style={{
+          backgroundColor: "var(--carta-superficie-enfasis)",
+          // El hueco toma la proporción de SU foto: así el plato se ve entero
+          // en vez de recortado a un 4:3 que no le corresponde.
+          aspectRatio: proporcionFoto(item.foto_url),
+        }}
       >
         {conFoto ? (
           <Image
@@ -76,10 +82,8 @@ export function ItemCard({
             alt={item.nombre}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 300px"
-            // Las fotos se guardan ya recortadas a 4:3, la misma proporción que
-            // este hueco, así que aquí no se vuelve a recortar nada y se ve
-            // exactamente el encuadre elegido. Anclarlo al 35% como antes
-            // descuadraba las fotos de copa, que llevan el vaso abajo.
+            // El hueco ya tiene la proporción de esta foto, así que aquí no se
+            // vuelve a recortar nada: se ve entera, tal cual se guardó.
             className="object-cover object-center transition-transform duration-[900ms] ease-out group-hover:scale-[1.07]"
           />
         ) : (
