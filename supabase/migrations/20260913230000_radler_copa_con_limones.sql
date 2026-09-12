@@ -1,0 +1,6 @@
+-- Radler de barril: la misma copa que la caña, con unos limones al lado.
+--
+-- La Radler es cerveza con limon y en la carta se distingue de la caña normal
+-- justo por eso. La foto de catalogo que hay en Agora mide 252x200 y lleva un
+-- barril de fondo que no pega con el resto, asi que se monta: la MISMA copa de
+-- barril que la caña, con dos limones a sus pies. Ver scripts/carta-radler.py.
