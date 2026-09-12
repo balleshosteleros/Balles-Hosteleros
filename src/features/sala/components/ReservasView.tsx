@@ -2821,6 +2821,14 @@ const PLANO_CANVAS_H = 640;
 const ENCUADRE_AUTO_MARGEN = 16;
 
 /**
+ * Caja aproximada de un rotulo de zona en el lienzo, para que el encuadre
+ * automatico le reserve sitio. Son las medidas de la pildora que se dibuja mas
+ * abajo (texto de 11 px en negrita, `px-2 py-0.5`), redondeadas hacia arriba.
+ */
+const ETIQUETA_ZONA_ALTO = 20;
+const ETIQUETA_ZONA_ANCHO_POR_LETRA = 8;
+
+/**
  * Recuadro que ocupan de verdad las mesas de una sala, para ampliarlo hasta
  * llenar la pantalla cuando nadie ha dibujado un encuadre en el editor.
  *
@@ -2838,6 +2846,7 @@ function encuadreAutomatico(
   posiciones: Map<string, PlanoMesaPosicion>,
   mesasMeta: Map<string, MesaMeta>,
   decoraciones: SalaDecoracion[],
+  etiquetasZona: { nombre: string; x: number; y: number }[] = [],
 ): { x: number; y: number; width: number; height: number } {
   const lienzoEntero = { x: 0, y: 0, width: PLANO_CANVAS_W, height: PLANO_CANVAS_H };
 
@@ -2863,6 +2872,15 @@ function encuadreAutomatico(
   }
   for (const d of decoraciones) {
     sumar(Number(d.x), Number(d.y), Number(d.width), Number(d.height));
+  }
+  // Y los ROTULOS de las zonas ("Terraza exterior", "Terraza interior"). Van
+  // por ENCIMA de su primera mesa, asi que quedaban fuera del recuadro y el
+  // recorte se los comia: se veia la franja de color y el nombre no. Como el
+  // texto aun no esta dibujado cuando se mide, se estima su caja con el largo
+  // del nombre; pasarse un poco es inofensivo (solo es aire), quedarse corto
+  // volveria a cortarlo.
+  for (const l of etiquetasZona) {
+    sumar(Number(l.x), Number(l.y), ETIQUETA_ZONA_ANCHO_POR_LETRA * l.nombre.length + 16, ETIQUETA_ZONA_ALTO);
   }
 
   // Sala sin nada colocado: no hay qué encuadrar y se deja el lienzo entero.
@@ -2972,67 +2990,6 @@ function PlanoCanvas({
   const outerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
-  // Recuadro del lienzo que hay que ampliar.
-  //
-  // Sin encuadre guardado NO se coge el lienzo entero: las mesas rara vez lo
-  // llenan —normalmente ocupan una franja— y ampliar el lienzo completo
-  // ampliaba también todo ese aire vacío, así que el plano se veía pequeño en
-  // el centro de la pantalla con franjas muertas enormes arriba y abajo. Y
-  // ninguna sala tiene encuadre guardado, así que le pasaba a todas.
-  //
-  // En su lugar se calcula solo: se mide dónde están de verdad las mesas (con
-  // sus etiquetas de zona y las decoraciones) y se amplía ese recuadro. El
-  // encuadre dibujado a mano en el editor sigue mandando cuando existe.
-  const vista = useMemo(() => {
-    const e = encuadre;
-    if (!e) return encuadreAutomatico(mesasConPos, posiciones, mesasMeta, decoraciones);
-    // Se recorta al lienzo por si quedara un encuadre viejo mas grande que el
-    // plano: asi nunca se amplia aire que no existe.
-    // El minimo de 200 es el mismo que impone el editor: sin el, un encuadre
-    // corrupto de pocos pixeles ampliaria una mesa hasta llenar la pantalla y
-    // el plano quedaria inservible.
-    const MIN = 200;
-    const x = Math.max(0, Math.min(PLANO_CANVAS_W - MIN, e.x));
-    const y = Math.max(0, Math.min(PLANO_CANVAS_H - MIN, e.y));
-    return {
-      x,
-      y,
-      width: Math.max(MIN, Math.min(PLANO_CANVAS_W - x, e.width)),
-      height: Math.max(MIN, Math.min(PLANO_CANVAS_H - y, e.height)),
-    };
-  }, [encuadre, mesasConPos, posiciones, mesasMeta, decoraciones]);
-
-  useEffect(() => {
-    const el = outerRef.current;
-    if (!el) return;
-    const update = () => {
-      const w = el.clientWidth;
-      const h = el.clientHeight;
-      if (w <= 0 || h <= 0) return;
-      // SIN TOPE: el plano llena todo el hueco que haya. El marco del editor es
-      // el tamaño de la sala y no cambia, asi que lo unico que decide como de
-      // grandes se ven las mesas es como de grandes se dibujaron DENTRO de ese
-      // marco. Aqui solo se estira ese mismo marco hasta ocupar la pantalla:
-      // en un monitor grande se ve grande, en un portatil mas pequeño, pero
-      // siempre entero y siempre en la misma proporcion.
-      //
-      // Antes habia un tope (1.6, luego 2) que dejaba franjas muertas alrededor
-      // en las pantallas del salon: el plano se veia pequeño aunque hubiera
-      // sitio de sobra.
-      // Se escala el RECUADRO encuadrado, no el lienzo entero. Antes se
-      // ampliaba el lienzo completo y, como las mesas rara vez lo llenan, el
-      // hueco vacio se ampliaba con ellas: el plano se veia pequeno en el
-      // centro con franjas muertas alrededor. Ahora manda el encuadre, asi que
-      // apretandolo en el editor las mesas llegan hasta los bordes.
-      const s = Math.min(w / vista.width, h / vista.height);
-      setScale(s > 0 ? s : 1);
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [vista.width, vista.height]);
-
   // Encuadra una posición dentro del lienzo estándar (mismas bounds que el editor).
   // Recibe las dimensiones reales de la mesa para que las rectangulares no se
   // recorten en el borde derecho/inferior.
@@ -3076,6 +3033,68 @@ function PlanoCanvas({
     }
     return labels;
   }, [zonas, mesasConPos, posiciones, mesasMeta]);
+
+  // Recuadro del lienzo que hay que ampliar.
+  //
+  // Sin encuadre guardado NO se coge el lienzo entero: las mesas rara vez lo
+  // llenan —normalmente ocupan una franja— y ampliar el lienzo completo
+  // ampliaba también todo ese aire vacío, así que el plano se veía pequeño en
+  // el centro de la pantalla con franjas muertas enormes arriba y abajo. Y
+  // ninguna sala tiene encuadre guardado, así que le pasaba a todas.
+  //
+  // En su lugar se calcula solo: se mide dónde están de verdad las mesas (con
+  // sus etiquetas de zona y las decoraciones) y se amplía ese recuadro. El
+  // encuadre dibujado a mano en el editor sigue mandando cuando existe.
+  const vista = useMemo(() => {
+    const e = encuadre;
+    if (!e) return encuadreAutomatico(mesasConPos, posiciones, mesasMeta, decoraciones, labelsZonas);
+    // Se recorta al lienzo por si quedara un encuadre viejo mas grande que el
+    // plano: asi nunca se amplia aire que no existe.
+    // El minimo de 200 es el mismo que impone el editor: sin el, un encuadre
+    // corrupto de pocos pixeles ampliaria una mesa hasta llenar la pantalla y
+    // el plano quedaria inservible.
+    const MIN = 200;
+    const x = Math.max(0, Math.min(PLANO_CANVAS_W - MIN, e.x));
+    const y = Math.max(0, Math.min(PLANO_CANVAS_H - MIN, e.y));
+    return {
+      x,
+      y,
+      width: Math.max(MIN, Math.min(PLANO_CANVAS_W - x, e.width)),
+      height: Math.max(MIN, Math.min(PLANO_CANVAS_H - y, e.height)),
+    };
+  }, [encuadre, mesasConPos, posiciones, mesasMeta, decoraciones, labelsZonas]);
+
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w <= 0 || h <= 0) return;
+      // SIN TOPE: el plano llena todo el hueco que haya. El marco del editor es
+      // el tamaño de la sala y no cambia, asi que lo unico que decide como de
+      // grandes se ven las mesas es como de grandes se dibujaron DENTRO de ese
+      // marco. Aqui solo se estira ese mismo marco hasta ocupar la pantalla:
+      // en un monitor grande se ve grande, en un portatil mas pequeño, pero
+      // siempre entero y siempre en la misma proporcion.
+      //
+      // Antes habia un tope (1.6, luego 2) que dejaba franjas muertas alrededor
+      // en las pantallas del salon: el plano se veia pequeño aunque hubiera
+      // sitio de sobra.
+      // Se escala el RECUADRO encuadrado, no el lienzo entero. Antes se
+      // ampliaba el lienzo completo y, como las mesas rara vez lo llenan, el
+      // hueco vacio se ampliaba con ellas: el plano se veia pequeno en el
+      // centro con franjas muertas alrededor. Ahora manda el encuadre, asi que
+      // apretandolo en el editor las mesas llegan hasta los bordes.
+      const s = Math.min(w / vista.width, h / vista.height);
+      setScale(s > 0 ? s : 1);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [vista.width, vista.height]);
+
 
   if (mesasConPos.length === 0) {
     return (
