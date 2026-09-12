@@ -6,6 +6,19 @@
 
 > **INSTRUCCION PRIORITARIA:** Lee `.claude/memory/MEMORY.md` al inicio de cada sesión. Contiene reglas activas de UI, guardado, arquitectura y contexto del proyecto.
 
+> **INSTRUCCION PRIORITARIA 2 — EL CANAL CON FERNANDO:** Fernando trabaja sobre este
+> mismo repositorio (logística, almacén, Ágora) y **deja sus preguntas y avisos en
+> `docs/TAREA_FERNANDO_precios_compra_bacanal.md`**, las más recientes arriba del todo.
+>
+> **Léelo al empezar la sesión, después de la memoria.** Si hay preguntas sin contestar,
+> **díselas a Iván tú, sin que las pida** — él no sabe que están ahí. Han llegado a
+> acumularse semanas de preguntas sin respuesta simplemente porque nadie las sacaba.
+>
+> Para contestar: escribe la respuesta en ese mismo fichero, debajo de la pregunta, y
+> commitea. Es un fichero compartido por git: lo que escribas ahí le llega.
+>
+> Resumen de lo pendiente en todo momento: `docs/LOGISTICA_LO_QUE_QUEDA_PENDIENTE.md`.
+
 ---
 
 ## Modo de Operacion: Autonomo con Restricciones
@@ -26,24 +39,34 @@ Si detectas un error critico, **detente y reportalo**. No intentes parchearlo a 
 
 **Balles-Hosteleros** es un SaaS de **gestion integral para restaurantes**, construido con SaaS Factory V4.
 Cubre todas las areas operativas de un restaurante moderno: direccion, RRHH, logistica, cocina, contabilidad, gerencia y juridico.
-El directorio raiz es `/Users/ivanballesteros/Desktop/Balles Hosteleros`.
-
-**Estructura del proyecto:**
+**Estructura real del proyecto** (comprobada el 2026-09-12):
 
 ```
 Balles-Hosteleros/
 ├── CLAUDE.md                   # Este archivo (cerebro del agente)
-├── README.md                   # Documentacion del proyecto
-├── CHANGELOG.md                # Historial de cambios
-├── mi-proyecto/                # Codigo fuente del SaaS (si aplica)
-├── saas-factory/               # Template original (referencia, no modificar)
+├── next.config.ts              # Rutas por dominio: la app, las webs, los QR
+│
+├── src/
+│   ├── app/                    # Rutas (App Router) y los crons de /api/cron
+│   ├── features/               # EL CÓDIGO, por módulo de negocio (43 carpetas:
+│   │                           #   logistica, cocina, sala, rrhh, gerencia…)
+│   ├── shared/                 # Lo transversal: componentes UI, utilidades
+│   └── lib/                    # Supabase, IA, integraciones
+│
+├── supabase/migrations/        # TODO cambio de base de datos vive aquí
+├── docs/                       # Estado, planes y el canal con Fernando
+├── scripts/                    # Utilidades (incluida sql-produccion.sh)
 │
 └── .claude/
-    ├── skills/                 # 20 Skills V4 (invocables con /)
-    ├── memory/                 # Memoria persistente (git-versioned)
-    ├── PRPs/                   # Product Requirements Proposals
-    └── design-systems/         # 5 sistemas de diseno
+    ├── skills/                 # Skills invocables con /
+    ├── memory/                 # Memoria persistente (compartida por git)
+    └── PRPs/                   # Product Requirements Proposals
 ```
+
+> Este apartado describía antes un esqueleto de plantilla (`mi-proyecto/`,
+> `saas-factory/`) que no existe, y una ruta de Mac que ya no usa nadie. Si vuelves a
+> encontrar el manual desfasado, **corrígelo**: un manual desactualizado no es neutral,
+> manda en la dirección equivocada con toda la confianza del mundo.
 
 ---
 
@@ -60,6 +83,56 @@ Tu: Ejecutas /new-app → generas BUSINESS_LOGIC.md → preguntas diseno → imp
 **NUNCA** le pidas que edite un archivo.
 **NUNCA** le muestres paths internos.
 Tu haces TODO. El solo aprueba.
+
+---
+
+## Comprobar en vez de suponer
+
+Leer el código dice lo que **debería** pasar. La base de datos dice lo que **pasa**. Antes
+de afirmar que algo está roto, que una columna existe o que una migración se aplicó, se
+mira.
+
+### Consultar la base de datos de producción
+
+```bash
+bash scripts/sql-produccion.sh -c "select count(*) from productos;"
+bash scripts/sql-produccion.sh consulta.sql
+```
+
+El permiso sale de `SUPABASE_ACCESS_TOKEN`, que ya está en `.env.local`. **Nunca** se
+escribe un token en el repositorio ni se imprime en pantalla.
+
+Consultar (`select`) no tiene ningún riesgo. Hazlo siempre que vayas a afirmar un número:
+la diferencia entre «creo que hay unos cuantos» y «hay 49, en 17 productos, y son estos»
+es la diferencia entre estorbar y ayudar.
+
+### Ensayar toda escritura antes de tocar datos
+
+Una migración o un arreglo de datos se prueba primero dentro de una transacción que se
+deshace sola:
+
+```sql
+begin;
+  -- ...la migración entera...
+  select count(*) from lo_que_sea;   -- ¿ha hecho lo que se esperaba?
+rollback;                            -- y no queda nada
+```
+
+Mejor todavía: poner las comprobaciones como aserciones, para que el ensayo falle solo si
+algo no cuadra en vez de tener que leer el resultado a ojo. Este método ha cazado varios
+fallos antes de tocar un solo dato de producción.
+
+### Comprobar que un despliegue ha salido bien
+
+```bash
+gh api repos/balleshosteleros/Balles-Hosteleros/commits/HEAD/status --jq .state
+```
+
+Devuelve `success`, `failure` o `pending`. Un `success` es fiable: `next.config.ts` no
+lleva `ignoreBuildErrors`, así que el despliegue valida de verdad el typecheck y el lint.
+
+**Después de cada push, míralo.** Un despliegue roto que nadie mira es una versión que la
+gente no tiene.
 
 ---
 
