@@ -7,6 +7,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { diaNegocioHoy } from "@/features/sala/lib/dia-negocio";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { categoriaEnHorario } from "../lib/horario";
+import { portalActivo } from "@/features/empresa/lib/portales";
 import type {
   CartaPublica,
   CartaCategoria,
@@ -176,6 +177,10 @@ export async function fetchCartaPorSlug(
       return null;
     }
     if (!empresa) return null;
+    // La empresa puede no tener carta digital (Ajustes → Departamentos →
+    // Marketing → Página web). Entonces esta dirección no existe, ni siquiera
+    // con la carta publicada: el QR de la mesa no lleva a ninguna parte.
+    if (!portalActivo(empresa.config_operativa, "carta")) return null;
 
     const empresaPub: CartaEmpresaPublica = {
       id: empresa.id,

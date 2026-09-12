@@ -1,3 +1,4 @@
+import { portalActivo } from "@/features/empresa/lib/portales";
 import { notFound } from "next/navigation";
 import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import type { Viewport } from "next";
@@ -27,6 +28,10 @@ async function fetchEmpresaBySlug(slug: string): Promise<EmpresaMarca | null> {
     .eq("slug", slug)
     .maybeSingle();
   if (!data) return null;
+  // La empresa puede no tener portal de reservas (Ajustes → Departamentos →
+  // Marketing → Página web). Entonces esta dirección no existe: enseñar el
+  // formulario sería aceptar mesas que nadie recoge.
+  if (!portalActivo(data.config_operativa, "reservas")) return null;
   return {
     id: data.id as string,
     nombre: data.nombre as string,

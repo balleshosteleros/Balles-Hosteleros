@@ -1,3 +1,5 @@
+import type { PortalesEmpresa } from "@/features/empresa/lib/portales";
+
 export interface DatosGenerales {
   nombreComercial: string;
   razonSocial: string;
@@ -130,6 +132,13 @@ export interface ConfigOperativa {
    * de la sala visible, así que hay que cambiar de sala para ver las suyas.
    */
   reservasListadoPorSala?: boolean;
+  /**
+   * Portales públicos que esta empresa tiene contratados (carta, reservas,
+   * empleo). Lo que no está marcado desaparece de su web y su dirección deja de
+   * responder. Ausente = los tiene todos — ver `portalActivo()` en
+   * `@/features/empresa/lib/portales`.
+   */
+  portales?: PortalesEmpresa;
 }
 
 // ─── Telefonía ──────────────────────────────────────────────────

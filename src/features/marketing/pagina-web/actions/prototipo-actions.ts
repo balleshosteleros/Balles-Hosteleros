@@ -8,6 +8,7 @@
  * módulos quiere.
  */
 
+import type { PortalesEmpresa } from "@/features/empresa/lib/portales";
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -39,7 +40,7 @@ async function reunirDatosEmpresa(empresaId: string): Promise<DatosEmpresaWeb | 
   const { data: emp } = await admin
     .from("empresas")
     .select(
-      "nombre, slug, empleo_slug, carta_slug, carta_publicada, logo_url, isotipo_url, color, color_secundario, datos_generales",
+      "nombre, slug, empleo_slug, carta_slug, carta_publicada, logo_url, isotipo_url, color, color_secundario, datos_generales, config_operativa",
     )
     .eq("id", empresaId)
     .maybeSingle();
@@ -111,6 +112,8 @@ async function reunirDatosEmpresa(empresaId: string): Promise<DatosEmpresaWeb | 
     empleoSlug: (emp.empleo_slug as string | null) ?? null,
     cartaSlug: (emp.carta_slug as string | null) ?? null,
     cartaPublicada: Boolean(emp.carta_publicada),
+    portales:
+      ((emp.config_operativa as { portales?: PortalesEmpresa } | null)?.portales) ?? {},
     logoUrl: (emp.logo_url as string | null) ?? (emp.isotipo_url as string | null) ?? null,
     color: (emp.color as string | null) ?? null,
     colorSecundario: (emp.color_secundario as string | null) ?? null,
@@ -137,9 +140,9 @@ export interface ModuloEstado {
 }
 
 const MOTIVOS: Record<string, string> = {
-  carta: "La empresa no tiene carta digital configurada.",
-  reservas: "La empresa no tiene identificador (slug).",
-  empleo: "La empresa no tiene portal de empleo configurado.",
+  carta: "La empresa no tiene carta digital.",
+  reservas: "La empresa no tiene portal de reservas.",
+  empleo: "La empresa no tiene portal de empleo.",
   inspecciones: "La empresa no tiene identificador (slug).",
   redes: "No hay ninguna red social en Ajustes → Datos generales.",
   testimonios: "Todavía no hay reseñas de Google sincronizadas.",

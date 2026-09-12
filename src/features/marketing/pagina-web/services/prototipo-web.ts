@@ -11,6 +11,12 @@
  */
 
 import type { Bloque, BloqueTipo, BrandingSnapshot, SeoConfig } from "../types";
+import { portalActivo, type PortalesEmpresa } from "@/features/empresa/lib/portales";
+
+/** `portalActivo` lee la configuración de la empresa; aquí ya viene desglosada. */
+function portalesComoConfig(d: DatosEmpresaWeb) {
+  return { portales: d.portales };
+}
 
 export type ModuloWeb =
   | "hero"
@@ -54,6 +60,11 @@ export interface DatosEmpresaWeb {
   empleoSlug: string | null;
   cartaSlug: string | null;
   cartaPublicada: boolean;
+  /**
+   * Portales que la empresa tiene contratados (Ajustes → Departamentos →
+   * Marketing → Página web). Lo que no tenga no se le ofrece en la web.
+   */
+  portales: PortalesEmpresa;
   logoUrl: string | null;
   color: string | null;
   colorSecundario: string | null;
@@ -74,12 +85,13 @@ export interface DatosEmpresaWeb {
 /** Un módulo puede no ser aplicable si faltan datos en el software. */
 export function moduloDisponible(m: ModuloWeb, d: DatosEmpresaWeb): boolean {
   switch (m) {
+    // Dos preguntas: ¿tiene la empresa el portal?, y ¿están sus datos puestos?
     case "carta":
-      return Boolean(d.cartaSlug);
+      return portalActivo(portalesComoConfig(d), "carta") && Boolean(d.cartaSlug);
     case "reservas":
-      return Boolean(d.slug);
+      return portalActivo(portalesComoConfig(d), "reservas") && Boolean(d.slug);
     case "empleo":
-      return Boolean(d.empleoSlug);
+      return portalActivo(portalesComoConfig(d), "empleo") && Boolean(d.empleoSlug);
     case "inspecciones":
       return Boolean(d.slug);
     case "redes":

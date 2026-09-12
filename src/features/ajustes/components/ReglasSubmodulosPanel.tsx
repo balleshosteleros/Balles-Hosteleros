@@ -35,6 +35,7 @@ import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/compone
 import { JornadasVacantesPanel } from "@/features/ajustes/components/JornadasVacantesPanel";
 import { TiposContratoPanel } from "@/features/ajustes/components/TiposContratoPanel";
 import { DireccionWebEmpresaPanel } from "@/features/marketing/pagina-web/components/admin/dominios/DireccionWebEmpresaPanel";
+import { PortalesEmpresaPanel } from "@/features/ajustes/components/PortalesEmpresaPanel";
 import { GestoriaConfig } from "@/features/rrhh/components/reclutamiento/config/GestoriaConfig";
 import { ConfigGeneralConfig } from "@/features/rrhh/components/reclutamiento/config/ConfigGeneralConfig";
 import { OnboardingPruebaConfig } from "@/features/rrhh/components/reclutamiento/config/OnboardingPruebaConfig";
@@ -281,7 +282,14 @@ function SubmoduloRow({
           ) : submodulo.key === "contratos" ? (
             <TiposContratoPanel />
           ) : submodulo.key === "pagina_web" ? (
-            <DireccionWebEmpresaPanel />
+            // Qué portales tiene la empresa y a dónde apunta su dominio: las
+            // dos cosas que deciden qué enseña su web al visitante.
+            <div className="space-y-6">
+              <PortalesEmpresaPanel />
+              <div className="border-t pt-6">
+                <DireccionWebEmpresaPanel />
+              </div>
+            </div>
           ) : submodulo.key === "cierres" ? (
             <CierresPlazoPanel embedded />
           ) : (

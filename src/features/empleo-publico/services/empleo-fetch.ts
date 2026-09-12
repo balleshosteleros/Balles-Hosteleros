@@ -3,6 +3,7 @@
  * Solo devuelve vacantes con estado_publicacion='publicada' AND visible_publicamente=true.
  * Usado por las rutas /empleo/[slug] y /empleo/[slug]/[oferta-id].
  */
+import { portalActivo } from "@/features/empresa/lib/portales";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import type { PreguntaCuestionario } from "@/features/rrhh/data/cuestionario-vacante";
 import {
@@ -80,10 +81,12 @@ interface EmpresaRow {
   color: string | null;
   color_secundario: string | null;
   color_texto: string | null;
+  /** Ajustes de la empresa; de aquí sale si tiene portal de empleo. */
+  config_operativa: unknown;
 }
 
 const EMPRESA_COLS =
-  "id, slug, empleo_slug, nombre, logo_url, isotipo_url, color, color_secundario, color_texto";
+  "id, slug, empleo_slug, nombre, logo_url, isotipo_url, color, color_secundario, color_texto, config_operativa";
 
 /**
  * Resuelve la empresa pública por su URL de empleo personalizada (`empleo_slug`)
@@ -110,6 +113,16 @@ async function findEmpresaPublica(
     .ilike("slug", safe)
     .maybeSingle<EmpresaRow>();
   return porSlug.data ?? null;
+}
+
+/**
+ * ¿Tiene esta empresa portal de empleo? Se marca en Ajustes → Departamentos →
+ * Marketing → Página web. Sin él, la dirección no existe: un cliente puede no
+ * captar personal por aquí, y el portal enseñaría su marca ofreciendo trabajo.
+ */
+function conPortalDeEmpleo(empresa: EmpresaRow | null): EmpresaRow | null {
+  if (!empresa) return null;
+  return portalActivo(empresa.config_operativa, "empleo") ? empresa : null;
 }
 
 interface VacanteRow {
@@ -175,7 +188,7 @@ export async function fetchPortalEmpleoPorSlug(slug: string): Promise<EmpleoPort
   try {
     const supabase = serviceClient();
 
-    const empresa = await findEmpresaPublica(supabase, slug);
+    const empresa = conPortalDeEmpleo(await findEmpresaPublica(supabase, slug));
     if (!empresa) return null;
 
     const { data: ofertasRows, error: ofertasErr } = await supabase
@@ -216,7 +229,7 @@ export async function fetchOfertaPublica(
   try {
     const supabase = serviceClient();
 
-    const empresa = await findEmpresaPublica(supabase, slug);
+    const empresa = conPortalDeEmpleo(await findEmpresaPublica(supabase, slug));
     if (!empresa) return null;
 
     const { data: ofertaRow, error: ofertaErr } = await supabase

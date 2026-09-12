@@ -4,6 +4,7 @@
  *
  * Se ejecuta en Server Components de la ruta catch-all (public-site).
  */
+import { portalActivo } from "@/features/empresa/lib/portales";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Bloque, BrandingSnapshot } from "../types";
@@ -37,14 +38,19 @@ export interface HostnameMatch {
    * guardan en el bloque: cambiar la red en Ajustes actualiza la web sola.
    */
   redes: RedesEmpresa;
-  /** Hay vacantes publicadas ahora mismo. Gobierna el enlace "Empleo" del menú. */
+  /**
+   * La empresa tiene portal de empleo Y hay vacantes publicadas ahora mismo.
+   * Gobierna el enlace "Empleo" del menú.
+   */
   empleo_activo: boolean;
   /**
-   * La empresa tiene sala, es decir, se le puede reservar mesa. Gobierna el
-   * botón "Reservar" de la barra: BALLES no es un restaurante y le salía un
-   * botón que abría el formulario de reservar mesa.
+   * La empresa tiene portal de reservas Y tiene sala, es decir, se le puede
+   * reservar mesa. Gobierna el botón "Reservar" de la barra: BALLES no es un
+   * restaurante y le salía un botón que abría el formulario de reservar mesa.
    */
   reservas_activas: boolean;
+  /** La empresa tiene carta digital. Gobierna el enlace "Carta" del menú. */
+  carta_activa: boolean;
 }
 
 export interface RedesEmpresa {
@@ -186,7 +192,12 @@ export async function resolverHostname(
     // con el cliente de servicio, y solo para contar (no sale ningún dato).
     const admin = createAdminClient();
 
-    const [{ data: empresaRow }, { count: vacantesPublicas }, { count: salasEmpresa }] = await Promise.all([
+    const [
+      { data: empresaRow },
+      { count: vacantesPublicas },
+      { count: salasEmpresa },
+      { data: configRow },
+    ] = await Promise.all([
       supabase
         .from("empresas_web_publica")
         .select("id, nombre, slug, logo_url, isotipo_url, instagram, facebook, tiktok, whatsapp, color_primario, color_secundario, color_texto")
@@ -211,7 +222,18 @@ export async function resolverHostname(
         .from("salas")
         .select("id, locales!inner(empresa_id)", { count: "exact", head: true })
         .eq("locales.empresa_id", pag.empresa_id),
+      // Qué portales tiene contratados la empresa (Ajustes → Departamentos →
+      // Marketing → Página web). Los datos de arriba dicen si HAY algo que
+      // enseñar; esto dice si la empresa lo tiene siquiera. `empresas` no se
+      // deja leer al visitante anónimo, así que va con el cliente de servicio.
+      admin
+        .from("empresas")
+        .select("config_operativa")
+        .eq("id", pag.empresa_id)
+        .maybeSingle(),
     ]);
+
+    const config = configRow?.config_operativa ?? null;
 
     const emp = (empresaRow ?? {}) as {
       nombre?: string;
@@ -250,12 +272,17 @@ export async function resolverHostname(
         logo_url: emp.logo_url ?? undefined,
       },
       nombre_pagina: pag.nombre,
+      // Dos preguntas encadenadas: ¿tiene la empresa este portal?, y ¿hay algo
+      // que enseñar? El interruptor de Ajustes es el techo; el dato real decide
+      // lo demás.
       // `null` (error de lectura) se trata como "sí hay": ante la duda es mejor
       // enseñar el enlace que esconder por error un portal con ofertas activas.
-      empleo_activo: vacantesPublicas === null ? true : vacantesPublicas > 0,
+      empleo_activo:
+        portalActivo(config, "empleo") && (vacantesPublicas === null ? true : vacantesPublicas > 0),
       // Ante un error de lectura, NO se enseña: un botón de reservar mesa en la
       // web de una empresa que no tiene sala es peor que no tenerlo.
-      reservas_activas: (salasEmpresa ?? 0) > 0,
+      reservas_activas: portalActivo(config, "reservas") && (salasEmpresa ?? 0) > 0,
+      carta_activa: portalActivo(config, "carta"),
       redes: {
         instagram: urlRed("instagram", dg.instagram),
         facebook: urlRed("facebook", dg.facebook),
