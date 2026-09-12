@@ -45,7 +45,19 @@ export interface CatalogoApagable {
   horas: number;
 }
 
-/** Catálogo de venta agrupado por categoría, con lo que está apagado ahora. */
+/**
+ * Lo que hay EN LA CARTA, agrupado por sus categorías, con lo que está apagado
+ * ahora mismo.
+ *
+ * Solo entra lo que el cliente puede pedir: productos de venta activos, con el
+ * interruptor «Visible en carta digital» encendido y con su plato en la carta.
+ * Fuera queda todo lo demás —consumibles internos, artículos de inventario,
+ * marcas sueltas de destilado—: cocina busca aquí con las manos ocupadas y una
+ * lista con 600 referencias que no se sirven no se recorre (Iván, 12-09-2026).
+ *
+ * Las categorías son las de la CARTA, no las del inventario, y en su mismo
+ * orden: es la lista que cocina tiene delante en la mesa.
+ */
 export async function listarProductosApagables(): Promise<Resultado<CatalogoApagable>> {
   try {
     const { supabase, empresaId } = await getAppContext();
@@ -53,33 +65,76 @@ export async function listarProductosApagables(): Promise<Resultado<CatalogoApag
 
     const horas = await getHorasApagado(supabase, empresaId);
 
-    const { data, error } = await supabase
-      .from("productos")
-      .select("id, nombre, categoria, agotado_at, agotado_por")
-      .eq("empresa_id", empresaId)
-      .eq("tipo", "venta")
-      // Un producto dado de baja no se vende ni encendido: enseñarlo aquí solo
-      // alarga la lista que cocina tiene que recorrer con las manos ocupadas.
-      .eq("estado", "Activo")
-      .order("categoria", { ascending: true })
-      .order("nombre", { ascending: true });
+    const [itemsRes, catsRes] = await Promise.all([
+      supabase
+        .from("carta_items")
+        .select("producto_id, categoria_id, orden")
+        .eq("empresa_id", empresaId)
+        .eq("visible", true)
+        .not("producto_id", "is", null)
+        .order("orden", { ascending: true }),
+      supabase
+        .from("carta_categorias")
+        .select("id, nombre, orden")
+        .eq("empresa_id", empresaId)
+        .eq("visible", true)
+        .order("orden", { ascending: true }),
+    ]);
 
-    if (error) {
-      console.error("[cocina][apagados][listar]", error.message);
+    if (itemsRes.error || catsRes.error) {
+      console.error("[cocina][apagados][listar]", itemsRes.error?.message ?? catsRes.error?.message);
+      return { ok: false, error: "No se pudo cargar la carta." };
+    }
+
+    const items = (itemsRes.data ?? []) as Array<{
+      producto_id: string;
+      categoria_id: string;
+      orden: number;
+    }>;
+    const cats = (catsRes.data ?? []) as Array<{ id: string; nombre: string; orden: number }>;
+    if (items.length === 0) return { ok: true, data: { categorias: [], horas } };
+
+    const { data: prodRows, error: prodErr } = await supabase
+      .from("productos")
+      .select("id, nombre, tipo, estado, visible_carta, agotado_at, agotado_por")
+      .eq("empresa_id", empresaId)
+      .in("id", Array.from(new Set(items.map((i) => i.producto_id))));
+
+    if (prodErr) {
+      console.error("[cocina][apagados][listar/productos]", prodErr.message);
       return { ok: false, error: "No se pudo cargar el catálogo." };
     }
 
-    const filas = (data ?? []) as Array<{
+    const productos = new Map<
+      string,
+      { nombre: string; agotado_at: string | null; agotado_por: string | null }
+    >();
+    for (const p of (prodRows ?? []) as Array<{
       id: string;
       nombre: string;
-      categoria: string | null;
+      tipo: string | null;
+      estado: string | null;
+      visible_carta: boolean | null;
       agotado_at: string | null;
       agotado_por: string | null;
-    }>;
+    }>) {
+      // Un producto de baja no se vende ni encendido, y uno con el interruptor
+      // maestro apagado no llega a la carta: ninguno de los dos pinta aquí.
+      if (p.tipo !== "venta" || p.estado === "Inactivo" || p.visible_carta === false) continue;
+      productos.set(p.id, {
+        nombre: p.nombre,
+        agotado_at: p.agotado_at,
+        agotado_por: p.agotado_por,
+      });
+    }
 
     // Nombre de quien apagó cada producto: se resuelve en una sola consulta.
     const apagadores = Array.from(
-      new Set(filas.filter((f) => f.agotado_por).map((f) => f.agotado_por as string)),
+      new Set(
+        Array.from(productos.values())
+          .map((p) => p.agotado_por)
+          .filter((v): v is string => !!v),
+      ),
     );
     const nombres = new Map<string, string>();
     if (apagadores.length > 0) {
@@ -92,23 +147,35 @@ export async function listarProductosApagables(): Promise<Resultado<CatalogoApag
       }
     }
 
+    const nombreCategoria = new Map(cats.map((c) => [c.id, c.nombre]));
     const porCategoria = new Map<string, ProductoApagable[]>();
-    for (const f of filas) {
-      const categoria = f.categoria?.trim() || "Sin categoría";
+    const yaPuesto = new Set<string>();
+
+    for (const it of items) {
+      const prod = productos.get(it.producto_id);
+      const categoria = nombreCategoria.get(it.categoria_id);
+      // Sin categoría visible, el plato no está en la carta que ve el cliente.
+      if (!prod || !categoria) continue;
+      // Un mismo producto puede figurar en dos apartados; en la lista va una vez.
+      if (yaPuesto.has(it.producto_id)) continue;
+      yaPuesto.add(it.producto_id);
+
       const lista = porCategoria.get(categoria) ?? [];
       lista.push({
-        id: f.id,
-        nombre: f.nombre,
+        id: it.producto_id,
+        nombre: prod.nombre,
         categoria,
-        apagado: apagadoVigente(f.agotado_at, horas),
-        apagadoPor: f.agotado_por ? nombres.get(f.agotado_por) ?? null : null,
+        apagado: apagadoVigente(prod.agotado_at, horas),
+        apagadoPor: prod.agotado_por ? nombres.get(prod.agotado_por) ?? null : null,
       });
       porCategoria.set(categoria, lista);
     }
 
+    const ordenPorNombre = new Map(cats.map((c) => [c.nombre, c.orden]));
     const categorias = Array.from(porCategoria.entries())
       .map(([nombre, productos]) => ({ nombre, productos }))
-      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+      // El orden de la CARTA: cocina espera encontrarlas como están en la mesa.
+      .sort((a, b) => (ordenPorNombre.get(a.nombre) ?? 0) - (ordenPorNombre.get(b.nombre) ?? 0));
 
     return { ok: true, data: { categorias, horas } };
   } catch (err) {

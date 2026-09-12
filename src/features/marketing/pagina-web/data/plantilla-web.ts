@@ -165,7 +165,7 @@ export function crearBloquesPlantilla(nombreEmpresa?: string, slugEmpresa?: stri
           {
             titulo: "Navegación",
             items: [
-              { label: "Carta", href: slug ? `/carta` : "#carta" },
+              { label: "Carta", href: slug ? `/carta?web=1` : "#carta" },
               { label: "Reservar", href: "#reservas" },
               ...(slug ? [{ label: "Empleo", href: `/empleo?o=WEB` }] : []),
             ],

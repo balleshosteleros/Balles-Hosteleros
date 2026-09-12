@@ -836,7 +836,7 @@ function CollageCartaPublico({
           // Un solo enlace de carta: el mismo que lleva el QR de la mesa. Lo
           // que se sirve a cada hora lo decide el horario de cada categoría,
           // no por dónde haya entrado el cliente.
-          href={`/carta`}
+          href={`/carta?web=1`}
           className="mt-9 inline-block rounded-full px-10 py-4 text-xs font-bold uppercase tracking-[0.2em] text-black transition-transform hover:scale-105 md:text-sm"
           style={{ backgroundColor: "var(--pw-primario)" }}
         >

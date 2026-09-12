@@ -52,6 +52,15 @@ export type CartaCategoria = {
   dias_semana: number[] | null;
   hora_desde: string | null;
   hora_hasta: string | null;
+  /**
+   * Solo en la carta abierta DESDE LA WEB: la categoría se enseña aunque ahora
+   * mismo no se sirva. Quien mira la web a las diez de la noche está decidiendo
+   * si viene a comer mañana, y el menú del día es justo lo que busca; en la
+   * mesa, en cambio, solo puede pedir lo que la cocina sirve en ese momento.
+   */
+  fuera_de_horario?: boolean;
+  /** "Se sirve de lunes a viernes, de 12:30 a 16:30" — va bajo el título. */
+  horario_texto?: string | null;
   created_at: string;
   updated_at: string;
 };

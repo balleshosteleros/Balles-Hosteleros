@@ -8,16 +8,24 @@ export const revalidate = 60;
 
 /**
  * Un solo enlace para la carta: el del QR de la mesa y el de la web del
- * restaurante son el mismo. Lo que se ve a cada hora lo decide el horario de
- * cada categoría, no por dónde haya entrado el cliente.
+ * restaurante son el mismo, y los QR impresos siguen valiendo.
+ *
+ * Lo único que cambia es `?web=1`, que solo añade la web: con esa marca las
+ * categorías con horario (el menú del día) se enseñan siempre, con su franja
+ * escrita. Sin ella —el QR pelado de la mesa— se enseña solo lo que la cocina
+ * está sirviendo. Por la noche, que es cuando la gente consulta la carta desde
+ * casa para decidir, el menú del día tiene que estar ahí (Iván).
  */
 export default async function CartaPublicaPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ web?: string }>;
 }) {
   const { slug } = await params;
-  const carta = await fetchCartaPorSlug(slug);
+  const { web } = await searchParams;
+  const carta = await fetchCartaPorSlug(slug, web === "1" ? "web" : "local");
   if (!carta) notFound();
   return <CartaPublicaShell carta={carta} />;
 }

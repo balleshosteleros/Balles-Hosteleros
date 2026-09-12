@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef } from "react";
+import { Clock } from "lucide-react";
 import { PROPORCION_FORMATO, type CartaCategoria, type CartaItem, type FormatoFoto } from "../../types";
 import { ItemCard } from "./ItemCard";
 
@@ -39,6 +40,7 @@ export const ItemList = forwardRef<HTMLDivElement, {
               descripcion={cat.descripcion}
               count={items.length}
               total={cat.items.length}
+              horario={cat.fuera_de_horario ? cat.horario_texto ?? null : null}
             />
 
             {items.length > 0 ? (
@@ -80,11 +82,20 @@ function CategoryHeader({
   descripcion,
   count,
   total,
+  horario,
 }: {
   nombre: string;
   descripcion: string | null;
   count: number;
   total: number;
+  /**
+   * Solo llega con texto en la carta abierta DESDE LA WEB y cuando ahora mismo
+   * no se sirve ("Se sirve de lunes a viernes, de 12:30 a 16:30"). Sin esta
+   * frase, enseñar la categoría fuera de su hora sería la promesa falsa que la
+   * ventana horaria venía a evitar. En la mesa nunca hay aviso: allí la
+   * categoría directamente no aparece.
+   */
+  horario: string | null;
 }) {
   const filtrados = total > count;
 
@@ -111,6 +122,19 @@ function CategoryHeader({
           {filtrados ? `${count} / ${total}` : count}
         </span>
       </div>
+
+      {horario ? (
+        <p
+          className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11.5px] font-medium"
+          style={{
+            color: "var(--carta-texto-suave)",
+            backgroundColor: "color-mix(in srgb, var(--carta-acento) 14%, transparent)",
+          }}
+        >
+          <Clock className="h-3.5 w-3.5" strokeWidth={1.75} />
+          {horario}
+        </p>
+      ) : null}
 
       {descripcion ? (
         <p

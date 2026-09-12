@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Sun, Moon, PowerOff, Settings } from "lucide-react";
+import { Sun, Moon, Settings, Apple, Slash } from "lucide-react";
 import {
   updateEstadoCocinaLinea,
   updateEstadoCocinaTicket,
@@ -232,7 +232,13 @@ function ComandasBoardInner() {
             onClick={() => setApagadosAbierto(true)}
             title="Marcar lo que se ha acabado"
           >
-            <PowerOff className="h-4 w-4" />
+            {/* La manzana de PRODUCTOS con la franja encima: se reconoce de
+                qué habla el botón antes de leerlo, y la raya dice que es para
+                apagar. Un icono de apagado genérico no decía qué se apaga. */}
+            <span className="relative inline-flex h-4 w-4 items-center justify-center">
+              <Apple className="h-4 w-4" />
+              <Slash className="absolute h-4 w-4" strokeWidth={2.25} />
+            </span>
             <span className="hidden sm:inline">Apagar productos</span>
           </Button>
           <Button

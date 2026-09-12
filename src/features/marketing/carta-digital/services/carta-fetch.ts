@@ -7,7 +7,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { apagadoVigente } from "@/features/cocina/apagados/lib/caducidad";
 import { getHorasApagado } from "@/features/cocina/apagados/lib/horas-apagado-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
-import { categoriaEnHorario } from "../lib/horario";
+import { categoriaEnHorario, textoHorario } from "../lib/horario";
 import { portalActivo } from "@/features/empresa/lib/portales";
 import type {
   CartaPublica,
@@ -147,14 +147,23 @@ function rowToItem(r: ItemRow, horasApagado: number): CartaItem {
 /**
  * La carta, tal y como se sirve AHORA MISMO.
  *
- * Hay un único enlace: el del QR de la mesa y el de la web del restaurante son
- * el mismo, y lo que se enseña no depende de por dónde entre el cliente, sino
- * del horario de cada categoría. Un menú del día en la carta de un sábado por
- * la noche es prometer algo que no existe, y el camarero acaba dando
- * explicaciones; para eso está la ventana horaria de la categoría.
+ * El enlace es UNO —el del QR de la mesa y el de la web del restaurante son el
+ * mismo, y no hay que reimprimir nada—, pero no se lee igual en los dos sitios:
+ *
+ *  · `local` (por defecto, el QR pelado de la mesa) — solo lo que la cocina
+ *    sirve EN ESE MOMENTO. Un menú del día en la carta de un sábado por la
+ *    noche es prometer algo que no existe, y el camarero acaba dando
+ *    explicaciones.
+ *  · `web` (la web añade `?web=1`) — se enseña TODO, y lo que ahora no toca
+ *    lleva su horario escrito al lado. Aquí manda lo contrario: quien mira la
+ *    carta a las diez de la noche está decidiendo si viene a comer mañana, y
+ *    justo a esa hora el menú del día es lo que viene a consultar (Iván).
  */
+export type ModoLectura = "local" | "web";
+
 export async function fetchCartaPorSlug(
   slug: string,
+  modo: ModoLectura = "local",
 ): Promise<CartaPublica | null> {
   try {
     // Carga inicial con service role (server-side, no llega al navegador).
@@ -298,13 +307,18 @@ export async function fetchCartaPorSlug(
 
     const categorias = categoriasRows
       .map(rowToCategoria)
-      // Solo lo que se sirve ahora, se llegue por el QR de la mesa o desde la
-      // web: es la misma carta y un solo enlace.
-      .filter((c) => categoriaEnHorario(c, zona))
-      .map((c) => ({
-        ...c,
-        items: items.filter((i) => i.categoria_id === c.id),
-      }));
+      // En la mesa, solo lo que se sirve ahora. Desde la web, todo.
+      .filter((c) => modo === "web" || categoriaEnHorario(c, zona))
+      .map((c) => {
+        const fuera = modo === "web" && !categoriaEnHorario(c, zona);
+        return {
+          ...c,
+          fuera_de_horario: fuera,
+          // La misma frase que lee quien la configura en el panel.
+          horario_texto: textoHorario(c),
+          items: items.filter((i) => i.categoria_id === c.id),
+        };
+      });
     const destacados = items.filter((i) => i.destacado);
 
     const familias: CartaFamilia[] =

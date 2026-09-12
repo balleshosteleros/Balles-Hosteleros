@@ -108,7 +108,7 @@ export function HistoriaForm({ bloque }: { bloque: Extract<Bloque, { tipo: "hist
             size="sm"
             className="w-full"
             onClick={() =>
-              set({ enlaces: [...(datos.enlaces ?? []), { label: "Ver la carta", href: "/carta" }] })
+              set({ enlaces: [...(datos.enlaces ?? []), { label: "Ver la carta", href: "/carta?web=1" }] })
             }
           >
             <Plus className="h-3.5 w-3.5 mr-1" /> Añadir botón

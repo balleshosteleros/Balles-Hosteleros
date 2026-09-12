@@ -164,7 +164,7 @@ export function generarBloquesPrototipo(
       texto: d.cartaPublicada
         ? "Siempre actualizada, con precios y alérgenos."
         : "Publica tu carta digital para que tus clientes la vean aquí.",
-      boton: { label: "Ver la carta", href: "/carta", variante: "primary" },
+      boton: { label: "Ver la carta", href: "/carta?web=1", variante: "primary" },
     });
   }
 
@@ -221,7 +221,7 @@ export function generarBloquesPrototipo(
     const columnas: Array<{ titulo: string; items: Array<{ label: string; href: string }> }> = [];
     const navegar: Array<{ label: string; href: string }> = [];
     if (activos.has("carta") && d.cartaSlug) {
-      navegar.push({ label: "Carta", href: "/carta" });
+      navegar.push({ label: "Carta", href: "/carta?web=1" });
     }
     if (activos.has("reservas")) navegar.push({ label: "Reservar", href: "#reservas" });
     if (activos.has("empleo") && d.empleoSlug) {
