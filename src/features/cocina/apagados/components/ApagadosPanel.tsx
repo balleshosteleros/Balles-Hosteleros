@@ -182,7 +182,10 @@ export function ApagadosPanel({
                 <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   {cat.nombre}
                 </h3>
-                <div className="grid gap-1.5 sm:grid-cols-2">
+                {/* DOS por fila también en el móvil. A pantalla completa, uno
+                    por fila dejaba una tira larguísima de botones gigantes y
+                    había que hacer scroll eterno para encontrar algo. */}
+                <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-3">
                   {cat.productos.map((p) => {
                     const apagado = estaApagado(p.id, p.apagado);
                     return (
@@ -192,7 +195,7 @@ export function ApagadosPanel({
                         onClick={() => alternar(p.id, p.apagado)}
                         aria-pressed={apagado}
                         className={cn(
-                          "flex h-12 items-center justify-between gap-3 rounded-lg border px-3 text-left transition-colors",
+                          "flex h-12 items-center justify-between gap-2 rounded-lg border px-2.5 text-left transition-colors sm:gap-3 sm:px-3",
                           apagado
                             ? "border-amber-300 bg-amber-50 text-amber-900"
                             : "bg-background hover:bg-muted",
@@ -200,7 +203,7 @@ export function ApagadosPanel({
                       >
                         <span
                           className={cn(
-                            "truncate text-sm",
+                            "line-clamp-2 text-[13px] leading-tight sm:text-sm",
                             apagado && "line-through decoration-amber-500/70",
                           )}
                         >
@@ -208,16 +211,16 @@ export function ApagadosPanel({
                         </span>
                         <span
                           className={cn(
-                            "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border",
+                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border sm:h-6 sm:w-6",
                             apagado
                               ? "border-amber-500 bg-amber-500 text-white"
                               : "border-muted-foreground/30",
                           )}
                         >
                           {apagado ? (
-                            <X className="h-4 w-4" />
+                            <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           ) : (
-                            <Check className="h-4 w-4 opacity-25" />
+                            <Check className="h-3.5 w-3.5 opacity-25 sm:h-4 sm:w-4" />
                           )}
                         </span>
                       </button>

@@ -65,7 +65,7 @@ export async function listarProductosApagables(): Promise<Resultado<CatalogoApag
 
     const horas = await getHorasApagado(supabase, empresaId);
 
-    const [itemsRes, catsRes] = await Promise.all([
+    const [itemsRes, catsRes, famsRes] = await Promise.all([
       supabase
         .from("carta_items")
         .select("producto_id, categoria_id, orden")
@@ -75,9 +75,14 @@ export async function listarProductosApagables(): Promise<Resultado<CatalogoApag
         .order("orden", { ascending: true }),
       supabase
         .from("carta_categorias")
-        .select("id, nombre, orden")
+        .select("id, nombre, orden, familia")
         .eq("empresa_id", empresaId)
         .eq("visible", true)
+        .order("orden", { ascending: true }),
+      supabase
+        .from("carta_familias")
+        .select("clave, orden")
+        .eq("empresa_id", empresaId)
         .order("orden", { ascending: true }),
     ]);
 
@@ -91,8 +96,29 @@ export async function listarProductosApagables(): Promise<Resultado<CatalogoApag
       categoria_id: string;
       orden: number;
     }>;
-    const cats = (catsRes.data ?? []) as Array<{ id: string; nombre: string; orden: number }>;
+    const cats = (catsRes.data ?? []) as Array<{
+      id: string;
+      nombre: string;
+      orden: number;
+      familia: string | null;
+    }>;
     if (items.length === 0) return { ok: true, data: { categorias: [], horas } };
+
+    // La carta se lee por bloques —Comida, Bebida, Otros— y dentro de cada uno
+    // por el orden de sus apartados. Sin este primer nivel, «Shishas» (la 1.ª
+    // de Otros) se colaba entre los entrantes (Iván, 13-09-2026).
+    const ordenFamilia = new Map(
+      ((famsRes.data ?? []) as Array<{ clave: string; orden: number }>).map((f) => [
+        f.clave,
+        f.orden,
+      ]),
+    );
+    /** Sin familias configuradas, el mismo reparto por defecto que la carta. */
+    const FAMILIA_DEFECTO: Record<string, number> = { comida: 1, bebida: 2, otros: 3 };
+    const pesoFamilia = (familia: string | null) => {
+      const clave = familia ?? "otros";
+      return ordenFamilia.get(clave) ?? FAMILIA_DEFECTO[clave] ?? 99;
+    };
 
     const { data: prodRows, error: prodErr } = await supabase
       .from("productos")
@@ -147,35 +173,38 @@ export async function listarProductosApagables(): Promise<Resultado<CatalogoApag
       }
     }
 
-    const nombreCategoria = new Map(cats.map((c) => [c.id, c.nombre]));
+    // Se agrupa por ID de apartado, no por su nombre: dos bloques distintos de
+    // la carta pueden llamar igual a un apartado y se fundían en uno solo.
+    const porId = new Map(cats.map((c) => [c.id, c]));
     const porCategoria = new Map<string, ProductoApagable[]>();
     const yaPuesto = new Set<string>();
 
     for (const it of items) {
       const prod = productos.get(it.producto_id);
-      const categoria = nombreCategoria.get(it.categoria_id);
+      const cat = porId.get(it.categoria_id);
       // Sin categoría visible, el plato no está en la carta que ve el cliente.
-      if (!prod || !categoria) continue;
+      if (!prod || !cat) continue;
       // Un mismo producto puede figurar en dos apartados; en la lista va una vez.
       if (yaPuesto.has(it.producto_id)) continue;
       yaPuesto.add(it.producto_id);
 
-      const lista = porCategoria.get(categoria) ?? [];
+      const lista = porCategoria.get(cat.id) ?? [];
       lista.push({
         id: it.producto_id,
         nombre: prod.nombre,
-        categoria,
+        categoria: cat.nombre,
         apagado: apagadoVigente(prod.agotado_at, horas),
         apagadoPor: prod.agotado_por ? nombres.get(prod.agotado_por) ?? null : null,
       });
-      porCategoria.set(categoria, lista);
+      porCategoria.set(cat.id, lista);
     }
 
-    const ordenPorNombre = new Map(cats.map((c) => [c.nombre, c.orden]));
-    const categorias = Array.from(porCategoria.entries())
-      .map(([nombre, productos]) => ({ nombre, productos }))
-      // El orden de la CARTA: cocina espera encontrarlas como están en la mesa.
-      .sort((a, b) => (ordenPorNombre.get(a.nombre) ?? 0) - (ordenPorNombre.get(b.nombre) ?? 0));
+    const categorias = cats
+      // El orden de la CARTA: primero el bloque, luego el apartado dentro de él.
+      .slice()
+      .sort((a, b) => pesoFamilia(a.familia) - pesoFamilia(b.familia) || a.orden - b.orden)
+      .map((c) => ({ nombre: c.nombre, productos: porCategoria.get(c.id) ?? [] }))
+      .filter((c) => c.productos.length > 0);
 
     return { ok: true, data: { categorias, horas } };
   } catch (err) {
