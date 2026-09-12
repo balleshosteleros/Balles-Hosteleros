@@ -24,7 +24,12 @@ import { getCatalogo } from "../../../data/bloques-catalogo";
 import type { Bloque } from "../../../types";
 import { BloqueRenderer } from "./BloqueRenderer";
 
-function SortableBloque({ bloque }: { bloque: Bloque }) {
+/**
+ * `soloContenido` = el restaurante escribe su web, no la reestructura: se va
+ * el asa de arrastrar y el botón de borrar, y queda ocultar una sección, que
+ * no rompe la plantilla y siempre se puede deshacer.
+ */
+function SortableBloque({ bloque, soloContenido }: { bloque: Bloque; soloContenido: boolean }) {
   const seleccionadoId = useEditorStore((s) => s.seleccionadoId);
   const seleccionar = useEditorStore((s) => s.seleccionar);
   const borrarBloque = useEditorStore((s) => s.borrarBloque);
@@ -53,14 +58,16 @@ function SortableBloque({ bloque }: { bloque: Bloque }) {
     >
       {/* Header del bloque */}
       <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/20">
-        <button
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
-          aria-label="Arrastrar"
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
+        {soloContenido ? null : (
+          <button
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+            aria-label="Arrastrar"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        )}
         <Icon className="h-4 w-4 text-muted-foreground" />
         <span className="text-xs font-medium uppercase tracking-wide">{catalogo.label}</span>
         <span className="text-xs text-muted-foreground">#{bloque.orden + 1}</span>
@@ -77,18 +84,20 @@ function SortableBloque({ bloque }: { bloque: Bloque }) {
           >
             <EyeOff className="h-3.5 w-3.5" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-red-600 hover:text-red-700"
-            title="Borrar bloque"
-            onClick={(e) => {
-              e.stopPropagation();
-              borrarBloque(bloque.id);
-            }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {soloContenido ? null : (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-red-600 hover:text-red-700"
+              title="Borrar bloque"
+              onClick={(e) => {
+                e.stopPropagation();
+                borrarBloque(bloque.id);
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -100,7 +109,7 @@ function SortableBloque({ bloque }: { bloque: Bloque }) {
   );
 }
 
-export function Canvas() {
+export function Canvas({ soloContenido = false }: { soloContenido?: boolean }) {
   const bloques = useEditorStore((s) => s.bloques);
   const reordenar = useEditorStore((s) => s.reordenar);
 
@@ -110,6 +119,7 @@ export function Canvas() {
   );
 
   const onDragEnd = (e: DragEndEvent) => {
+    if (soloContenido) return;
     const { active, over } = e;
     if (!over || active.id === over.id) return;
     const oldIndex = bloques.findIndex((b) => b.id === active.id);
@@ -125,7 +135,9 @@ export function Canvas() {
         {bloques.length === 0 && (
           <div className="rounded-lg border-2 border-dashed border-muted-foreground/30 py-16 text-center">
             <p className="text-sm text-muted-foreground">
-              Añade bloques desde la biblioteca de la izquierda
+              {soloContenido
+                ? "Esta web todavía no tiene secciones."
+                : "Añade bloques desde la biblioteca de la izquierda"}
             </p>
           </div>
         )}
@@ -135,7 +147,7 @@ export function Canvas() {
             strategy={verticalListSortingStrategy}
           >
             {bloques.map((b) => (
-              <SortableBloque key={b.id} bloque={b} />
+              <SortableBloque key={b.id} bloque={b} soloContenido={soloContenido} />
             ))}
           </SortableContext>
         </DndContext>

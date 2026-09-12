@@ -18,6 +18,7 @@ import { ChatWebPane } from "./ChatWebPane";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { getEstructuraWebEditable } from "@/features/ajustes/actions/portales-actions";
 
 interface Props {
   paginaId: string;
@@ -38,6 +39,11 @@ export function EditorShell({ paginaId }: Props) {
   // Página legal = contenido derivado de Ajustes. Se ve, se publica, pero no
   // se edita: sus datos (CIF, domicilio, correo) tienen una única fuente.
   const [esLegal, setEsLegal] = useState(false);
+  // Hasta dónde llega esta empresa en su propio editor (Ajustes →
+  // Departamentos → Marketing → Página web). De fábrica solo el CONTENIDO:
+  // textos, fotos y enlaces. La plantilla es la misma para todos.
+  // Arranca cerrado a propósito: mientras no se sepa, no se ofrece reestructurar.
+  const [soloContenido, setSoloContenido] = useState(true);
   const [publicando, setPublicando] = useState(false);
   const { estado: estadoAutosave, ultimoGuardado } = useAutosave(paginaId, 1000, !esLegal);
 
@@ -52,6 +58,17 @@ export function EditorShell({ paginaId }: Props) {
     setNombreAnterior(nombreStore);
     setNombre(nombreStore);
   }
+
+  useEffect(() => {
+    let vivo = true;
+    getEstructuraWebEditable().then((res) => {
+      if (!vivo) return;
+      setSoloContenido(!(res.ok && res.data));
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
 
   const guardarNombre = async () => {
     const limpio = nombre.trim();
@@ -148,7 +165,9 @@ export function EditorShell({ paginaId }: Props) {
               tarea de IA, no un botón suelto de la barra.
               La dirección web es de la EMPRESA, no de una página suelta: se
               gestiona en Ajustes › Departamentos › Marketing › Página web. */}
-          {!esLegal && (
+          {/* El asistente reestructura la web entera, así que va con la
+              estructura: en modo contenido no se ofrece. */}
+          {!esLegal && !soloContenido && (
             <Button
               variant={showChat ? "default" : "outline"}
               size="sm"
@@ -213,6 +232,17 @@ export function EditorShell({ paginaId }: Props) {
       {/* Propiedades solo cuando hay bloque seleccionado: una columna vacía
           permanente come un tercio de la pantalla sin aportar nada.
           El asistente, si está abierto, ocupa ese mismo hueco. */}
+      {!esLegal && soloContenido && (
+        <div className="flex items-start gap-2.5 border-b bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
+          <p>
+            Aquí se escribe el contenido de la web: textos, fotos y enlaces.
+            Las secciones y su orden son los mismos para todos los locales, y
+            los colores salen de Ajustes → Imagen de marca.
+          </p>
+        </div>
+      )}
+
       {esLegal && (
         <div className="flex items-start gap-2.5 border-b bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground">
           <Lock className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
@@ -233,10 +263,10 @@ export function EditorShell({ paginaId }: Props) {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        {!esLegal && <BloqueLibrary />}
-        <Canvas />
+        {!esLegal && !soloContenido && <BloqueLibrary />}
+        <Canvas soloContenido={soloContenido} />
         {!esLegal &&
-          (showChat ? (
+          (showChat && !soloContenido ? (
             <ChatWebPane paginaId={paginaId} onCerrar={() => setShowChat(false)} />
           ) : (
             seleccionadoId && <PropiedadesPanel />

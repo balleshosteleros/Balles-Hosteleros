@@ -67,3 +67,48 @@ export async function savePortalesEmpresa(
 
   return { ok: true, data: portales };
 }
+
+/**
+ * ¿Puede esta empresa cambiar la estructura de su web, o solo su contenido?
+ *
+ * Apagado (lo de fábrica) = modo contenido: textos, fotos y enlaces. La
+ * plantilla —qué secciones hay y en qué orden— no se toca, que es lo que hace
+ * que las webs no se rompan y sigan pareciéndose entre sí.
+ */
+export async function getEstructuraWebEditable(): Promise<Resultado<boolean>> {
+  const { supabase, empresaId } = await getCtx();
+  if (!empresaId) return { ok: false, error: "Sin empresa activa" };
+
+  const { data, error } = await supabase
+    .from("empresas")
+    .select("config_operativa")
+    .eq("id", empresaId)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+
+  const config = (data?.config_operativa ?? {}) as { webEstructuraEditable?: boolean };
+  return { ok: true, data: config.webEstructuraEditable === true };
+}
+
+export async function saveEstructuraWebEditable(
+  valor: boolean,
+): Promise<Resultado<boolean>> {
+  const { supabase, empresaId } = await getCtx();
+  if (!empresaId) return { ok: false, error: "Sin empresa activa" };
+
+  const { data, error: errorLectura } = await supabase
+    .from("empresas")
+    .select("config_operativa")
+    .eq("id", empresaId)
+    .maybeSingle();
+  if (errorLectura) return { ok: false, error: errorLectura.message };
+
+  const config = (data?.config_operativa ?? {}) as Record<string, unknown>;
+  const { error } = await supabase
+    .from("empresas")
+    .update({ config_operativa: { ...config, webEstructuraEditable: valor } })
+    .eq("id", empresaId);
+  if (error) return { ok: false, error: error.message };
+
+  return { ok: true, data: valor };
+}

@@ -139,6 +139,13 @@ export interface ConfigOperativa {
    * `@/features/empresa/lib/portales`.
    */
   portales?: PortalesEmpresa;
+  /**
+   * El restaurante puede cambiar la ESTRUCTURA de su web (añadir, borrar y
+   * reordenar secciones), no solo su contenido. Apagado (por defecto) deja el
+   * editor en modo contenido: textos, fotos y enlaces. La plantilla es la
+   * misma para todos; el contenido, suyo.
+   */
+  webEstructuraEditable?: boolean;
 }
 
 // ─── Telefonía ──────────────────────────────────────────────────

@@ -22,24 +22,45 @@ import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { PORTALES, type PortalesEmpresa, type PortalPublico } from "@/features/empresa/lib/portales";
 import {
+  getEstructuraWebEditable,
   getPortalesEmpresa,
+  saveEstructuraWebEditable,
   savePortalesEmpresa,
 } from "@/features/ajustes/actions/portales-actions";
 
 export function PortalesEmpresaPanel() {
   const [portales, setPortales] = useState<PortalesEmpresa | null>(null);
+  const [estructura, setEstructura] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     let vivo = true;
-    getPortalesEmpresa().then((res) => {
-      if (!vivo) return;
-      setPortales(res.ok ? res.data : {});
-    });
+    Promise.all([getPortalesEmpresa(), getEstructuraWebEditable()]).then(
+      ([resPortales, resEstructura]) => {
+        if (!vivo) return;
+        setPortales(resPortales.ok ? resPortales.data : {});
+        setEstructura(resEstructura.ok ? resEstructura.data : false);
+      },
+    );
     return () => {
       vivo = false;
     };
   }, []);
+
+  async function alternarEstructura(valor: boolean) {
+    if (guardando) return;
+    const anterior = estructura;
+    setEstructura(valor);
+    setGuardando(true);
+    const res = await saveEstructuraWebEditable(valor);
+    setGuardando(false);
+    if (!res.ok) {
+      setEstructura(anterior);
+      toast.error("No se pudo guardar");
+      return;
+    }
+    toast.success("Guardado");
+  }
 
   async function alternar(clave: PortalPublico, valor: boolean) {
     if (!portales || guardando) return;
@@ -103,6 +124,36 @@ export function PortalesEmpresaPanel() {
         responder. Marcarlo no basta para que salga: hace falta además que haya
         algo que enseñar.
       </p>
+
+      {/* Hasta dónde llega el restaurante en su propio editor. Lo de fábrica es
+          el contenido: la plantilla es la misma para todos, y abrir la mano con
+          la estructura es la vía rápida a webs rotas. */}
+      <div className="border-t pt-4">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          Editor de la web
+        </p>
+        <div className="mt-2 flex items-start justify-between gap-4">
+          <div className="space-y-0.5">
+            <Label className="text-xs font-bold">
+              Dejar que el restaurante cambie la estructura de su web
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {estructura
+                ? "Puede añadir, borrar y reordenar secciones, además de escribir el contenido."
+                : "Solo escribe el contenido: textos, fotos y enlaces. Las secciones y su orden no se tocan."}
+            </p>
+          </div>
+          <Switch
+            checked={estructura}
+            disabled={guardando}
+            onCheckedChange={(v) => void alternarEstructura(v)}
+          />
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Los colores y las tipografías no se editan nunca desde aquí: salen de
+          Ajustes → Imagen de marca, para que la web se parezca al local.
+        </p>
+      </div>
     </div>
   );
 }
