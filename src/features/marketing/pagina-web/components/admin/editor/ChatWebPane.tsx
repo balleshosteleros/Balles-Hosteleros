@@ -20,6 +20,7 @@ import {
 } from "../../../actions/chat-web-actions";
 import { ImportarDeUrlDialog } from "./ImportarDeUrlDialog";
 import { useSubidaImagenes, type ImagenItem } from "./forms/imagenes";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   paginaId: string;
@@ -207,19 +208,20 @@ export function ChatWebPane({ paginaId, onCerrar }: Props) {
           <div className="mb-2 flex flex-wrap gap-1.5">
             {adjuntas.map((f, i) => (
               <div key={f.url} className="relative group">
-                <div
-                  className="h-14 w-14 rounded border bg-muted bg-cover bg-center"
-                  style={{ backgroundImage: `url(${f.url})` }}
-                  title={f.alt}
-                />
-                <button
-                  type="button"
-                  onClick={() => setAdjuntas((prev) => prev.filter((_, j) => j !== i))}
-                  className="absolute -right-1.5 -top-1.5 rounded-full bg-background border p-0.5 text-red-600 opacity-0 group-hover:opacity-100 transition"
-                  title="Quitar esta foto"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
+                <ToolTooltip label={f.alt}>
+                  <div
+                    className="h-14 w-14 rounded border bg-muted bg-cover bg-center"
+                    style={{ backgroundImage: `url(${f.url})` }}
+                  />
+                </ToolTooltip>
+                <ToolTooltip label="Quitar esta foto">
+                  <button
+                    type="button"
+                    onClick={() => setAdjuntas((prev) => prev.filter((_, j) => j !== i))}
+                    className="absolute -right-1.5 -top-1.5 rounded-full bg-background border p-0.5 text-red-600 opacity-0 group-hover:opacity-100 transition" aria-label="Quitar esta foto">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </ToolTooltip>
               </div>
             ))}
             <p className="w-full text-[11px] text-muted-foreground">

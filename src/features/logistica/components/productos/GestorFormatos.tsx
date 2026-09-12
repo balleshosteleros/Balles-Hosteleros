@@ -20,6 +20,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Gestor de FORMATOS por MEDIDA.
@@ -160,15 +161,23 @@ export function GestorFormatos({ tipo, onChanged, refreshKey }: { tipo: TipoProd
                           <span className="text-[11px] text-muted-foreground">=</span>
                           <Input value={editEquiv} onChange={(e) => setEditEquiv(e.target.value)} placeholder="equiv." className="h-7 text-xs w-24"
                             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSaveEdit(f.id); } else if (e.key === "Escape") setEditId(null); }} />
-                          <button type="button" onClick={() => onSaveEdit(f.id)} disabled={isPending || !editNombre.trim() || !equivValida(editEquiv)} className="rounded p-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-40" title="Guardar"><Check className="h-3.5 w-3.5" /></button>
-                          <button type="button" onClick={() => setEditId(null)} className="rounded p-1 text-muted-foreground hover:bg-muted" title="Cancelar"><X className="h-3.5 w-3.5" /></button>
+                          <ToolTooltip label="Guardar">
+                            <button type="button" onClick={() => onSaveEdit(f.id)} disabled={isPending || !editNombre.trim() || !equivValida(editEquiv)} className="rounded p-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-40" aria-label="Guardar"><Check className="h-3.5 w-3.5" /></button>
+                          </ToolTooltip>
+                          <ToolTooltip label="Cancelar">
+                            <button type="button" onClick={() => setEditId(null)} className="rounded p-1 text-muted-foreground hover:bg-muted" aria-label="Cancelar"><X className="h-3.5 w-3.5" /></button>
+                          </ToolTooltip>
                         </>
                       ) : (
                         <>
                           <span className="flex-1 font-medium">{f.nombre}</span>
                           <span className="text-[10px] text-muted-foreground">= {f.equivalencias ?? "—"}</span>
-                          <button type="button" onClick={() => { setEditId(f.id); setEditNombre(f.nombre); setEditEquiv(f.equivalencias != null ? String(f.equivalencias).replace(".", ",") : ""); }} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
-                          <button type="button" onClick={() => setPendiente({ id: f.id, nombre: f.nombre })} disabled={isPending} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40" title="Borrar"><Trash2 className="h-3.5 w-3.5" /></button>
+                          <ToolTooltip label="Editar">
+                            <button type="button" onClick={() => { setEditId(f.id); setEditNombre(f.nombre); setEditEquiv(f.equivalencias != null ? String(f.equivalencias).replace(".", ",") : ""); }} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Editar"><Pencil className="h-3.5 w-3.5" /></button>
+                          </ToolTooltip>
+                          <ToolTooltip label="Borrar">
+                            <button type="button" onClick={() => setPendiente({ id: f.id, nombre: f.nombre })} disabled={isPending} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40" aria-label="Borrar"><Trash2 className="h-3.5 w-3.5" /></button>
+                          </ToolTooltip>
                         </>
                       )}
                     </li>

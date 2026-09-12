@@ -10,6 +10,7 @@ import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calen
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 import { cn } from "@/lib/utils";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const ALL = "__ALL__";
 const DIAS_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
@@ -377,17 +378,17 @@ function MesMini({
           const isToday = formatDate(hoy) === dateStr;
           const intensity = Math.min(1, count / max);
           return (
-            <div
-              key={day}
-              title={count > 0 ? `${count} publicación${count === 1 ? "" : "es"}` : undefined}
-              className={cn(
-                "relative aspect-square flex items-center justify-center text-[9px] rounded",
-                isToday && "ring-1 ring-primary text-primary font-bold",
-              )}
-              style={count > 0 ? { background: `rgba(59, 130, 246, ${0.15 + intensity * 0.55})` } : undefined}
-            >
-              {day}
-            </div>
+            <ToolTooltip key={day} label={count > 0 ? `${count} publicación${count === 1 ? "" : "es"}` : undefined}>
+              <div
+                className={cn(
+                  "relative aspect-square flex items-center justify-center text-[9px] rounded",
+                  isToday && "ring-1 ring-primary text-primary font-bold",
+                )}
+                style={count > 0 ? { background: `rgba(59, 130, 246, ${0.15 + intensity * 0.55})` } : undefined}
+              >
+                {day}
+              </div>
+            </ToolTooltip>
           );
         })}
       </div>

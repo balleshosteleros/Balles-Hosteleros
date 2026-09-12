@@ -14,6 +14,7 @@ import type {
   SegmentoCondicion,
   TipoSegmentoCondicion,
 } from "@/features/marketing/data/campanas";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   segmento: SegmentoJson;
@@ -276,14 +277,14 @@ function CondicionRow({
       <div className="flex flex-wrap items-center gap-2">
         <ValoresDeCondicion condicion={condicion} etiquetas={etiquetas} onChange={onChange} />
       </div>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="ml-auto text-muted-foreground hover:text-destructive"
-        title="Quitar este filtro"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
+      <ToolTooltip label="Quitar este filtro">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="ml-auto text-muted-foreground hover:text-destructive" aria-label="Quitar este filtro">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </ToolTooltip>
     </div>
   );
 }

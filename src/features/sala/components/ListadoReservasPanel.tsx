@@ -42,6 +42,7 @@ import {
   zonaLabel,
   type EstadoReserva,
 } from "@/features/sala/data/reservas";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /** Filas por hoja. Con un año entero de reservas pintarlas todas ahoga al navegador. */
 const POR_PAGINA = 100;
@@ -1335,17 +1336,18 @@ export function ListadoReservasPanel({
                         )}
                       >
                         {vacio ? null : destino ? (
-                          <Link
-                            href={destino}
-                            className="hover:underline"
-                            title={
+                          <ToolTooltip label={
                               esCliente
                                 ? "Abrir la ficha del cliente"
                                 : "Ir al día de esta reserva"
-                            }
-                          >
-                            {contenido}
-                          </Link>
+                            }>
+                            <Link
+                              href={destino}
+                              className="hover:underline"
+                            >
+                              {contenido}
+                            </Link>
+                          </ToolTooltip>
                         ) : (
                           contenido
                         )}

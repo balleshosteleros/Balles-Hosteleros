@@ -131,6 +131,7 @@ import {
 import { enviarReclutamientoFaseEmail } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
 import { toast } from "sonner";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface CandidatoDetailModalProps {
   open: boolean;
@@ -287,17 +288,18 @@ export function CandidatoDetailModal({
               {/* Días que el candidato lleva en la fase actual (se reinicia a 0
                   en cada cambio de fase). */}
               {diasEnFase !== null && (
-                <div
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted/40 text-xs"
-                  title="Días en la fase actual (se reinicia al cambiar de fase)"
-                >
-                  <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-semibold text-foreground tabular-nums">
-                    {diasEnFase === 0
-                      ? "Hoy"
-                      : `${diasEnFase} ${diasEnFase === 1 ? "día" : "días"} en fase`}
-                  </span>
-                </div>
+                <ToolTooltip label="Días en la fase actual (se reinicia al cambiar de fase)">
+                  <div
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted/40 text-xs"
+                  >
+                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {diasEnFase === 0
+                        ? "Hoy"
+                        : `${diasEnFase} ${diasEnFase === 1 ? "día" : "días"} en fase`}
+                    </span>
+                  </div>
+                </ToolTooltip>
               )}
             </div>
 
@@ -328,13 +330,13 @@ export function CandidatoDetailModal({
               {/* Un candidato ya contratado no puede borrarse: su candidatura
                   perdura en la base de datos como historial. */}
               {onEliminar && !candidato.promovidoAt && (
-                <button
-                  onClick={() => onEliminar(candidato)}
-                  className="ml-1 p-1.5 rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  title="Archivar candidato en «Papelera»"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <ToolTooltip label="Archivar candidato en «Papelera»">
+                  <button
+                    onClick={() => onEliminar(candidato)}
+                    className="ml-1 p-1.5 rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Archivar candidato en «Papelera»">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </ToolTooltip>
               )}
               <DialogPrimitive.Close className="ml-1 p-1.5 rounded hover:bg-muted/60">
                 <X className="h-4 w-4" />
@@ -867,34 +869,35 @@ function CandidatoSidebar({
 
       {/* Acciones de contacto: llamar (desde el software), email y WhatsApp. */}
       <div className="grid grid-cols-3 gap-2">
-        <button
-          type="button"
-          onClick={() => candidato.telefono && llamarDesdeApp(candidato.telefono)}
-          disabled={!candidato.telefono}
-          title="Llamar desde el software"
-          className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-xs font-medium text-foreground hover:bg-sky-50 hover:border-sky-200 hover:text-sky-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Phone className="h-4 w-4" />
-          Llamar
-        </button>
-        <a
-          href={`mailto:${candidato.email}`}
-          title="Enviar email"
-          className={`flex flex-col items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-xs font-medium text-foreground hover:bg-muted/60 hover:border-primary/30 hover:text-primary transition-colors ${candidato.email ? "" : "pointer-events-none opacity-40"}`}
-        >
-          <Mail className="h-4 w-4" />
-          Email
-        </a>
-        <a
-          href={whatsappLink ?? "#"}
-          target="_blank"
-          rel="noreferrer"
-          title={whatsappLink ? "Abrir la conversación de WhatsApp con el candidato" : "Este número no admite WhatsApp"}
-          className={`flex flex-col items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-xs font-medium text-foreground hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors ${whatsappLink ? "" : "pointer-events-none opacity-40"}`}
-        >
-          <WhatsAppIcon className="h-4 w-4 text-[#25D366]" />
-          WhatsApp
-        </a>
+        <ToolTooltip label="Llamar desde el software">
+          <button
+            type="button"
+            onClick={() => candidato.telefono && llamarDesdeApp(candidato.telefono)}
+            disabled={!candidato.telefono}
+            className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-xs font-medium text-foreground hover:bg-sky-50 hover:border-sky-200 hover:text-sky-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Llamar desde el software">
+            <Phone className="h-4 w-4" />
+            Llamar
+          </button>
+        </ToolTooltip>
+        <ToolTooltip label="Enviar email">
+          <a
+            href={`mailto:${candidato.email}`}
+            className={`flex flex-col items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-xs font-medium text-foreground hover:bg-muted/60 hover:border-primary/30 hover:text-primary transition-colors ${candidato.email ? "" : "pointer-events-none opacity-40"}`} aria-label="Enviar email">
+            <Mail className="h-4 w-4" />
+            Email
+          </a>
+        </ToolTooltip>
+        <ToolTooltip label={whatsappLink ? "Abrir la conversación de WhatsApp con el candidato" : "Este número no admite WhatsApp"}>
+          <a
+            href={whatsappLink ?? "#"}
+            target="_blank"
+            rel="noreferrer"
+            className={`flex flex-col items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-xs font-medium text-foreground hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors ${whatsappLink ? "" : "pointer-events-none opacity-40"}`}
+          >
+            <WhatsAppIcon className="h-4 w-4 text-[#25D366]" />
+            WhatsApp
+          </a>
+        </ToolTooltip>
       </div>
 
       {/* Phone */}
@@ -913,13 +916,13 @@ function CandidatoSidebar({
           >
             {candidato.email}
           </a>
-          <button
-            onClick={copyEmail}
-            className="ml-auto inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 text-muted-foreground"
-            title="Copiar email"
-          >
-            <Copy className="h-3.5 w-3.5" />
-          </button>
+          <ToolTooltip label="Copiar email">
+            <button
+              onClick={copyEmail}
+              className="ml-auto inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 text-muted-foreground" aria-label="Copiar email">
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          </ToolTooltip>
         </div>
       </div>
 
@@ -1087,16 +1090,17 @@ function TabTriggerWithCount({
 // Ocupa una posición fija en la barra de pestañas (junto a Cuestionarios).
 function DocumentacionTabTrigger({ completa }: { completa: boolean }) {
   return (
-    <TabsTrigger
-      value="documentacion"
-      className="rounded-none border-b-2 border-transparent bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none px-1 pb-2 text-sm font-medium"
-      title={completa ? "Documentación recibida" : "Documentación pendiente"}
-    >
-      <span>Documentación</span>
-      <FileText
-        className={`ml-1.5 h-4 w-4 ${completa ? "text-emerald-600" : "text-red-600"}`}
-      />
-    </TabsTrigger>
+    <ToolTooltip label={completa ? "Documentación recibida" : "Documentación pendiente"}>
+      <TabsTrigger
+        value="documentacion"
+        className="rounded-none border-b-2 border-transparent bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none px-1 pb-2 text-sm font-medium"
+      >
+        <span>Documentación</span>
+        <FileText
+          className={`ml-1.5 h-4 w-4 ${completa ? "text-emerald-600" : "text-red-600"}`}
+        />
+      </TabsTrigger>
+    </ToolTooltip>
   );
 }
 
@@ -1501,23 +1505,25 @@ function ActividadTab({
                   // Con HTML archivado: el asunto abre el visor con el correo
                   // EXACTO que recibió el candidato (inmutable aunque cambie la
                   // plantilla).
-                  <button
-                    type="button"
-                    onClick={() => setEmailVisor({ asunto: h.emailAsunto!, html: h.emailHtml! })}
-                    className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-primary transition-colors hover:bg-primary/20"
-                    title="Ver el correo que recibió el candidato"
-                  >
-                    <Mail className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{h.emailAsunto}</span>
-                    <Eye className="h-3 w-3 shrink-0 opacity-70" />
-                  </button>
+                  <ToolTooltip label="Ver el correo que recibió el candidato">
+                    <button
+                      type="button"
+                      onClick={() => setEmailVisor({ asunto: h.emailAsunto!, html: h.emailHtml! })}
+                      className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-primary transition-colors hover:bg-primary/20" aria-label="Ver el correo que recibió el candidato">
+                      <Mail className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{h.emailAsunto}</span>
+                      <Eye className="h-3 w-3 shrink-0 opacity-70" />
+                    </button>
+                  </ToolTooltip>
                 ) : (
                   // Sin HTML archivado (correos previos a esta función): solo asunto.
                   <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-primary">
                     <Mail className="h-3 w-3 shrink-0" />
-                    <span className="truncate" title={h.emailAsunto}>
-                      {h.emailAsunto}
-                    </span>
+                    <ToolTooltip label={h.emailAsunto}>
+                      <span className="truncate">
+                        {h.emailAsunto}
+                      </span>
+                    </ToolTooltip>
                   </div>
                 )
               )}
@@ -1757,14 +1763,14 @@ function ResenasTab({
                   <span className="font-medium text-foreground">{r.autor}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">{r.fecha}</span>
-                    <button
-                      type="button"
-                      onClick={() => borrar(r.id)}
-                      className="inline-flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                      title="Borrar reseña"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <ToolTooltip label="Borrar reseña">
+                      <button
+                        type="button"
+                        onClick={() => borrar(r.id)}
+                        className="inline-flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors" aria-label="Borrar reseña">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </ToolTooltip>
                   </div>
                 </div>
                 {media !== null && (
@@ -1926,14 +1932,14 @@ function NotasTab({
                 <span className="font-medium text-foreground text-xs">{n.autor}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground text-xs">{n.fecha}</span>
-                  <button
-                    type="button"
-                    onClick={() => borrar(n.id)}
-                    className="inline-flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                    title="Borrar nota"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <ToolTooltip label="Borrar nota">
+                    <button
+                      type="button"
+                      onClick={() => borrar(n.id)}
+                      className="inline-flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors" aria-label="Borrar nota">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </ToolTooltip>
                 </div>
               </div>
               <p className="text-foreground whitespace-pre-wrap">{n.texto}</p>

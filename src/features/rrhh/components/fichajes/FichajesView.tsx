@@ -47,6 +47,7 @@ import {
 import { IOActions } from "@/shared/io";
 import { fichajesIO } from "@/features/rrhh/io/fichajes.io";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
   const localRaw = row.locales as
@@ -457,13 +458,13 @@ export function FichajesView() {
         // no suman. Se marca en gris para que el 0 se lea como intencionado.
         const computa = tipoComputaTiempo(f.tipo);
         return (
-          <TableCell
-            key="horas"
-            className={`text-sm text-right font-medium ${computa ? "" : "text-muted-foreground"}`}
-            title={computa ? undefined : "Este tipo de fichaje no computa tiempo: no suma horas"}
-          >
-            {f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}
-          </TableCell>
+          <ToolTooltip key="horas" label={computa ? undefined : "Este tipo de fichaje no computa tiempo: no suma horas"}>
+            <TableCell
+              className={`text-sm text-right font-medium ${computa ? "" : "text-muted-foreground"}`}
+            >
+              {f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}
+            </TableCell>
+          </ToolTooltip>
         );
       },
     },

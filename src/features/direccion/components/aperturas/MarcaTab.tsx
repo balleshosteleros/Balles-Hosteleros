@@ -20,6 +20,7 @@ import { prepararFotoParaSubida } from "@/features/direccion/lib/foto-upload";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { BadgeSugerenciaIA } from "@/features/direccion/components/aperturas/shared/BadgeSugerenciaIA";
 import type { DraftMarca } from "@/features/direccion/types/aperturas-ia";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 type CampoMarcaIA =
   | "claim"
@@ -205,15 +206,16 @@ export function MarcaTab({
                 className="h-32 w-auto max-w-xs rounded-md border bg-white object-contain p-3"
               />
               {!readOnly && (
-                <button
-                  type="button"
-                  onClick={removeLogo}
-                  className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
-                  title="Quitar logo"
-                  aria-label="Quitar logo"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <ToolTooltip label="Quitar logo">
+                  <button
+                    type="button"
+                    onClick={removeLogo}
+                    className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+                    aria-label="Quitar logo"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </ToolTooltip>
               )}
             </div>
           ) : uploadingLogo ? (

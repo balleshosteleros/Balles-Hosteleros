@@ -25,6 +25,7 @@ import {
 } from "@/features/sala/planos/actions/combinaciones-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { SelectorMesasPlano } from "./SelectorMesasPlano";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   open: boolean;
@@ -327,17 +328,17 @@ export function CombinacionConfigModal({
             <Label className="text-xs">Color de marca visual</Label>
             <div className="grid grid-cols-10 gap-1.5">
               {COLORES_PASTEL_COMBINACIONES.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  className={cn(
-                    "h-8 rounded-md border-2 transition-all",
-                    color === c ? "border-foreground scale-110" : "border-transparent",
-                  )}
-                  style={{ backgroundColor: c }}
-                  title={c}
-                />
+                <ToolTooltip key={c} label={c}>
+                  <button
+                    type="button"
+                    onClick={() => setColor(c)}
+                    className={cn(
+                      "h-8 rounded-md border-2 transition-all",
+                      color === c ? "border-foreground scale-110" : "border-transparent",
+                    )}
+                    style={{ backgroundColor: c }}
+                  />
+                </ToolTooltip>
               ))}
             </div>
           </div>

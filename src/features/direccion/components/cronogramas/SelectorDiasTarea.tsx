@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { Frecuencia, TerminaTipo } from "../../hooks/useCronogramasOperativos";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 type CalendarioPatch = {
   frecuencia?: Frecuencia;
@@ -232,20 +233,20 @@ export function SelectorDiasTarea({
               {DIAS.map((d) => {
                 const active = (dia_semana ?? []).includes(d.iso);
                 return (
-                  <button
-                    key={d.iso}
-                    type="button"
-                    onClick={() => toggleDiaSemana(d.iso)}
-                    title={DIAS_LARGOS[d.iso]}
-                    className={cn(
-                      "w-9 h-9 rounded-full text-xs font-semibold border transition-all",
-                      active
-                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                        : "bg-background border-border text-muted-foreground hover:border-primary/50",
-                    )}
-                  >
-                    {d.label}
-                  </button>
+                  <ToolTooltip key={d.iso} label={DIAS_LARGOS[d.iso]}>
+                    <button
+                      type="button"
+                      onClick={() => toggleDiaSemana(d.iso)}
+                      className={cn(
+                        "w-9 h-9 rounded-full text-xs font-semibold border transition-all",
+                        active
+                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                          : "bg-background border-border text-muted-foreground hover:border-primary/50",
+                      )}
+                    >
+                      {d.label}
+                    </button>
+                  </ToolTooltip>
                 );
               })}
             </div>

@@ -12,6 +12,7 @@
 
 import { ArrowDown, ArrowUp, MoveHorizontal } from "lucide-react";
 import { formatNumero } from "@/shared/lib/numero";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export type VariacionPrecio = "baja" | "sube" | "igual" | "sin_referencia";
 
@@ -62,31 +63,37 @@ export function IndicadorPrecio({
 
   if (variacion === "igual") {
     return (
-      <span title={titulo ? `${titulo} — correcto` : "Precio correcto"} className="inline-flex">
-        <MoveHorizontal
-          className={`h-4 w-4 text-emerald-600 ${className}`}
-          aria-label="Precio correcto (sin cambios)"
-        />
-      </span>
+      <ToolTooltip label={titulo ? `${titulo} — correcto` : "Precio correcto"}>
+        <span className="inline-flex">
+          <MoveHorizontal
+            className={`h-4 w-4 text-emerald-600 ${className}`}
+            aria-label="Precio correcto (sin cambios)"
+          />
+        </span>
+      </ToolTooltip>
     );
   }
   if (variacion === "baja") {
     return (
-      <span title={titulo ? `${titulo} — ha bajado` : "El precio ha bajado"} className="inline-flex">
-        <ArrowDown
-          className={`h-4 w-4 text-amber-500 ${className}`}
-          aria-label="El precio ha bajado respecto al registrado"
-        />
-      </span>
+      <ToolTooltip label={titulo ? `${titulo} — ha bajado` : "El precio ha bajado"}>
+        <span className="inline-flex">
+          <ArrowDown
+            className={`h-4 w-4 text-amber-500 ${className}`}
+            aria-label="El precio ha bajado respecto al registrado"
+          />
+        </span>
+      </ToolTooltip>
     );
   }
   // sube
   return (
-    <span title={titulo ? `${titulo} — más caro` : "El precio está más caro"} className="inline-flex">
-      <ArrowUp
-        className={`h-4 w-4 text-rose-600 ${className}`}
-        aria-label="El precio está más caro que el registrado"
-      />
-    </span>
+    <ToolTooltip label={titulo ? `${titulo} — más caro` : "El precio está más caro"}>
+      <span className="inline-flex">
+        <ArrowUp
+          className={`h-4 w-4 text-rose-600 ${className}`}
+          aria-label="El precio está más caro que el registrado"
+        />
+      </span>
+    </ToolTooltip>
   );
 }

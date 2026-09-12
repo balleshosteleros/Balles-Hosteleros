@@ -55,6 +55,7 @@ import {
   convenioDeProvincia,
 } from "@/features/ajustes/data/establecimiento";
 import { CCC_LONGITUD, normalizarCcc, errorCcc } from "@/features/ajustes/lib/ccc";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Local {
   id: string;
@@ -289,14 +290,14 @@ export function LocalesEmpresaTab({ empresaId }: LocalesEmpresaTabProps = {}) {
                     ? `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`
                     : "Sin ubicación"}
                 </div>
-                <button
-                  onClick={() => setAsignacionLocal(c)}
-                  className="flex items-center gap-1.5 text-sm justify-end hover:text-primary"
-                  title="Gestionar empleados"
-                >
-                  <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-medium tabular-nums">{c.empleados_count}</span>
-                </button>
+                <ToolTooltip label="Gestionar empleados">
+                  <button
+                    onClick={() => setAsignacionLocal(c)}
+                    className="flex items-center gap-1.5 text-sm justify-end hover:text-primary" aria-label="Gestionar empleados">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-medium tabular-nums">{c.empleados_count}</span>
+                  </button>
+                </ToolTooltip>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8">

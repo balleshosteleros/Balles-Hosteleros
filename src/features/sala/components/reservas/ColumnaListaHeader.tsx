@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Check, ListFilter, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Cabecera de una columna de la LISTA DE RESERVAS: filtro + orden, como en el
@@ -166,45 +167,46 @@ export function ColumnaListaHeader({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "group inline-flex min-w-0 items-center gap-1 uppercase tracking-wider transition-colors hover:text-foreground",
-            align === "center" ? "justify-center" : "justify-start",
-            (filtroActivo || ordenActivo) && "text-primary",
-            className,
-          )}
-          title={`${label} — filtrar y ordenar`}
-        >
-          {!soloIcono && <span className="truncate">{label}</span>}
-          <span className="inline-flex shrink-0 items-center gap-0.5">
-            {ordenActivo &&
-              (orden!.direccion === "asc" ? (
-                <ArrowUp className="h-3 w-3" />
-              ) : (
-                <ArrowDown className="h-3 w-3" />
-              ))}
-            {filtroActivo && <ListFilter className="h-3 w-3 fill-current" />}
-            {/* En reposo, TODAS las columnas enseñan el mismo embudo que la de
-                Estado —antes unas llevaban flecha doble y otras embudo, y en
-                cabeceras pegadas (Nombre + Etiquetas) parecían dos controles
-                distintos—, y solo aparece al pasar por encima: la cabecera se
-                lee limpia y el icono sale donde se va a pinchar. */}
-            {!filtroActivo && !ordenActivo && (
-              <ListFilter
-                className={cn(
-                  "h-3 w-3 transition-opacity",
-                  // Sin rótulo el embudo es lo ÚNICO que ocupa la cabecera: si
-                  // se escondiera del todo, Zona y Etiquetas quedarían como un
-                  // hueco vacío sin nada donde pinchar. Se deja apagado.
-                  soloIcono
-                    ? "opacity-30 group-hover:opacity-100"
-                    : "opacity-0 group-hover:opacity-60",
-                )}
-              />
+        <ToolTooltip label={`${label} — filtrar y ordenar`}>
+          <button
+            type="button"
+            className={cn(
+              "group inline-flex min-w-0 items-center gap-1 uppercase tracking-wider transition-colors hover:text-foreground",
+              align === "center" ? "justify-center" : "justify-start",
+              (filtroActivo || ordenActivo) && "text-primary",
+              className,
             )}
-          </span>
-        </button>
+          >
+            {!soloIcono && <span className="truncate">{label}</span>}
+            <span className="inline-flex shrink-0 items-center gap-0.5">
+              {ordenActivo &&
+                (orden!.direccion === "asc" ? (
+                  <ArrowUp className="h-3 w-3" />
+                ) : (
+                  <ArrowDown className="h-3 w-3" />
+                ))}
+              {filtroActivo && <ListFilter className="h-3 w-3 fill-current" />}
+              {/* En reposo, TODAS las columnas enseñan el mismo embudo que la de
+                  Estado —antes unas llevaban flecha doble y otras embudo, y en
+                  cabeceras pegadas (Nombre + Etiquetas) parecían dos controles
+                  distintos—, y solo aparece al pasar por encima: la cabecera se
+                  lee limpia y el icono sale donde se va a pinchar. */}
+              {!filtroActivo && !ordenActivo && (
+                <ListFilter
+                  className={cn(
+                    "h-3 w-3 transition-opacity",
+                    // Sin rótulo el embudo es lo ÚNICO que ocupa la cabecera: si
+                    // se escondiera del todo, Zona y Etiquetas quedarían como un
+                    // hueco vacío sin nada donde pinchar. Se deja apagado.
+                    soloIcono
+                      ? "opacity-30 group-hover:opacity-100"
+                      : "opacity-0 group-hover:opacity-60",
+                  )}
+                />
+              )}
+            </span>
+          </button>
+        </ToolTooltip>
       </PopoverTrigger>
       <PopoverContent
         // `text-foreground` explícito: dentro del portal el texto se hereda del

@@ -57,6 +57,7 @@ import {
 import { formatNumero, parseDecimal } from "@/shared/lib/numero";
 import { MargenesAnalisis } from "@/features/cocina/components/escandallos/MargenesAnalisis";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // ─── Estado colors ─────────────────────────────────────────────
 const ESTADO_COLORS: Record<EstadoEscandallo, string> = {
@@ -404,16 +405,17 @@ function VideoUploaderCompact({ video, onChange }: { video?: string; onChange: (
           ) : isDirectVideoUrl(video) ? (
             <video src={video} controls className="w-full aspect-video object-cover rounded border bg-black" />
           ) : (
-            <a
-              href={video}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex flex-col items-center justify-center w-full aspect-video rounded border bg-muted/40 hover:bg-muted/60 transition-colors"
-              title={video}
-            >
-              <ExternalLink className="h-4 w-4 text-muted-foreground" />
-              <span className="text-[9px] text-muted-foreground">Abrir vídeo</span>
-            </a>
+            <ToolTooltip label={video}>
+              <a
+                href={video}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center justify-center w-full aspect-video rounded border bg-muted/40 hover:bg-muted/60 transition-colors"
+              >
+                <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                <span className="text-[9px] text-muted-foreground">Abrir vídeo</span>
+              </a>
+            </ToolTooltip>
           )}
           <div className="absolute -top-1.5 -right-1.5 flex gap-0.5">
             <Button
@@ -920,12 +922,13 @@ function EscandalloDetalle({
                                   onChange={(e) => handleIngredienteCantidad(ing.id, +e.target.value)}
                                 />
                                 {ing.unidadRevisar ? (
-                                  <span
-                                    className="text-[11px] text-amber-600 w-8 truncate cursor-help"
-                                    title={`Revisar: la receta dice "${ing.unidad}" pero el producto se mide en "${ing.medidaProducto}". No cuadran y no se pueden convertir solas — ajusta la cantidad y la unidad a mano.`}
-                                  >
-                                    ⚠ {ing.unidad}
-                                  </span>
+                                  <ToolTooltip label={`Revisar: la receta dice "${ing.unidad}" pero el producto se mide en "${ing.medidaProducto}". No cuadran y no se pueden convertir solas — ajusta la cantidad y la unidad a mano.`}>
+                                    <span
+                                      className="text-[11px] text-amber-600 w-8 truncate cursor-help"
+                                    >
+                                      ⚠ {ing.unidad}
+                                    </span>
+                                  </ToolTooltip>
                                 ) : (
                                   <span className="text-[11px] text-muted-foreground w-8 truncate">{ing.unidad || ""}</span>
                                 )}
@@ -1117,36 +1120,36 @@ function EscandalloDetalle({
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {alergenosDerivados.map(({ alergeno, origenes }) => (
-                    <Badge
-                      key={alergeno}
-                      variant="outline"
-                      title={`Viene de: ${origenes.map((o) => `${o.nombre}${o.tipo ? ` (${o.tipo})` : ""}`).join(", ")}`}
-                      className="text-xs bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800/40 py-1 px-2.5"
-                    >
-                      <span className="font-semibold">{alergeno}</span>
-                      <span className="ml-1.5 opacity-75">
-                        · {origenes.map((o) => o.nombre).join(", ")}
-                      </span>
-                    </Badge>
+                    <ToolTooltip key={alergeno} label={`Viene de: ${origenes.map((o) => `${o.nombre}${o.tipo ? ` (${o.tipo})` : ""}`).join(", ")}`}>
+                      <Badge
+                        variant="outline"
+                        className="text-xs bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800/40 py-1 px-2.5"
+                      >
+                        <span className="font-semibold">{alergeno}</span>
+                        <span className="ml-1.5 opacity-75">
+                          · {origenes.map((o) => o.nombre).join(", ")}
+                        </span>
+                      </Badge>
+                    </ToolTooltip>
                   ))}
                   {alergenosExtra.map((a) => (
-                    <Badge
-                      key={`extra-${a}`}
-                      variant="outline"
-                      title="Añadido manualmente (no proviene de un ingrediente vinculado)"
-                      className="text-xs bg-zinc-50 text-zinc-700 border-zinc-200 dark:bg-zinc-900/20 dark:text-zinc-200 dark:border-zinc-800/40 py-1 px-2.5"
-                    >
-                      <span className="font-semibold">{a}</span>
-                      <span className="ml-1.5 opacity-75">· manual</span>
-                      <button
-                        type="button"
-                        onClick={() => update({ alergenos: form.alergenos.filter((x) => x !== a) })}
-                        className="ml-1.5 hover:text-destructive"
-                        title="Quitar alérgeno manual"
+                    <ToolTooltip key={`extra-${a}`} label="Añadido manualmente (no proviene de un ingrediente vinculado)">
+                      <Badge
+                        variant="outline"
+                        className="text-xs bg-zinc-50 text-zinc-700 border-zinc-200 dark:bg-zinc-900/20 dark:text-zinc-200 dark:border-zinc-800/40 py-1 px-2.5"
                       >
-                        ×
-                      </button>
-                    </Badge>
+                        <span className="font-semibold">{a}</span>
+                        <span className="ml-1.5 opacity-75">· manual</span>
+                        <ToolTooltip label="Quitar alérgeno manual">
+                          <button
+                            type="button"
+                            onClick={() => update({ alergenos: form.alergenos.filter((x) => x !== a) })}
+                            className="ml-1.5 hover:text-destructive" aria-label="Quitar alérgeno manual">
+                            ×
+                          </button>
+                        </ToolTooltip>
+                      </Badge>
+                    </ToolTooltip>
                   ))}
                 </div>
               )}

@@ -50,6 +50,7 @@ import {
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { hoyEnZonaISO } from "@/shared/lib/timeUtils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const CANVAS_W = 1200;
 const CANVAS_H = 640;
@@ -565,52 +566,52 @@ export function BloqueosTab() {
                   borderCls = "border-destructive shadow-lg ring-2 ring-destructive/40";
                 }
                 return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => toggleMesa(m.id)}
-                    className={cn(
-                      "absolute flex flex-col items-center justify-center text-xs font-semibold border-2 select-none transition-shadow",
-                      borderCls,
-                      textCol,
-                    )}
-                    style={{
-                      left: Math.max(0, Math.min(CANVAS_W - dims.w, pos.x)),
-                      top: Math.max(0, Math.min(CANVAS_H - dims.h, pos.y)),
-                      width: dims.w,
-                      height: dims.h,
-                      borderRadius: radius,
-                      backgroundColor: bg,
-                      transform: `rotate(${pos.rotation}deg)`,
-                    }}
-                    title={
+                  <ToolTooltip key={m.id} label={
                       bloqueada
                         ? `${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} per · Bloqueada`
                         : `${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} per`
-                    }
-                  >
-                    <div
-                      className="flex flex-col items-center justify-center pointer-events-none"
-                      style={{ transform: `rotate(${-pos.rotation}deg)` }}
+                    }>
+                    <button
+                      type="button"
+                      onClick={() => toggleMesa(m.id)}
+                      className={cn(
+                        "absolute flex flex-col items-center justify-center text-xs font-semibold border-2 select-none transition-shadow",
+                        borderCls,
+                        textCol,
+                      )}
+                      style={{
+                        left: Math.max(0, Math.min(CANVAS_W - dims.w, pos.x)),
+                        top: Math.max(0, Math.min(CANVAS_H - dims.h, pos.y)),
+                        width: dims.w,
+                        height: dims.h,
+                        borderRadius: radius,
+                        backgroundColor: bg,
+                        transform: `rotate(${pos.rotation}deg)`,
+                      }}
                     >
-                      <span className="flex items-center gap-1">
-                        {bloqueada && !seleccionada && !zonaIncluida && (
-                          <Lock className="h-3 w-3" />
-                        )}
-                        {m.codigo}
-                      </span>
-                      <span
-                        className={cn(
-                          "text-[10px] font-normal",
-                          bloqueada && !seleccionada && !zonaIncluida
-                            ? "text-white/70"
-                            : "text-muted-foreground",
-                        )}
+                      <div
+                        className="flex flex-col items-center justify-center pointer-events-none"
+                        style={{ transform: `rotate(${-pos.rotation}deg)` }}
                       >
-                        {m.capacidadMin}-{m.capacidadMax}
-                      </span>
-                    </div>
-                  </button>
+                        <span className="flex items-center gap-1">
+                          {bloqueada && !seleccionada && !zonaIncluida && (
+                            <Lock className="h-3 w-3" />
+                          )}
+                          {m.codigo}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[10px] font-normal",
+                            bloqueada && !seleccionada && !zonaIncluida
+                              ? "text-white/70"
+                              : "text-muted-foreground",
+                          )}
+                        >
+                          {m.capacidadMin}-{m.capacidadMax}
+                        </span>
+                      </div>
+                    </button>
+                  </ToolTooltip>
                 );
               })}
             </div>

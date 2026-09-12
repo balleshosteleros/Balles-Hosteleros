@@ -11,6 +11,7 @@ import {
   sinonimosZona,
   TZ_DESTACADAS,
 } from "../lib/timezones";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // Selector de huso horario secundario (buscable). Botón de reloj que abre un
 // popover con buscador. Compartido entre el Calendario y Meet.
@@ -58,17 +59,18 @@ export function SelectorTZ({
 
   return (
     <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          "rounded-full p-3 transition-colors",
-          tz ? "bg-blue-100 text-blue-700" : "text-[#5f6368] hover:bg-black/5",
-        )}
-        title={tz ? `Mostrando ${nombreZona(tz)}` : "Huso horario secundario"}
-      >
-        <Clock className="h-5 w-5" />
-      </button>
+      <ToolTooltip label={tz ? `Mostrando ${nombreZona(tz)}` : "Huso horario secundario"}>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className={cn(
+            "rounded-full p-3 transition-colors",
+            tz ? "bg-blue-100 text-blue-700" : "text-[#5f6368] hover:bg-black/5",
+          )}
+        >
+          <Clock className="h-5 w-5" />
+        </button>
+      </ToolTooltip>
       {open && (
         <div className="absolute right-0 z-50 mt-1 w-64 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
           <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">

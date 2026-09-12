@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { ShieldCheck, ExternalLink } from "lucide-react";
 import type { CasillasMap, ModeloTipo } from "../types/modelos";
 import { ModeloPdfButton } from "./ModeloPdfButton";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Plantilla de lectura del modelo tal y como se presentó: reproduce los bloques
@@ -202,16 +203,16 @@ export function CasillasPresentadas({
         </div>
         <div className="flex items-center gap-2">
           {documentoOrigenUrl ? (
-            <a
-              href={documentoOrigenUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-accent"
-              title="Abrir el documento original"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Original
-            </a>
+            <ToolTooltip label="Abrir el documento original">
+              <a
+                href={documentoOrigenUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-accent" aria-label="Abrir el documento original">
+                <ExternalLink className="h-3.5 w-3.5" />
+                Original
+              </a>
+            </ToolTooltip>
           ) : null}
           <ModeloPdfButton modeloId={modeloId} tienePdf={tienePdf} />
         </div>

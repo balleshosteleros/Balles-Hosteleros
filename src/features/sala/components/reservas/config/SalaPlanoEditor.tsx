@@ -62,6 +62,7 @@ import {
 } from "@/features/sala/planos/actions/sala-decoraciones-actions";
 import { updateZona } from "@/features/sala/planos/actions/zonas-actions";
 import { setSalaEncuadre } from "@/features/sala/planos/actions/salas-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // Tamano DE SERIE de una mesa nueva. Nunca por debajo de MIN_MESA_SIZE: una
 // mesa recien puesta no puede nacer mas pequena de lo que luego se permite
@@ -1556,17 +1557,17 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                 {zonasSala
                   .filter((z) => getZonaLabelPos(z.id) === null)
                   .map((z) => (
-                    <button
-                      key={z.id}
-                      type="button"
-                      onPointerDown={(e) => startDragZonaLabelNueva(e, z.id)}
-                      className="flex items-center gap-1.5 text-[11px] font-semibold border rounded px-2 py-1 cursor-grab active:cursor-grabbing hover:border-foreground"
-                      style={{ backgroundColor: z.colorPastel }}
-                      title={`Colocar etiqueta "${z.nombre}"`}
-                    >
-                      <Tag className="h-3 w-3 opacity-70" />
-                      {z.nombre}
-                    </button>
+                    <ToolTooltip key={z.id} label={`Colocar etiqueta "${z.nombre}"`}>
+                      <button
+                        type="button"
+                        onPointerDown={(e) => startDragZonaLabelNueva(e, z.id)}
+                        className="flex items-center gap-1.5 text-[11px] font-semibold border rounded px-2 py-1 cursor-grab active:cursor-grabbing hover:border-foreground"
+                        style={{ backgroundColor: z.colorPastel }}
+                      >
+                        <Tag className="h-3 w-3 opacity-70" />
+                        {z.nombre}
+                      </button>
+                    </ToolTooltip>
                   ))}
                 {zonasSala.every((z) => getZonaLabelPos(z.id) !== null) && (
                   <p className="text-[11px] text-muted-foreground italic">
@@ -1587,16 +1588,16 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                   <p className="text-[10px] text-muted-foreground">{g.titulo}</p>
                   <div className="flex flex-wrap gap-1">
                     {g.tipos.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onPointerDown={(e) => startDragDecoNueva(e, t)}
-                        className="flex items-center gap-1.5 text-[11px] border rounded px-2 py-1 cursor-grab active:cursor-grabbing hover:border-foreground bg-muted/30"
-                        title={TIPO_DECORACION_LABELS[t]}
-                      >
-                        <DecoPaletteIcon tipo={t} />
-                        {TIPO_DECORACION_LABELS[t]}
-                      </button>
+                      <ToolTooltip key={t} label={TIPO_DECORACION_LABELS[t]}>
+                        <button
+                          type="button"
+                          onPointerDown={(e) => startDragDecoNueva(e, t)}
+                          className="flex items-center gap-1.5 text-[11px] border rounded px-2 py-1 cursor-grab active:cursor-grabbing hover:border-foreground bg-muted/30"
+                        >
+                          <DecoPaletteIcon tipo={t} />
+                          {TIPO_DECORACION_LABELS[t]}
+                        </button>
+                      </ToolTooltip>
                     ))}
                   </div>
                 </div>
@@ -1910,31 +1911,31 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                 const w = zonaLabelWidth(z.nombre);
                 const sel = zonaLabelSeleccionada === z.id;
                 return (
-                  <div
-                    key={`zlabel-${z.id}`}
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      setZonaLabelSeleccionada(z.id);
-                      setMesaSeleccionada(null);
-                      setDecoSeleccionada(null);
-                      startDragZonaLabelExistente(e, z.id);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className={cn(
-                      "absolute flex items-center justify-center text-[11px] font-bold tracking-wide text-zinc-800 rounded shadow-sm cursor-grab active:cursor-grabbing select-none border border-foreground/15",
-                      sel && "outline outline-2 outline-primary outline-offset-2",
-                    )}
-                    style={{
-                      left: Math.max(0, Math.min(CANVAS_W - w, pos.x)),
-                      top: Math.max(0, Math.min(CANVAS_H - ZONA_LABEL_H, pos.y)),
-                      width: w,
-                      height: ZONA_LABEL_H,
-                      backgroundColor: z.colorPastel,
-                    }}
-                    title={z.nombre}
-                  >
-                    {z.nombre}
-                  </div>
+                  <ToolTooltip key={`zlabel-${z.id}`} label={z.nombre}>
+                    <div
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        setZonaLabelSeleccionada(z.id);
+                        setMesaSeleccionada(null);
+                        setDecoSeleccionada(null);
+                        startDragZonaLabelExistente(e, z.id);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className={cn(
+                        "absolute flex items-center justify-center text-[11px] font-bold tracking-wide text-zinc-800 rounded shadow-sm cursor-grab active:cursor-grabbing select-none border border-foreground/15",
+                        sel && "outline outline-2 outline-primary outline-offset-2",
+                      )}
+                      style={{
+                        left: Math.max(0, Math.min(CANVAS_W - w, pos.x)),
+                        top: Math.max(0, Math.min(CANVAS_H - ZONA_LABEL_H, pos.y)),
+                        width: w,
+                        height: ZONA_LABEL_H,
+                        backgroundColor: z.colorPastel,
+                      }}
+                    >
+                      {z.nombre}
+                    </div>
+                  </ToolTooltip>
                 );
               })}
 

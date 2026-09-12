@@ -38,6 +38,7 @@ import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { cn } from "@/shared/lib/utils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 type Firma = {
   id: string;
@@ -557,50 +558,50 @@ function RecuadroDocumento({
     : FileSignature;
 
   return (
-    <button
-      type="button"
-      onClick={() => onAbrir(doc)}
-      className={cn(
-        "rounded-lg border bg-card p-4 h-full text-left flex flex-col justify-between",
-        "transition-colors hover:border-primary/50 hover:bg-accent/40",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        firmado && "border-emerald-200",
-      )}
-      title="Ver documento firmado y acreditación legal"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-sm font-medium text-foreground line-clamp-2">{etiqueta}</span>
-        <Icono
-          className={cn(
-            "h-4 w-4 shrink-0",
-            firmado ? "text-emerald-600"
-              : doc.estado === "pendiente" ? "text-amber-600"
-              : doc.estado === "rechazado" ? "text-rose-600"
-              : "text-muted-foreground",
-          )}
-        />
-      </div>
-
-      <div className="mt-3 space-y-1.5">
-        <Badge variant="outline" className={cn("text-[11px]", estadoFirmaColor(doc.estado, doc.tipo))}>
-          {estadoFirmaLabel(doc.estado, doc.tipo)}
-        </Badge>
-        <div className="text-xs text-muted-foreground">
-          {firmado ? fmt(doc.firmadoEn) : `Enviado ${fmt(doc.enviadoEn)}`}
+    <ToolTooltip label="Ver documento firmado y acreditación legal">
+      <button
+        type="button"
+        onClick={() => onAbrir(doc)}
+        className={cn(
+          "rounded-lg border bg-card p-4 h-full text-left flex flex-col justify-between",
+          "transition-colors hover:border-primary/50 hover:bg-accent/40",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          firmado && "border-emerald-200",
+        )} aria-label="Ver documento firmado y acreditación legal">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-sm font-medium text-foreground line-clamp-2">{etiqueta}</span>
+          <Icono
+            className={cn(
+              "h-4 w-4 shrink-0",
+              firmado ? "text-emerald-600"
+                : doc.estado === "pendiente" ? "text-amber-600"
+                : doc.estado === "rechazado" ? "text-rose-600"
+                : "text-muted-foreground",
+            )}
+          />
         </div>
-        {esReconocimiento && doc.decisionReconocimiento && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Stethoscope className="h-3 w-3" />
-            {doc.decisionReconocimiento === "si" ? "Sí quiere pasarlo" : "No quiere pasarlo"}
+
+        <div className="mt-3 space-y-1.5">
+          <Badge variant="outline" className={cn("text-[11px]", estadoFirmaColor(doc.estado, doc.tipo))}>
+            {estadoFirmaLabel(doc.estado, doc.tipo)}
+          </Badge>
+          <div className="text-xs text-muted-foreground">
+            {firmado ? fmt(doc.firmadoEn) : `Enviado ${fmt(doc.enviadoEn)}`}
           </div>
-        )}
-        {total > 1 && (
-          <div className="text-[11px] text-muted-foreground">
-            {total} documentos de este tipo
-          </div>
-        )}
-      </div>
-    </button>
+          {esReconocimiento && doc.decisionReconocimiento && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Stethoscope className="h-3 w-3" />
+              {doc.decisionReconocimiento === "si" ? "Sí quiere pasarlo" : "No quiere pasarlo"}
+            </div>
+          )}
+          {total > 1 && (
+            <div className="text-[11px] text-muted-foreground">
+              {total} documentos de este tipo
+            </div>
+          )}
+        </div>
+      </button>
+    </ToolTooltip>
   );
 }
 

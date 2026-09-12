@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Recuadro azul con las veces que ese cliente ha reservado en la empresa.
@@ -19,16 +20,17 @@ export function ClienteReservasBadge({
 }) {
   if (!total || total < 2) return null;
   return (
-    <span
-      className={cn(
-        "inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md border px-1",
-        "border-blue-500/40 bg-blue-500/10 text-[10px] font-semibold tabular-nums text-blue-600",
-        "[.sala-oscuro_&]:text-blue-300",
-        className,
-      )}
-      title={`Ha venido ${total} veces`}
-    >
-      {total}
-    </span>
+    <ToolTooltip label={`Ha venido ${total} veces`}>
+      <span
+        className={cn(
+          "inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md border px-1",
+          "border-blue-500/40 bg-blue-500/10 text-[10px] font-semibold tabular-nums text-blue-600",
+          "[.sala-oscuro_&]:text-blue-300",
+          className,
+        )}
+      >
+        {total}
+      </span>
+    </ToolTooltip>
   );
 }

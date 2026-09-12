@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ShieldAlert, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/features/auth/contexts/auth-context";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /** Minutos que dura una verificación antes de volver a pedirla. */
 const VERIFICACION_VALIDEZ_MIN = 5;
@@ -148,16 +149,17 @@ export function VerificacionAccesosProvider({ children }: { children: React.Reac
                   autoComplete="current-password"
                   className="pr-9"
                 />
-                <button
-                  type="button"
-                  onClick={() => setVerPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  title={verPassword ? "Ocultar contraseña" : "Ver contraseña"}
-                  aria-label={verPassword ? "Ocultar contraseña" : "Ver contraseña"}
-                  tabIndex={-1}
-                >
-                  {verPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                <ToolTooltip label={verPassword ? "Ocultar contraseña" : "Ver contraseña"}>
+                  <button
+                    type="button"
+                    onClick={() => setVerPassword((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={verPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                    tabIndex={-1}
+                  >
+                    {verPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </ToolTooltip>
               </div>
               {error && <p className="text-[12px] text-destructive mt-1">{error}</p>}
             </div>

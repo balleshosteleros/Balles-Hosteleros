@@ -25,6 +25,7 @@ import {
 } from "../../actions/cronograma-ejecuciones-actions";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 type RangoPreset =
   | "7d"
@@ -437,20 +438,21 @@ export function DashboardProductividad() {
                           {e.hechas} / {e.total} tareas
                         </div>
                       </div>
-                      <div
-                        className={cn(
-                          "flex items-center gap-1 text-xs tabular-nums w-24 justify-end",
-                          e.pospuestasTotales >= 3
-                            ? "text-red-600 font-semibold"
-                            : e.pospuestasTotales > 0
-                              ? "text-amber-600"
-                              : "text-muted-foreground/40",
-                        )}
-                        title={`${e.pospuestasTotales} pospuestas en ${e.pospuestas} tareas`}
-                      >
-                        <CalendarClock className="h-3.5 w-3.5" />
-                        {e.pospuestasTotales}
-                      </div>
+                      <ToolTooltip label={`${e.pospuestasTotales} pospuestas en ${e.pospuestas} tareas`}>
+                        <div
+                          className={cn(
+                            "flex items-center gap-1 text-xs tabular-nums w-24 justify-end",
+                            e.pospuestasTotales >= 3
+                              ? "text-red-600 font-semibold"
+                              : e.pospuestasTotales > 0
+                                ? "text-amber-600"
+                                : "text-muted-foreground/40",
+                          )}
+                        >
+                          <CalendarClock className="h-3.5 w-3.5" />
+                          {e.pospuestasTotales}
+                        </div>
+                      </ToolTooltip>
                       <div className="w-32">
                         <div className="h-2 rounded-full bg-muted overflow-hidden">
                           <div

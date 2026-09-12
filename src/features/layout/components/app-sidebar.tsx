@@ -20,6 +20,7 @@ import {
   type Section,
   type SubItem,
 } from "@/features/layout/data/nav-routes";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // El sidebar debe reflejar SIEMPRE el área en la que está el usuario:
 // rutas bajo /mi-panel → menú Paneles; rutas bajo /mis-departamentos o cualquier
@@ -294,41 +295,43 @@ export function AppSidebar() {
       <SidebarHeader className="px-3 py-3">
         {collapsed ? (
           <div className="flex items-center justify-center">
-            <button
-              type="button"
-              onClick={togglePin}
-              className={
-                "flex items-center justify-center rounded transition-colors py-1 px-1 " +
-                (isPinned
-                  ? "bg-sidebar-accent/60 text-sidebar-primary hover:bg-sidebar-accent/80"
-                  : "hover:bg-sidebar-accent/40 text-sidebar-foreground/80")
-              }
-              title={isPinned ? "Desfijar menú (volver a modo automático)" : "Fijar menú abierto"}
-              aria-pressed={isPinned}
-            >
-              {isPinned ? <Pin className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
-            </button>
+            <ToolTooltip label={isPinned ? "Desfijar menú (volver a modo automático)" : "Fijar menú abierto"}>
+              <button
+                type="button"
+                onClick={togglePin}
+                className={
+                  "flex items-center justify-center rounded transition-colors py-1 px-1 " +
+                  (isPinned
+                    ? "bg-sidebar-accent/60 text-sidebar-primary hover:bg-sidebar-accent/80"
+                    : "hover:bg-sidebar-accent/40 text-sidebar-foreground/80")
+                }
+                aria-pressed={isPinned}
+              >
+                {isPinned ? <Pin className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
+              </button>
+            </ToolTooltip>
           </div>
         ) : (
           <div className="relative flex flex-col items-center gap-1.5 pb-10">
-            <button
-              type="button"
-              onClick={togglePin}
-              className={
-                "absolute right-0 top-0 flex h-7 w-7 items-center justify-center rounded transition-colors " +
-                (isPinned
-                  ? "bg-sidebar-accent/60 text-sidebar-primary hover:bg-sidebar-accent/80"
-                  : "hover:bg-sidebar-accent/40")
-              }
-              title={isPinned ? "Desfijar menú (volver a modo automático)" : "Fijar menú abierto"}
-              aria-pressed={isPinned}
-            >
-              {isPinned ? (
-                <Pin className="h-4 w-4" />
-              ) : (
-                <PinOff className="h-4 w-4 text-sidebar-foreground/60" />
-              )}
-            </button>
+            <ToolTooltip label={isPinned ? "Desfijar menú (volver a modo automático)" : "Fijar menú abierto"}>
+              <button
+                type="button"
+                onClick={togglePin}
+                className={
+                  "absolute right-0 top-0 flex h-7 w-7 items-center justify-center rounded transition-colors " +
+                  (isPinned
+                    ? "bg-sidebar-accent/60 text-sidebar-primary hover:bg-sidebar-accent/80"
+                    : "hover:bg-sidebar-accent/40")
+                }
+                aria-pressed={isPinned}
+              >
+                {isPinned ? (
+                  <Pin className="h-4 w-4" />
+                ) : (
+                  <PinOff className="h-4 w-4 text-sidebar-foreground/60" />
+                )}
+              </button>
+            </ToolTooltip>
             <img
               src="/logo-balles.png"
               alt="Balles Hosteleros"

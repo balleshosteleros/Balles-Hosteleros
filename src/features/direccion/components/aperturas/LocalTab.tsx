@@ -29,6 +29,7 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { MapaUbicacionRadio } from "./MapaUbicacionRadio";
 import { BadgeSugerenciaIA } from "@/features/direccion/components/aperturas/shared/BadgeSugerenciaIA";
 import type { DraftLocal } from "@/features/direccion/types/aperturas-ia";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export type SeccionLocalIA = "caracteristicas" | "ubicacion";
 
@@ -550,25 +551,27 @@ function PortadaSection({
     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
       {imagen && (
         <div className="relative group aspect-square rounded-md overflow-hidden border bg-muted">
-          <button
-            type="button"
-            onClick={onOpenLightbox}
-            className="block w-full h-full cursor-zoom-in"
-            title="Ver en grande"
-            aria-label="Abrir foto de portada en grande"
-          >
-            <img src={imagen} alt={nombre} className="w-full h-full object-cover" />
-          </button>
-          {!readOnly && (
+          <ToolTooltip label="Ver en grande">
             <button
               type="button"
-              onClick={onRemove}
-              className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
-              title="Quitar foto"
-              aria-label="Quitar foto"
+              onClick={onOpenLightbox}
+              className="block w-full h-full cursor-zoom-in"
+              aria-label="Abrir foto de portada en grande"
             >
-              <Trash2 className="h-3 w-3" />
+              <img src={imagen} alt={nombre} className="w-full h-full object-cover" />
             </button>
+          </ToolTooltip>
+          {!readOnly && (
+            <ToolTooltip label="Quitar foto">
+              <button
+                type="button"
+                onClick={onRemove}
+                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+                aria-label="Quitar foto"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </ToolTooltip>
           )}
         </div>
       )}
@@ -627,30 +630,32 @@ function Galeria({
             className="relative group aspect-square rounded-md overflow-hidden border bg-muted"
           >
             {f.url ? (
-              <button
-                type="button"
-                onClick={() => onOpenLightbox(idxAbrible)}
-                className="block w-full h-full cursor-zoom-in"
-                title="Ver en grande"
-                aria-label={`Abrir foto ${label} en grande`}
-              >
-                <img src={f.url} alt={label} className="w-full h-full object-cover" />
-              </button>
+              <ToolTooltip label="Ver en grande">
+                <button
+                  type="button"
+                  onClick={() => onOpenLightbox(idxAbrible)}
+                  className="block w-full h-full cursor-zoom-in"
+                  aria-label={`Abrir foto ${label} en grande`}
+                >
+                  <img src={f.url} alt={label} className="w-full h-full object-cover" />
+                </button>
+              </ToolTooltip>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
                 Sin previsualización
               </div>
             )}
             {!readOnly && (
-              <button
-                type="button"
-                onClick={() => onRemove(categoria, f)}
-                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
-                title="Quitar foto"
-                aria-label="Quitar foto"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
+              <ToolTooltip label="Quitar foto">
+                <button
+                  type="button"
+                  onClick={() => onRemove(categoria, f)}
+                  className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+                  aria-label="Quitar foto"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </ToolTooltip>
             )}
             {!abrible && f.url && (
               <span className="sr-only">no abrible</span>
@@ -751,46 +756,49 @@ function Lightbox({
             {index + 1} / {total}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          className="h-9 w-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
-          aria-label="Cerrar"
-          title="Cerrar (Esc)"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        <ToolTooltip label="Cerrar (Esc)">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="h-9 w-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            aria-label="Cerrar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </ToolTooltip>
       </div>
 
       {total > 1 && (
         <>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              prev();
-            }}
-            className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
-            aria-label="Foto anterior"
-            title="Anterior (←)"
-          >
-            <ChevronLeft className="h-6 w-6" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              next();
-            }}
-            className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
-            aria-label="Foto siguiente"
-            title="Siguiente (→)"
-          >
-            <ChevronRight className="h-6 w-6" />
-          </button>
+          <ToolTooltip label="Anterior (←)">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                prev();
+              }}
+              className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+              aria-label="Foto anterior"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+          </ToolTooltip>
+          <ToolTooltip label="Siguiente (→)">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                next();
+              }}
+              className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+              aria-label="Foto siguiente"
+            >
+              <ChevronRight className="h-6 w-6" />
+            </button>
+          </ToolTooltip>
         </>
       )}
 
@@ -811,21 +819,21 @@ function Lightbox({
             {zonas.map((z) => {
               const ZIco = z.Icono;
               return (
-                <button
-                  key={`${z.label}-${z.startIndex}`}
-                  type="button"
-                  onClick={() => onIndexChange(z.startIndex)}
-                  className={
-                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors " +
-                    (z.activa
-                      ? "bg-white text-black"
-                      : "bg-white/10 text-white/85 hover:bg-white/20")
-                  }
-                  title={`Ir a ${z.label}`}
-                >
-                  <ZIco className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  {z.label}
-                </button>
+                <ToolTooltip key={`${z.label}-${z.startIndex}`} label={`Ir a ${z.label}`}>
+                  <button
+                    type="button"
+                    onClick={() => onIndexChange(z.startIndex)}
+                    className={
+                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors " +
+                      (z.activa
+                        ? "bg-white text-black"
+                        : "bg-white/10 text-white/85 hover:bg-white/20")
+                    }
+                  >
+                    <ZIco className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    {z.label}
+                  </button>
+                </ToolTooltip>
               );
             })}
           </div>

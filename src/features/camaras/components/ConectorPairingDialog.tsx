@@ -36,6 +36,7 @@ import {
   type ConectorEstado,
   type ConectorPublic,
 } from "@/features/camaras/types/conector";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const ESTADO_BADGE: Record<ConectorEstado, string> = {
   pendiente: "bg-amber-100 text-amber-700",
@@ -276,14 +277,14 @@ function ListView({
                   Ver código
                 </Button>
               )}
-              <button
-                type="button"
-                onClick={() => onEliminar(c)}
-                className="p-1 text-muted-foreground hover:text-destructive"
-                title="Eliminar"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <ToolTooltip label="Eliminar">
+                <button
+                  type="button"
+                  onClick={() => onEliminar(c)}
+                  className="p-1 text-muted-foreground hover:text-destructive" aria-label="Eliminar">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </ToolTooltip>
             </li>
           ))}
         </ul>
@@ -346,18 +347,18 @@ function PairingView({
               <code className="rounded bg-muted px-3 py-1 font-mono text-base tracking-widest">
                 {code}
               </code>
-              <button
-                type="button"
-                onClick={copiar}
-                className="p-1.5 text-muted-foreground hover:text-foreground"
-                title="Copiar código"
-              >
-                {copiado ? (
-                  <Check className="h-4 w-4 text-emerald-600" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </button>
+              <ToolTooltip label="Copiar código">
+                <button
+                  type="button"
+                  onClick={copiar}
+                  className="p-1.5 text-muted-foreground hover:text-foreground" aria-label="Copiar código">
+                  {copiado ? (
+                    <Check className="h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </button>
+              </ToolTooltip>
             </div>
           </div>
 

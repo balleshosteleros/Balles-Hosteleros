@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Upload, Link2, X, Loader2, ImageIcon } from "lucide-react";
 import { subirImagenInspeccion } from "../services/foto-upload";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface ImageInputOrUploadProps {
   value: string | null;
@@ -73,9 +74,11 @@ export function ImageInputOrUpload({
               }}
             />
           </div>
-          <div className="flex-1 truncate text-xs text-muted-foreground" title={value!}>
-            {value}
-          </div>
+          <ToolTooltip label={value!}>
+            <div className="flex-1 truncate text-xs text-muted-foreground">
+              {value}
+            </div>
+          </ToolTooltip>
           <Button
             size="icon"
             variant="ghost"

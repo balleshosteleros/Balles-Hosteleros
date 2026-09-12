@@ -29,6 +29,7 @@ import {
   horaFechaEnTZ,
   shortTZLabel,
 } from "../lib/timezones";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface EventoApi {
   id: string;
@@ -327,38 +328,38 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
         <SheetTitle className="sr-only">Google Meet — Reuniones</SheetTitle>
         <SheetHeader className="bg-[#f6f8fc] px-2 py-2 border-b border-transparent">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSidebarAbierto((v) => !v)}
-              className="rounded-full p-3 hover:bg-black/5 transition-colors"
-              title="Menú principal"
-            >
-              <MenuIcon className="h-5 w-5 text-[#5f6368]" />
-            </button>
+            <ToolTooltip label="Menú principal">
+              <button
+                type="button"
+                onClick={() => setSidebarAbierto((v) => !v)}
+                className="rounded-full p-3 hover:bg-black/5 transition-colors" aria-label="Menú principal">
+                <MenuIcon className="h-5 w-5 text-[#5f6368]" />
+              </button>
+            </ToolTooltip>
             <div className="flex items-center gap-1 pr-3">
               <MeetLogo className="h-9 w-auto" />
             </div>
             <div className="ml-auto flex items-center gap-1">
-              <button
-                type="button"
-                onClick={load}
-                disabled={loading}
-                className="rounded-full p-3 hover:bg-black/5 transition-colors disabled:opacity-50"
-                title="Actualizar"
-              >
-                <RefreshCw className={`h-5 w-5 text-[#5f6368] ${loading ? "animate-spin" : ""}`} />
-              </button>
+              <ToolTooltip label="Actualizar">
+                <button
+                  type="button"
+                  onClick={load}
+                  disabled={loading}
+                  className="rounded-full p-3 hover:bg-black/5 transition-colors disabled:opacity-50" aria-label="Actualizar">
+                  <RefreshCw className={`h-5 w-5 text-[#5f6368] ${loading ? "animate-spin" : ""}`} />
+                </button>
+              </ToolTooltip>
               <SelectorTZ tz={tzSecundaria} onChange={cambiarTz} />
               <GoogleAccountButton />
               <SheetMaximizeButton className="text-[#5f6368]" />
               <SheetClose asChild>
-                <button
-                  type="button"
-                  className="ml-1 rounded-full p-3 hover:bg-black/5 transition-colors"
-                  title="Cerrar"
-                >
-                  <X className="h-5 w-5 text-[#5f6368]" />
-                </button>
+                <ToolTooltip label="Cerrar">
+                  <button
+                    type="button"
+                    className="ml-1 rounded-full p-3 hover:bg-black/5 transition-colors" aria-label="Cerrar">
+                    <X className="h-5 w-5 text-[#5f6368]" />
+                  </button>
+                </ToolTooltip>
               </SheetClose>
             </div>
           </div>
@@ -419,30 +420,30 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
             </Tabs>
             {/* Conmutador agenda ↔ calendario */}
             <div className="flex items-center rounded-full border bg-muted/30 p-0.5">
-              <button
-                type="button"
-                onClick={() => setModo("agenda")}
-                className={`rounded-full p-1.5 transition-colors ${
-                  modo === "agenda"
-                    ? "bg-white text-emerald-700 shadow-sm"
-                    : "text-[#5f6368] hover:text-foreground"
-                }`}
-                title="Vista agenda"
-              >
-                <List className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setModo("calendario")}
-                className={`rounded-full p-1.5 transition-colors ${
-                  modo === "calendario"
-                    ? "bg-white text-emerald-700 shadow-sm"
-                    : "text-[#5f6368] hover:text-foreground"
-                }`}
-                title="Vista calendario"
-              >
-                <CalendarRange className="h-4 w-4" />
-              </button>
+              <ToolTooltip label="Vista agenda">
+                <button
+                  type="button"
+                  onClick={() => setModo("agenda")}
+                  className={`rounded-full p-1.5 transition-colors ${
+                    modo === "agenda"
+                      ? "bg-white text-emerald-700 shadow-sm"
+                      : "text-[#5f6368] hover:text-foreground"
+                  }`} aria-label="Vista agenda">
+                  <List className="h-4 w-4" />
+                </button>
+              </ToolTooltip>
+              <ToolTooltip label="Vista calendario">
+                <button
+                  type="button"
+                  onClick={() => setModo("calendario")}
+                  className={`rounded-full p-1.5 transition-colors ${
+                    modo === "calendario"
+                      ? "bg-white text-emerald-700 shadow-sm"
+                      : "text-[#5f6368] hover:text-foreground"
+                  }`} aria-label="Vista calendario">
+                  <CalendarRange className="h-4 w-4" />
+                </button>
+              </ToolTooltip>
             </div>
           </div>
         </div>

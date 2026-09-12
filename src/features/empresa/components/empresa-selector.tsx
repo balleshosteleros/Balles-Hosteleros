@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Icono de la empresa. SIEMPRE redondo, suba quien suba lo que suba.
@@ -104,14 +105,15 @@ export function EmpresaSelector() {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          onMouseEnter={() => setOpen(true)}
-          className="flex items-center justify-center rounded-lg p-0.5 hover:bg-sidebar-accent/50 transition-colors focus:outline-none"
-          title={empresaVisible.nombre}
-        >
-          <EmpresaAvatar empresa={empresaVisible} logoUrl={getIsotipoUrl(empresaVisible.id)} />
-        </button>
+        <ToolTooltip label={empresaVisible.nombre}>
+          <button
+            type="button"
+            onMouseEnter={() => setOpen(true)}
+            className="flex items-center justify-center rounded-lg p-0.5 hover:bg-sidebar-accent/50 transition-colors focus:outline-none"
+          >
+            <EmpresaAvatar empresa={empresaVisible} logoUrl={getIsotipoUrl(empresaVisible.id)} />
+          </button>
+        </ToolTooltip>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"

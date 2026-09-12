@@ -36,6 +36,7 @@ import {
 import type { AusenciaCalendario } from "@/features/rrhh/actions/calendario-ausencias-actions";
 import type { FestivoInfo } from "@/features/rrhh/hooks/useFestivos";
 import type { SolicitudSubtipoAusencia } from "@/features/mi-panel/types";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Billete verde: ese día se liquidaron días de vacaciones en nómina. Se pinta en
@@ -359,56 +360,56 @@ export function CalendarioUnico({ ausencias, liquidaciones, festivoEnFecha, onAn
         {TIPOS_CALENDARIO.map((t) => {
           const on = tiposOn.has(t.subtipo);
           return (
-            <button
-              key={t.subtipo}
-              type="button"
-              onClick={() => toggleTipo(t.subtipo)}
-              title={t.ayuda}
-              className={cn(
-                "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-                on ? "bg-card" : "bg-transparent text-muted-foreground opacity-50",
-              )}
-            >
-              <span
-                className="h-2.5 w-2.5 rounded-full ring-2 ring-offset-1 ring-offset-background"
-                style={{ backgroundColor: t.color, boxShadow: `0 0 0 2px ${t.color}40` }}
-              />
-              {t.label}
-            </button>
+            <ToolTooltip key={t.subtipo} label={t.ayuda}>
+              <button
+                type="button"
+                onClick={() => toggleTipo(t.subtipo)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  on ? "bg-card" : "bg-transparent text-muted-foreground opacity-50",
+                )}
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-full ring-2 ring-offset-1 ring-offset-background"
+                  style={{ backgroundColor: t.color, boxShadow: `0 0 0 2px ${t.color}40` }}
+                />
+                {t.label}
+              </button>
+            </ToolTooltip>
           );
         })}
 
-        <button
-          type="button"
-          onClick={() => setFestivosOn((v) => !v)}
-          title="Festivos y vísperas. El festivo va en color; la víspera, más flojo."
-          className={cn(
-            "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-            festivosOn ? "bg-card" : "bg-transparent text-muted-foreground opacity-50",
-          )}
-        >
-          <PartyPopper className="h-3.5 w-3.5 text-amber-600" />
-          Festivos
-        </button>
+        <ToolTooltip label="Festivos y vísperas. El festivo va en color; la víspera, más flojo.">
+          <button
+            type="button"
+            onClick={() => setFestivosOn((v) => !v)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+              festivosOn ? "bg-card" : "bg-transparent text-muted-foreground opacity-50",
+            )} aria-label="Festivos y vísperas. El festivo va en color; la víspera, más flojo.">
+            <PartyPopper className="h-3.5 w-3.5 text-amber-600" />
+            Festivos
+          </button>
+        </ToolTooltip>
 
         <span className="mx-1 h-4 w-px bg-border" />
 
         {ESTADOS_CALENDARIO.map((e) => {
           const on = estadosOn.has(e.estado);
           return (
-            <button
-              key={e.estado}
-              type="button"
-              onClick={() => toggleEstado(e.estado)}
-              title={e.ayuda}
-              className={cn(
-                "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-                on ? "bg-card" : "bg-transparent text-muted-foreground opacity-50",
-                e.estado === "pendiente" && on && "border-dashed",
-              )}
-            >
-              {e.label}
-            </button>
+            <ToolTooltip key={e.estado} label={e.ayuda}>
+              <button
+                type="button"
+                onClick={() => toggleEstado(e.estado)}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  on ? "bg-card" : "bg-transparent text-muted-foreground opacity-50",
+                  e.estado === "pendiente" && on && "border-dashed",
+                )}
+              >
+                {e.label}
+              </button>
+            </ToolTooltip>
           );
         })}
 
@@ -480,17 +481,18 @@ function MasDelDia({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "flex items-center justify-center rounded-full border border-dashed bg-muted/60 font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-            d.avatar,
-            d.texto,
-          )}
-          title={`Ver ${restantes.length} más`}
-        >
-          +{restantes.length}
-        </button>
+        <ToolTooltip label={`Ver ${restantes.length} más`}>
+          <button
+            type="button"
+            className={cn(
+              "flex items-center justify-center rounded-full border border-dashed bg-muted/60 font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              d.avatar,
+              d.texto,
+            )}
+          >
+            +{restantes.length}
+          </button>
+        </ToolTooltip>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-2" align="start">
         <p className="px-1 pb-1.5 text-xs font-semibold text-muted-foreground">
@@ -623,16 +625,17 @@ function MarcaFestivo({ info, mini }: { info: FestivoInfo; mini?: boolean }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "rounded p-0.5 transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/40",
-            esVispera ? "text-amber-500/70" : "text-amber-600",
-          )}
-          title={esVispera ? `Víspera de ${info.festivo.nombre}` : info.festivo.nombre}
-        >
-          <PartyPopper className={cn(mini ? "h-2.5 w-2.5" : "h-3.5 w-3.5", esVispera && "opacity-60")} />
-        </button>
+        <ToolTooltip label={esVispera ? `Víspera de ${info.festivo.nombre}` : info.festivo.nombre}>
+          <button
+            type="button"
+            className={cn(
+              "rounded p-0.5 transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/40",
+              esVispera ? "text-amber-500/70" : "text-amber-600",
+            )}
+          >
+            <PartyPopper className={cn(mini ? "h-2.5 w-2.5" : "h-3.5 w-3.5", esVispera && "opacity-60")} />
+          </button>
+        </ToolTooltip>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-3" align="end">
         <p className="text-sm font-semibold">{info.festivo.nombre}</p>

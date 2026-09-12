@@ -23,6 +23,7 @@ import {
 import { DriveExplorador } from "./DriveExplorador";
 import { DriveLogo } from "./DriveIcon";
 import { GoogleAccountButton } from "./GoogleAccountButton";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export function DriveDrawer({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -50,13 +51,13 @@ export function DriveDrawer({ children }: { children: ReactNode }) {
               <GoogleAccountButton />
               <SheetMaximizeButton className="text-[#5f6368]" />
               <SheetClose asChild>
-                <button
-                  type="button"
-                  className="ml-1 rounded-full p-3 transition-colors hover:bg-black/5"
-                  title="Cerrar"
-                >
-                  <X className="h-5 w-5 text-[#5f6368]" />
-                </button>
+                <ToolTooltip label="Cerrar">
+                  <button
+                    type="button"
+                    className="ml-1 rounded-full p-3 transition-colors hover:bg-black/5" aria-label="Cerrar">
+                    <X className="h-5 w-5 text-[#5f6368]" />
+                  </button>
+                </ToolTooltip>
               </SheetClose>
             </div>
           </div>

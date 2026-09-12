@@ -15,6 +15,7 @@ import {
 } from "@/features/sala/planos/data/planos";
 import { createZona, updateZona, deleteZona } from "@/features/sala/planos/actions/zonas-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   open: boolean;
@@ -142,17 +143,17 @@ export function ZonaConfigModal({
             <Label className="text-xs">Color pastel</Label>
             <div className="grid grid-cols-10 gap-1.5">
               {COLORES_PASTEL_ZONAS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  className={cn(
-                    "h-8 rounded-md border-2 transition-all",
-                    color === c ? "border-foreground scale-110" : "border-transparent",
-                  )}
-                  style={{ backgroundColor: c }}
-                  title={c}
-                />
+                <ToolTooltip key={c} label={c}>
+                  <button
+                    type="button"
+                    onClick={() => setColor(c)}
+                    className={cn(
+                      "h-8 rounded-md border-2 transition-all",
+                      color === c ? "border-foreground scale-110" : "border-transparent",
+                    )}
+                    style={{ backgroundColor: c }}
+                  />
+                </ToolTooltip>
               ))}
             </div>
           </div>

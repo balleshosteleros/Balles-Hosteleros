@@ -64,6 +64,7 @@ import { formatFechaEnZona, formatHoraEnZona, claveDiaEnZona, etiquetaDiaChat } 
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 type Canal = {
   id: string;
@@ -1061,13 +1062,13 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-1">
             <SheetMaximizeButton className="p-2 text-[#5f6368]" />
             <SheetClose asChild>
-              <button
-                type="button"
-                className="rounded-full p-2 hover:bg-black/5 transition-colors"
-                title="Cerrar"
-              >
-                <X className="h-5 w-5 text-[#5f6368]" />
-              </button>
+              <ToolTooltip label="Cerrar">
+                <button
+                  type="button"
+                  className="rounded-full p-2 hover:bg-black/5 transition-colors" aria-label="Cerrar">
+                  <X className="h-5 w-5 text-[#5f6368]" />
+                </button>
+              </ToolTooltip>
             </SheetClose>
           </div>
         </header>
@@ -1203,22 +1204,23 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                 {/* Header del chat */}
                 <div className="flex items-center justify-between border-b bg-background px-5 py-3 shrink-0">
                   <div className="flex items-center gap-3 min-w-0">
-                    <button
-                      onClick={() => setCanalActivo(null)}
-                      className="lg:hidden rounded-full p-1 hover:bg-muted"
-                      title="Volver"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
+                    <ToolTooltip label="Volver">
+                      <button
+                        onClick={() => setCanalActivo(null)}
+                        className="lg:hidden rounded-full p-1 hover:bg-muted" aria-label="Volver">
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                    </ToolTooltip>
                     {/* Oculta/muestra la lista de grupos para dar todo el ancho
                         a la conversación. */}
-                    <button
-                      onClick={() => setListaOculta((v) => !v)}
-                      className="hidden lg:flex shrink-0 items-center justify-center rounded-full p-1.5 text-muted-foreground hover:bg-muted"
-                      title={listaOculta ? "Mostrar los grupos" : "Ocultar los grupos"}
-                    >
-                      <PanelLeft className="h-5 w-5" />
-                    </button>
+                    <ToolTooltip label={listaOculta ? "Mostrar los grupos" : "Ocultar los grupos"}>
+                      <button
+                        onClick={() => setListaOculta((v) => !v)}
+                        className="hidden lg:flex shrink-0 items-center justify-center rounded-full p-1.5 text-muted-foreground hover:bg-muted"
+                      >
+                        <PanelLeft className="h-5 w-5" />
+                      </button>
+                    </ToolTooltip>
                     <GrupoAvatar logoUrl={logoUrl} iniciales={iniciales} color={colorEmpresa} size="md" />
                     <div className="min-w-0">
                       <h2 className="text-base font-bold text-foreground truncate flex items-center gap-1.5">
@@ -1230,14 +1232,14 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                           {isDepartamento ? <Building2 className="h-3 w-3" /> : <Briefcase className="h-3 w-3" />}
                           {isDepartamento ? "Departamento" : "Asunto"}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setDlgAcceso(true)}
-                          className="inline-flex items-center gap-1 hover:text-primary hover:underline"
-                          title="Ver personas con acceso"
-                        >
-                          <Users className="h-3 w-3" /> {canal.miembros}
-                        </button>
+                        <ToolTooltip label="Ver personas con acceso">
+                          <button
+                            type="button"
+                            onClick={() => setDlgAcceso(true)}
+                            className="inline-flex items-center gap-1 hover:text-primary hover:underline" aria-label="Ver personas con acceso">
+                            <Users className="h-3 w-3" /> {canal.miembros}
+                          </button>
+                        </ToolTooltip>
                         {prefActivo.silenciado && (
                           <span className="inline-flex items-center gap-1"><BellOff className="h-3 w-3" /> silenciado</span>
                         )}
@@ -1381,25 +1383,26 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                                 {/* Ticks SOLO en mis mensajes, al lado de la hora:
                                     gris = enviado · AZUL = ya lo han leído. */}
                                 {propio && !m.id.startsWith("m-") && (
-                                  <button
-                                    type="button"
-                                    onClick={() => verLectores(m)}
-                                    title={
+                                  <ToolTooltip label={
                                       (lecturas[m.id] ?? 0) > 0
                                         ? `Leído por ${lecturas[m.id]}`
                                         : "Enviado"
-                                    }
-                                    className="inline-flex items-center hover:opacity-70"
-                                  >
-                                    <CheckCheck
-                                      className={cn(
-                                        "h-3.5 w-3.5",
-                                        (lecturas[m.id] ?? 0) > 0
-                                          ? "text-sky-500"
-                                          : "text-muted-foreground/60",
-                                      )}
-                                    />
-                                  </button>
+                                    }>
+                                    <button
+                                      type="button"
+                                      onClick={() => verLectores(m)}
+                                      className="inline-flex items-center hover:opacity-70"
+                                    >
+                                      <CheckCheck
+                                        className={cn(
+                                          "h-3.5 w-3.5",
+                                          (lecturas[m.id] ?? 0) > 0
+                                            ? "text-sky-500"
+                                            : "text-muted-foreground/60",
+                                        )}
+                                      />
+                                    </button>
+                                  </ToolTooltip>
                                 )}
                               </p>
                             </div>
@@ -1867,14 +1870,14 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                       <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => { setDlgAjustes(false); setDlgAcceso(true); }}
-                    className="text-[11px] text-muted-foreground flex items-center gap-1 hover:text-primary hover:underline"
-                    title="Ver personas con acceso"
-                  >
-                    <Users className="h-3 w-3" /> {canal.miembros} miembros
-                  </button>
+                  <ToolTooltip label="Ver personas con acceso">
+                    <button
+                      type="button"
+                      onClick={() => { setDlgAjustes(false); setDlgAcceso(true); }}
+                      className="text-[11px] text-muted-foreground flex items-center gap-1 hover:text-primary hover:underline" aria-label="Ver personas con acceso">
+                      <Users className="h-3 w-3" /> {canal.miembros} miembros
+                    </button>
+                  </ToolTooltip>
                 </div>
 
                 {isDepartamento && (

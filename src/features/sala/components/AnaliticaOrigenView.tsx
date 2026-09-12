@@ -21,6 +21,7 @@ import { ESTADOS_RESERVA, ESTADO_RESERVA_LABELS } from "@/features/sala/data/res
 import { CapacidadGruposPanel } from "@/features/sala/components/CapacidadGruposPanel";
 import { TendenciaCanalesPanel } from "@/features/sala/components/TendenciaCanalesPanel";
 import { ListadoReservasPanel } from "@/features/sala/components/ListadoReservasPanel";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 type PieDatum = { name: string; value: number; origen: OrigenBucket };
 
@@ -88,13 +89,14 @@ function TablaOrigen({
         <span className="text-right text-muted-foreground">%</span>
         {origenes.map((o) => (
           <div key={o.origen} className="contents">
-            <span
-              style={{ color: colorOrigen(o.origen) }}
-              className="truncate font-medium"
-              title={labelOrigen(o.origen)}
-            >
-              {labelOrigen(o.origen)}
-            </span>
+            <ToolTooltip label={labelOrigen(o.origen)}>
+              <span
+                style={{ color: colorOrigen(o.origen) }}
+                className="truncate font-medium"
+              >
+                {labelOrigen(o.origen)}
+              </span>
+            </ToolTooltip>
             <span className="text-right font-mono" style={{ color: colorOrigen(o.origen) }}>
               {o.reservas}
             </span>
@@ -203,32 +205,32 @@ export function AnaliticaOrigenView() {
           </TabsList>
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded-md border bg-background p-0.5">
-              <button
-                type="button"
-                onClick={() => setCampoFecha("fecha")}
-                className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs transition-colors ${
-                  campoFecha === "fecha"
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                title="Agrupar por el día para el que reservó el cliente"
-              >
-                <CalendarDays className="h-3.5 w-3.5" />
-                Día reservado
-              </button>
-              <button
-                type="button"
-                onClick={() => setCampoFecha("created_at")}
-                className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs transition-colors ${
-                  campoFecha === "created_at"
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                title="Agrupar por el día en que se registró la reserva"
-              >
-                <CalendarRange className="h-3.5 w-3.5" />
-                Fecha creación
-              </button>
+              <ToolTooltip label="Agrupar por el día para el que reservó el cliente">
+                <button
+                  type="button"
+                  onClick={() => setCampoFecha("fecha")}
+                  className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs transition-colors ${
+                    campoFecha === "fecha"
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`} aria-label="Agrupar por el día para el que reservó el cliente">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Día reservado
+                </button>
+              </ToolTooltip>
+              <ToolTooltip label="Agrupar por el día en que se registró la reserva">
+                <button
+                  type="button"
+                  onClick={() => setCampoFecha("created_at")}
+                  className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs transition-colors ${
+                    campoFecha === "created_at"
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`} aria-label="Agrupar por el día en que se registró la reserva">
+                  <CalendarRange className="h-3.5 w-3.5" />
+                  Fecha creación
+                </button>
+              </ToolTooltip>
             </div>
             <Select value={estado} onValueChange={(v) => setEstado(v as FiltroEstado)}>
               <SelectTrigger className="h-8 w-[150px] text-xs">

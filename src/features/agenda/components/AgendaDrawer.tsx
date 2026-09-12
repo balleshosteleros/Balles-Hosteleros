@@ -62,6 +62,7 @@ import {
   updateContacto,
   deleteContacto,
 } from "@/features/agenda/actions/contactos-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   mantenimiento: Wrench,
@@ -344,46 +345,49 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
                       {/* Acciones rápidas: llamar / email / WhatsApp */}
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         {c.telefono && (
-                          <a
-                            href={`tel:${c.telefono}`}
-                            title={`Llamar a ${c.telefono}`}
-                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
-                          >
-                            <Phone className="h-3 w-3" />
-                            {c.telefono}
-                          </a>
+                          <ToolTooltip label={`Llamar a ${c.telefono}`}>
+                            <a
+                              href={`tel:${c.telefono}`}
+                              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
+                            >
+                              <Phone className="h-3 w-3" />
+                              {c.telefono}
+                            </a>
+                          </ToolTooltip>
                         )}
                         {c.email && (
-                          <a
-                            href={`mailto:${c.email}`}
-                            title={`Enviar email a ${c.email}`}
-                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
-                          >
-                            <Mail className="h-3 w-3" />
-                            Email
-                          </a>
+                          <ToolTooltip label={`Enviar email a ${c.email}`}>
+                            <a
+                              href={`mailto:${c.email}`}
+                              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
+                            >
+                              <Mail className="h-3 w-3" />
+                              Email
+                            </a>
+                          </ToolTooltip>
                         )}
                         {c.telefono_fijo && (
-                          <a
-                            href={`tel:${c.telefono_fijo}`}
-                            title={`Llamar a ${c.telefono_fijo}`}
-                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
-                          >
-                            <Phone className="h-3 w-3" />
-                            {c.telefono_fijo}
-                          </a>
+                          <ToolTooltip label={`Llamar a ${c.telefono_fijo}`}>
+                            <a
+                              href={`tel:${c.telefono_fijo}`}
+                              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
+                            >
+                              <Phone className="h-3 w-3" />
+                              {c.telefono_fijo}
+                            </a>
+                          </ToolTooltip>
                         )}
                         {whatsappHref(c.telefono) && (
-                          <a
-                            href={whatsappHref(c.telefono)!}
-                            target="_blank"
-                            rel="noreferrer"
-                            title="Abrir WhatsApp"
-                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
-                          >
-                            <MessageCircle className="h-3 w-3" />
-                            WhatsApp
-                          </a>
+                          <ToolTooltip label="Abrir WhatsApp">
+                            <a
+                              href={whatsappHref(c.telefono)!}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700" aria-label="Abrir WhatsApp">
+                              <MessageCircle className="h-3 w-3" />
+                              WhatsApp
+                            </a>
+                          </ToolTooltip>
                         )}
 
                         {editable && (

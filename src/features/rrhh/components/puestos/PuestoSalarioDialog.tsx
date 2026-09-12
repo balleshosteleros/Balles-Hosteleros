@@ -37,6 +37,7 @@ import {
   type CampoPuesto,
 } from "@/features/rrhh/services/validar-puesto";
 import type { PuestoSalarial, NivelSalarial } from "@/features/rrhh/data/puestos";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   open: boolean;
@@ -598,13 +599,14 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
                     return (
                       <div key={d} className="flex flex-col items-center gap-0.5">
                         <span className="text-[9px] text-muted-foreground">{d}</span>
-                        <span
-                          className={`h-5 w-full rounded-sm flex items-center justify-center text-[9px] font-semibold ${t ? "text-white" : "bg-muted text-muted-foreground/60"}`}
-                          style={t ? { backgroundColor: t.colorHex } : undefined}
-                          title={t ? `${t.codigo} · ${t.nombre}` : "Libre"}
-                        >
-                          {t ? t.codigo : "·"}
-                        </span>
+                        <ToolTooltip label={t ? `${t.codigo} · ${t.nombre}` : "Libre"}>
+                          <span
+                            className={`h-5 w-full rounded-sm flex items-center justify-center text-[9px] font-semibold ${t ? "text-white" : "bg-muted text-muted-foreground/60"}`}
+                            style={t ? { backgroundColor: t.colorHex } : undefined}
+                          >
+                            {t ? t.codigo : "·"}
+                          </span>
+                        </ToolTooltip>
                       </div>
                     );
                   })}

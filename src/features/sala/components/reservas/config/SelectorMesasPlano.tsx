@@ -13,6 +13,7 @@
 
 import { useMemo } from "react";
 import type { Mesa, Zona } from "@/features/sala/planos/data/planos";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   mesas: Mesa[];
@@ -78,31 +79,31 @@ export function SelectorMesasPlano({
                 const sel = seleccionadas.includes(m.id);
                 const bloqueada = zonaBloqueada && !sel;
                 return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    disabled={bloqueada}
-                    onClick={() => onToggle(m.id)}
-                    title={
+                  <ToolTooltip key={m.id} label={
                       bloqueada
                         ? `Otra zona (${g.nombre}). Quita las mesas elegidas para cambiar.`
                         : `${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} per`
-                    }
-                    className={[
-                      "rounded border px-2 h-8 text-xs font-semibold transition-colors",
-                      sel
-                        ? "border-transparent text-white"
-                        : bloqueada
-                          ? "border-dashed text-muted-foreground/35 cursor-not-allowed"
-                          : "hover:border-foreground",
-                    ].join(" ")}
-                    style={sel ? { backgroundColor: color } : undefined}
-                  >
-                    {m.codigo}
-                    <span className="ml-1 font-normal opacity-70">
-                      {m.capacidadMax}p
-                    </span>
-                  </button>
+                    }>
+                    <button
+                      type="button"
+                      disabled={bloqueada}
+                      onClick={() => onToggle(m.id)}
+                      className={[
+                        "rounded border px-2 h-8 text-xs font-semibold transition-colors",
+                        sel
+                          ? "border-transparent text-white"
+                          : bloqueada
+                            ? "border-dashed text-muted-foreground/35 cursor-not-allowed"
+                            : "hover:border-foreground",
+                      ].join(" ")}
+                      style={sel ? { backgroundColor: color } : undefined}
+                    >
+                      {m.codigo}
+                      <span className="ml-1 font-normal opacity-70">
+                        {m.capacidadMax}p
+                      </span>
+                    </button>
+                  </ToolTooltip>
                 );
               })}
             </div>

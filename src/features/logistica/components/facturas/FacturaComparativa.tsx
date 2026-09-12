@@ -11,6 +11,7 @@ import type {
   DiscrepanciaTipo,
   LineaFactura,
 } from "@/features/logistica/types/facturas";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   lineas: LineaFactura[];
@@ -158,9 +159,11 @@ function FilaComparativa({
   return (
     <tr className={`border-b ${bg}`}>
       <td className="px-3 py-2 max-w-[260px]">
-        <div className="font-medium truncate" title={linea.nombre}>
-          {linea.nombre}
-        </div>
+        <ToolTooltip label={linea.nombre}>
+          <div className="font-medium truncate">
+            {linea.nombre}
+          </div>
+        </ToolTooltip>
         {sis && tipo === "nombre" && (
           <div className="text-[10px] text-muted-foreground truncate">
             Sistema: {sis.nombre}

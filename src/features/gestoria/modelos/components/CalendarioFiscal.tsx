@@ -30,6 +30,7 @@ import {
   type ModeloPeriodo,
   type GrupoModelo,
 } from "../types/modelos";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   ejercicio: number;
@@ -497,21 +498,21 @@ function MesGrande({ anio, mes, ventanasEnDia, limitesEnDia }: MesProps) {
               : undefined;
 
           return (
-            <div
-              key={i}
-              title={titulo}
-              style={celda.enMes ? est.style : undefined}
-              className={cn(
-                "flex aspect-square items-center justify-center rounded-md border border-transparent text-sm",
-                !celda.enMes && "text-muted-foreground/40",
-                celda.enMes && est.className,
-                esInicioFranja && "rounded-l-lg",
-                esFinFranja && "rounded-r-lg",
-                esLimite && cn("font-bold", anilloLimite(limites)),
-              )}
-            >
-              {celda.fecha.getDate()}
-            </div>
+            <ToolTooltip key={i} label={titulo}>
+              <div
+                style={celda.enMes ? est.style : undefined}
+                className={cn(
+                  "flex aspect-square items-center justify-center rounded-md border border-transparent text-sm",
+                  !celda.enMes && "text-muted-foreground/40",
+                  celda.enMes && est.className,
+                  esInicioFranja && "rounded-l-lg",
+                  esFinFranja && "rounded-r-lg",
+                  esLimite && cn("font-bold", anilloLimite(limites)),
+                )}
+              >
+                {celda.fecha.getDate()}
+              </div>
+            </ToolTooltip>
           );
         })}
       </div>
@@ -575,19 +576,19 @@ function MiniMes({ anio, mes, ventanasEnDia, limitesEnDia }: MesProps) {
               : undefined;
 
           return (
-            <div
-              key={i}
-              title={titulo}
-              style={celda.enMes ? est.style : undefined}
-              className={cn(
-                "flex aspect-square items-center justify-center rounded-[3px] text-[10px] leading-none",
-                !celda.enMes && "text-muted-foreground/30",
-                celda.enMes && est.className,
-                esLimite && cn("font-bold", anilloLimite(limites).replace("ring-2", "ring-1")),
-              )}
-            >
-              {celda.enMes ? celda.fecha.getDate() : ""}
-            </div>
+            <ToolTooltip key={i} label={titulo}>
+              <div
+                style={celda.enMes ? est.style : undefined}
+                className={cn(
+                  "flex aspect-square items-center justify-center rounded-[3px] text-[10px] leading-none",
+                  !celda.enMes && "text-muted-foreground/30",
+                  celda.enMes && est.className,
+                  esLimite && cn("font-bold", anilloLimite(limites).replace("ring-2", "ring-1")),
+                )}
+              >
+                {celda.enMes ? celda.fecha.getDate() : ""}
+              </div>
+            </ToolTooltip>
           );
         })}
       </div>

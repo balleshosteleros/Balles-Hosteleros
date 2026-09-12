@@ -15,6 +15,7 @@ import { saveRolesToSupabase, loadRolesFromSupabase } from "@/features/ajustes/a
 import { getEmployees } from "@/actions/admin";
 import { MODULOS_DEPARTAMENTO } from "@/features/auth/lib/permisos";
 import { useModuloDisponible } from "@/features/empresa/contexts/catalogo-empresa-context";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 type UsuarioRol = {
   id: string;
@@ -192,15 +193,16 @@ export function RolesTab() {
                   <span className="text-xs text-muted-foreground">{accesosCount}/{TOTAL_MODULOS} con acceso</span>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                        title={`${usuariosConRol.length} ${usuariosConRol.length === 1 ? "usuario" : "usuarios"} con este rol`}
-                      >
-                        <Users className="h-3.5 w-3.5" />
-                        <span className="font-semibold tabular-nums">{usuariosConRol.length}</span>
-                      </button>
+                      <ToolTooltip label={`${usuariosConRol.length} ${usuariosConRol.length === 1 ? "usuario" : "usuarios"} con este rol`}>
+                        <button
+                          type="button"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                          <span className="font-semibold tabular-nums">{usuariosConRol.length}</span>
+                        </button>
+                      </ToolTooltip>
                     </PopoverTrigger>
                     <PopoverContent
                       align="end"

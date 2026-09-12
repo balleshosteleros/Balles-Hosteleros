@@ -58,6 +58,7 @@ import {
   saveViewPreferences,
 } from "@/shared/io/view-preferences";
 import { useIsMobile } from "@/shared/hooks/use-mobile";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export type ToolbarFiltroTipo =
   | "lista"
@@ -871,14 +872,14 @@ function ColumnasPopover({
         </p>
         <div className="space-y-0.5 max-h-80 overflow-y-auto">
           {bloqueadas.map((c) => (
-            <div
-              key={c.campo}
-              className="w-full flex items-center justify-between gap-2 px-1.5 py-1 rounded text-sm cursor-not-allowed opacity-70"
-              title="Esta columna no puede ocultarse ni reordenarse"
-            >
-              <span className="text-foreground">{c.label}</span>
-              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
+            <ToolTooltip key={c.campo} label="Esta columna no puede ocultarse ni reordenarse">
+              <div
+                className="w-full flex items-center justify-between gap-2 px-1.5 py-1 rounded text-sm cursor-not-allowed opacity-70"
+              >
+                <span className="text-foreground">{c.label}</span>
+                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+            </ToolTooltip>
           ))}
           {onOrdenChange ? (
             <DndContext

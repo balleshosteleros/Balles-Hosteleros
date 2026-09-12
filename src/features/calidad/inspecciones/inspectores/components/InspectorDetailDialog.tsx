@@ -30,6 +30,7 @@ import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoD
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   inspectorId: string | null;
@@ -122,14 +123,14 @@ export function InspectorDetailDialog({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                 {data.telefono && (
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => llamarDesdeApp(data.telefono!)}
-                      title="Llamar desde el software"
-                      className="text-muted-foreground hover:text-sky-600 transition-colors"
-                    >
-                      <Phone className="h-3.5 w-3.5" />
-                    </button>
+                    <ToolTooltip label="Llamar desde el software">
+                      <button
+                        type="button"
+                        onClick={() => llamarDesdeApp(data.telefono!)}
+                        className="text-muted-foreground hover:text-sky-600 transition-colors" aria-label="Llamar desde el software">
+                        <Phone className="h-3.5 w-3.5" />
+                      </button>
+                    </ToolTooltip>
                     <button
                       type="button"
                       onClick={() => llamarDesdeApp(data.telefono!)}
@@ -138,15 +139,15 @@ export function InspectorDetailDialog({
                       {data.telefono}
                     </button>
                     {whatsappHref(data.telefono) && (
-                      <a
-                        href={whatsappHref(data.telefono)!}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Abrir WhatsApp"
-                        className="text-emerald-600 hover:text-emerald-700 transition-colors"
-                      >
-                        <MessageCircle className="h-3.5 w-3.5" />
-                      </a>
+                      <ToolTooltip label="Abrir WhatsApp">
+                        <a
+                          href={whatsappHref(data.telefono)!}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-emerald-600 hover:text-emerald-700 transition-colors" aria-label="Abrir WhatsApp">
+                          <MessageCircle className="h-3.5 w-3.5" />
+                        </a>
+                      </ToolTooltip>
                     )}
                   </div>
                 )}

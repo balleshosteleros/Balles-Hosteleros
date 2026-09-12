@@ -4,6 +4,7 @@ import { Maximize2, Minimize2, X } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const Sheet = SheetPrimitive.Root;
 
@@ -94,18 +95,19 @@ const SheetMaximizeButton = ({
   const Icono = ctx.maximizado ? Minimize2 : Maximize2;
   const etiqueta = ctx.maximizado ? "Reducir" : "Ampliar a pantalla completa";
   return (
-    <button
-      type="button"
-      onClick={ctx.alternar}
-      title={etiqueta}
-      className={cn(
-        "hidden sm:inline-flex items-center justify-center rounded-full p-3 opacity-70 transition-colors hover:bg-black/5 hover:opacity-100",
-        className,
-      )}
-    >
-      <Icono className={cn("h-5 w-5", iconClassName)} />
-      <span className="sr-only">{etiqueta}</span>
-    </button>
+    <ToolTooltip label={etiqueta}>
+      <button
+        type="button"
+        onClick={ctx.alternar}
+        className={cn(
+          "hidden sm:inline-flex items-center justify-center rounded-full p-3 opacity-70 transition-colors hover:bg-black/5 hover:opacity-100",
+          className,
+        )}
+      >
+        <Icono className={cn("h-5 w-5", iconClassName)} />
+        <span className="sr-only">{etiqueta}</span>
+      </button>
+    </ToolTooltip>
   );
 };
 SheetMaximizeButton.displayName = "SheetMaximizeButton";
@@ -136,15 +138,16 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
             `[&>button]:hidden` y colocan <SheetMaximizeButton /> donde toca.
           */}
           {maximizable && (
-            <button
-              type="button"
-              onClick={alternar}
-              title={maximizado ? "Reducir" : "Ampliar a pantalla completa"}
-              className="absolute right-11 top-4 hidden rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:inline-flex"
-            >
-              {maximizado ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              <span className="sr-only">{maximizado ? "Reducir" : "Ampliar a pantalla completa"}</span>
-            </button>
+            <ToolTooltip label={maximizado ? "Reducir" : "Ampliar a pantalla completa"}>
+              <button
+                type="button"
+                onClick={alternar}
+                className="absolute right-11 top-4 hidden rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:inline-flex"
+              >
+                {maximizado ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                <span className="sr-only">{maximizado ? "Reducir" : "Ampliar a pantalla completa"}</span>
+              </button>
+            </ToolTooltip>
           )}
           <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-secondary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
             <X className="h-4 w-4" />

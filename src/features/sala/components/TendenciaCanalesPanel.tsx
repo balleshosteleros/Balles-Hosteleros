@@ -18,6 +18,7 @@ import {
 import type { CampoFecha, FiltroEstado } from "@/features/sala/actions/analitica-origen-actions";
 import { colorOrigen, labelOrigen } from "@/features/sala/data/origenes";
 import { cn } from "@/lib/utils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /** Cuántos canales se dibujan como línea. El resto vive en la tabla de abajo. */
 const LINEAS_VISIBLES = 6;
@@ -27,12 +28,13 @@ function Flecha({ v }: { v: number | null }) {
   // tendencia: el guion dice "aquí no hay nada que comparar".
   if (v === null) {
     return (
-      <span
-        className="text-muted-foreground"
-        title="Sin datos suficientes en el periodo anterior para calcular una tendencia"
-      >
-        —
-      </span>
+      <ToolTooltip label="Sin datos suficientes en el periodo anterior para calcular una tendencia">
+        <span
+          className="text-muted-foreground"
+        >
+          —
+        </span>
+      </ToolTooltip>
     );
   }
   if (v === 0) {
@@ -276,35 +278,35 @@ export function TendenciaCanalesPanel({
                   const enGrafica = canalesLinea.includes(c.canal);
                   const oculto = ocultos.has(c.canal);
                   return (
-                    <tr
-                      key={c.canal}
-                      onClick={() => enGrafica && alternar(c.canal)}
-                      className={cn(
-                        "border-t transition-colors",
-                        enGrafica && "cursor-pointer hover:bg-accent/50",
-                        oculto && "opacity-40",
-                      )}
-                      title={enGrafica ? "Pulsa para esconder o mostrar su línea" : undefined}
-                    >
-                      <td className="px-3 py-1.5">
-                        <span className="inline-flex items-center gap-2">
-                          <span
-                            className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                            style={{ background: colorOrigen(c.canal) }}
-                          />
-                          {labelOrigen(c.canal)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">
-                        {c.total.toLocaleString("es-ES")}
-                      </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
-                        {c.porcentaje.toLocaleString("es-ES")} %
-                      </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">
-                        <Flecha v={c.variacion} />
-                      </td>
-                    </tr>
+                    <ToolTooltip key={c.canal} label={enGrafica ? "Pulsa para esconder o mostrar su línea" : undefined}>
+                      <tr
+                        onClick={() => enGrafica && alternar(c.canal)}
+                        className={cn(
+                          "border-t transition-colors",
+                          enGrafica && "cursor-pointer hover:bg-accent/50",
+                          oculto && "opacity-40",
+                        )}
+                      >
+                        <td className="px-3 py-1.5">
+                          <span className="inline-flex items-center gap-2">
+                            <span
+                              className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                              style={{ background: colorOrigen(c.canal) }}
+                            />
+                            {labelOrigen(c.canal)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">
+                          {c.total.toLocaleString("es-ES")}
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                          {c.porcentaje.toLocaleString("es-ES")} %
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">
+                          <Flecha v={c.variacion} />
+                        </td>
+                      </tr>
+                    </ToolTooltip>
                   );
                 })}
               </tbody>

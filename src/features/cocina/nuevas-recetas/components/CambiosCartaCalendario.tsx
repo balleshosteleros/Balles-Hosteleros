@@ -30,6 +30,7 @@ import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calen
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 import { cn } from "@/lib/utils";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -401,17 +402,17 @@ function VistaSemanal({
                   eventos.map((e, i) => {
                     const color = COLOR_PALETTE[e.semana.color as FaseColor];
                     return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => onCeldaClick(e.cambio)}
-                        className="w-full text-left rounded text-[10px] text-white p-1 flex items-center gap-1 hover:opacity-90"
-                        style={{ background: `linear-gradient(135deg, ${color.from}, ${color.to})` }}
-                        title={`${e.semana.fase_nombre} — ${e.cambio.nombre}`}
-                      >
-                        {e.semana.es_oficial && <Star className="h-2.5 w-2.5 fill-amber-300 text-amber-300 shrink-0" />}
-                        <span className="truncate font-medium">{e.semana.fase_nombre}</span>
-                      </button>
+                      <ToolTooltip key={i} label={`${e.semana.fase_nombre} — ${e.cambio.nombre}`}>
+                        <button
+                          type="button"
+                          onClick={() => onCeldaClick(e.cambio)}
+                          className="w-full text-left rounded text-[10px] text-white p-1 flex items-center gap-1 hover:opacity-90"
+                          style={{ background: `linear-gradient(135deg, ${color.from}, ${color.to})` }}
+                        >
+                          {e.semana.es_oficial && <Star className="h-2.5 w-2.5 fill-amber-300 text-amber-300 shrink-0" />}
+                          <span className="truncate font-medium">{e.semana.fase_nombre}</span>
+                        </button>
+                      </ToolTooltip>
                     );
                   })
                 )}
@@ -466,35 +467,35 @@ function MesGrid({
           const color = semana ? COLOR_PALETTE[semana.semana.color as FaseColor] : null;
 
           return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => semana && onCeldaClick(semana.cambio)}
-              disabled={!semana}
-              title={semana
+            <ToolTooltip key={i} label={semana
                 ? `${semana.semana.fase_nombre} — ${semana.cambio.nombre}`
-                : undefined}
-              className={`
-                aspect-square rounded-[3px] text-[10px] flex items-center justify-center
-                transition-colors relative
-                ${semana ? "cursor-pointer hover:ring-2 hover:ring-foreground/40" : ""}
-                ${esHoy ? "ring-1 ring-foreground/60 font-bold" : ""}
-                ${!semana ? "text-muted-foreground" : "text-white font-medium"}
-              `}
-              style={{
-                background: color
-                  ? `linear-gradient(135deg, ${color.from}, ${color.to})`
-                  : undefined,
-              }}
-            >
-              {d.getDate()}
-              {semana?.semana.es_oficial && semana.esInicio && (
-                <Star
-                  className="absolute -top-1 -right-1 h-2.5 w-2.5 fill-amber-400 text-amber-500 drop-shadow"
-                  strokeWidth={3}
-                />
-              )}
-            </button>
+                : undefined}>
+              <button
+                type="button"
+                onClick={() => semana && onCeldaClick(semana.cambio)}
+                disabled={!semana}
+                className={`
+                  aspect-square rounded-[3px] text-[10px] flex items-center justify-center
+                  transition-colors relative
+                  ${semana ? "cursor-pointer hover:ring-2 hover:ring-foreground/40" : ""}
+                  ${esHoy ? "ring-1 ring-foreground/60 font-bold" : ""}
+                  ${!semana ? "text-muted-foreground" : "text-white font-medium"}
+                `}
+                style={{
+                  background: color
+                    ? `linear-gradient(135deg, ${color.from}, ${color.to})`
+                    : undefined,
+                }}
+              >
+                {d.getDate()}
+                {semana?.semana.es_oficial && semana.esInicio && (
+                  <Star
+                    className="absolute -top-1 -right-1 h-2.5 w-2.5 fill-amber-400 text-amber-500 drop-shadow"
+                    strokeWidth={3}
+                  />
+                )}
+              </button>
+            </ToolTooltip>
           );
         })}
       </div>

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange } from "@/shared/components/calendar/calendar-range";
 import type { CronogramaOperativo } from "../../hooks/useCronogramasOperativos";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const DIAS = [
   { iso: 1, short: "Lun", largo: "Lunes" },
@@ -684,33 +685,33 @@ function MiniMes({
           const isToday = sameDay(c.date, hoy);
           const dominant = tareas[0]?.frecuencia;
           return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => count > 0 && onTareaClick(tareas[0])}
-              disabled={count === 0}
-              title={count > 0 ? `${count} tarea${count === 1 ? "" : "s"}` : undefined}
-              className={cn(
-                "aspect-square flex flex-col items-center justify-center text-[9px] transition-colors relative",
-                count > 0 && "hover:bg-muted/40 cursor-pointer",
-                count === 0 && "cursor-default",
-                isToday && "bg-primary/10 font-bold text-primary",
-              )}
-            >
-              <span className={cn(!isToday && c.inMonth && "text-foreground/70")}>{c.date.getDate()}</span>
-              {count > 0 && (
-                <span className={cn(
-                  "h-1 w-1 rounded-full mt-0.5",
-                  dominant === "SEMANAL" && "bg-emerald-500",
-                  dominant === "MENSUAL" && "bg-blue-500",
-                  dominant === "TRIMESTRAL" && "bg-violet-500",
-                  dominant === "ANUAL" && "bg-orange-500",
-                )} />
-              )}
-              {count > 1 && (
-                <span className="absolute top-0.5 right-0.5 text-[8px] text-muted-foreground font-mono">{count}</span>
-              )}
-            </button>
+            <ToolTooltip key={i} label={count > 0 ? `${count} tarea${count === 1 ? "" : "s"}` : undefined}>
+              <button
+                type="button"
+                onClick={() => count > 0 && onTareaClick(tareas[0])}
+                disabled={count === 0}
+                className={cn(
+                  "aspect-square flex flex-col items-center justify-center text-[9px] transition-colors relative",
+                  count > 0 && "hover:bg-muted/40 cursor-pointer",
+                  count === 0 && "cursor-default",
+                  isToday && "bg-primary/10 font-bold text-primary",
+                )}
+              >
+                <span className={cn(!isToday && c.inMonth && "text-foreground/70")}>{c.date.getDate()}</span>
+                {count > 0 && (
+                  <span className={cn(
+                    "h-1 w-1 rounded-full mt-0.5",
+                    dominant === "SEMANAL" && "bg-emerald-500",
+                    dominant === "MENSUAL" && "bg-blue-500",
+                    dominant === "TRIMESTRAL" && "bg-violet-500",
+                    dominant === "ANUAL" && "bg-orange-500",
+                  )} />
+                )}
+                {count > 1 && (
+                  <span className="absolute top-0.5 right-0.5 text-[8px] text-muted-foreground font-mono">{count}</span>
+                )}
+              </button>
+            </ToolTooltip>
           );
         })}
       </div>

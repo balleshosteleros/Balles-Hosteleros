@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Users, Utensils, Sun, Moon } from "lucide-re
 import { cn } from "@/lib/utils";
 import { useReservasMes, gridFechasMes } from "@/features/sala/hooks/useReservasMes";
 import type { HorarioResuelto } from "@/features/sala/lib/horario-resolver";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   /** Fecha activa (YYYY-MM-DD). Determina el mes mostrado al montar y resincroniza al cambiar de mes. */
@@ -249,14 +250,18 @@ export function CalendarioMes({
                         ? "text-primary-foreground/90 border-primary-foreground/25"
                         : "text-foreground/80 border-border/60",
                     )}>
-                      <span className="inline-flex items-center gap-1" title="Mesas reservadas en el día">
-                        <Utensils className={cn("h-3.5 w-3.5", esSeleccionado ? "" : "text-sky-500")} />
-                        <span className="font-semibold">{totalReservasDia}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1" title="Personas en el día">
-                        <Users className={cn("h-3.5 w-3.5", esSeleccionado ? "" : "text-emerald-500")} />
-                        <span className="font-semibold">{totalPersonasDia}</span>
-                      </span>
+                      <ToolTooltip label="Mesas reservadas en el día">
+                        <span className="inline-flex items-center gap-1">
+                          <Utensils className={cn("h-3.5 w-3.5", esSeleccionado ? "" : "text-sky-500")} />
+                          <span className="font-semibold">{totalReservasDia}</span>
+                        </span>
+                      </ToolTooltip>
+                      <ToolTooltip label="Personas en el día">
+                        <span className="inline-flex items-center gap-1">
+                          <Users className={cn("h-3.5 w-3.5", esSeleccionado ? "" : "text-emerald-500")} />
+                          <span className="font-semibold">{totalPersonasDia}</span>
+                        </span>
+                      </ToolTooltip>
                     </div>
                   )}
                 </>
@@ -291,37 +296,42 @@ function HorarioLinea({
   const fin = (h.fin ?? "").slice(0, 5);
   const hayDatos = reservas > 0 || personas > 0;
   return (
-    <div
-      className={cn(
-        "flex items-center gap-1 text-[12px] leading-tight tabular-nums",
-        cerrado && !selected && "text-red-600 dark:text-red-300",
-      )}
-      title={turno === "comida" ? "Comida" : "Cena"}
-    >
-      <Icon className={cn("h-3.5 w-3.5 shrink-0", !selected && (cerrado ? "text-red-500" : tono))} />
-      {cerrado ? (
-        <span className="font-medium">Cerrado</span>
-      ) : (
-        <span className="font-medium">{ini}–{fin}</span>
-      )}
-      {/* Totales SOLO de este turno. */}
-      {!cerrado && hayDatos && (
-        <span
-          className={cn(
-            "ml-auto inline-flex items-center gap-1.5 shrink-0",
-            selected ? "text-primary-foreground/90" : "text-muted-foreground",
-          )}
-        >
-          <span className="inline-flex items-center gap-0.5" title="Mesas reservadas del turno">
-            <Utensils className={cn("h-3 w-3", selected ? "" : "text-sky-500")} />
-            <span className="font-semibold">{reservas}</span>
+    <ToolTooltip label={turno === "comida" ? "Comida" : "Cena"}>
+      <div
+        className={cn(
+          "flex items-center gap-1 text-[12px] leading-tight tabular-nums",
+          cerrado && !selected && "text-red-600 dark:text-red-300",
+        )}
+      >
+        <Icon className={cn("h-3.5 w-3.5 shrink-0", !selected && (cerrado ? "text-red-500" : tono))} />
+        {cerrado ? (
+          <span className="font-medium">Cerrado</span>
+        ) : (
+          <span className="font-medium">{ini}–{fin}</span>
+        )}
+        {/* Totales SOLO de este turno. */}
+        {!cerrado && hayDatos && (
+          <span
+            className={cn(
+              "ml-auto inline-flex items-center gap-1.5 shrink-0",
+              selected ? "text-primary-foreground/90" : "text-muted-foreground",
+            )}
+          >
+            <ToolTooltip label="Mesas reservadas del turno">
+              <span className="inline-flex items-center gap-0.5">
+                <Utensils className={cn("h-3 w-3", selected ? "" : "text-sky-500")} />
+                <span className="font-semibold">{reservas}</span>
+              </span>
+            </ToolTooltip>
+            <ToolTooltip label="Personas del turno">
+              <span className="inline-flex items-center gap-0.5">
+                <Users className={cn("h-3 w-3", selected ? "" : "text-emerald-500")} />
+                <span className="font-semibold">{personas}</span>
+              </span>
+            </ToolTooltip>
           </span>
-          <span className="inline-flex items-center gap-0.5" title="Personas del turno">
-            <Users className={cn("h-3 w-3", selected ? "" : "text-emerald-500")} />
-            <span className="font-semibold">{personas}</span>
-          </span>
-        </span>
-      )}
-    </div>
+        )}
+      </div>
+    </ToolTooltip>
   );
 }

@@ -7,6 +7,7 @@ import {
   FORMATOS_ACEPTADOS_INPUT,
 } from "@/features/logistica/lib/importador-ia/extractor";
 import type { PayloadExtraido } from "@/features/logistica/types/importador-ia";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Dropzone multi-archivo para el flujo "Rellenar con IA" de Aperturas.
@@ -162,12 +163,14 @@ export function RellenoIADropzone({
               key={`${a.nombre}-${i}`}
               className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-2.5 py-1.5 text-xs"
             >
-              <span className="flex-1 truncate" title={a.nombre}>
-                <span className="font-medium">{a.nombre}</span>
-                <span className="ml-2 text-muted-foreground">
-                  {(a.tamano / 1024).toFixed(0)} KB · {a.payload.kind === "tabla" ? "tabla" : "documento"}
+              <ToolTooltip label={a.nombre}>
+                <span className="flex-1 truncate">
+                  <span className="font-medium">{a.nombre}</span>
+                  <span className="ml-2 text-muted-foreground">
+                    {(a.tamano / 1024).toFixed(0)} KB · {a.payload.kind === "tabla" ? "tabla" : "documento"}
+                  </span>
                 </span>
-              </span>
+              </ToolTooltip>
               <button
                 type="button"
                 onClick={() => eliminar(i)}

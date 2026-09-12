@@ -6,6 +6,7 @@ import {
   ocupacionMedia,
   type EstudioApertura,
 } from "@/features/direccion/data/aperturas";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 function cellColor(v: number): string {
   // Escala blanco/transparente → ámbar saturado (sin depender del CSS var primario).
@@ -74,14 +75,14 @@ function Row({ label, values }: { label: string; values: number[] }) {
     <>
       <div className="flex items-center pr-2 text-right opacity-80">{label}</div>
       {values.map((v, i) => (
-        <div
-          key={i}
-          className="flex aspect-square items-center justify-center rounded text-sm font-medium"
-          style={{ backgroundColor: cellColor(v) }}
-          title={`${v}%`}
-        >
-          {v > 0 ? `${v}` : ""}
-        </div>
+        <ToolTooltip key={i} label={`${v}%`}>
+          <div
+            className="flex aspect-square items-center justify-center rounded text-sm font-medium"
+            style={{ backgroundColor: cellColor(v) }}
+          >
+            {v > 0 ? `${v}` : ""}
+          </div>
+        </ToolTooltip>
       ))}
     </>
   );

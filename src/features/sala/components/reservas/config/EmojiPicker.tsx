@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ChevronDown } from "lucide-react";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Iconos ofrecidos al etiquetar. Agrupados por lo que suele necesitar una
@@ -61,21 +62,21 @@ export function EmojiPicker({ value, onChange, size = "md" }: Props) {
       <PopoverContent className="w-auto p-2" align="start">
         <div className="grid grid-cols-8 gap-1">
           {/* Primera opción: dejar la etiqueta sin icono. */}
-          <button
-            type="button"
-            onClick={() => {
-              onChange("");
-              setOpen(false);
-            }}
-            className={`flex h-8 w-8 items-center justify-center rounded-md border text-[10px] text-muted-foreground transition-colors ${
-              value === ""
-                ? "border-primary bg-primary/10"
-                : "border-transparent hover:bg-muted"
-            }`}
-            title="Sin icono"
-          >
-            —
-          </button>
+          <ToolTooltip label="Sin icono">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+              }}
+              className={`flex h-8 w-8 items-center justify-center rounded-md border text-[10px] text-muted-foreground transition-colors ${
+                value === ""
+                  ? "border-primary bg-primary/10"
+                  : "border-transparent hover:bg-muted"
+              }`} aria-label="Sin icono">
+              —
+            </button>
+          </ToolTooltip>
           {EMOJI_CATALOG.map((e) => (
             <button
               key={e}

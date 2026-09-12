@@ -306,14 +306,15 @@ function AppLayoutInterno({
               Es un <a> de verdad, no un router.push: si el JS no ha cargado o
               se ha roto, la vista se quedaría sin salida posible.
             */}
-            <a
-              href={volverHref}
-              className="md:hidden -ml-1 shrink-0 flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent transition-colors"
-              aria-label="Volver"
-              title="Volver"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </a>
+            <ToolTooltip label="Volver">
+              <a
+                href={volverHref}
+                className="md:hidden -ml-1 shrink-0 flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent transition-colors"
+                aria-label="Volver"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </a>
+            </ToolTooltip>
             {(headerLabel || ModuleIcon !== null) && (
               <h1 className="flex items-center gap-2 text-sm font-bold tracking-wide text-foreground min-w-0 flex-1 md:flex-none">
                 {ModuleIcon !== null && <ModuleIcon className="h-4 w-4 shrink-0" />}
@@ -557,12 +558,13 @@ function AppLayoutInterno({
 
                     {/* Nombre + Rol del empleado */}
                     <div className="hidden md:flex flex-col justify-center px-1 max-w-[140px]">
-                      <span
-                        className="text-xs font-semibold text-foreground leading-tight truncate"
-                        title={userName}
-                      >
-                        {userName}
-                      </span>
+                      <ToolTooltip label={userName}>
+                        <span
+                          className="text-xs font-semibold text-foreground leading-tight truncate"
+                        >
+                          {userName}
+                        </span>
+                      </ToolTooltip>
                       <span className="text-[10px] font-medium text-muted-foreground leading-tight truncate uppercase tracking-wide">
                         {rolLabel}
                       </span>

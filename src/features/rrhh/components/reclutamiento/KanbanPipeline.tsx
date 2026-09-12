@@ -54,6 +54,7 @@ import {
   getReclutamientoConfigGeneral,
   type ReclutamientoConfigGeneral,
 } from "@/features/rrhh/actions/gestoria-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface KanbanPipelineProps {
   vacante: Vacante;
@@ -78,22 +79,28 @@ function CuestionarioBadge({ aciertos, total }: { aciertos: number; total: numbe
   const titulo = `Cuestionario · ${aciertos}/${total} correctas`;
   if (veredicto === "aprobado") {
     return (
-      <span className="shrink-0 text-emerald-600" title={titulo} aria-label={titulo}>
-        <CheckCircle2 className="h-3.5 w-3.5" />
-      </span>
+      <ToolTooltip label={titulo}>
+        <span className="shrink-0 text-emerald-600" aria-label={titulo}>
+          <CheckCircle2 className="h-3.5 w-3.5" />
+        </span>
+      </ToolTooltip>
     );
   }
   if (veredicto === "regular") {
     return (
-      <span className="shrink-0 text-orange-500" title={titulo} aria-label={titulo}>
-        <MinusCircle className="h-3.5 w-3.5" />
-      </span>
+      <ToolTooltip label={titulo}>
+        <span className="shrink-0 text-orange-500" aria-label={titulo}>
+          <MinusCircle className="h-3.5 w-3.5" />
+        </span>
+      </ToolTooltip>
     );
   }
   return (
-    <span className="shrink-0 text-red-600" title={titulo} aria-label={titulo}>
-      <XCircle className="h-3.5 w-3.5" />
-    </span>
+    <ToolTooltip label={titulo}>
+      <span className="shrink-0 text-red-600" aria-label={titulo}>
+        <XCircle className="h-3.5 w-3.5" />
+      </span>
+    </ToolTooltip>
   );
 }
 
@@ -114,14 +121,15 @@ const PendientesDevolucionCtx = createContext<Record<string, number>>({});
 function DevolucionPendienteBadge({ piezas }: { piezas: number }) {
   const titulo = `Material sin devolver · ${piezas} ${piezas === 1 ? "pieza" : "piezas"}`;
   return (
-    <span
-      className="inline-flex items-center gap-0.5 shrink-0 text-amber-600"
-      title={titulo}
-      aria-label={titulo}
-    >
-      <PackageX className="h-3.5 w-3.5" />
-      <span className="text-[9px] font-semibold tabular-nums">{piezas}</span>
-    </span>
+    <ToolTooltip label={titulo}>
+      <span
+        className="inline-flex items-center gap-0.5 shrink-0 text-amber-600"
+        aria-label={titulo}
+      >
+        <PackageX className="h-3.5 w-3.5" />
+        <span className="text-[9px] font-semibold tabular-nums">{piezas}</span>
+      </span>
+    </ToolTooltip>
   );
 }
 
@@ -130,13 +138,14 @@ function DocumentacionBadge({ completa }: { completa: boolean }) {
     ? "Documentación · recibida"
     : "Documentación · pendiente";
   return (
-    <span
-      className={`shrink-0 ${completa ? "text-emerald-600" : "text-red-600"}`}
-      title={titulo}
-      aria-label={titulo}
-    >
-      <FileText className="h-3.5 w-3.5" />
-    </span>
+    <ToolTooltip label={titulo}>
+      <span
+        className={`shrink-0 ${completa ? "text-emerald-600" : "text-red-600"}`}
+        aria-label={titulo}
+      >
+        <FileText className="h-3.5 w-3.5" />
+      </span>
+    </ToolTooltip>
   );
 }
 
@@ -173,13 +182,14 @@ function CandidatoCard({
     >
       {/* Esquina superior derecha: días en la fase actual (se reinicia al cambiar de fase). */}
       {dias !== null && (
-        <span
-          className="absolute top-1 right-1 inline-flex items-center gap-0.5 rounded bg-muted/70 px-1 py-0.5 text-[9px] font-semibold text-muted-foreground tabular-nums"
-          title="Días en la fase actual"
-        >
-          <CalendarDays className="h-2.5 w-2.5" />
-          {dias === 0 ? "hoy" : `${dias}d`}
-        </span>
+        <ToolTooltip label="Días en la fase actual">
+          <span
+            className="absolute top-1 right-1 inline-flex items-center gap-0.5 rounded bg-muted/70 px-1 py-0.5 text-[9px] font-semibold text-muted-foreground tabular-nums"
+          >
+            <CalendarDays className="h-2.5 w-2.5" />
+            {dias === 0 ? "hoy" : `${dias}d`}
+          </span>
+        </ToolTooltip>
       )}
       {/* Sin manejador de arrastre lateral: la tarjeta entera es draggable, así
           que el texto aprovecha todo el ancho. */}
@@ -203,15 +213,16 @@ function CandidatoCard({
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {/* Nota media de las reseñas de la entrevista (1–5 estrellas). */}
             {candidato.resenaMedia != null && (
-              <span
-                className="inline-flex items-center gap-0.5"
-                title={`Reseñas · ${candidato.resenaMedia.toFixed(1)} / 5`}
-              >
-                <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
-                <span className="font-medium text-foreground/80 text-[11px]">
-                  {candidato.resenaMedia.toFixed(1).replace(".", ",")}
+              <ToolTooltip label={`Reseñas · ${candidato.resenaMedia.toFixed(1)} / 5`}>
+                <span
+                  className="inline-flex items-center gap-0.5"
+                >
+                  <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
+                  <span className="font-medium text-foreground/80 text-[11px]">
+                    {candidato.resenaMedia.toFixed(1).replace(".", ",")}
+                  </span>
                 </span>
-              </span>
+              </ToolTooltip>
             )}
             {/* Resultado del cuestionario de la vacante (verde/naranja/rojo). */}
             {candidato.cuestionarioTotal != null && candidato.cuestionarioTotal > 0 && (
@@ -228,20 +239,23 @@ function CandidatoCard({
             )}
             {/* «Visto»: ojo verde cuando la ficha ya se revisó (se abrió). */}
             {candidato.vistoAt && (
-              <span className="shrink-0 text-emerald-600" title="Candidato visto" aria-label="Candidato visto">
-                <Eye className="h-3 w-3" />
-              </span>
+              <ToolTooltip label="Candidato visto">
+                <span className="shrink-0 text-emerald-600" aria-label="Candidato visto">
+                  <Eye className="h-3 w-3" />
+                </span>
+              </ToolTooltip>
             )}
             {/* Candidato ya contratado: distintivo de empleado (icono RRHH + tick, en verde). */}
             {candidato.promovidoAt && (
-              <span
-                className="inline-flex items-center gap-0.5 shrink-0 text-emerald-600"
-                title="Contratado · empleado"
-                aria-label="Contratado · empleado"
-              >
-                <UsersRound className="h-3 w-3" />
-                <CheckCircle2 className="h-3 w-3" />
-              </span>
+              <ToolTooltip label="Contratado · empleado">
+                <span
+                  className="inline-flex items-center gap-0.5 shrink-0 text-emerald-600"
+                  aria-label="Contratado · empleado"
+                >
+                  <UsersRound className="h-3 w-3" />
+                  <CheckCircle2 className="h-3 w-3" />
+                </span>
+              </ToolTooltip>
             )}
           </div>
         </div>
@@ -256,43 +270,47 @@ function CandidatoCard({
 function DestinoIcon({ destino }: { destino: PlantillaFaseInfo["destino"] }) {
   if (destino === "gestoria") {
     return (
-      <span
-        className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-medium text-amber-700"
-        title="Este correo se envía a la gestoría, no al candidato"
-      >
-        <Building2 className="h-2.5 w-2.5" /> Gestoría
-      </span>
+      <ToolTooltip label="Este correo se envía a la gestoría, no al candidato">
+        <span
+          className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-medium text-amber-700"
+        >
+          <Building2 className="h-2.5 w-2.5" /> Gestoría
+        </span>
+      </ToolTooltip>
     );
   }
   if (destino === "rrhh") {
     return (
-      <span
-        className="inline-flex items-center gap-0.5 rounded bg-sky-100 px-1 py-0.5 text-[9px] font-medium text-sky-700"
-        title="Este correo es un aviso interno a RRHH, no al candidato"
-      >
-        <UserCog className="h-2.5 w-2.5" /> RRHH
-      </span>
+      <ToolTooltip label="Este correo es un aviso interno a RRHH, no al candidato">
+        <span
+          className="inline-flex items-center gap-0.5 rounded bg-sky-100 px-1 py-0.5 text-[9px] font-medium text-sky-700"
+        >
+          <UserCog className="h-2.5 w-2.5" /> RRHH
+        </span>
+      </ToolTooltip>
     );
   }
   if (destino === "personalizado") {
     return (
-      <span
-        className="inline-flex items-center gap-0.5 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-medium text-violet-700"
-        title="Este correo se envía a una dirección personalizada"
-      >
-        <UserCog className="h-2.5 w-2.5" /> Personalizado
-      </span>
+      <ToolTooltip label="Este correo se envía a una dirección personalizada">
+        <span
+          className="inline-flex items-center gap-0.5 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-medium text-violet-700"
+        >
+          <UserCog className="h-2.5 w-2.5" /> Personalizado
+        </span>
+      </ToolTooltip>
     );
   }
   // Candidato: destinatario por defecto. Se muestra también (antes se omitía) para
   // que TODOS los correos indiquen a quién van, igual que gestoría/RRHH.
   return (
-    <span
-      className="inline-flex items-center gap-0.5 rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-medium text-emerald-700"
-      title="Este correo se envía al candidato"
-    >
-      <User className="h-2.5 w-2.5" /> Candidato
-    </span>
+    <ToolTooltip label="Este correo se envía al candidato">
+      <span
+        className="inline-flex items-center gap-0.5 rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-medium text-emerald-700"
+      >
+        <User className="h-2.5 w-2.5" /> Candidato
+      </span>
+    </ToolTooltip>
   );
 }
 
@@ -328,15 +346,16 @@ function EmailFaseIcon({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="ml-auto shrink-0 rounded p-0.5 hover:bg-muted transition-colors"
-          aria-label={`Ver correos de la fase ${estadoLabel}`}
-          title={`Correos de ${estadoLabel}`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {boton}
-        </button>
+        <ToolTooltip label={`Correos de ${estadoLabel}`}>
+          <button
+            type="button"
+            className="ml-auto shrink-0 rounded p-0.5 hover:bg-muted transition-colors"
+            aria-label={`Ver correos de la fase ${estadoLabel}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {boton}
+          </button>
+        </ToolTooltip>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-2" onClick={(e) => e.stopPropagation()}>
         <div className="space-y-1">
@@ -345,9 +364,11 @@ function EmailFaseIcon({
               key={`${p.nombre}-${i}`}
               className="flex items-center gap-2 px-1 py-0.5"
             >
-              <span className="min-w-0 flex-1 truncate text-xs text-foreground" title={p.nombre}>
-                {p.nombre}
-              </span>
+              <ToolTooltip label={p.nombre}>
+                <span className="min-w-0 flex-1 truncate text-xs text-foreground">
+                  {p.nombre}
+                </span>
+              </ToolTooltip>
               <DestinoIcon destino={p.destino} />
             </div>
           ))}

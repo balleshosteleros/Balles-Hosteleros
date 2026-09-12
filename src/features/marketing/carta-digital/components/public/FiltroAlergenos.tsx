@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { X, Wheat, Egg, Fish, Nut, Milk, Bean, Leaf, Check, Star } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ALERGENOS_UE, type Alergeno } from "../../types";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const ALERGENO_ICON: Record<Alergeno, LucideIcon> = {
   "Gluten": Wheat,
@@ -122,23 +123,24 @@ export function FiltroAlergenos({
   return (
     <>
       {/* ── Botones flotantes ──────────────────────────────────────── */}
-      <button
-        type="button"
-        onClick={() => onSoloFavoritos(!soloFavoritos)}
-        aria-pressed={soloFavoritos}
-        aria-label={soloFavoritos ? "Ver toda la carta" : "Ver solo los platos de la casa"}
-        title={soloFavoritos ? "Ver toda la carta" : "Solo los de la casa"}
-        className="fixed bottom-[76px] right-4 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-transform duration-200 active:scale-90 sm:bottom-[84px] sm:right-6"
-        style={{
-          backgroundColor: soloFavoritos
-            ? "var(--carta-acento)"
-            : "color-mix(in srgb, var(--carta-superficie) 88%, transparent)",
-          color: soloFavoritos ? "#1A1A1A" : "var(--carta-texto-suave)",
-          border: "1px solid var(--carta-borde)",
-        }}
-      >
-        <Star className={`h-5 w-5 ${soloFavoritos ? "fill-current" : ""}`} strokeWidth={1.6} />
-      </button>
+      <ToolTooltip label={soloFavoritos ? "Ver toda la carta" : "Solo los de la casa"}>
+        <button
+          type="button"
+          onClick={() => onSoloFavoritos(!soloFavoritos)}
+          aria-pressed={soloFavoritos}
+          aria-label={soloFavoritos ? "Ver toda la carta" : "Ver solo los platos de la casa"}
+          className="fixed bottom-[76px] right-4 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-transform duration-200 active:scale-90 sm:bottom-[84px] sm:right-6"
+          style={{
+            backgroundColor: soloFavoritos
+              ? "var(--carta-acento)"
+              : "color-mix(in srgb, var(--carta-superficie) 88%, transparent)",
+            color: soloFavoritos ? "#1A1A1A" : "var(--carta-texto-suave)",
+            border: "1px solid var(--carta-borde)",
+          }}
+        >
+          <Star className={`h-5 w-5 ${soloFavoritos ? "fill-current" : ""}`} strokeWidth={1.6} />
+        </button>
+      </ToolTooltip>
 
       <button
         type="button"

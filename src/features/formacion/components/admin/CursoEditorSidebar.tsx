@@ -29,6 +29,7 @@ import {
 } from "@/features/formacion/actions/formacion-interaccion-actions";
 import type { Leccion, Seccion } from "@/features/formacion/types";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   cursoId: string;
@@ -317,19 +318,24 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
                   <span className={`flex-1 text-[11px] font-bold uppercase tracking-widest truncate ${sec.publicado ? "text-muted-foreground" : "text-amber-600/70 line-through"}`}>
                     {sec.titulo}
                   </span>
-                  <button onClick={() => toggleTemaPublicado(sec)}
-                    title={sec.publicado ? "Tema publicado — ocultar (y sus lecciones)" : "Tema oculto — publicar (y sus lecciones)"}
-                    className={`p-1 ${sec.publicado ? "text-emerald-600" : "text-amber-500"} hover:opacity-70`}>
-                    {sec.publicado ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                  </button>
-                  <button onClick={() => abrirEditarModulo(sec)} title="Editar módulo"
-                    className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => borrarModulo(sec)} title="Borrar módulo"
-                    className="p-1 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <ToolTooltip label={sec.publicado ? "Tema publicado — ocultar (y sus lecciones)" : "Tema oculto — publicar (y sus lecciones)"}>
+                    <button onClick={() => toggleTemaPublicado(sec)}
+                      className={`p-1 ${sec.publicado ? "text-emerald-600" : "text-amber-500"} hover:opacity-70`}>
+                      {sec.publicado ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    </button>
+                  </ToolTooltip>
+                  <ToolTooltip label="Editar módulo">
+                    <button onClick={() => abrirEditarModulo(sec)}
+                      className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100" aria-label="Editar módulo">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </ToolTooltip>
+                  <ToolTooltip label="Borrar módulo">
+                    <button onClick={() => borrarModulo(sec)}
+                      className="p-1 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100" aria-label="Borrar módulo">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </ToolTooltip>
                 </div>
                 <ul className="space-y-0.5">
                   {ls.map((l, i) => (
@@ -346,17 +352,20 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
                           {i + 1}. {l.titulo}
                         </span>
                       </button>
-                      <button onClick={() => toggleLeccionPublicada(l)}
-                        title={l.publicado ? "Publicada — ocultar" : "Oculta — publicar"}
-                        className={`p-1 ${l.publicado ? "text-emerald-600" : "text-amber-500"} hover:opacity-70`}>
-                        {l.publicado ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                      </button>
+                      <ToolTooltip label={l.publicado ? "Publicada — ocultar" : "Oculta — publicar"}>
+                        <button onClick={() => toggleLeccionPublicada(l)}
+                          className={`p-1 ${l.publicado ? "text-emerald-600" : "text-amber-500"} hover:opacity-70`}>
+                          {l.publicado ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                        </button>
+                      </ToolTooltip>
                       {cs.length > 1 && (
                         <Select value={l.seccionId} onValueChange={(v) => moverLeccion(l, v)}>
-                          <SelectTrigger className="h-7 w-7 p-0 border-0 bg-transparent opacity-0 group-hover:opacity-100 [&>svg]:hidden justify-center"
-                            title="Mover a otro tema">
-                            <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
-                          </SelectTrigger>
+                          <ToolTooltip label="Mover a otro tema">
+                            <SelectTrigger className="h-7 w-7 p-0 border-0 bg-transparent opacity-0 group-hover:opacity-100 [&>svg]:hidden justify-center"
+                             >
+                              <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                            </SelectTrigger>
+                          </ToolTooltip>
                           <SelectContent>
                             {cs.map((s2) => (
                               <SelectItem key={s2.id} value={s2.id} disabled={s2.id === l.seccionId}>
@@ -366,14 +375,18 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
                           </SelectContent>
                         </Select>
                       )}
-                      <button onClick={() => abrirEditarLeccion(l)} title="Editar"
-                        className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => borrarLeccion(l)} title="Borrar"
-                        className="p-1 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <ToolTooltip label="Editar">
+                        <button onClick={() => abrirEditarLeccion(l)}
+                          className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100" aria-label="Editar">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </ToolTooltip>
+                      <ToolTooltip label="Borrar">
+                        <button onClick={() => borrarLeccion(l)}
+                          className="p-1 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100" aria-label="Borrar">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </ToolTooltip>
                     </li>
                   ))}
                 </ul>
@@ -511,8 +524,10 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
                   <div className="space-y-1 pl-1">
                     {q.opciones.map((op, oi) => (
                       <div key={oi} className="flex items-center gap-2">
-                        <input type="radio" checked={op.correcta} onChange={() => setOpcionCorrecta(qi, oi)}
-                          title="Marcar como correcta" className="accent-emerald-600" />
+                        <ToolTooltip label="Marcar como correcta">
+                          <input type="radio" checked={op.correcta} onChange={() => setOpcionCorrecta(qi, oi)}
+                            className="accent-emerald-600" aria-label="Marcar como correcta" />
+                        </ToolTooltip>
                         <Input value={op.texto} onChange={(e) => setOpcionTexto(qi, oi, e.target.value)}
                           placeholder={`Opción ${oi + 1}`} className="text-sm h-8" />
                       </div>

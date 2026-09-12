@@ -22,6 +22,7 @@ import {
 } from "../../data/cronogramaAreas";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   data: CronogramaOperativo[];
@@ -111,12 +112,12 @@ function FrecuenciaBar({
         if (n === 0) return null;
         const pct = (n / total) * 100;
         return (
-          <div
-            key={freq}
-            className={cn("h-full", FREQ_COLORS[freq] ?? "bg-muted")}
-            style={{ width: `${pct}%` }}
-            title={`${freq}: ${n}`}
-          />
+          <ToolTooltip key={freq} label={`${freq}: ${n}`}>
+            <div
+              className={cn("h-full", FREQ_COLORS[freq] ?? "bg-muted")}
+              style={{ width: `${pct}%` }}
+            />
+          </ToolTooltip>
         );
       })}
     </div>

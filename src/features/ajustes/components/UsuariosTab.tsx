@@ -40,6 +40,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { EmpresaBadge } from "@/shared/components/EmpresaBadge";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // El acceso solo tiene DOS estados: Activo / Inactivo. O entras o no entras.
 // Conjunto vacío estable para usar como "default neutro" en filtros sin default.
@@ -1140,17 +1141,18 @@ function ColumnFilter({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${
-            active
-              ? "bg-primary/10 text-primary"
-              : "text-muted-foreground/60 hover:bg-muted hover:text-foreground"
-          }`}
-          title={`Filtrar ${label.toLowerCase()}`}
-        >
-          <ListFilter className="h-3 w-3" />
-        </button>
+        <ToolTooltip label={`Filtrar ${label.toLowerCase()}`}>
+          <button
+            type="button"
+            className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${
+              active
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <ListFilter className="h-3 w-3" />
+          </button>
+        </ToolTooltip>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-56 p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">
@@ -1200,15 +1202,15 @@ function EmpresasCell({
 }) {
   if (nombres.length === 0) {
     return (
-      <button
-        type="button"
-        onClick={onEdit}
-        className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-400"
-        title="Asignar empresas"
-      >
-        <Building2 className="h-3 w-3" />
-        Sin empresa
-      </button>
+      <ToolTooltip label="Asignar empresas">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-400" aria-label="Asignar empresas">
+          <Building2 className="h-3 w-3" />
+          Sin empresa
+        </button>
+      </ToolTooltip>
     );
   }
 
@@ -1220,13 +1222,14 @@ function EmpresasCell({
       {resto.length > 0 && (
         <Popover>
           <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex items-center rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
-              title={`${nombres.length} empresas`}
-            >
-              +{resto.length}
-            </button>
+            <ToolTooltip label={`${nombres.length} empresas`}>
+              <button
+                type="button"
+                className="inline-flex items-center rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                +{resto.length}
+              </button>
+            </ToolTooltip>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-56 p-0">
             <div className="border-b px-3 py-2">

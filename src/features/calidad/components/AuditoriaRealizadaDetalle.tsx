@@ -9,6 +9,7 @@ import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { getEnvioDetalle, type EnvioDetalle, type RespuestaDetalle } from "@/features/calidad/actions/envios-actions";
 import { formatFechaAuditoria } from "@/features/calidad/lib/fecha-auditoria";
 import { cn } from "@/lib/utils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 function nota(n: number | null): string {
   return n === null ? "—" : n.toFixed(2).replace(".", ",");
@@ -192,27 +193,29 @@ function EscalaRespuesta({ r }: { r: RespuestaDetalle }) {
   }
 
   return (
-    <div className="flex items-center gap-1" title={`${r.valor_numero} de ${max}`}>
-      {items.map((n) => {
-        const activo = n === r.valor_numero;
-        return (
-          <span
-            key={n}
-            className={cn(
-              "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] tabular-nums",
-              activo
-                ? r.valor_numero! / max >= 0.8
-                  ? "border-emerald-500 bg-emerald-100 text-emerald-700 font-semibold"
-                  : r.valor_numero! / max >= 0.5
-                    ? "border-amber-500 bg-amber-100 text-amber-700 font-semibold"
-                    : "border-red-500 bg-red-100 text-red-700 font-semibold"
-                : "text-muted-foreground/50",
-            )}
-          >
-            {n}
-          </span>
-        );
-      })}
-    </div>
+    <ToolTooltip label={`${r.valor_numero} de ${max}`}>
+      <div className="flex items-center gap-1">
+        {items.map((n) => {
+          const activo = n === r.valor_numero;
+          return (
+            <span
+              key={n}
+              className={cn(
+                "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] tabular-nums",
+                activo
+                  ? r.valor_numero! / max >= 0.8
+                    ? "border-emerald-500 bg-emerald-100 text-emerald-700 font-semibold"
+                    : r.valor_numero! / max >= 0.5
+                      ? "border-amber-500 bg-amber-100 text-amber-700 font-semibold"
+                      : "border-red-500 bg-red-100 text-red-700 font-semibold"
+                  : "text-muted-foreground/50",
+              )}
+            >
+              {n}
+            </span>
+          );
+        })}
+      </div>
+    </ToolTooltip>
   );
 }

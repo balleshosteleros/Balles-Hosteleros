@@ -28,6 +28,7 @@ import {
   EDAD_MINIMA_LABORAL,
 } from "@/features/rrhh/lib/documentacion-validacion";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   token: string;
@@ -184,15 +185,16 @@ function SubidaDoc({
           )}
           {/* Papelera para quitar el documento y subir otro. En móvil siempre
               visible; en escritorio aparece al pasar el ratón por encima. */}
-          <button
-            type="button"
-            onClick={() => onFile(null)}
-            aria-label="Quitar este documento"
-            title="Quitar y subir otro"
-            className="ml-auto shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors sm:opacity-0 sm:group-hover:opacity-100"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          <ToolTooltip label="Quitar y subir otro">
+            <button
+              type="button"
+              onClick={() => onFile(null)}
+              aria-label="Quitar este documento"
+              className="ml-auto shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </ToolTooltip>
         </div>
       )}
 

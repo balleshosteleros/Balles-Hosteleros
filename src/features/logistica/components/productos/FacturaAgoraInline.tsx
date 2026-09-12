@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { getFacturaAgora, type FacturaAgora } from "@/features/logistica/actions/kardex-actions";
 import { formatEur } from "@/shared/lib/numero";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 function eur(n: number | null): string {
   if (n == null) return "—";
@@ -75,12 +76,13 @@ export function FacturaAgoraInline({ ticketId }: { ticketId: string }) {
                     <span className="mr-1 opacity-60">+</span>
                     {c.nombre ?? "—"}
                     {!c.enlazado && (
-                      <span
-                        className="ml-1.5 text-amber-600"
-                        title="No existe este producto en Balles, así que su consumo no se descuenta. Hay que darlo de alta."
-                      >
-                        ⚠ sin dar de alta
-                      </span>
+                      <ToolTooltip label="No existe este producto en Balles, así que su consumo no se descuenta. Hay que darlo de alta.">
+                        <span
+                          className="ml-1.5 text-amber-600"
+                        >
+                          ⚠ sin dar de alta
+                        </span>
+                      </ToolTooltip>
                     )}
                   </td>
                   <td className="py-0.5 text-right tabular-nums">×{c.ratio}</td>

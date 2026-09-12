@@ -24,6 +24,7 @@ import type {
   QrTokenPublic,
 } from "../types";
 import { QrViewerDialog } from "./QrViewerDialog";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // Limpia sufijos del nombre de la plantilla (" — versión 2", " — V3",
 // " — 2023"...) para mostrar el título de forma neutra. El badge V# va aparte.
@@ -243,12 +244,13 @@ export function PublicFormulario({ token, data }: PublicFormularioProps) {
           </p>
         </div>
         {data.plantilla.numero_secuencial != null && (
-          <span
-            className="shrink-0 rounded-md border border-muted-foreground/30 px-2 py-0.5 text-[11px] font-mono uppercase tracking-wide text-muted-foreground"
-            title={`Versión ${data.plantilla.numero_secuencial}`}
-          >
-            v{data.plantilla.numero_secuencial}
-          </span>
+          <ToolTooltip label={`Versión ${data.plantilla.numero_secuencial}`}>
+            <span
+              className="shrink-0 rounded-md border border-muted-foreground/30 px-2 py-0.5 text-[11px] font-mono uppercase tracking-wide text-muted-foreground"
+            >
+              v{data.plantilla.numero_secuencial}
+            </span>
+          </ToolTooltip>
         )}
       </div>
 

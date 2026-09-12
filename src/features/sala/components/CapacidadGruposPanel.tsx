@@ -20,6 +20,7 @@ import {
   getCapacidadPorGrupo,
   type CapacidadGruposResult,
 } from "@/features/sala/actions/capacidad-grupos-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Local {
   id: string;
@@ -251,23 +252,23 @@ export function CapacidadGruposPanel() {
                           <td colSpan={zonas.length + 4} className="px-3 py-2.5">
                             <div className="flex flex-wrap gap-1.5">
                               {f.opciones.map((o) => (
-                                <span
-                                  key={o.codigo}
-                                  className={[
-                                    "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px]",
-                                    o.libre
-                                      ? "bg-card"
-                                      : "bg-destructive/5 border-destructive/20 text-muted-foreground line-through",
-                                    o.esCombinacion ? "border-dashed" : "",
-                                  ].join(" ")}
-                                  title={
+                                <ToolTooltip key={o.codigo} label={
                                     o.libre
                                       ? `${o.zona} — ${o.capacidadMin}–${o.capacidadMax} plazas`
                                       : `Ocupada por: ${o.bloqueadaPor.join(", ")}`
-                                  }
-                                >
-                                  {o.codigo}
-                                </span>
+                                  }>
+                                  <span
+                                    className={[
+                                      "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px]",
+                                      o.libre
+                                        ? "bg-card"
+                                        : "bg-destructive/5 border-destructive/20 text-muted-foreground line-through",
+                                      o.esCombinacion ? "border-dashed" : "",
+                                    ].join(" ")}
+                                  >
+                                    {o.codigo}
+                                  </span>
+                                </ToolTooltip>
                               ))}
                             </div>
                           </td>

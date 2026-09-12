@@ -50,6 +50,7 @@ import { PlanosTab } from "./PlanosTab";
 import { SalaPlanoEditor } from "./SalaPlanoEditor";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { loadEstructuraContext } from "@/features/sala/actions/estructura-context";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export function EstructuraTab() {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
@@ -728,29 +729,31 @@ function AforoRapido({
     "h-5 w-5 shrink-0 rounded border text-[13px] leading-none flex items-center justify-center " +
     "text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent";
   return (
-    <span className="inline-flex items-center gap-1" title={titulo}>
-      <button
-        type="button"
-        aria-label={`Restar en ${titulo.toLowerCase()}`}
-        disabled={valor <= min}
-        onClick={() => onChange(valor - 1)}
-        className={boton}
-      >
-        −
-      </button>
-      <span className="tabular-nums font-medium text-foreground w-5 text-center">
-        {valor}
+    <ToolTooltip label={titulo}>
+      <span className="inline-flex items-center gap-1">
+        <button
+          type="button"
+          aria-label={`Restar en ${titulo.toLowerCase()}`}
+          disabled={valor <= min}
+          onClick={() => onChange(valor - 1)}
+          className={boton}
+        >
+          −
+        </button>
+        <span className="tabular-nums font-medium text-foreground w-5 text-center">
+          {valor}
+        </span>
+        <button
+          type="button"
+          aria-label={`Sumar en ${titulo.toLowerCase()}`}
+          disabled={valor >= max}
+          onClick={() => onChange(valor + 1)}
+          className={boton}
+        >
+          +
+        </button>
       </span>
-      <button
-        type="button"
-        aria-label={`Sumar en ${titulo.toLowerCase()}`}
-        disabled={valor >= max}
-        onClick={() => onChange(valor + 1)}
-        className={boton}
-      >
-        +
-      </button>
-    </span>
+    </ToolTooltip>
   );
 }
 

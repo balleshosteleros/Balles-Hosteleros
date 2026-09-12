@@ -23,6 +23,7 @@ import {
   type EtiquetaCategoria,
   type EtiquetaScope,
 } from "@/features/sala/actions/sala-etiquetas-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   /**
@@ -139,14 +140,14 @@ export function EtiquetasPanel({ scope, entityId, onChange }: Props) {
               emoji={etiqueta.emoji}
               color={etiqueta.color}
             />
-            <button
-              type="button"
-              onClick={() => quitarDePropias(etiqueta)}
-              className="ml-0.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition"
-              title="Quitar"
-            >
-              <X className="h-3 w-3" />
-            </button>
+            <ToolTooltip label="Quitar">
+              <button
+                type="button"
+                onClick={() => quitarDePropias(etiqueta)}
+                className="ml-0.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition" aria-label="Quitar">
+                <X className="h-3 w-3" />
+              </button>
+            </ToolTooltip>
           </span>
         ))}
 

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { formatNumero, formatPorcentaje } from "@/shared/lib/numero";
 import { obtenerEmbudo, type EmbudoConPasos, type PasoDeEmbudo } from "../../actions/embudos-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const ESTADO_LABEL: Record<string, string> = {
   BORRADOR: "Borrador",
@@ -127,9 +128,11 @@ export function EmbudoDetalleView({ embudoId }: { embudoId: string }) {
                   </span>
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium" title={paso.nombre}>
-                      {paso.nombre}
-                    </p>
+                    <ToolTooltip label={paso.nombre}>
+                      <p className="truncate font-medium">
+                        {paso.nombre}
+                      </p>
+                    </ToolTooltip>
                     <p className="truncate font-mono text-[11px] text-muted-foreground">
                       /{paso.slug_interno}
                     </p>
@@ -173,11 +176,12 @@ export function EmbudoDetalleView({ embudoId }: { embudoId: string }) {
 
                 {/* La barra, centrada: al bajar se estrecha. Eso es el embudo. */}
                 <div className="mt-3 flex justify-center">
-                  <div
-                    className="h-3 rounded-full bg-primary transition-all"
-                    style={{ width: `${anchoBarra}%` }}
-                    title={`${formatNumero(paso.visitas)} visitas`}
-                  />
+                  <ToolTooltip label={`${formatNumero(paso.visitas)} visitas`}>
+                    <div
+                      className="h-3 rounded-full bg-primary transition-all"
+                      style={{ width: `${anchoBarra}%` }}
+                    />
+                  </ToolTooltip>
                 </div>
               </Card>
             </div>

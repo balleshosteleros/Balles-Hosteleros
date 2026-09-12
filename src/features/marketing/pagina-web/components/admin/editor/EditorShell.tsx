@@ -17,6 +17,7 @@ import { AutosaveIndicator } from "./AutosaveIndicator";
 import { ChatWebPane } from "./ChatWebPane";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { AuthContext } from "@/features/auth/contexts/auth-context";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   paginaId: string;
@@ -117,22 +118,23 @@ export function EditorShell({ paginaId }: Props) {
         {/* El nombre se edita AQUÍ, escribiendo encima del título: antes era un
             botón suelto en la lista que abría un diálogo aparte. Se guarda al
             salir del campo (o con Enter). */}
-        <input
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-          onBlur={guardarNombre}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
-            if (e.key === "Escape") {
-              setNombre(nombreAnterior);
-              e.currentTarget.blur();
-            }
-          }}
-          aria-label="Nombre de la página"
-          title="Nombre de la página"
-          readOnly={esLegal}
-          className="font-medium text-sm truncate bg-transparent border border-transparent rounded px-1.5 py-0.5 -mx-1.5 min-w-0 max-w-[280px] hover:border-border focus:border-ring focus:outline-none read-only:hover:border-transparent read-only:cursor-default"
-        />
+        <ToolTooltip label="Nombre de la página">
+          <input
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            onBlur={guardarNombre}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") {
+                setNombre(nombreAnterior);
+                e.currentTarget.blur();
+              }
+            }}
+            aria-label="Nombre de la página"
+            readOnly={esLegal}
+            className="font-medium text-sm truncate bg-transparent border border-transparent rounded px-1.5 py-0.5 -mx-1.5 min-w-0 max-w-[280px] hover:border-border focus:border-ring focus:outline-none read-only:hover:border-transparent read-only:cursor-default"
+          />
+        </ToolTooltip>
         {esLegal ? (
           <span className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
             <Lock className="h-3 w-3" strokeWidth={2} />

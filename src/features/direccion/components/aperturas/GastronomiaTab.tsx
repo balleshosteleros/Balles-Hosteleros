@@ -19,6 +19,7 @@ import { prepararFotoParaSubida } from "@/features/direccion/lib/foto-upload";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { BadgeSugerenciaIA } from "@/features/direccion/components/aperturas/shared/BadgeSugerenciaIA";
 import type { DraftGastronomia } from "@/features/direccion/types/aperturas-ia";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /* Campos escalares de la propuesta gastronómica que la IA puede sugerir
    y que pueden mostrar badge. Los arrays (platos, categoriasVenta) se
@@ -304,15 +305,16 @@ function PlatoCard({
           <>
             <img src={plato.foto.url} alt={plato.nombre} className="absolute inset-0 w-full h-full object-cover" />
             {!readOnly && (
-              <button
-                type="button"
-                onClick={onRemoveFoto}
-                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
-                title="Quitar foto"
-                aria-label="Quitar foto"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <ToolTooltip label="Quitar foto">
+                <button
+                  type="button"
+                  onClick={onRemoveFoto}
+                  className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                  aria-label="Quitar foto"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </ToolTooltip>
             )}
           </>
         ) : readOnly ? (

@@ -13,6 +13,7 @@ import { ChevronRight, Filter } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { formatNumero, formatPorcentaje } from "@/shared/lib/numero";
 import { listarEmbudos, type EmbudoConPasos } from "../../actions/embudos-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export function EmbudosPanel({ recargar }: { recargar?: number }) {
   const router = useRouter();
@@ -55,9 +56,11 @@ export function EmbudosPanel({ recargar }: { recargar?: number }) {
             <div className="flex items-start gap-2">
               <Filter className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium" title={embudo.nombre}>
-                  {embudo.nombre}
-                </p>
+                <ToolTooltip label={embudo.nombre}>
+                  <p className="truncate font-medium">
+                    {embudo.nombre}
+                  </p>
+                </ToolTooltip>
                 <p className="text-xs text-muted-foreground">
                   {embudo.pasos.length} {embudo.pasos.length === 1 ? "paso" : "pasos"}
                   {publicados > 0 ? ` · ${publicados} en directo` : " · sin publicar"}
@@ -80,16 +83,16 @@ export function EmbudosPanel({ recargar }: { recargar?: number }) {
               {embudo.pasos.map((p) => {
                 const alto = entran > 0 ? Math.max(8, (p.visitas / entran) * 100) : 8;
                 return (
-                  <div
-                    key={p.id}
-                    className="h-10 flex-1 rounded-sm bg-muted"
-                    title={`${p.nombre}: ${formatNumero(p.visitas)}`}
-                  >
+                  <ToolTooltip key={p.id} label={`${p.nombre}: ${formatNumero(p.visitas)}`}>
                     <div
-                      className="w-full rounded-sm bg-primary/70"
-                      style={{ height: `${alto}%`, marginTop: `${100 - alto}%` }}
-                    />
-                  </div>
+                      className="h-10 flex-1 rounded-sm bg-muted"
+                    >
+                      <div
+                        className="w-full rounded-sm bg-primary/70"
+                        style={{ height: `${alto}%`, marginTop: `${100 - alto}%` }}
+                      />
+                    </div>
+                  </ToolTooltip>
                 );
               })}
             </div>

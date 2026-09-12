@@ -58,6 +58,7 @@ import {
   borrarLista,
 } from "@/features/sala/musica/actions/musica-actions";
 import { ETIQUETAS_MUSICA, type ListaMusica } from "@/features/sala/musica/types";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export function MusicaView() {
   const { listas, cargando, puedeGestionar, recargar, reproducirLista } = useMusica();
@@ -367,21 +368,21 @@ function TarjetaLista({
             nombre para ver qué hay dentro es lo que se espera, y deja la tarjeta
             con un botón menos.
           */}
-          <button
-            type="button"
-            onClick={onAbrir}
-            className="min-w-0 text-left"
-            title="Ver las canciones de la lista"
-          >
-            <p className="truncate font-semibold text-foreground hover:underline">
-              {lista.nombre}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {lista.canciones.length === 1
-                ? "1 canción"
-                : `${lista.canciones.length} canciones`}
-            </p>
-          </button>
+          <ToolTooltip label="Ver las canciones de la lista">
+            <button
+              type="button"
+              onClick={onAbrir}
+              className="min-w-0 text-left" aria-label="Ver las canciones de la lista">
+              <p className="truncate font-semibold text-foreground hover:underline">
+                {lista.nombre}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {lista.canciones.length === 1
+                  ? "1 canción"
+                  : `${lista.canciones.length} canciones`}
+              </p>
+            </button>
+          </ToolTooltip>
 
           <Button
             variant="ghost"

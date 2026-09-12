@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useGoogleConnection } from "./useGoogleConnection";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 function GoogleLogo({ className }: { className?: string }) {
   return (
@@ -58,15 +59,16 @@ export function GoogleAccountHub() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          className="flex items-center gap-2 rounded-full border bg-card px-2.5 py-1 text-xs font-medium shadow-sm transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title={`Cuenta activa: ${email ?? ""}`}
-        >
-          <Avatar email={email ?? "G"} size="sm" />
-          <span className="hidden max-w-[140px] truncate md:inline text-muted-foreground">
-            {email}
-          </span>
-        </button>
+        <ToolTooltip label={`Cuenta activa: ${email ?? ""}`}>
+          <button
+            className="flex items-center gap-2 rounded-full border bg-card px-2.5 py-1 text-xs font-medium shadow-sm transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Avatar email={email ?? "G"} size="sm" />
+            <span className="hidden max-w-[140px] truncate md:inline text-muted-foreground">
+              {email}
+            </span>
+          </button>
+        </ToolTooltip>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="center" className="w-72">

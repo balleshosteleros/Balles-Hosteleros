@@ -21,6 +21,7 @@ import type { CitaCalendario, CitaConDetalle, EmpleadoDeCalendario } from "../ty
 import { CITA_ESTADO_LABEL } from "../types";
 import { CalendariosConfigDialog } from "./CalendariosConfigDialog";
 import { CitaDetalleDialog } from "./CitaDetalleDialog";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -329,16 +330,16 @@ function VistaMes({
                   </span>
                   <div className="space-y-1">
                     {delDia.slice(0, 3).map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => onCita(c)}
-                        className="block w-full truncate rounded px-1.5 py-1 text-left text-[11px] leading-tight text-white hover:opacity-90"
-                        style={{ background: c.calendario_color ?? COLOR_POR_DEFECTO }}
-                        title={`${c.cliente_nombre ?? "Sin nombre"} · ${c.calendario_nombre ?? ""}`}
-                      >
-                        {formatHoraEnZona(c.inicio, zonaHoraria)} {c.cliente_nombre ?? "Sin nombre"}
-                      </button>
+                      <ToolTooltip key={c.id} label={`${c.cliente_nombre ?? "Sin nombre"} · ${c.calendario_nombre ?? ""}`}>
+                        <button
+                          type="button"
+                          onClick={() => onCita(c)}
+                          className="block w-full truncate rounded px-1.5 py-1 text-left text-[11px] leading-tight text-white hover:opacity-90"
+                          style={{ background: c.calendario_color ?? COLOR_POR_DEFECTO }}
+                        >
+                          {formatHoraEnZona(c.inicio, zonaHoraria)} {c.cliente_nombre ?? "Sin nombre"}
+                        </button>
+                      </ToolTooltip>
                     ))}
                     {delDia.length > 3 && (
                       <span className="px-1 text-[11px] text-muted-foreground">
@@ -407,15 +408,15 @@ function VistaAno({
                 const k = dia ? clave(ano, mes, dia) : null;
                 const n = k ? (porDia.get(k) ?? []).length : 0;
                 return (
-                  <span
-                    key={i}
-                    className={`flex h-6 items-center justify-center rounded text-[11px] tabular-nums ${
-                      k === hoy ? "ring-1 ring-primary" : ""
-                    } ${n > 0 ? "bg-primary/15 font-semibold" : "text-muted-foreground"}`}
-                    title={n > 0 ? `${n} cita${n > 1 ? "s" : ""}` : undefined}
-                  >
-                    {dia ?? ""}
-                  </span>
+                  <ToolTooltip key={i} label={n > 0 ? `${n} cita${n > 1 ? "s" : ""}` : undefined}>
+                    <span
+                      className={`flex h-6 items-center justify-center rounded text-[11px] tabular-nums ${
+                        k === hoy ? "ring-1 ring-primary" : ""
+                      } ${n > 0 ? "bg-primary/15 font-semibold" : "text-muted-foreground"}`}
+                    >
+                      {dia ?? ""}
+                    </span>
+                  </ToolTooltip>
                 );
               })}
             </div>

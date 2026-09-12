@@ -77,6 +77,7 @@ import type {
   BloqueIAAnyKey,
   DraftIAEstudio,
 } from "@/features/direccion/types/aperturas-ia";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 function rowToEstudio(row: EstudioRow): EstudioApertura {
   return {
@@ -564,15 +565,16 @@ export function AperturasView() {
                       alt={e.datos.nombre}
                       className="w-full h-32 object-cover rounded-md border"
                     />
-                    <button
-                      type="button"
-                      onClick={() => removeImagen(e.id)}
-                      className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
-                      title="Quitar imagen"
-                      aria-label="Quitar imagen"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <ToolTooltip label="Quitar imagen">
+                      <button
+                        type="button"
+                        onClick={() => removeImagen(e.id)}
+                        className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+                        aria-label="Quitar imagen"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </ToolTooltip>
                   </div>
                 ) : (
                   <label className="flex flex-col items-center justify-center gap-1 h-32 w-full rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer text-xs">
@@ -684,17 +686,18 @@ function ShareMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          title={isOn ? "Enlace público activo" : "Compartir"}
-          aria-label={isOn ? "Enlace público activo" : "Compartir"}
-          className={cn(
-            "inline-flex items-center justify-center rounded-full p-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-            "text-muted-foreground hover:bg-muted hover:text-foreground",
-          )}
-        >
-          {isOn ? <Link2 className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
-        </button>
+        <ToolTooltip label={isOn ? "Enlace público activo" : "Compartir"}>
+          <button
+            type="button"
+            aria-label={isOn ? "Enlace público activo" : "Compartir"}
+            className={cn(
+              "inline-flex items-center justify-center rounded-full p-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+              "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            {isOn ? <Link2 className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
+          </button>
+        </ToolTooltip>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         {!isOn ? (
@@ -2796,15 +2799,16 @@ function NuevoEstudioForm({ onSave, onClose }: { onSave: (e: EstudioApertura, fo
               alt="Vista previa"
               className="w-full h-32 object-cover rounded-md border"
             />
-            <button
-              type="button"
-              onClick={() => { setFotoFile(null); setFotoPreview(null); }}
-              className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
-              title="Quitar imagen"
-              aria-label="Quitar imagen"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+            <ToolTooltip label="Quitar imagen">
+              <button
+                type="button"
+                onClick={() => { setFotoFile(null); setFotoPreview(null); }}
+                className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+                aria-label="Quitar imagen"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </ToolTooltip>
           </div>
         ) : (
           <label className="mt-1 flex flex-col items-center justify-center gap-1 h-24 w-full rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer text-xs">

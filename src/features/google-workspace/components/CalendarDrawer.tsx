@@ -52,6 +52,7 @@ import {
 } from "../lib/timezones";
 import { SelectorTZ } from "./SelectorTZ";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 type GoogleCalendar = {
   id: string;
@@ -887,14 +888,14 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
         <SheetTitle className="sr-only">Calendario · Google Calendar</SheetTitle>
         <SheetHeader className="bg-[#f6f8fc] px-2 py-2 border-b border-transparent">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSidebarAbierto((v) => !v)}
-              className="rounded-full p-3 hover:bg-black/5 transition-colors"
-              title="Menú principal"
-            >
-              <MenuIcon className="h-5 w-5 text-[#5f6368]" />
-            </button>
+            <ToolTooltip label="Menú principal">
+              <button
+                type="button"
+                onClick={() => setSidebarAbierto((v) => !v)}
+                className="rounded-full p-3 hover:bg-black/5 transition-colors" aria-label="Menú principal">
+                <MenuIcon className="h-5 w-5 text-[#5f6368]" />
+              </button>
+            </ToolTooltip>
             <div className="flex items-center gap-1 pl-1 pr-3">
               <CalendarLogo className="h-9 w-auto" />
             </div>
@@ -902,28 +903,28 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
               <Loader2 className="h-4 w-4 animate-spin text-[#5f6368]" />
             )}
             <div className="ml-auto flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setBuscadorAbierto((v) => !v)}
-                className={cn(
-                  "rounded-full p-3 transition-colors",
-                  buscadorAbierto ? "bg-blue-100 text-blue-700" : "text-[#5f6368] hover:bg-black/5",
-                )}
-                title="Buscar eventos"
-              >
-                <Search className="h-5 w-5" />
-              </button>
+              <ToolTooltip label="Buscar eventos">
+                <button
+                  type="button"
+                  onClick={() => setBuscadorAbierto((v) => !v)}
+                  className={cn(
+                    "rounded-full p-3 transition-colors",
+                    buscadorAbierto ? "bg-blue-100 text-blue-700" : "text-[#5f6368] hover:bg-black/5",
+                  )} aria-label="Buscar eventos">
+                  <Search className="h-5 w-5" />
+                </button>
+              </ToolTooltip>
               <SelectorTZ tz={tzSecundaria} onChange={cambiarTz} />
               <GoogleAccountButton />
               <SheetMaximizeButton className="text-[#5f6368]" />
               <SheetClose asChild>
-                <button
-                  type="button"
-                  className="ml-1 rounded-full p-3 hover:bg-black/5 transition-colors"
-                  title="Cerrar"
-                >
-                  <X className="h-5 w-5 text-[#5f6368]" />
-                </button>
+                <ToolTooltip label="Cerrar">
+                  <button
+                    type="button"
+                    className="ml-1 rounded-full p-3 hover:bg-black/5 transition-colors" aria-label="Cerrar">
+                    <X className="h-5 w-5 text-[#5f6368]" />
+                  </button>
+                </ToolTooltip>
               </SheetClose>
             </div>
           </div>
@@ -950,14 +951,14 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
             {busqueda && (
-              <button
-                type="button"
-                onClick={() => setBusqueda("")}
-                className="rounded p-1 text-muted-foreground hover:bg-muted"
-                title="Limpiar"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <ToolTooltip label="Limpiar">
+                <button
+                  type="button"
+                  onClick={() => setBusqueda("")}
+                  className="rounded p-1 text-muted-foreground hover:bg-muted" aria-label="Limpiar">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </ToolTooltip>
             )}
             <span className="text-[11px] text-muted-foreground">
               {q ? `${eventos.filter(coincide).length} coincidencias` : ""}
@@ -1029,31 +1030,30 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
                 {semanaActual.map((d, i) => {
                   const esHoy = d.toDateString() === new Date().toDateString();
                   return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => {
-                        setFechaRef(d);
-                        setVista("day");
-                      }}
-                      className="flex-1 border-r px-1 py-1 text-center transition-colors hover:bg-muted/40"
-                      title="Ver día"
-                    >
-                      <p className={cn(
-                        "text-[10px] font-medium uppercase tracking-wider",
-                        esHoy ? "text-blue-600" : "text-muted-foreground",
-                      )}>
-                        {DIAS_CORTO[i]}
-                      </p>
-                      <p
-                        className={cn(
-                          "mx-auto mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold",
-                          esHoy ? "bg-blue-600 text-white" : "text-foreground",
-                        )}
-                      >
-                        {d.getDate()}
-                      </p>
-                    </button>
+                    <ToolTooltip key={i} label="Ver día">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFechaRef(d);
+                          setVista("day");
+                        }}
+                        className="flex-1 border-r px-1 py-1 text-center transition-colors hover:bg-muted/40" aria-label="Ver día">
+                        <p className={cn(
+                          "text-[10px] font-medium uppercase tracking-wider",
+                          esHoy ? "text-blue-600" : "text-muted-foreground",
+                        )}>
+                          {DIAS_CORTO[i]}
+                        </p>
+                        <p
+                          className={cn(
+                            "mx-auto mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold",
+                            esHoy ? "bg-blue-600 text-white" : "text-foreground",
+                          )}
+                        >
+                          {d.getDate()}
+                        </p>
+                      </button>
+                    </ToolTooltip>
                   );
                 })}
               </div>
@@ -1709,11 +1709,12 @@ function EventoBox({
       style={{ top, height, left, right, backgroundColor: bg, color: txt }}
     >
       {editable && esInicio && (
-        <div
-          onPointerDown={(e) => onIniciarMov("top", e)}
-          className="absolute inset-x-0 top-0 z-10 h-1.5 cursor-ns-resize"
-          title="Cambiar hora de inicio"
-        />
+        <ToolTooltip label="Cambiar hora de inicio">
+          <div
+            onPointerDown={(e) => onIniciarMov("top", e)}
+            className="absolute inset-x-0 top-0 z-10 h-1.5 cursor-ns-resize"
+          />
+        </ToolTooltip>
       )}
       <p className="truncate font-semibold">{ev.titulo}</p>
       <p className="truncate text-[10px] opacity-90">{subLabel}</p>
@@ -1721,11 +1722,12 @@ function EventoBox({
         <p className="truncate text-[10px] opacity-90">📍 {ev.lugar}</p>
       )}
       {editable && esFin && (
-        <div
-          onPointerDown={(e) => onIniciarMov("bottom", e)}
-          className="absolute inset-x-0 bottom-0 z-10 h-1.5 cursor-ns-resize"
-          title="Cambiar hora de fin"
-        />
+        <ToolTooltip label="Cambiar hora de fin">
+          <div
+            onPointerDown={(e) => onIniciarMov("bottom", e)}
+            className="absolute inset-x-0 bottom-0 z-10 h-1.5 cursor-ns-resize"
+          />
+        </ToolTooltip>
       )}
     </div>
   );

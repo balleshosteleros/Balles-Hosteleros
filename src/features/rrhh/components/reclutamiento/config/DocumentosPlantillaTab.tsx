@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { CONTRATO_INTERNO_DEFAULT } from "@/features/rrhh/services/firmas/contrato-interno-texto";
 import { RECONOCIMIENTO_MEDICO_DEFAULT } from "@/features/rrhh/services/firmas/reconocimiento-medico-texto";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // Placeholders admitidos en el cuerpo de los documentos (contrato interno /
 // reconocimiento médico). Ambos comparten el mismo juego de códigos.
@@ -148,14 +149,14 @@ function DocumentoEditor({
         </p>
         <div className="flex flex-wrap gap-1.5">
           {PLACEHOLDERS.map((p) => (
-            <button
-              key={p.codigo}
-              onClick={() => insertPlaceholder(p.codigo)}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border bg-muted/50 text-[11px] font-mono text-foreground hover:bg-primary/10 hover:border-primary/30 transition-colors"
-              title={p.descripcion}
-            >
-              {p.codigo}
-            </button>
+            <ToolTooltip key={p.codigo} label={p.descripcion}>
+              <button
+                onClick={() => insertPlaceholder(p.codigo)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border bg-muted/50 text-[11px] font-mono text-foreground hover:bg-primary/10 hover:border-primary/30 transition-colors"
+              >
+                {p.codigo}
+              </button>
+            </ToolTooltip>
           ))}
         </div>
       </div>

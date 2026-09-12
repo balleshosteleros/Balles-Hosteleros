@@ -50,6 +50,7 @@ import {
 } from "@/features/sala/data/capacidad-grupos";
 import type { Mesa, Plano } from "@/features/sala/planos/data/planos";
 import { loadOrdenContext } from "@/features/sala/actions/estructura-context";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Local {
   id: string;
@@ -364,10 +365,11 @@ export function OrdenAsignacionTab() {
                 <div className="flex items-center gap-1.5 pt-1">
                   <span className="text-sm font-semibold tabular-nums">{n}</span>
                   {(ordenGuardado[n] ?? []).length > 0 && (
-                    <span
-                      className="h-1.5 w-1.5 rounded-full bg-primary"
-                      title="Orden personalizado"
-                    />
+                    <ToolTooltip label="Orden personalizado">
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-primary"
+                      />
+                    </ToolTooltip>
                   )}
                 </div>
 
@@ -512,38 +514,39 @@ function Chip({
   };
 
   return (
-    <span
-      ref={setNodeRef}
-      style={style}
-      className={[
-        "inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-xs",
-        opcion.esCombinacion ? "bg-accent/40 border-dashed" : "bg-card",
-        isDragging ? "opacity-80 shadow-lg" : "",
-      ].join(" ")}
-      title={`${opcion.zonaNombre} — ${opcion.capacidadMin}–${opcion.capacidadMax} plazas`}
-    >
-      <button
-        type="button"
-        className="cursor-grab touch-none text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
-        aria-label={`Reordenar ${opcion.codigo}`}
-        {...attributes}
-        {...listeners}
+    <ToolTooltip label={`${opcion.zonaNombre} — ${opcion.capacidadMin}–${opcion.capacidadMax} plazas`}>
+      <span
+        ref={setNodeRef}
+        style={style}
+        className={[
+          "inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-xs",
+          opcion.esCombinacion ? "bg-accent/40 border-dashed" : "bg-card",
+          isDragging ? "opacity-80 shadow-lg" : "",
+        ].join(" ")}
       >
-        <GripVertical className="h-3 w-3" />
-      </button>
-      <span className="text-[10px] font-semibold text-muted-foreground tabular-nums">
-        {posicion}
+        <button
+          type="button"
+          className="cursor-grab touch-none text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+          aria-label={`Reordenar ${opcion.codigo}`}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-3 w-3" />
+        </button>
+        <span className="text-[10px] font-semibold text-muted-foreground tabular-nums">
+          {posicion}
+        </span>
+        <span className="font-medium">{opcion.codigo}</span>
+        <button
+          type="button"
+          onClick={onQuitar}
+          className="text-muted-foreground/50 hover:text-foreground"
+          aria-label={`Quitar ${opcion.codigo}`}
+        >
+          <X className="h-3 w-3" />
+        </button>
       </span>
-      <span className="font-medium">{opcion.codigo}</span>
-      <button
-        type="button"
-        onClick={onQuitar}
-        className="text-muted-foreground/50 hover:text-foreground"
-        aria-label={`Quitar ${opcion.codigo}`}
-      >
-        <X className="h-3 w-3" />
-      </button>
-    </span>
+    </ToolTooltip>
   );
 }
 

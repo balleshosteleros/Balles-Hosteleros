@@ -36,6 +36,7 @@ import { PlantillasNavButton } from "./PlantillasListView";
 import type { InspeccionesTab } from "@/features/calidad/components/CalidadInspeccionesView";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const columnasDef: ToolbarColumna[] = [
   { campo: "numero_secuencial", label: "Nº", bloqueada: true },
@@ -161,14 +162,14 @@ function NotasPorSeccionCell({
           valor >= 5 ? "bg-amber-50 text-amber-700 border-amber-200" :
           "bg-red-50 text-red-700 border-red-200";
         return (
-          <span
-            key={seccion}
-            className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] ${color}`}
-            title={`${seccion}: ${valor.toFixed(2)}`}
-          >
-            <span className="font-medium">{nombreCortoSeccion(seccion)}</span>
-            <span className="font-mono tabular-nums">{Number(valor).toFixed(1)}</span>
-          </span>
+          <ToolTooltip key={seccion} label={`${seccion}: ${valor.toFixed(2)}`}>
+            <span
+              className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] ${color}`}
+            >
+              <span className="font-medium">{nombreCortoSeccion(seccion)}</span>
+              <span className="font-mono tabular-nums">{Number(valor).toFixed(1)}</span>
+            </span>
+          </ToolTooltip>
         );
       })}
     </div>
@@ -192,13 +193,14 @@ function EscalaBadge({ valor, max }: { valor: number; max: number }) {
 function PlantillaBadge({ nombre, version }: { nombre: string | null; version?: number | null }) {
   if (!nombre) return <span className="text-muted-foreground text-xs">—</span>;
   return (
-    <Badge
-      variant="outline"
-      className="text-[10px] font-mono tabular-nums font-normal text-muted-foreground border-muted-foreground/30"
-      title={nombre}
-    >
-      V{version ?? 1}
-    </Badge>
+    <ToolTooltip label={nombre}>
+      <Badge
+        variant="outline"
+        className="text-[10px] font-mono tabular-nums font-normal text-muted-foreground border-muted-foreground/30"
+      >
+        V{version ?? 1}
+      </Badge>
+    </ToolTooltip>
   );
 }
 
@@ -216,21 +218,23 @@ function FirmadoIcon({ envio, tz }: { envio: EnvioResumen; tz: string }) {
   if (envio.verificado_at) {
     const por = envio.verificado_por_nombre ?? envio.nombre_jefe_sala ?? "Jefe de sala";
     return (
-      <span
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
-        title={`Firmada por ${por} el ${formatFechaHoraEnZona(envio.verificado_at, tz)}`}
-      >
-        <Check className="h-3 w-3" strokeWidth={2.5} />
-      </span>
+      <ToolTooltip label={`Firmada por ${por} el ${formatFechaHoraEnZona(envio.verificado_at, tz)}`}>
+        <span
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+        >
+          <Check className="h-3 w-3" strokeWidth={2.5} />
+        </span>
+      </ToolTooltip>
     );
   }
   return (
-    <span
-      className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-50 text-red-700 border border-red-200"
-      title="El inspeccionado no firmó la inspección"
-    >
-      <X className="h-3 w-3" strokeWidth={2.5} />
-    </span>
+    <ToolTooltip label="El inspeccionado no firmó la inspección">
+      <span
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-50 text-red-700 border border-red-200"
+      >
+        <X className="h-3 w-3" strokeWidth={2.5} />
+      </span>
+    </ToolTooltip>
   );
 }
 

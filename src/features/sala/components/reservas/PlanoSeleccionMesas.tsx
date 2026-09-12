@@ -28,6 +28,7 @@ import {
   PLANO_CANVAS_W,
   type MesaMetaPlano,
 } from "@/features/sala/components/reservas/plano-mesas-medidas";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /** Aire alrededor del lienzo, descontado al calcular la escala. */
 const PADDING_LIENZO = 8;
@@ -194,65 +195,65 @@ export function PlanoSeleccionMesas({
             const otras = getReservasMesa(m.id).filter((r) => r.id !== reservaId);
             const ocupadaPorOtra = otras.length > 0;
             return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={(e) => onToggle(codigo, e.metaKey || e.ctrlKey)}
-                title={
+              <ToolTooltip key={m.id} label={
                   ocupadaPorOtra
                     ? `${m.codigo} · ocupada por ${otras[0].cliente || "WALK IN"} a las ${otras[0].hora.slice(0, 5)}`
                     : `${m.codigo} · ${meta?.capacidadMin ?? "?"}-${meta?.capacidadMax ?? "?"} per`
-                }
-                className={cn(
-                  "absolute flex flex-col items-center justify-center overflow-hidden border-2 px-1 text-[11px] font-semibold transition-all cursor-pointer",
-                  // El foco del navegador se quedaba pegado tras pulsar: la
-                  // mesa seguía resaltada como si el ratón estuviera encima,
-                  // y con varias pulsadas no se distinguía cuál estaba elegida.
-                  // Se conserva el anillo SOLO para quien navega con teclado.
-                  "outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
-                  // Borde rojo: misma norma visual que la mesa seleccionada en
-                  // el plano de la vista de sala.
-                  elegida
-                    ? "ring-[10px] ring-red-500 z-10 !border-red-500 !border-4"
-                    : "border-white/15 hover:border-white/60",
-                  ocupadaPorOtra && !elegida && "border-amber-500/70",
-                )}
-                style={{
-                  left: c.x,
-                  top: c.y,
-                  width: dims.w,
-                  height: dims.h,
-                  borderRadius: forma === "redonda" ? 9999 : 6,
-                  // Mismo azul de marca que en el plano de la vista: todas
-                  // las mesas comparten fondo, el color de zona se queda solo
-                  // en las etiquetas.
-                  backgroundImage: fondoMesaLibre(m.id, esOscuro),
-                  transform: pos.rotation ? `rotate(${pos.rotation}deg)` : undefined,
-                }}
-              >
-                <div
-                  className="pointer-events-none flex flex-col items-center justify-center leading-tight text-white"
-                  style={pos.rotation ? { transform: `rotate(${-pos.rotation}deg)` } : undefined}
+                }>
+                <button
+                  type="button"
+                  onClick={(e) => onToggle(codigo, e.metaKey || e.ctrlKey)}
+                  className={cn(
+                    "absolute flex flex-col items-center justify-center overflow-hidden border-2 px-1 text-[11px] font-semibold transition-all cursor-pointer",
+                    // El foco del navegador se quedaba pegado tras pulsar: la
+                    // mesa seguía resaltada como si el ratón estuviera encima,
+                    // y con varias pulsadas no se distinguía cuál estaba elegida.
+                    // Se conserva el anillo SOLO para quien navega con teclado.
+                    "outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+                    // Borde rojo: misma norma visual que la mesa seleccionada en
+                    // el plano de la vista de sala.
+                    elegida
+                      ? "ring-[10px] ring-red-500 z-10 !border-red-500 !border-4"
+                      : "border-white/15 hover:border-white/60",
+                    ocupadaPorOtra && !elegida && "border-amber-500/70",
+                  )}
+                  style={{
+                    left: c.x,
+                    top: c.y,
+                    width: dims.w,
+                    height: dims.h,
+                    borderRadius: forma === "redonda" ? 9999 : 6,
+                    // Mismo azul de marca que en el plano de la vista: todas
+                    // las mesas comparten fondo, el color de zona se queda solo
+                    // en las etiquetas.
+                    backgroundImage: fondoMesaLibre(m.id, esOscuro),
+                    transform: pos.rotation ? `rotate(${pos.rotation}deg)` : undefined,
+                  }}
                 >
-                  <span className="flex items-center gap-0.5 leading-none">
-                    {elegida && <Check className="h-3 w-3" />}
-                    {m.codigo}
-                  </span>
-                  <span className="mt-0.5 text-[9px] font-normal opacity-80">
-                    ({m.capacidad}p)
-                  </span>
-                  {eraDeLaReserva && (
-                    <span className="text-[8px] font-normal uppercase opacity-70">
-                      actual
+                  <div
+                    className="pointer-events-none flex flex-col items-center justify-center leading-tight text-white"
+                    style={pos.rotation ? { transform: `rotate(${-pos.rotation}deg)` } : undefined}
+                  >
+                    <span className="flex items-center gap-0.5 leading-none">
+                      {elegida && <Check className="h-3 w-3" />}
+                      {m.codigo}
                     </span>
-                  )}
-                  {ocupadaPorOtra && !eraDeLaReserva && (
-                    <span className="truncate max-w-full text-[8px] font-normal opacity-80">
-                      {otras[0].hora.slice(0, 5)}
+                    <span className="mt-0.5 text-[9px] font-normal opacity-80">
+                      ({m.capacidad}p)
                     </span>
-                  )}
-                </div>
-              </button>
+                    {eraDeLaReserva && (
+                      <span className="text-[8px] font-normal uppercase opacity-70">
+                        actual
+                      </span>
+                    )}
+                    {ocupadaPorOtra && !eraDeLaReserva && (
+                      <span className="truncate max-w-full text-[8px] font-normal opacity-80">
+                        {otras[0].hora.slice(0, 5)}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              </ToolTooltip>
             );
           })}
         </div>

@@ -22,6 +22,7 @@ import {
   type MarcaRow,
   type AcuerdoAnual,
 } from "@/features/logistica/actions/marcas-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const MESES = [
   "Enero",
@@ -287,25 +288,26 @@ export function AcuerdosView() {
                         return (
                           <td key={i} className="px-2 py-2.5 text-right tabular-nums">
                             {tieneCompras ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setDesglose(
-                                    abierto ? null : { referenciaId: fila.referenciaId, mes: i },
-                                  )
-                                }
-                                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-accent ${
-                                  abierto ? "bg-accent" : ""
-                                }`}
-                                title={`Ver los albaranes de ${MESES[i]}`}
-                              >
-                                {abierto ? (
-                                  <ChevronDown className="h-3 w-3" strokeWidth={2} />
-                                ) : (
-                                  <ChevronRight className="h-3 w-3 opacity-40" strokeWidth={2} />
-                                )}
-                                {formatNumero(celda.cantidad)}
-                              </button>
+                              <ToolTooltip label={`Ver los albaranes de ${MESES[i]}`}>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setDesglose(
+                                      abierto ? null : { referenciaId: fila.referenciaId, mes: i },
+                                    )
+                                  }
+                                  className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-accent ${
+                                    abierto ? "bg-accent" : ""
+                                  }`}
+                                >
+                                  {abierto ? (
+                                    <ChevronDown className="h-3 w-3" strokeWidth={2} />
+                                  ) : (
+                                    <ChevronRight className="h-3 w-3 opacity-40" strokeWidth={2} />
+                                  )}
+                                  {formatNumero(celda.cantidad)}
+                                </button>
+                              </ToolTooltip>
                             ) : (
                               // No es "sin dato": sabemos que se compró 0.
                               <span className="text-muted-foreground">0</span>

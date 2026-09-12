@@ -24,6 +24,7 @@ import { formatEur } from "@/shared/lib/numero";
 import { telefonoHref, whatsappHref } from "@/shared/lib/telefono";
 import type { Oportunidad, PipelineFase } from "../types";
 import { OPORTUNIDAD_ESTADO_CLASE as ESTADO_CLASE, OPORTUNIDAD_ESTADO_LABEL } from "../types";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /** Colores del estado. Abierta no pinta nada: es lo normal, no una etiqueta. */
 
@@ -89,61 +90,68 @@ function OportunidadCard({
           icono apagado que no hace nada confunde más de lo que informa. */}
       <div className="mt-1.5 flex items-center gap-2 text-muted-foreground">
         {hrefLlamada && (
-          <a
-            href={hrefLlamada}
-            onClick={(e) => e.stopPropagation()}
-            title={`Llamar a ${o.telefono}`}
-            aria-label={`Llamar a ${o.telefono}`}
-            className="hover:text-foreground"
-          >
-            <Phone className="h-3.5 w-3.5" />
-          </a>
+          <ToolTooltip label={`Llamar a ${o.telefono}`}>
+            <a
+              href={hrefLlamada}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Llamar a ${o.telefono}`}
+              className="hover:text-foreground"
+            >
+              <Phone className="h-3.5 w-3.5" />
+            </a>
+          </ToolTooltip>
         )}
         {hrefWhatsapp && (
-          <a
-            href={hrefWhatsapp}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            title="Abrir WhatsApp"
-            aria-label="Abrir WhatsApp"
-            className="hover:text-foreground"
-          >
-            <MessageCircle className="h-3.5 w-3.5" />
-          </a>
+          <ToolTooltip label="Abrir WhatsApp">
+            <a
+              href={hrefWhatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Abrir WhatsApp"
+              className="hover:text-foreground"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+            </a>
+          </ToolTooltip>
         )}
         {o.email && (
-          <a
-            href={`mailto:${o.email}`}
-            onClick={(e) => e.stopPropagation()}
-            title={o.email}
-            aria-label={`Escribir a ${o.email}`}
-            className="hover:text-foreground"
-          >
-            <Mail className="h-3.5 w-3.5" />
-          </a>
+          <ToolTooltip label={o.email}>
+            <a
+              href={`mailto:${o.email}`}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Escribir a ${o.email}`}
+              className="hover:text-foreground"
+            >
+              <Mail className="h-3.5 w-3.5" />
+            </a>
+          </ToolTooltip>
         )}
         {o.etiquetas.length > 0 && (
-          <span
-            className="inline-flex items-center gap-0.5 tabular-nums"
-            title={o.etiquetas.join(", ")}
-          >
-            <Tag className="h-3.5 w-3.5" />
-            <span className="text-[10px] font-semibold">{o.etiquetas.length}</span>
-          </span>
+          <ToolTooltip label={o.etiquetas.join(", ")}>
+            <span
+              className="inline-flex items-center gap-0.5 tabular-nums"
+            >
+              <Tag className="h-3.5 w-3.5" />
+              <span className="text-[10px] font-semibold">{o.etiquetas.length}</span>
+            </span>
+          </ToolTooltip>
         )}
         {o.notas && (
-          <span title="Tiene notas">
-            <StickyNote className="h-3.5 w-3.5" />
-          </span>
+          <ToolTooltip label="Tiene notas">
+            <span>
+              <StickyNote className="h-3.5 w-3.5" />
+            </span>
+          </ToolTooltip>
         )}
         {dias !== null && (
-          <span
-            className="ml-auto text-[10px] tabular-nums"
-            title="Días en esta fase"
-          >
-            {dias === 0 ? "hoy" : `${dias} d`}
-          </span>
+          <ToolTooltip label="Días en esta fase">
+            <span
+              className="ml-auto text-[10px] tabular-nums"
+            >
+              {dias === 0 ? "hoy" : `${dias} d`}
+            </span>
+          </ToolTooltip>
         )}
       </div>
     </div>
@@ -173,15 +181,16 @@ function Columna({
   if (plegada) {
     return (
       <div className="flex w-10 shrink-0 flex-col items-center gap-2 rounded-lg border bg-muted/30 py-2">
-        <button
-          type="button"
-          onClick={onPlegar}
-          title="Desplegar la fase"
-          aria-label="Desplegar la fase"
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
+        <ToolTooltip label="Desplegar la fase">
+          <button
+            type="button"
+            onClick={onPlegar}
+            aria-label="Desplegar la fase"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </ToolTooltip>
         <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">
           {oportunidades.length}
         </span>
@@ -222,15 +231,16 @@ function Columna({
             {oportunidades.length} oportunidades · {formatEur(total)}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onPlegar}
-          title="Plegar la fase"
-          aria-label="Plegar la fase"
-          className="shrink-0 text-muted-foreground hover:text-foreground"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
+        <ToolTooltip label="Plegar la fase">
+          <button
+            type="button"
+            onClick={onPlegar}
+            aria-label="Plegar la fase"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        </ToolTooltip>
       </div>
 
       <ScrollArea className="flex-1 px-1.5 py-1.5" style={{ maxHeight: "calc(100vh - 300px)" }}>

@@ -12,6 +12,7 @@
 
 import { paisDeTelefono } from "@/features/sala/data/prefijos-telefono";
 import { cn } from "@/lib/utils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export function BanderaTelefono({
   telefono,
@@ -24,13 +25,14 @@ export function BanderaTelefono({
   if (!pais) return null;
 
   return (
-    <span
-      className={cn("inline-flex shrink-0 items-center gap-1", className)}
-      title={pais.label}
-    >
-      <span aria-label={pais.label} role="img">
-        {pais.flag}
+    <ToolTooltip label={pais.label}>
+      <span
+        className={cn("inline-flex shrink-0 items-center gap-1", className)}
+      >
+        <span aria-label={pais.label} role="img">
+          {pais.flag}
+        </span>
       </span>
-    </span>
+    </ToolTooltip>
   );
 }

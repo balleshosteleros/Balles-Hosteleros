@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { useGoogleConnection, type CuentaGoogle } from "./useGoogleConnection";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const GOOGLE_RING_BG =
   "conic-gradient(from 0deg, #4285F4 0deg, #4285F4 90deg, #EA4335 90deg, #EA4335 180deg, #FBBC05 180deg, #FBBC05 270deg, #34A853 270deg, #34A853 360deg)";
@@ -195,16 +196,17 @@ export function GoogleAccountButton() {
                       </p>
                     </div>
                   </button>
-                  <button
-                    type="button"
-                    onClick={(e) => onRemove(cuenta.email, e)}
-                    disabled={ocupada}
-                    aria-label={`Quitar ${cuenta.email}`}
-                    title="Quitar cuenta"
-                    className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 disabled:opacity-30"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                  <ToolTooltip label="Quitar cuenta">
+                    <button
+                      type="button"
+                      onClick={(e) => onRemove(cuenta.email, e)}
+                      disabled={ocupada}
+                      aria-label={`Quitar ${cuenta.email}`}
+                      className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 disabled:opacity-30"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </ToolTooltip>
                 </div>
               );
             })}
@@ -214,16 +216,16 @@ export function GoogleAccountButton() {
         <DropdownMenuSeparator />
 
         <DropdownMenuItem asChild>
-          <a
-            href={`/api/google/connect?next=${encodeURIComponent(
-              pathname || "/",
-            )}&switch=1`}
-            className="cursor-pointer"
-            title="Solo la primera vez por cuenta. Después cambias con un click."
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Añadir otra cuenta de Google
-          </a>
+          <ToolTooltip label="Solo la primera vez por cuenta. Después cambias con un click.">
+            <a
+              href={`/api/google/connect?next=${encodeURIComponent(
+                pathname || "/",
+              )}&switch=1`}
+              className="cursor-pointer" aria-label="Solo la primera vez por cuenta. Después cambias con un click.">
+              <Plus className="mr-2 h-4 w-4" />
+              Añadir otra cuenta de Google
+            </a>
+          </ToolTooltip>
         </DropdownMenuItem>
 
         <DropdownMenuItem

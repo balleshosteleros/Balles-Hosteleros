@@ -1,4 +1,5 @@
 import { cn } from "@/shared/lib/utils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Punto de color determinista por empresa (mismo nombre → mismo color),
@@ -34,19 +35,20 @@ interface Props {
 export function EmpresaBadge({ nombre, color, size = "md", className }: Props) {
   const dot = color ?? dotColor(nombre);
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card font-medium text-foreground/80 leading-none",
-        size === "sm" ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]",
-        className,
-      )}
-      title={nombre}
-    >
+    <ToolTooltip label={nombre}>
       <span
-        className="h-1.5 w-1.5 shrink-0 rounded-full"
-        style={{ backgroundColor: dot }}
-      />
-      <span className="truncate">{nombre}</span>
-    </span>
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card font-medium text-foreground/80 leading-none",
+          size === "sm" ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]",
+          className,
+        )}
+      >
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ backgroundColor: dot }}
+        />
+        <span className="truncate">{nombre}</span>
+      </span>
+    </ToolTooltip>
   );
 }

@@ -19,6 +19,7 @@ import {
   type CamposFormularioConfig,
   type CampoCandidaturaClave,
 } from "@/features/rrhh/data/campos-candidatura";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export function CandidatosConfig() {
   const [campos, setCampos] = useState<CamposFormularioConfig>(() => normalizarCamposFormulario(null));
@@ -121,18 +122,19 @@ export function CandidatosConfig() {
                         {c.label}
                       </span>
                       {cfg.activo && (
-                        <button
-                          type="button"
-                          onClick={() => toggleObligatorio(c.clave)}
-                          title={cfg.obligatorio ? "Marcar como opcional" : "Marcar como obligatorio"}
-                        >
-                          <Badge
-                            variant={cfg.obligatorio ? "secondary" : "outline"}
-                            className="text-[10px] cursor-pointer"
+                        <ToolTooltip label={cfg.obligatorio ? "Marcar como opcional" : "Marcar como obligatorio"}>
+                          <button
+                            type="button"
+                            onClick={() => toggleObligatorio(c.clave)}
                           >
-                            {cfg.obligatorio ? "Obligatorio" : "Opcional"}
-                          </Badge>
-                        </button>
+                            <Badge
+                              variant={cfg.obligatorio ? "secondary" : "outline"}
+                              className="text-[10px] cursor-pointer"
+                            >
+                              {cfg.obligatorio ? "Obligatorio" : "Opcional"}
+                            </Badge>
+                          </button>
+                        </ToolTooltip>
                       )}
                     </div>
                     <Switch checked={cfg.activo} onCheckedChange={() => toggleActivo(c.clave)} />

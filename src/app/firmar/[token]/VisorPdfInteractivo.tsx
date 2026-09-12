@@ -7,6 +7,7 @@ import "react-pdf/dist/Page/TextLayer.css";
 import { Button } from "@/components/ui/button";
 import { Eraser, CheckCircle2, X, Smartphone } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -207,14 +208,14 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionesF
                     className="w-full h-full object-contain"
                   />
                   {i === 0 && (
-                    <button
-                      type="button"
-                      onClick={limpiar}
-                      className="absolute -top-2.5 -right-2.5 bg-white border border-zinc-200 rounded-full p-1 shadow-sm hover:shadow pointer-events-auto"
-                      title="Borrar y volver a dibujar"
-                    >
-                      <X className="h-3 w-3 text-zinc-500" />
-                    </button>
+                    <ToolTooltip label="Borrar y volver a dibujar">
+                      <button
+                        type="button"
+                        onClick={limpiar}
+                        className="absolute -top-2.5 -right-2.5 bg-white border border-zinc-200 rounded-full p-1 shadow-sm hover:shadow pointer-events-auto" aria-label="Borrar y volver a dibujar">
+                        <X className="h-3 w-3 text-zinc-500" />
+                      </button>
+                    </ToolTooltip>
                   )}
                 </div>
               );

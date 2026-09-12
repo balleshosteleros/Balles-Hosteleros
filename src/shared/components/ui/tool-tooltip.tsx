@@ -5,6 +5,7 @@ import { Slot } from "@radix-ui/react-slot";
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,11 @@ import { cn } from "@/lib/utils";
  * pasado a ser este componente, hay que reenviarle ambas cosas al botón de
  * dentro con un `Slot` y `forwardRef`; sin eso los iconos se quedan mudos: se
  * ven, pero no abren nada.
+ *
+ * Lleva su propio `TooltipProvider` por dos razones: las webs públicas (carta,
+ * portal de empleo, formación) viven fuera de `Providers` y sin él la pantalla
+ * se cae, y así la espera es de 150 ms —el `title=` del sistema tardaba casi un
+ * segundo en asomar—. Sin etiqueta que enseñar, deja pasar al hijo tal cual.
  */
 export const ToolTooltip = React.forwardRef<
   HTMLElement,
@@ -44,24 +50,27 @@ export const ToolTooltip = React.forwardRef<
   { label, children, side = "bottom", sideOffset = 8, className, ...triggerProps },
   ref,
 ) {
+  if (label === null || label === undefined || label === "") return <>{children}</>;
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Slot ref={ref} {...triggerProps}>
-          {children}
-        </Slot>
-      </TooltipTrigger>
-      <TooltipContent
-        side={side}
-        sideOffset={sideOffset}
-        // Redonda del todo y sin borde: es una etiqueta, no una tarjeta.
-        className={cn(
-          "rounded-full border-0 bg-foreground px-3 py-1.5 text-xs font-medium text-background shadow-lg",
-          className,
-        )}
-      >
-        {label}
-      </TooltipContent>
-    </Tooltip>
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Slot ref={ref} {...triggerProps}>
+            {children}
+          </Slot>
+        </TooltipTrigger>
+        <TooltipContent
+          side={side}
+          sideOffset={sideOffset}
+          // Redonda del todo y sin borde: es una etiqueta, no una tarjeta.
+          className={cn(
+            "rounded-full border-0 bg-foreground px-3 py-1.5 text-xs font-medium text-background shadow-lg",
+            className,
+          )}
+        >
+          {label}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 });

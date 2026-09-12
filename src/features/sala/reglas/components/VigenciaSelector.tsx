@@ -12,6 +12,7 @@ import {
   DIA_ISO_DOW_LABELS,
   DIAS_ISO_DOW,
 } from "../data/reglas";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   value: VigenciaSpec;
@@ -226,14 +227,14 @@ function SelectorFechas({
               className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-0.5 rounded"
             >
               {f}
-              <button
-                type="button"
-                onClick={() => quitar(f)}
-                className="text-muted-foreground hover:text-destructive"
-                title="Quitar"
-              >
-                <X className="h-3 w-3" />
-              </button>
+              <ToolTooltip label="Quitar">
+                <button
+                  type="button"
+                  onClick={() => quitar(f)}
+                  className="text-muted-foreground hover:text-destructive" aria-label="Quitar">
+                  <X className="h-3 w-3" />
+                </button>
+              </ToolTooltip>
             </span>
           ))}
         </div>

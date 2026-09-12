@@ -58,6 +58,7 @@ import { IOActions } from "@/shared/io";
 import { cierresIO } from "@/features/gerencia/io/cierres.io";
 import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // Tipos de movimiento del submódulo (el selector de arriba del modal).
 const TIPOS_MOVIMIENTO: { value: CierreTipo; label: string }[] = [
@@ -1313,64 +1314,64 @@ export function CierresView() {
                   const inerte = cerrado && !tieneCierre;
 
                   return (
-                    <div
-                      key={key}
-                      className={`relative ${bg} p-2 min-h-[90px] transition ${inerte ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:brightness-95"} ${esHoy ? "ring-2 ring-primary/40 ring-inset" : ""} ${esPendiente ? "ring-1 ring-red-400 ring-inset" : esProgramadoFuturo ? "ring-1 ring-blue-300 ring-inset" : ""}`}
-                      title={inerte ? `Fuera de plazo: solo se puede apuntar hasta ${config.dias_bloqueo} ${config.dias_bloqueo === 1 ? "día" : "días"} atrás` : undefined}
-                      aria-disabled={inerte || undefined}
-                      onClick={() => {
-                        if (tieneCierre) {
-                          setSelected(items[0]);
-                          setDetalleOpen(true);
-                        } else if (cerrado) {
-                          toast.error(
-                            `Día cerrado: solo se puede apuntar hasta ${config.dias_bloqueo} ${config.dias_bloqueo === 1 ? "día" : "días"} atrás, `
-                            + `para no alterar el efectivo acumulado actual.`,
-                          );
-                        } else {
-                          abrirNuevo(key);
-                        }
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={`text-xs font-medium ${esHoy ? "text-primary font-bold" : "text-muted-foreground"}`}>
-                          {format(dia, "d")}
-                        </span>
-                        {tieneCierre && (
-                          cuadra ? <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                                 : <AlertTriangle className="h-3 w-3 text-amber-600" />
-                        )}
-                      </div>
-                      <div className="mt-1 space-y-0.5">
-                        {items.slice(0, 2).map((c) => {
-                          // El importe con signo real sobre la caja: cierre suma, ingreso resta,
-                          // y la retirada suma o resta según cómo se registró.
-                          const importeConSigno = importeEfectivo(c);
-                          const esNegativo = importeConSigno < 0;
-                          return (
-                          <div key={c.id} className="text-[10px] leading-tight">
-                            <span className={`font-medium ${esNegativo ? "text-red-700" : ""}`}>{fmtEuro(importeConSigno)}</span>
-                            {!c.cuadra && (
-                              <span className={`ml-1 ${c.descuadre >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                                ({fmtDescuadre(c.descuadre)})
-                              </span>
-                            )}
-                          </div>
-                          );
-                        })}
-                        {items.length > 2 && (
-                          <span className="text-[10px] text-muted-foreground">+{items.length - 2} más</span>
-                        )}
-                        {esPendiente && (
-                          <span className="text-[10px] text-red-700 font-semibold flex items-center gap-0.5">
-                            <AlertTriangle className="h-2.5 w-2.5" /> Falta registrar
+                    <ToolTooltip key={key} label={inerte ? `Fuera de plazo: solo se puede apuntar hasta ${config.dias_bloqueo} ${config.dias_bloqueo === 1 ? "día" : "días"} atrás` : undefined}>
+                      <div
+                        className={`relative ${bg} p-2 min-h-[90px] transition ${inerte ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:brightness-95"} ${esHoy ? "ring-2 ring-primary/40 ring-inset" : ""} ${esPendiente ? "ring-1 ring-red-400 ring-inset" : esProgramadoFuturo ? "ring-1 ring-blue-300 ring-inset" : ""}`}
+                        aria-disabled={inerte || undefined}
+                        onClick={() => {
+                          if (tieneCierre) {
+                            setSelected(items[0]);
+                            setDetalleOpen(true);
+                          } else if (cerrado) {
+                            toast.error(
+                              `Día cerrado: solo se puede apuntar hasta ${config.dias_bloqueo} ${config.dias_bloqueo === 1 ? "día" : "días"} atrás, `
+                              + `para no alterar el efectivo acumulado actual.`,
+                            );
+                          } else {
+                            abrirNuevo(key);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-medium ${esHoy ? "text-primary font-bold" : "text-muted-foreground"}`}>
+                            {format(dia, "d")}
                           </span>
-                        )}
-                        {esProgramadoFuturo && (
-                          <span className="text-[10px] text-blue-700 font-medium">Cierre programado</span>
-                        )}
+                          {tieneCierre && (
+                            cuadra ? <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                   : <AlertTriangle className="h-3 w-3 text-amber-600" />
+                          )}
+                        </div>
+                        <div className="mt-1 space-y-0.5">
+                          {items.slice(0, 2).map((c) => {
+                            // El importe con signo real sobre la caja: cierre suma, ingreso resta,
+                            // y la retirada suma o resta según cómo se registró.
+                            const importeConSigno = importeEfectivo(c);
+                            const esNegativo = importeConSigno < 0;
+                            return (
+                            <div key={c.id} className="text-[10px] leading-tight">
+                              <span className={`font-medium ${esNegativo ? "text-red-700" : ""}`}>{fmtEuro(importeConSigno)}</span>
+                              {!c.cuadra && (
+                                <span className={`ml-1 ${c.descuadre >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                                  ({fmtDescuadre(c.descuadre)})
+                                </span>
+                              )}
+                            </div>
+                            );
+                          })}
+                          {items.length > 2 && (
+                            <span className="text-[10px] text-muted-foreground">+{items.length - 2} más</span>
+                          )}
+                          {esPendiente && (
+                            <span className="text-[10px] text-red-700 font-semibold flex items-center gap-0.5">
+                              <AlertTriangle className="h-2.5 w-2.5" /> Falta registrar
+                            </span>
+                          )}
+                          {esProgramadoFuturo && (
+                            <span className="text-[10px] text-blue-700 font-medium">Cierre programado</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </ToolTooltip>
                   );
                 })}
               </div>
@@ -2334,17 +2335,18 @@ function ColumnFilter({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${
-            active
-              ? "bg-primary/10 text-primary"
-              : "text-muted-foreground/60 hover:bg-muted hover:text-foreground"
-          }`}
-          title={`Filtrar ${label.toLowerCase()}`}
-        >
-          <ListFilter className="h-3 w-3" />
-        </button>
+        <ToolTooltip label={`Filtrar ${label.toLowerCase()}`}>
+          <button
+            type="button"
+            className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${
+              active
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <ListFilter className="h-3 w-3" />
+          </button>
+        </ToolTooltip>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-56 p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">

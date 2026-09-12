@@ -19,6 +19,7 @@ import { Search, X, Check, Wifi } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Empleado {
   id: string;
@@ -213,23 +214,24 @@ function FilaEmpleado({
         )}
       </div>
       {asignado && (
-        <button
-          onClick={() => onToggleTeletrabajo(!empleado.permite_teletrabajo)}
-          title={
+        <ToolTooltip label={
             empleado.permite_teletrabajo
               ? "Teletrabajo activo (salta validación de zona)"
               : "Activar teletrabajo"
-          }
-          className={cn(
-            "h-7 px-2 rounded-md text-xs flex items-center gap-1 transition-colors",
-            empleado.permite_teletrabajo
-              ? "bg-sky-100 text-sky-700 hover:bg-sky-200"
-              : "text-muted-foreground hover:bg-muted"
-          )}
-        >
-          <Wifi className="h-3 w-3" />
-          {empleado.permite_teletrabajo ? "Remoto" : "Presencial"}
-        </button>
+          }>
+          <button
+            onClick={() => onToggleTeletrabajo(!empleado.permite_teletrabajo)}
+            className={cn(
+              "h-7 px-2 rounded-md text-xs flex items-center gap-1 transition-colors",
+              empleado.permite_teletrabajo
+                ? "bg-sky-100 text-sky-700 hover:bg-sky-200"
+                : "text-muted-foreground hover:bg-muted"
+            )}
+          >
+            <Wifi className="h-3 w-3" />
+            {empleado.permite_teletrabajo ? "Remoto" : "Presencial"}
+          </button>
+        </ToolTooltip>
       )}
       <Button
         variant={asignado ? "ghost" : "outline"}

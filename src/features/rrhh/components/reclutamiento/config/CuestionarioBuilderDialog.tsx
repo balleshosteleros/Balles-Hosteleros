@@ -36,6 +36,7 @@ import {
   createCuestionarioVacante,
   updateCuestionarioVacante,
 } from "@/features/rrhh/actions/cuestionarios-vacante-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   open: boolean;
@@ -338,18 +339,20 @@ function PreguntaCard({
         <div className="ml-auto flex items-center gap-3">
           {!readOnly && (
             <>
-              <button type="button" onClick={onDuplicar} className="text-muted-foreground hover:text-foreground" title="Duplicar">
-                <Copy className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={onEliminar}
-                disabled={!puedeEliminar}
-                className="text-muted-foreground hover:text-destructive disabled:opacity-30"
-                title="Eliminar"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <ToolTooltip label="Duplicar">
+                <button type="button" onClick={onDuplicar} className="text-muted-foreground hover:text-foreground" aria-label="Duplicar">
+                  <Copy className="h-4 w-4" />
+                </button>
+              </ToolTooltip>
+              <ToolTooltip label="Eliminar">
+                <button
+                  type="button"
+                  onClick={onEliminar}
+                  disabled={!puedeEliminar}
+                  className="text-muted-foreground hover:text-destructive disabled:opacity-30" aria-label="Eliminar">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </ToolTooltip>
             </>
           )}
         </div>
@@ -408,14 +411,14 @@ function PreguntaCard({
                   className={o.correcta ? "border-emerald-300 focus-visible:ring-emerald-200" : ""}
                 />
                 {!readOnly && pregunta.opciones.length > 2 && (
-                  <button
-                    type="button"
-                    onClick={() => onEliminarOpcion(o.id)}
-                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                    title="Quitar opción"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <ToolTooltip label="Quitar opción">
+                    <button
+                      type="button"
+                      onClick={() => onEliminarOpcion(o.id)}
+                      className="shrink-0 text-muted-foreground hover:text-destructive" aria-label="Quitar opción">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </ToolTooltip>
                 )}
               </div>
             </div>

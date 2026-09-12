@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { reintentarNotifsFallidas, type SaludRwgData } from "@/features/canales-google-rwg/actions/salud-actions";
 import { toast } from "sonner";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   data: SaludRwgData;
@@ -86,7 +87,9 @@ export function SaludRwgView({ data }: Props) {
                 : "—";
               return (
                 <div key={e.endpoint} className="px-4 py-2 flex items-center gap-3 text-xs">
-                  <span className={`inline-block w-2 h-2 rounded-full ${sem.color}`} title={sem.label} />
+                  <ToolTooltip label={sem.label}>
+                    <span className={`inline-block w-2 h-2 rounded-full ${sem.color}`} />
+                  </ToolTooltip>
                   <span className="font-mono w-[200px] truncate">{e.endpoint}</span>
                   <span className="text-muted-foreground w-[100px]">
                     {e.llamadas24h} llamadas
@@ -128,10 +131,12 @@ export function SaludRwgView({ data }: Props) {
                   {f.slotsCount != null && f.slotsCount > 0 ? `${f.slotsCount} slots` : ""}
                 </span>
                 {f.errorMsg && (
-                  <span className="text-red-600 truncate flex items-center gap-1" title={f.errorMsg}>
-                    <AlertTriangle className="h-3 w-3" />
-                    {f.errorMsg.slice(0, 60)}
-                  </span>
+                  <ToolTooltip label={f.errorMsg}>
+                    <span className="text-red-600 truncate flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {f.errorMsg.slice(0, 60)}
+                    </span>
+                  </ToolTooltip>
                 )}
               </div>
             ))

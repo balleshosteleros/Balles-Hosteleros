@@ -14,6 +14,7 @@ import { Plus, Pencil, Trash2, Search, Fingerprint, Check } from "lucide-react";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { FICHAJE_COLOR_PALETTE, fichajeColorDot } from "@/features/rrhh/data/fichajes";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 type FormState = {
   nombre: string;
@@ -181,15 +182,15 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
               <label className="text-sm font-medium">Color</label>
               <div className="mt-1.5 flex flex-wrap gap-2">
                 {FICHAJE_COLOR_PALETTE.map(c => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    title={c.label}
-                    onClick={() => setForm(f => ({ ...f, color: c.key }))}
-                    className={`h-7 w-7 rounded-full flex items-center justify-center ${fichajeColorDot(c.key)} ${form.color === c.key ? "ring-2 ring-offset-2 ring-foreground/40" : ""}`}
-                  >
-                    {form.color === c.key && <Check className="h-3.5 w-3.5 text-white" />}
-                  </button>
+                  <ToolTooltip key={c.key} label={c.label}>
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, color: c.key }))}
+                      className={`h-7 w-7 rounded-full flex items-center justify-center ${fichajeColorDot(c.key)} ${form.color === c.key ? "ring-2 ring-offset-2 ring-foreground/40" : ""}`}
+                    >
+                      {form.color === c.key && <Check className="h-3.5 w-3.5 text-white" />}
+                    </button>
+                  </ToolTooltip>
                 ))}
               </div>
               <p className="text-[11px] text-muted-foreground mt-1">Color con el que se marca este tipo en la lista de fichajes.</p>

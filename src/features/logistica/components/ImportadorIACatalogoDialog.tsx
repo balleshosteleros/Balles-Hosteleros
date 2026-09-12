@@ -29,6 +29,7 @@ import type {
   FilaCatalogoSugerida,
   ImportadorEntityConfig,
 } from "@/features/logistica/types/importador-catalogo-ia";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface ImportadorIACatalogoDialogProps {
   open: boolean;
@@ -298,9 +299,11 @@ export function ImportadorIACatalogoDialog({
                       >
                         {c.label}
                         {c.obligatorio && (
-                          <span className="ml-0.5 text-destructive" title="Obligatorio">
-                            *
-                          </span>
+                          <ToolTooltip label="Obligatorio">
+                            <span className="ml-0.5 text-destructive">
+                              *
+                            </span>
+                          </ToolTooltip>
                         )}
                       </th>
                     ))}
@@ -330,15 +333,16 @@ export function ImportadorIACatalogoDialog({
                           </td>
                         ))}
                         <td className="px-1 py-1 align-top">
-                          <button
-                            type="button"
-                            onClick={() => eliminarFila(f.tempId)}
-                            className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                            title="Eliminar fila"
-                            aria-label="Eliminar fila"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          <ToolTooltip label="Eliminar fila">
+                            <button
+                              type="button"
+                              onClick={() => eliminarFila(f.tempId)}
+                              className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                              aria-label="Eliminar fila"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </ToolTooltip>
                         </td>
                       </tr>
                     );

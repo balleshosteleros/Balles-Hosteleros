@@ -41,6 +41,7 @@ import { toast } from "sonner";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { formatEur as fmtEur, parseDecimal } from "@/shared/lib/numero";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   productoId: string;
@@ -632,16 +633,17 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                           </span>
                         </div>
                       </td>
-                      <td
-                        className="px-3 py-1.5 text-muted-foreground tabular-nums whitespace-nowrap"
-                        title="Precio de 1 unidad de medida (1 ud / 1 kg / 1 L), calculado desde el formato. Solo informativo, no editable."
-                      >
-                        {precioUnidad ? (
-                          `${formatEur(precioUnidad.valor)}/${precioUnidad.sufijo}`
-                        ) : (
-                          <span className="italic">—</span>
-                        )}
-                      </td>
+                      <ToolTooltip label="Precio de 1 unidad de medida (1 ud / 1 kg / 1 L), calculado desde el formato. Solo informativo, no editable.">
+                        <td
+                          className="px-3 py-1.5 text-muted-foreground tabular-nums whitespace-nowrap"
+                        >
+                          {precioUnidad ? (
+                            `${formatEur(precioUnidad.valor)}/${precioUnidad.sufijo}`
+                          ) : (
+                            <span className="italic">—</span>
+                          )}
+                        </td>
+                      </ToolTooltip>
                       <td className="px-3 py-1.5 text-muted-foreground tabular-nums">
                         {it.iva ?? "—"}
                       </td>

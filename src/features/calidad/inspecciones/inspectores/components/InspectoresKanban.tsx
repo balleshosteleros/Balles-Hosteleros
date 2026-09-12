@@ -16,6 +16,7 @@ import {
 } from "../data";
 import type { InspectorFase, InspectorListItem } from "../types";
 import { moverInspectorFase } from "../actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   inspectores: InspectorListItem[];
@@ -54,29 +55,29 @@ function InspectorCard({
         <div className="space-y-0.5 text-[11px] text-muted-foreground pl-[30px]">
           {insp.telefono && (
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  llamarDesdeApp(insp.telefono!);
-                }}
-                title="Llamar desde el software"
-                className="text-muted-foreground hover:text-sky-600 transition-colors"
-              >
-                <Phone className="h-3 w-3 shrink-0" />
-              </button>
+              <ToolTooltip label="Llamar desde el software">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    llamarDesdeApp(insp.telefono!);
+                  }}
+                  className="text-muted-foreground hover:text-sky-600 transition-colors" aria-label="Llamar desde el software">
+                  <Phone className="h-3 w-3 shrink-0" />
+                </button>
+              </ToolTooltip>
               <span className="truncate">{insp.telefono}</span>
               {whatsappHref(insp.telefono) && (
-                <a
-                  href={whatsappHref(insp.telefono)!}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  title="Abrir WhatsApp"
-                  className="text-emerald-600 hover:text-emerald-700 transition-colors"
-                >
-                  <MessageCircle className="h-3 w-3 shrink-0" />
-                </a>
+                <ToolTooltip label="Abrir WhatsApp">
+                  <a
+                    href={whatsappHref(insp.telefono)!}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-emerald-600 hover:text-emerald-700 transition-colors" aria-label="Abrir WhatsApp">
+                    <MessageCircle className="h-3 w-3 shrink-0" />
+                  </a>
+                </ToolTooltip>
               )}
             </div>
           )}

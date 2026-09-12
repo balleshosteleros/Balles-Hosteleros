@@ -32,6 +32,7 @@ import {
   guardarCuotaMusica,
 } from "@/features/sala/musica/actions/musica-actions";
 import { DIAS_SEMANA, type ListaMusica } from "@/features/sala/musica/types";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export function ConfiguracionMusica() {
   const { listas, uso, recargar } = useMusica();
@@ -259,25 +260,25 @@ function HorarioDeLista({
                 {DIAS_SEMANA.map((d) => {
                   const activo = dias.includes(d.valor);
                   return (
-                    <button
-                      key={d.valor}
-                      type="button"
-                      onClick={() =>
-                        setDias((prev) =>
+                    <ToolTooltip key={d.valor} label={d.label}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDias((prev) =>
+                            activo
+                              ? prev.filter((x) => x !== d.valor)
+                              : [...prev, d.valor],
+                          )
+                        }
+                        className={`h-7 w-7 rounded-md border text-xs font-medium transition-colors ${
                           activo
-                            ? prev.filter((x) => x !== d.valor)
-                            : [...prev, d.valor],
-                        )
-                      }
-                      className={`h-7 w-7 rounded-md border text-xs font-medium transition-colors ${
-                        activo
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-background text-muted-foreground hover:bg-accent"
-                      }`}
-                      title={d.label}
-                    >
-                      {d.corto}
-                    </button>
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-muted-foreground hover:bg-accent"
+                        }`}
+                      >
+                        {d.corto}
+                      </button>
+                    </ToolTooltip>
                   );
                 })}
               </div>

@@ -40,6 +40,7 @@ import {
 } from "@/features/rrhh/data/material-stock";
 import { EntradaMaterialDialog } from "./EntradaMaterialDialog";
 import { BajaAlmacenDialog } from "./BajaAlmacenDialog";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 function Total({
   titulo, valor, Icono, color, pie,
@@ -189,12 +190,13 @@ export function AlmacenTab() {
                       <span className="flex items-center gap-2">
                         {nombrePieza(s.tipoNombre, s.talla)}
                         {tieneSaldoImposible(s) && (
-                          <span
-                            title="Hay más entregado que material registrado: falta cargar el saldo inicial"
-                            className="text-amber-600"
-                          >
-                            <AlertTriangle className="h-3.5 w-3.5" />
-                          </span>
+                          <ToolTooltip label="Hay más entregado que material registrado: falta cargar el saldo inicial">
+                            <span
+                              className="text-amber-600"
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                            </span>
+                          </ToolTooltip>
                         )}
                       </span>
                     </TableCell>

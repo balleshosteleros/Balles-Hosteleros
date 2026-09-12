@@ -18,6 +18,7 @@ import {
   type MatrizOcupacion,
 } from "@/features/direccion/data/aperturas";
 import { BadgeSugerenciaIA } from "@/features/direccion/components/aperturas/shared/BadgeSugerenciaIA";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   ocupacion: BloqueOcupacion;
@@ -346,20 +347,21 @@ function FilaHeatmap({
         const fg = pct >= 55 ? "text-white" : "text-foreground";
         return (
           <div key={f.key} className="p-1">
-            <div
-              className={`h-14 rounded-md flex flex-col items-center justify-center text-xs font-medium border border-black/5 transition-colors ${fg}`}
-              style={{
-                background: `color-mix(in srgb, ${color} ${pct}%, white)`,
-              }}
-              title={`${dia.label} · ${f.label}: ${pct}%${plazas > 0 ? ` (~${personas} pers.)` : ""}`}
-            >
-              <span>{pct}%</span>
-              {plazas > 0 && (
-                <span className={`text-[10px] font-normal ${fg === "text-white" ? "opacity-90" : "text-muted-foreground"}`}>
-                  ~{personas} pers.
-                </span>
-              )}
-            </div>
+            <ToolTooltip label={`${dia.label} · ${f.label}: ${pct}%${plazas > 0 ? ` (~${personas} pers.)` : ""}`}>
+              <div
+                className={`h-14 rounded-md flex flex-col items-center justify-center text-xs font-medium border border-black/5 transition-colors ${fg}`}
+                style={{
+                  background: `color-mix(in srgb, ${color} ${pct}%, white)`,
+                }}
+              >
+                <span>{pct}%</span>
+                {plazas > 0 && (
+                  <span className={`text-[10px] font-normal ${fg === "text-white" ? "opacity-90" : "text-muted-foreground"}`}>
+                    ~{personas} pers.
+                  </span>
+                )}
+              </div>
+            </ToolTooltip>
           </div>
         );
       })}

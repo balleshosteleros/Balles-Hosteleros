@@ -29,6 +29,7 @@ import {
   type SeccionAnalitica,
   type PreguntaAnalitica,
 } from "@/features/calidad/actions/analitica-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /* Paleta: azul sequencial para magnitud, estados para bueno/crítico. */
 const AZUL = "#2a78d6";
@@ -100,20 +101,21 @@ function TendenciaBadge({ pendiente, puntos }: { pendiente: number; puntos: numb
   const plano = Math.abs(total) < 0.15;
   const Icono = plano ? Minus : total > 0 ? TrendingUp : TrendingDown;
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs tabular-nums",
-        plano
-          ? "bg-muted text-muted-foreground"
-          : total > 0
-            ? "bg-emerald-100 text-emerald-700"
-            : "bg-red-100 text-red-700",
-      )}
-      title={plano ? "Estable" : total > 0 ? "Mejora en el histórico" : "Empeora en el histórico"}
-    >
-      <Icono className="h-3 w-3" />
-      {plano ? "Estable" : `${total > 0 ? "+" : "−"}${num(Math.abs(total), 1)}`}
-    </span>
+    <ToolTooltip label={plano ? "Estable" : total > 0 ? "Mejora en el histórico" : "Empeora en el histórico"}>
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs tabular-nums",
+          plano
+            ? "bg-muted text-muted-foreground"
+            : total > 0
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-red-100 text-red-700",
+        )}
+      >
+        <Icono className="h-3 w-3" />
+        {plano ? "Estable" : `${total > 0 ? "+" : "−"}${num(Math.abs(total), 1)}`}
+      </span>
+    </ToolTooltip>
   );
 }
 
@@ -385,15 +387,16 @@ export function AuditoriasAnaliticaView() {
                         <div className="text-sm">{p.texto}</div>
                         <div className="text-xs text-muted-foreground">{p.seccion}</div>
                       </div>
-                      <span
-                        className={cn(
-                          "mt-0.5 shrink-0 rounded-md px-2 py-0.5 text-xs tabular-nums",
-                          recorrido.clase,
-                        )}
-                        title={`${p.veces} auditorías con esta pregunta`}
-                      >
-                        {recorrido.etiqueta} · {p.veces}
-                      </span>
+                      <ToolTooltip label={`${p.veces} auditorías con esta pregunta`}>
+                        <span
+                          className={cn(
+                            "mt-0.5 shrink-0 rounded-md px-2 py-0.5 text-xs tabular-nums",
+                            recorrido.clase,
+                          )}
+                        >
+                          {recorrido.etiqueta} · {p.veces}
+                        </span>
+                      </ToolTooltip>
                       <TendenciaBadge pendiente={p.tendencia} puntos={p.veces} />
                     </div>
                   );

@@ -22,6 +22,7 @@ import {
   LeyendaTimeline,
   fmtHM,
 } from "@/features/rrhh/components/fichajes/timeline-shared";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 function iniciales(nombre: string): string {
   return nombre
@@ -133,18 +134,18 @@ export function FichajesTimelineDia() {
               filas.map((r) => (
                 <div key={r.empleadoId} className="flex items-center border-b last:border-b-0 hover:bg-muted/20">
                   {/* Empleado (clic → su ficha con todos sus fichajes) */}
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/rrhh/empleados/${r.empleadoId}`)}
-                    className="flex w-48 shrink-0 items-center gap-2 px-4 py-3 text-left hover:underline"
-                    title="Ver la ficha y todos sus fichajes"
-                  >
-                    <Avatar className="h-8 w-8">
-                      {r.avatarUrl ? <AvatarImage src={r.avatarUrl} alt={r.nombre} /> : null}
-                      <AvatarFallback className="text-[10px]">{iniciales(r.nombre)}</AvatarFallback>
-                    </Avatar>
-                    <span className="truncate text-sm">{r.nombre}</span>
-                  </button>
+                  <ToolTooltip label="Ver la ficha y todos sus fichajes">
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/rrhh/empleados/${r.empleadoId}`)}
+                      className="flex w-48 shrink-0 items-center gap-2 px-4 py-3 text-left hover:underline" aria-label="Ver la ficha y todos sus fichajes">
+                      <Avatar className="h-8 w-8">
+                        {r.avatarUrl ? <AvatarImage src={r.avatarUrl} alt={r.nombre} /> : null}
+                        <AvatarFallback className="text-[10px]">{iniciales(r.nombre)}</AvatarFallback>
+                      </Avatar>
+                      <span className="truncate text-sm">{r.nombre}</span>
+                    </button>
+                  </ToolTooltip>
                   {/* Horas fichado / previsto */}
                   <div className="w-36 shrink-0 whitespace-nowrap px-2 py-3 text-xs">
                     <span className="font-semibold tabular-nums">{fmtHM(r.horasFichadas)}</span>

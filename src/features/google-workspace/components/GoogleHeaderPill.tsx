@@ -214,16 +214,17 @@ export function GoogleHeaderPill() {
                       </p>
                     </div>
                   </button>
-                  <button
-                    type="button"
-                    onClick={(e) => onRemove(cuenta.email, e)}
-                    disabled={ocupada}
-                    aria-label={`Quitar ${cuenta.email}`}
-                    title="Quitar cuenta"
-                    className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 disabled:opacity-30"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                  <ToolTooltip label="Quitar cuenta">
+                    <button
+                      type="button"
+                      onClick={(e) => onRemove(cuenta.email, e)}
+                      disabled={ocupada}
+                      aria-label={`Quitar ${cuenta.email}`}
+                      className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 disabled:opacity-30"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </ToolTooltip>
                 </div>
               );
             })}
@@ -233,13 +234,13 @@ export function GoogleHeaderPill() {
         <DropdownMenuSeparator />
 
         <DropdownMenuItem asChild className="cursor-pointer gap-2 px-3 py-1.5">
-          <a
-            href={`/api/google/connect?next=${next}&switch=1`}
-            title="Solo la primera vez por cuenta. Después cambias con un click."
-          >
-            <Plus className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs font-medium">Añadir otra cuenta</span>
-          </a>
+          <ToolTooltip label="Solo la primera vez por cuenta. Después cambias con un click.">
+            <a
+              href={`/api/google/connect?next=${next}&switch=1`} aria-label="Solo la primera vez por cuenta. Después cambias con un click.">
+              <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium">Añadir otra cuenta</span>
+            </a>
+          </ToolTooltip>
         </DropdownMenuItem>
 
         <DropdownMenuItem

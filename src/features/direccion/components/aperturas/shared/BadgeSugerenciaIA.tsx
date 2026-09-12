@@ -1,6 +1,7 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Badge ámbar que marca un campo o sección como "sugerido por IA".
@@ -24,12 +25,13 @@ export function BadgeSugerenciaIA({
       ? "bg-amber-200 text-amber-900 ring-1 ring-amber-300"
       : "bg-amber-100 text-amber-800 ring-1 ring-amber-200";
   return (
-    <span
-      title={title ?? "Sugerencia generada por IA — revísala antes de aceptar"}
-      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${cls}`}
-    >
-      <Sparkles className="h-2.5 w-2.5" />
-      {texto}
-    </span>
+    <ToolTooltip label={title ?? "Sugerencia generada por IA — revísala antes de aceptar"}>
+      <span
+        className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${cls}`}
+      >
+        <Sparkles className="h-2.5 w-2.5" />
+        {texto}
+      </span>
+    </ToolTooltip>
   );
 }

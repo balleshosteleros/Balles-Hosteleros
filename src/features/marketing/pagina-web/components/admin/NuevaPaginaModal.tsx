@@ -23,6 +23,7 @@ import {
 } from "../../actions/prototipo-actions";
 import type { PaginaWebTipo } from "../../types";
 import type { ModuloWeb } from "../../services/prototipo-web";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   open: boolean;
@@ -220,30 +221,30 @@ export function NuevaPaginaModal({ open, onOpenChange, onCreated }: Props) {
                   {modulos.map((m) => {
                     const activo = seleccion.has(m.clave);
                     return (
-                      <button
-                        key={m.clave}
-                        type="button"
-                        disabled={creando || !m.disponible}
-                        onClick={() => alternar(m.clave)}
-                        title={m.motivo ?? undefined}
-                        className={`flex items-start gap-2.5 rounded-lg border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
-                          activo ? "border-primary bg-primary/5" : "border-muted hover:border-primary/50"
-                        }`}
-                      >
-                        <span
-                          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                            activo ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                      <ToolTooltip key={m.clave} label={m.motivo ?? undefined}>
+                        <button
+                          type="button"
+                          disabled={creando || !m.disponible}
+                          onClick={() => alternar(m.clave)}
+                          className={`flex items-start gap-2.5 rounded-lg border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
+                            activo ? "border-primary bg-primary/5" : "border-muted hover:border-primary/50"
                           }`}
                         >
-                          {activo ? <Check className="h-3 w-3" /> : null}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-medium">{m.label}</span>
-                          <span className="block text-xs text-muted-foreground">
-                            {m.disponible ? m.descripcion : m.motivo}
+                          <span
+                            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                              activo ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                            }`}
+                          >
+                            {activo ? <Check className="h-3 w-3" /> : null}
                           </span>
-                        </span>
-                      </button>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium">{m.label}</span>
+                            <span className="block text-xs text-muted-foreground">
+                              {m.disponible ? m.descripcion : m.motivo}
+                            </span>
+                          </span>
+                        </button>
+                      </ToolTooltip>
                     );
                   })}
                 </div>

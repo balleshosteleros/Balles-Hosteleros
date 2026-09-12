@@ -39,6 +39,7 @@ import {
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { formatearDuracion } from "@/features/sala/musica/lib/formato";
 import type { ListaMusica, Cancion } from "@/features/sala/musica/types";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export function DetalleLista({
   lista,
@@ -207,20 +208,21 @@ export function DetalleLista({
                     <span className="w-5 shrink-0 text-xs tabular-nums text-muted-foreground">
                       {i + 1}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => void reproducirLista(lista, i)}
-                      disabled={!lista.disponibleAhora}
-                      className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"
-                      title={lista.disponibleAhora ? "Reproducir desde aquí" : lista.motivoBloqueo ?? ""}
-                    >
-                      <p className="truncate text-sm text-foreground">{c.titulo}</p>
-                      {c.artista && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {c.artista}
-                        </p>
-                      )}
-                    </button>
+                    <ToolTooltip label={lista.disponibleAhora ? "Reproducir desde aquí" : lista.motivoBloqueo ?? ""}>
+                      <button
+                        type="button"
+                        onClick={() => void reproducirLista(lista, i)}
+                        disabled={!lista.disponibleAhora}
+                        className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"
+                      >
+                        <p className="truncate text-sm text-foreground">{c.titulo}</p>
+                        {c.artista && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {c.artista}
+                          </p>
+                        )}
+                      </button>
+                    </ToolTooltip>
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {formatearDuracion(c.duracionSeg)}
                     </span>

@@ -24,6 +24,7 @@ import { contarDestinatariosAction } from "@/features/marketing/actions/envios-a
 import { enviarEmailAction } from "@/features/marketing/actions/campanas-actions";
 import { previewSegmentoAction } from "@/features/marketing/actions/segmento-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   open: boolean;
@@ -336,19 +337,19 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
               </Label>
               <div className="mt-1 flex flex-wrap gap-2">
                 {FRECUENCIAS.map((f) => (
-                  <button
-                    key={f.value}
-                    type="button"
-                    onClick={() => cambiarProgramacion({ frecuencia: f.value as Frecuencia })}
-                    title={f.ayuda}
-                    className={`h-8 rounded border px-3 text-xs ${
-                      programacion.frecuencia === f.value
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    {f.label}
-                  </button>
+                  <ToolTooltip key={f.value} label={f.ayuda}>
+                    <button
+                      type="button"
+                      onClick={() => cambiarProgramacion({ frecuencia: f.value as Frecuencia })}
+                      className={`h-8 rounded border px-3 text-xs ${
+                        programacion.frecuencia === f.value
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border hover:bg-muted"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  </ToolTooltip>
                 ))}
               </div>
 

@@ -6,6 +6,7 @@ import {
   TIEMPO_FASE_CLASS,
   calcularTiempoReserva,
 } from "@/features/sala/lib/reserva-tiempo";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Celda de la columna TIEMPO del listado de reservas.
@@ -31,18 +32,19 @@ export function ReservaTiempoCelda({
   if (!t) return <span className={cn("min-w-0", className)} />;
 
   return (
-    <span
-      className={cn(
-        "flex min-w-0 items-center justify-center gap-0.5 tabular-nums font-semibold text-[13px]",
-        TIEMPO_FASE_CLASS[t.fase],
-        className,
-      )}
-      title={t.detalle}
-    >
-      {/* Pasarse del tiempo de mesa se dice con el ROJO y con el "+", que ya
-          se ven de un vistazo. El icono de reloj tachado que iba delante solo
-          robaba ancho a la cifra, que es el dato, y la dejaba cortada. */}
-      <span className="truncate">{t.texto}</span>
-    </span>
+    <ToolTooltip label={t.detalle}>
+      <span
+        className={cn(
+          "flex min-w-0 items-center justify-center gap-0.5 tabular-nums font-semibold text-[13px]",
+          TIEMPO_FASE_CLASS[t.fase],
+          className,
+        )}
+      >
+        {/* Pasarse del tiempo de mesa se dice con el ROJO y con el "+", que ya
+            se ven de un vistazo. El icono de reloj tachado que iba delante solo
+            robaba ancho a la cifra, que es el dato, y la dejaba cortada. */}
+        <span className="truncate">{t.texto}</span>
+      </span>
+    </ToolTooltip>
   );
 }

@@ -54,6 +54,7 @@ import {
   type ReclutamientoEmailPlantilla,
 } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
 import { toast } from "sonner";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // ─── Editor modal (crear / editar) ──────────────────────────────
 function PlantillaEditorDialog({
@@ -392,14 +393,14 @@ function PlantillaEditorDialog({
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{grupo}</p>
                         <div className="flex flex-wrap gap-1.5">
                           {vars.map((v) => (
-                            <button
-                              key={v.variable}
-                              onClick={() => insertVariable(v.variable)}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border bg-muted/50 text-[11px] font-mono text-foreground hover:bg-primary/10 hover:border-primary/30 transition-colors"
-                              title={v.descripcion}
-                            >
-                              {v.variable}
-                            </button>
+                            <ToolTooltip key={v.variable} label={v.descripcion}>
+                              <button
+                                onClick={() => insertVariable(v.variable)}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border bg-muted/50 text-[11px] font-mono text-foreground hover:bg-primary/10 hover:border-primary/30 transition-colors"
+                              >
+                                {v.variable}
+                              </button>
+                            </ToolTooltip>
                           ))}
                         </div>
                       </div>
@@ -651,30 +652,40 @@ function PlantillasEmailTab() {
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className="text-sm font-medium text-foreground truncate">{p.nombre}</span>
                       {destino === "departamento" && (
-                        <Badge variant="outline" className="text-[10px] gap-1 bg-amber-50 text-amber-700 border-amber-200" title="Se envía al correo de este departamento (Ajustes → Empresa)">
-                          <Building2 className="h-3 w-3" /> {etiquetaDestino(destino, dn.destinoEmail)}
-                        </Badge>
+                        <ToolTooltip label="Se envía al correo de este departamento (Ajustes → Empresa)">
+                          <Badge variant="outline" className="text-[10px] gap-1 bg-amber-50 text-amber-700 border-amber-200">
+                            <Building2 className="h-3 w-3" /> {etiquetaDestino(destino, dn.destinoEmail)}
+                          </Badge>
+                        </ToolTooltip>
                       )}
                       {destino === "candidato" && (
-                        <Badge variant="outline" className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200" title="Este correo se envía al candidato registrado">
-                          <User className="h-3 w-3" /> Candidato
-                        </Badge>
+                        <ToolTooltip label="Este correo se envía al candidato registrado">
+                          <Badge variant="outline" className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200">
+                            <User className="h-3 w-3" /> Candidato
+                          </Badge>
+                        </ToolTooltip>
                       )}
                       {destino === "personalizado" && (
-                        <Badge variant="outline" className="text-[10px] gap-1 bg-violet-50 text-violet-700 border-violet-200" title={p.destinoEmail ? `Se envía a ${p.destinoEmail}` : "Destinatario personalizado"}>
-                          <Mail className="h-3 w-3" /> {p.destinoEmail || "Personalizado"}
-                        </Badge>
+                        <ToolTooltip label={p.destinoEmail ? `Se envía a ${p.destinoEmail}` : "Destinatario personalizado"}>
+                          <Badge variant="outline" className="text-[10px] gap-1 bg-violet-50 text-violet-700 border-violet-200">
+                            <Mail className="h-3 w-3" /> {p.destinoEmail || "Personalizado"}
+                          </Badge>
+                        </ToolTooltip>
                       )}
                       {/* Estado del pipeline en el que se envía este email. Las
                           del sistema (onboarding) lo muestran igual (informativo). */}
                       {p.estadoKey ? (
-                        <Badge variant="outline" className="text-[10px] gap-1 bg-sky-50 text-sky-700 border-sky-200" title={`Se envía en el estado ${ESTADOS_CONFIG[p.estadoKey as keyof typeof ESTADOS_CONFIG]?.label ?? p.estadoKey}`}>
-                          <Briefcase className="h-3 w-3" /> {ESTADOS_CONFIG[p.estadoKey as keyof typeof ESTADOS_CONFIG]?.label ?? p.estadoKey}
-                        </Badge>
+                        <ToolTooltip label={`Se envía en el estado ${ESTADOS_CONFIG[p.estadoKey as keyof typeof ESTADOS_CONFIG]?.label ?? p.estadoKey}`}>
+                          <Badge variant="outline" className="text-[10px] gap-1 bg-sky-50 text-sky-700 border-sky-200">
+                            <Briefcase className="h-3 w-3" /> {ESTADOS_CONFIG[p.estadoKey as keyof typeof ESTADOS_CONFIG]?.label ?? p.estadoKey}
+                          </Badge>
+                        </ToolTooltip>
                       ) : !p.clave ? (
-                        <Badge variant="outline" className="text-[10px] gap-1 bg-amber-50 text-amber-700 border-amber-200" title="Esta plantilla no está asignada a ningún estado: no se enviará al mover de fase">
-                          <AlertTriangle className="h-3 w-3" /> Sin estado
-                        </Badge>
+                        <ToolTooltip label="Esta plantilla no está asignada a ningún estado: no se enviará al mover de fase">
+                          <Badge variant="outline" className="text-[10px] gap-1 bg-amber-50 text-amber-700 border-amber-200">
+                            <AlertTriangle className="h-3 w-3" /> Sin estado
+                          </Badge>
+                        </ToolTooltip>
                       ) : null}
                     </div>
                     <div className="text-xs text-muted-foreground truncate">
@@ -701,12 +712,13 @@ function PlantillasEmailTab() {
                     <Copy className="h-3.5 w-3.5" />
                   </Button>
                   {protegida ? (
-                    <span
-                      className="inline-flex h-8 w-8 items-center justify-center text-muted-foreground/50 cursor-not-allowed"
-                      title="Plantilla del sistema · no se puede borrar"
-                    >
-                      <Lock className="h-3.5 w-3.5" />
-                    </span>
+                    <ToolTooltip label="Plantilla del sistema · no se puede borrar">
+                      <span
+                        className="inline-flex h-8 w-8 items-center justify-center text-muted-foreground/50 cursor-not-allowed"
+                      >
+                        <Lock className="h-3.5 w-3.5" />
+                      </span>
+                    </ToolTooltip>
                   ) : (
                     <Button
                       variant="ghost"

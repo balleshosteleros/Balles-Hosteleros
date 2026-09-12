@@ -92,6 +92,7 @@ import { IOActions } from "@/shared/io";
 import { clientesIO } from "@/features/sala/io/clientes.io";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /** Filas por hoja en la tabla de clientes. */
 const POR_PAGINA = 50;
@@ -1220,30 +1221,31 @@ export function ClientesView() {
                         un campo suelto y a mano, así que la mitad de las fichas
                         se quedaban sin él o con un valor inventado. */}
                     <div className="flex gap-1.5">
-                      <select
-                        value={separarPrefijo(borrador.telefono).prefijo}
-                        onChange={(e) =>
-                          setBorrador({
-                            ...borrador,
-                            telefono: componerTelefono(
-                              e.target.value,
-                              separarPrefijo(borrador.telefono).numero,
-                            ),
-                          })
-                        }
-                        className="h-9 w-[96px] shrink-0 rounded-md border border-input bg-background px-2 text-sm"
-                        title={
+                      <ToolTooltip label={
                           PREFIJOS_TELEFONO.find(
                             (x) => x.prefijo === separarPrefijo(borrador.telefono).prefijo,
                           )?.label ?? ""
-                        }
-                      >
-                        {PREFIJOS_TELEFONO.map((x) => (
-                          <option key={x.prefijo} value={x.prefijo}>
-                            {x.flag} {x.prefijo}
-                          </option>
-                        ))}
-                      </select>
+                        }>
+                        <select
+                          value={separarPrefijo(borrador.telefono).prefijo}
+                          onChange={(e) =>
+                            setBorrador({
+                              ...borrador,
+                              telefono: componerTelefono(
+                                e.target.value,
+                                separarPrefijo(borrador.telefono).numero,
+                              ),
+                            })
+                          }
+                          className="h-9 w-[96px] shrink-0 rounded-md border border-input bg-background px-2 text-sm"
+                        >
+                          {PREFIJOS_TELEFONO.map((x) => (
+                            <option key={x.prefijo} value={x.prefijo}>
+                              {x.flag} {x.prefijo}
+                            </option>
+                          ))}
+                        </select>
+                      </ToolTooltip>
                       <Input
                         id="cli-telefono"
                         type="tel"
@@ -1331,27 +1333,27 @@ export function ClientesView() {
                     const estado = borrador[campo] ?? "sin_preguntar";
                     const esBaja = estado === "baja";
                     return (
-                      <label
-                        key={canal}
-                        className="flex items-center gap-2 text-sm"
-                        title={esBaja ? "Pidió no recibir más: solo él puede volver a darse de alta" : undefined}
-                      >
-                        <input
-                          type="checkbox"
-                          disabled={esBaja}
-                          checked={estado === "acepta"}
-                          onChange={(e) =>
-                            setBorrador({
-                              ...borrador,
-                              [campo]: e.target.checked ? "acepta" : "sin_preguntar",
-                            })
-                          }
-                        />
-                        <span className={esBaja ? "text-red-600 dark:text-red-400" : undefined}>
-                          {etiqueta}
-                          {esBaja ? " — se dio de baja" : ""}
-                        </span>
-                      </label>
+                      <ToolTooltip key={canal} label={esBaja ? "Pidió no recibir más: solo él puede volver a darse de alta" : undefined}>
+                        <label
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            disabled={esBaja}
+                            checked={estado === "acepta"}
+                            onChange={(e) =>
+                              setBorrador({
+                                ...borrador,
+                                [campo]: e.target.checked ? "acepta" : "sin_preguntar",
+                              })
+                            }
+                          />
+                          <span className={esBaja ? "text-red-600 dark:text-red-400" : undefined}>
+                            {etiqueta}
+                            {esBaja ? " — se dio de baja" : ""}
+                          </span>
+                        </label>
+                      </ToolTooltip>
                     );
                   })}
                 </div>
@@ -1579,13 +1581,14 @@ export function ClientesView() {
                                 de una tabla y el navegador lo saca de sitio.
                               */}
                               <td className="px-2 py-1.5 whitespace-nowrap">
-                                <Link
-                                  href={enlaceReserva(r.fecha, r.turno, r.id)}
-                                  className="font-medium hover:underline"
-                                  title="Abrir esta reserva en el plano de sala"
-                                >
-                                  {fechaConAnio(r.fecha)}
-                                </Link>
+                                <ToolTooltip label="Abrir esta reserva en el plano de sala">
+                                  <Link
+                                    href={enlaceReserva(r.fecha, r.turno, r.id)}
+                                    className="font-medium hover:underline"
+                                  >
+                                    {fechaConAnio(r.fecha)}
+                                  </Link>
+                                </ToolTooltip>
                               </td>
                               <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
                                 {r.hora || "—"}
@@ -1615,12 +1618,13 @@ export function ClientesView() {
                               <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
                                 {origenLabel(r.origen)}
                               </td>
-                              <td
-                                className="max-w-[16rem] truncate px-2 py-1.5 text-muted-foreground"
-                                title={r.notas ?? undefined}
-                              >
-                                {r.notas || "—"}
-                              </td>
+                              <ToolTooltip label={r.notas ?? undefined}>
+                                <td
+                                  className="max-w-[16rem] truncate px-2 py-1.5 text-muted-foreground"
+                                >
+                                  {r.notas || "—"}
+                                </td>
+                              </ToolTooltip>
                             </tr>
                           ))}
                         </tbody>

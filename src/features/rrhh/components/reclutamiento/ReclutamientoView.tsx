@@ -67,6 +67,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // ─── Vacancy Card ────────────────────────────────────────────────
 interface VacanteCardProps {
@@ -221,16 +222,17 @@ function SortableVacanteCard(props: VacanteCardProps & { id: string }) {
       <VacanteCard
         {...props}
         dragHandle={
-          <button
-            type="button"
-            className="shrink-0 -ml-1 flex h-7 w-7 items-center justify-center rounded-md cursor-grab touch-none text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
-            aria-label="Arrastrar para reordenar"
-            title="Arrastra para reordenar"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical className="h-5 w-5" />
-          </button>
+          <ToolTooltip label="Arrastra para reordenar">
+            <button
+              type="button"
+              className="shrink-0 -ml-1 flex h-7 w-7 items-center justify-center rounded-md cursor-grab touch-none text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+              aria-label="Arrastrar para reordenar"
+              {...attributes}
+              {...listeners}
+            >
+              <GripVertical className="h-5 w-5" />
+            </button>
+          </ToolTooltip>
         }
       />
     </div>

@@ -21,6 +21,7 @@ import {
   type Etiqueta,
   type EtiquetaCategoria,
 } from "@/features/sala/actions/sala-etiquetas-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   /** `null` = tarjeta de las etiquetas que se quedaron sin grupo. */
@@ -181,13 +182,14 @@ function EtiquetaItem({
       {confirmDeleteDialog}
       <Popover open={editando} onOpenChange={(o) => (o ? onStartEdit() : onEndEdit())}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={!etiqueta.activo ? "opacity-40" : ""}
-          title={etiqueta.activo ? "Editar etiqueta" : "Inactiva — pulsa para editar"}
-        >
-          <EtiquetaChip nombre={etiqueta.nombre} emoji={etiqueta.emoji} color={etiqueta.color} />
-        </button>
+        <ToolTooltip label={etiqueta.activo ? "Editar etiqueta" : "Inactiva — pulsa para editar"}>
+          <button
+            type="button"
+            className={!etiqueta.activo ? "opacity-40" : ""}
+          >
+            <EtiquetaChip nombre={etiqueta.nombre} emoji={etiqueta.emoji} color={etiqueta.color} />
+          </button>
+        </ToolTooltip>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-3" align="start">
         <div className="space-y-2">

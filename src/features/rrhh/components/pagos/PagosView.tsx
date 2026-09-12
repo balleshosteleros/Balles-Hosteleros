@@ -86,6 +86,7 @@ import {
 } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // Los pagos se registran por MES, pero se pueden ver agregados por trimestre o
 // año: entonces se suman todos los importes de cada trabajador en el rango.
@@ -1191,26 +1192,28 @@ export function PagosView() {
     // Sin campo (o sin detalle cargado): distintivo informativo, no pulsable.
     if (!campo || detalle.length === 0) {
       return (
-        <span
-          className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary align-middle"
-          title={`Suma de ${p.numNominas} nóminas`}
-        >
-          {p.numNominas}
-        </span>
+        <ToolTooltip label={`Suma de ${p.numNominas} nóminas`}>
+          <span
+            className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary align-middle"
+          >
+            {p.numNominas}
+          </span>
+        </ToolTooltip>
       );
     }
     return (
       <Popover>
         <PopoverTrigger asChild>
-          <button
-            type="button"
-            onClick={(e) => e.stopPropagation()}
-            className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary align-middle transition hover:bg-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-            title={`Suma de ${p.numNominas} nóminas — pulsa para ver el desglose`}
-            aria-label={`Ver el desglose de las ${p.numNominas} nóminas`}
-          >
-            {p.numNominas}
-          </button>
+          <ToolTooltip label={`Suma de ${p.numNominas} nóminas — pulsa para ver el desglose`}>
+            <button
+              type="button"
+              onClick={(e) => e.stopPropagation()}
+              className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary align-middle transition hover:bg-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              aria-label={`Ver el desglose de las ${p.numNominas} nóminas`}
+            >
+              {p.numNominas}
+            </button>
+          </ToolTooltip>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-64 p-3" onClick={(e) => e.stopPropagation()}>
           <p className="text-xs font-semibold">{ETIQUETA_DESGLOSE[campo]}</p>
@@ -1360,9 +1363,11 @@ export function PagosView() {
       td: (p) => {
         const h = horasMesMap?.get(p.empleadoId);
         return (
-          <TableCell key="horasReales" className="text-right tabular-nums" title="Horas que marca su horario">
-            {h ? fmtHoras(h.teoricas) : "—"}
-          </TableCell>
+          <ToolTooltip key="horasReales" label="Horas que marca su horario">
+            <TableCell className="text-right tabular-nums">
+              {h ? fmtHoras(h.teoricas) : "—"}
+            </TableCell>
+          </ToolTooltip>
         );
       },
     },
@@ -1371,9 +1376,11 @@ export function PagosView() {
       td: (p) => {
         const h = horasMesMap?.get(p.empleadoId);
         return (
-          <TableCell key="horasTrabajadas" className="text-right tabular-nums font-medium" title="Horas fichadas este mes">
-            {h ? fmtHoras(h.normales + h.extras) : "—"}
-          </TableCell>
+          <ToolTooltip key="horasTrabajadas" label="Horas fichadas este mes">
+            <TableCell className="text-right tabular-nums font-medium">
+              {h ? fmtHoras(h.normales + h.extras) : "—"}
+            </TableCell>
+          </ToolTooltip>
         );
       },
     },
@@ -1386,9 +1393,11 @@ export function PagosView() {
         const cls =
           h.balance > 0.01 ? "text-emerald-600" : h.balance < -0.01 ? "text-destructive" : "text-muted-foreground";
         return (
-          <TableCell key="horasBalance" className={`text-right tabular-nums ${cls}`} title="Fichadas − horario">
-            {h.balance >= 0 ? "+" : ""}{fmtHoras(h.balance)}
-          </TableCell>
+          <ToolTooltip key="horasBalance" label="Fichadas − horario">
+            <TableCell className={`text-right tabular-nums ${cls}`}>
+              {h.balance >= 0 ? "+" : ""}{fmtHoras(h.balance)}
+            </TableCell>
+          </ToolTooltip>
         );
       },
     },
@@ -1445,26 +1454,29 @@ export function PagosView() {
       td: (p) => (
         <TableCell key="nominaDoc" className="text-center">
           {p.numNominas > 0 || p.nominaPath ? (
-            <button
-              type="button"
-              onClick={() => abrirNominaEmpleado(p)}
-              disabled={abriendoNomina === p.empleadoId}
-              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
-              title={
+            <ToolTooltip label={
                 p.numNominas > 1
                   ? `Ver las ${p.numNominas} nóminas de ${p.empleadoNombre} (se abren en un único PDF)`
                   : `Ver la nómina de ${p.empleadoNombre}`
-              }
-              aria-label={`Ver la nómina de ${p.empleadoNombre}`}
-            >
-              {abriendoNomina === p.empleadoId ? (
-                <Clock className="h-4 w-4 animate-pulse" />
-              ) : (
-                <FileText className="h-4 w-4" />
-              )}
-            </button>
+              }>
+              <button
+                type="button"
+                onClick={() => abrirNominaEmpleado(p)}
+                disabled={abriendoNomina === p.empleadoId}
+                className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
+                aria-label={`Ver la nómina de ${p.empleadoNombre}`}
+              >
+                {abriendoNomina === p.empleadoId ? (
+                  <Clock className="h-4 w-4 animate-pulse" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
+              </button>
+            </ToolTooltip>
           ) : (
-            <span className="text-xs text-muted-foreground" title="Sin nómina adjunta">—</span>
+            <ToolTooltip label="Sin nómina adjunta">
+              <span className="text-xs text-muted-foreground">—</span>
+            </ToolTooltip>
           )}
         </TableCell>
       ),
@@ -1545,15 +1557,18 @@ export function PagosView() {
         return (
           <TableCell key="comentario" className="max-w-[280px]">
             {rechazo && (
-              <span
-                className="block truncate text-xs font-medium text-destructive"
-                title={`El trabajador rechazó la liquidación: ${rechazo}`}
-              >
-                Rechazado: {rechazo}
-              </span>
+              <ToolTooltip label={`El trabajador rechazó la liquidación: ${rechazo}`}>
+                <span
+                  className="block truncate text-xs font-medium text-destructive"
+                >
+                  Rechazado: {rechazo}
+                </span>
+              </ToolTooltip>
             )}
             {p.comentario && (
-              <span className="block truncate text-xs" title={p.comentario}>{p.comentario}</span>
+              <ToolTooltip label={p.comentario}>
+                <span className="block truncate text-xs">{p.comentario}</span>
+              </ToolTooltip>
             )}
           </TableCell>
         );
@@ -1954,17 +1969,20 @@ export function PagosView() {
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-1.5">
                             {p.avisoInactivo ? (
-                              <span
-                                title="Este empleado ya estaba de baja cuando se subió su nómina. Revisa si realmente debe cobrar."
-                                aria-label="Empleado dado de baja: revisar si debe cobrar"
-                                className="inline-flex"
-                              >
-                                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-                              </span>
+                              <ToolTooltip label="Este empleado ya estaba de baja cuando se subió su nómina. Revisa si realmente debe cobrar.">
+                                <span
+                                  aria-label="Empleado dado de baja: revisar si debe cobrar"
+                                  className="inline-flex"
+                                >
+                                  <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+                                </span>
+                              </ToolTooltip>
                             ) : null}
-                            <span className="block max-w-[150px] truncate" title={p.empleadoNombre}>
-                              {p.empleadoNombre}
-                            </span>
+                            <ToolTooltip label={p.empleadoNombre}>
+                              <span className="block max-w-[150px] truncate">
+                                {p.empleadoNombre}
+                              </span>
+                            </ToolTooltip>
                           </div>
                           {p.dniNie ? (
                             <div className="text-[11px] font-normal tabular-nums text-muted-foreground">{p.dniNie}</div>

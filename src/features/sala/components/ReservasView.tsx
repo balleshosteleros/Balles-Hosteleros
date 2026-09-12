@@ -188,6 +188,7 @@ import { friendlyError } from "@/shared/lib/friendly-errors";
 // listado por zonas y el salón de reasignación manual de mesas.
 import { colorZona, fondoMesaLibre } from "@/features/sala/lib/color-zona";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Paleta de fondo de mesa por estado.
@@ -480,16 +481,17 @@ function TipoReservaCelda({ reserva }: { reserva: Reserva }) {
   });
 
   return (
-    <span
-      className={cn(
-        "min-w-0 truncate text-[11px]",
-        tipo === "gratis" ? "" : "font-medium",
-        TIPO_RESERVA_COLOR[tipo],
-      )}
-      title={TIPO_RESERVA_LABELS[tipo]}
-    >
-      {TIPO_RESERVA_CORTO[tipo]}
-    </span>
+    <ToolTooltip label={TIPO_RESERVA_LABELS[tipo]}>
+      <span
+        className={cn(
+          "min-w-0 truncate text-[11px]",
+          tipo === "gratis" ? "" : "font-medium",
+          TIPO_RESERVA_COLOR[tipo],
+        )}
+      >
+        {TIPO_RESERVA_CORTO[tipo]}
+      </span>
+    </ToolTooltip>
   );
 }
 
@@ -1904,16 +1906,17 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             {/* Prefijo obligatorio, nunca a mano: si unos números lo llevan
                 y otros no, el mismo cliente acaba con dos fichas. */}
             <div className="flex gap-1.5">
-              <select
-                value={form.telefonoPrefijo}
-                onChange={e => setForm(p => ({ ...p, telefonoPrefijo: e.target.value }))}
-                className="h-8 w-[86px] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs"
-                title={PREFIJOS_TELEFONO.find(x => x.prefijo === form.telefonoPrefijo)?.label ?? ""}
-              >
-                {PREFIJOS_TELEFONO.map(x => (
-                  <option key={x.prefijo} value={x.prefijo}>{x.flag} {x.prefijo}</option>
-                ))}
-              </select>
+              <ToolTooltip label={PREFIJOS_TELEFONO.find(x => x.prefijo === form.telefonoPrefijo)?.label ?? ""}>
+                <select
+                  value={form.telefonoPrefijo}
+                  onChange={e => setForm(p => ({ ...p, telefonoPrefijo: e.target.value }))}
+                  className="h-8 w-[86px] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs"
+                >
+                  {PREFIJOS_TELEFONO.map(x => (
+                    <option key={x.prefijo} value={x.prefijo}>{x.flag} {x.prefijo}</option>
+                  ))}
+                </select>
+              </ToolTooltip>
               <Input
                 type="tel"
                 className="h-8 flex-1 text-xs"
@@ -2174,21 +2177,22 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               para no encontrar nada. Si mañana se abre otro canal en
               `ORIGENES_ALTA_SALA`, vuelve a ser un selector. */}
           {esWalkIn || esListaEspera || ORIGENES_ALTA_SALA.length === 1 ? (
-            <Input
-              className="h-8 text-xs"
-              value={labelOrigen(
-                esWalkIn ? "WALKIN" : esListaEspera ? "LISTA_ESPERA" : ORIGENES_ALTA_SALA[0],
-              )}
-              readOnly
-              disabled
-              title={
+            <ToolTooltip label={
                 esWalkIn
                   ? "Las reservas walk-in siempre se registran con origen Walk in."
                   : esListaEspera
                     ? "La lista de espera se registra con origen Lista de espera, igual que su estado."
                     : "Las reservas que se dan de alta aquí entran por teléfono."
-              }
-            />
+              }>
+              <Input
+                className="h-8 text-xs"
+                value={labelOrigen(
+                  esWalkIn ? "WALKIN" : esListaEspera ? "LISTA_ESPERA" : ORIGENES_ALTA_SALA[0],
+                )}
+                readOnly
+                disabled
+              />
+            </ToolTooltip>
           ) : (
             <select
               value={form.origen}
@@ -2206,17 +2210,18 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         <div className="col-span-3">
           <Label className="text-xs">Tipo de reserva</Label>
           {sinCobro ? (
-            <Input
-              className="h-8 text-xs"
-              value={TIPO_RESERVA_CATEGORIA_LABELS.gratis}
-              readOnly
-              disabled
-              title={
+            <ToolTooltip label={
                 esWalkIn
                   ? "Las reservas walk-in son siempre gratis: no hay garantía ni cupón."
                   : "La lista de espera no cobra nada: todavía no hay mesa que garantizar."
-              }
-            />
+              }>
+              <Input
+                className="h-8 text-xs"
+                value={TIPO_RESERVA_CATEGORIA_LABELS.gratis}
+                readOnly
+                disabled
+              />
+            </ToolTooltip>
           ) : (
           <select
             value={form.tipoCategoria}
@@ -2760,21 +2765,22 @@ function KpiTurnoMes({
   reservas: number;
 }) {
   return (
-    <div
-      className="inline-flex items-center gap-2 h-8 px-2.5 rounded-md border border-input bg-background text-xs font-semibold"
-      title={`${titulo}: ${personas} personas · ${reservas} mesas reservadas`}
-    >
-      {icono}
-      <span className="text-muted-foreground font-medium">{titulo}</span>
-      <span className="inline-flex items-center gap-1">
-        <Users className="h-3.5 w-3.5 text-emerald-500" />
-        <span className="tabular-nums">{personas}</span>
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <LayoutGrid className="h-3.5 w-3.5 text-sky-500" />
-        <span className="tabular-nums">{reservas}</span>
-      </span>
-    </div>
+    <ToolTooltip label={`${titulo}: ${personas} personas · ${reservas} mesas reservadas`}>
+      <div
+        className="inline-flex items-center gap-2 h-8 px-2.5 rounded-md border border-input bg-background text-xs font-semibold"
+      >
+        {icono}
+        <span className="text-muted-foreground font-medium">{titulo}</span>
+        <span className="inline-flex items-center gap-1">
+          <Users className="h-3.5 w-3.5 text-emerald-500" />
+          <span className="tabular-nums">{personas}</span>
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <LayoutGrid className="h-3.5 w-3.5 text-sky-500" />
+          <span className="tabular-nums">{reservas}</span>
+        </span>
+      </div>
+    </ToolTooltip>
   );
 }
 
@@ -3188,28 +3194,7 @@ function PlanoCanvas({
               }}
             >
               <PopoverTrigger asChild>
-                <button
-                  className={cn(
-                    "sala-mesa absolute flex flex-col items-center justify-center text-[11px] font-semibold border-2 transition-all cursor-pointer px-1 overflow-hidden",
-                    mesaBg[estado] ?? "",
-                    isLibre
-                      // El borde SUBE en nocturno: sobre el lienzo marino
-                      // la mesa quedaba a 1,2:1 de contraste y no se veía.
-                      // El azul del relleno no se toca, solo su contorno.
-                      ? "text-white border-white/15 [.sala-oscuro_&]:border-white/40"
-                      : "border-black/20",
-                    // Recuadro rojo SOLO mientras el raton esta encima: ni al
-                    // abrir la ficha de una reserva ni al elegir una mesa se
-                    // queda marcada. Al mover el raton se enciende unicamente
-                    // la mesa que se esta señalando.
-                    mesasResaltadasIds.has(m.id) &&
-                      "!border-red-500 !border-[6px] ring-[18px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
-                    moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
-                    destinoInvalido && "opacity-40 cursor-not-allowed",
-                  )}
-                  onMouseEnter={() => onHoverMesa?.(m.id)}
-                  onMouseLeave={() => onHoverMesa?.(null)}
-                  title={
+                <ToolTooltip label={
                     moviendo
                       ? esOrigenMover
                         ? "Mesa actual de la reserva"
@@ -3217,159 +3202,181 @@ function PlanoCanvas({
                           ? "Mesa bloqueada en este turno"
                           : `Mover la reserva a la mesa ${m.codigo}`
                       : undefined
-                  }
-                  style={{
-                    left: c.x,
-                    top: c.y,
-                    width: dims.w,
-                    height: dims.h,
-                    borderRadius: radius,
-                    backgroundImage: isLibre ? fondoMesaLibre(m.id, esOscuro) : undefined,
-                    transform: pos.rotation ? `rotate(${pos.rotation}deg)` : undefined,
-                  }}
-                  onClick={(e) => {
-                    if (moviendo) {
-                      // En modo mover el clic es "soltar aquí": no abrimos el
-                      // popover ni cambiamos la selección de mesa.
-                      e.preventDefault();
-                      if (!destinoInvalido) onElegirDestino?.(m);
-                      return;
-                    }
-                    onSelectMesa(m);
-                  }}
-                >
-                  {/* MESA VENDIDA DOS VECES: se parte en diagonal y CADA MITAD
-                      lleva su reserva —su color de estado y su nombre—. Antes
-                      la diagonal era solo una raya sobre un fondo único: se
-                      veia que habia doble servicio, pero no cual era cual ni
-                      por donde iba cada una.
-
-                      ARRIBA-IZQUIERDA la PRIMERA por horario y abajo-derecha la
-                      siguiente: `rs` ya viene ordenado por hora, asi que se lee
-                      en el orden en que va a pasar el servicio. Si a una se le
-                      cambia el estado, cambia SOLO su mitad. */}
-                  {mesaCompartida && (
-                    <svg
-                      className="absolute inset-0 h-full w-full pointer-events-none"
-                      viewBox="0 0 100 100"
-                      preserveAspectRatio="none"
-                      aria-hidden="true"
-                    >
-                      {/* Triangulo superior-izquierdo: la reserva mas temprana. */}
-                      <polygon
-                        points="0,0 100,0 0,100"
-                        fill={colorMitadReserva(rs[0].estado)}
-                      />
-                      {/* Triangulo inferior-derecho: la siguiente. */}
-                      <polygon
-                        points="100,0 100,100 0,100"
-                        fill={colorMitadReserva(rs[1].estado)}
-                      />
-                      {/* La linea de separacion se mantiene: sin ella dos
-                          mitades del mismo color se leen como una mesa entera. */}
-                      <line
-                        x1="0"
-                        y1="100"
-                        x2="100"
-                        y2="0"
-                        stroke="#00000055"
-                        strokeWidth="2"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                    </svg>
-                  )}
-                  {/* Los DOS nombres, uno por mitad. Van en el color que se lee
-                      sobre SU relleno, no sobre el de la mesa: una mitad puede
-                      ser verde oscuro y la otra verde claro a la vez. */}
-                  {mesaCompartida && (
-                    <div className="absolute inset-0 pointer-events-none">
-                      {/* NOMBRE arriba y hora debajo, no los dos en una linea:
-                          en una linea sola el nombre —que es lo que se busca
-                          cruzando la sala— era siempre lo que se cortaba, y en
-                          las mesas pequeñas se quedaba en "21:00…" sin cliente.
-                          La hora va en su propia linea, mas pequeña y sin
-                          truncar: son cinco cifras fijas y cortarlas no sirve
-                          de nada. */}
-                      <span
-                        className="absolute left-[6%] top-[5%] flex max-w-[64%] flex-col leading-none"
-                        style={{ color: textoMitadReserva(rs[0].estado) }}
-                      >
-                        <span className="truncate text-[11px] font-bold">
-                          {esReservaWalkIn(rs[0]) ? "WALK IN" : rs[0].cliente}
-                        </span>
-                        <span className="text-[9px] font-medium tabular-nums opacity-85">
-                          {rs[0].hora.slice(0, 5)}
-                        </span>
-                      </span>
-                      <span
-                        className="absolute bottom-[5%] right-[6%] flex max-w-[64%] flex-col items-end text-right leading-none"
-                        style={{ color: textoMitadReserva(rs[1].estado) }}
-                      >
-                        <span className="truncate max-w-full text-[11px] font-bold">
-                          {esReservaWalkIn(rs[1]) ? "WALK IN" : rs[1].cliente}
-                        </span>
-                        <span className="text-[9px] font-medium tabular-nums opacity-85">
-                          {rs[1].hora.slice(0, 5)}
-                        </span>
-                      </span>
-                    </div>
-                  )}
-                  {/* Contra-rotación para mantener el texto legible aunque la mesa esté girada. */}
-                  <div
-                    className="relative flex w-full min-w-0 flex-col items-center justify-center leading-tight pointer-events-none"
-                    style={pos.rotation ? { transform: `rotate(${-pos.rotation}deg)` } : undefined}
-                  >
-                    {/* Tres lineas como mucho: la mesa mas pequeña son 60x60
-                        (48 de alto si es rectangular) y con cuatro no cabia el
-                        texto grande. Con reserva, la capacidad se pega a la
-                        hora en la misma linea y el nombre se queda una entera
-                        para el. */}
-                    <span
-                      className="text-[13px] leading-none"
-                      // Mesa partida: el codigo cae justo sobre la diagonal, con
-                      // un relleno distinto a cada lado. Un halo del color
-                      // contrario lo mantiene legible sobre los dos.
-                      style={
-                        mesaCompartida
-                          ? { color: "#FFFFFF", textShadow: "0 0 3px #000, 0 1px 2px #000" }
-                          : undefined
+                  }>
+                  <button
+                    className={cn(
+                      "sala-mesa absolute flex flex-col items-center justify-center text-[11px] font-semibold border-2 transition-all cursor-pointer px-1 overflow-hidden",
+                      mesaBg[estado] ?? "",
+                      isLibre
+                        // El borde SUBE en nocturno: sobre el lienzo marino
+                        // la mesa quedaba a 1,2:1 de contraste y no se veía.
+                        // El azul del relleno no se toca, solo su contorno.
+                        ? "text-white border-white/15 [.sala-oscuro_&]:border-white/40"
+                        : "border-black/20",
+                      // Recuadro rojo SOLO mientras el raton esta encima: ni al
+                      // abrir la ficha de una reserva ni al elegir una mesa se
+                      // queda marcada. Al mover el raton se enciende unicamente
+                      // la mesa que se esta señalando.
+                      mesasResaltadasIds.has(m.id) &&
+                        "!border-red-500 !border-[6px] ring-[18px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
+                      moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
+                      destinoInvalido && "opacity-40 cursor-not-allowed",
+                    )}
+                    onMouseEnter={() => onHoverMesa?.(m.id)}
+                    onMouseLeave={() => onHoverMesa?.(null)}
+                    style={{
+                      left: c.x,
+                      top: c.y,
+                      width: dims.w,
+                      height: dims.h,
+                      borderRadius: radius,
+                      backgroundImage: isLibre ? fondoMesaLibre(m.id, esOscuro) : undefined,
+                      transform: pos.rotation ? `rotate(${pos.rotation}deg)` : undefined,
+                    }}
+                    onClick={(e) => {
+                      if (moviendo) {
+                        // En modo mover el clic es "soltar aquí": no abrimos el
+                        // popover ni cambiamos la selección de mesa.
+                        e.preventDefault();
+                        if (!destinoInvalido) onElegirDestino?.(m);
+                        return;
                       }
-                    >
-                      {m.codigo}
-                    </span>
-                    {/* Mesa partida: en el centro SOLO el codigo. La hora y el
-                        nombre de cada reserva ya van en su mitad, y repetidos
-                        aqui en medio se pisaban con ellos. */}
-                    {mesaCompartida ? null : firstR ? (
-                      /* La hora va SIN truncar: son cinco cifras fijas y
-                         cortarlas ("14:0…") destruye el dato. La capacidad se
-                         queda detras porque, si algo sobra, es ella. */
-                      <span className={cn("text-[10px] font-medium tabular-nums leading-tight whitespace-nowrap", isLibre ? "text-white/75" : "opacity-90")}>
-                        {firstR.hora.slice(0, 5)} · {m.capacidad}p
-                      </span>
-                    ) : (
-                      <span className={cn("text-[10px] font-normal mt-0.5", isLibre ? "text-white/70" : "opacity-75")}>
-                        ({m.capacidad}p)
-                      </span>
-                    )}
-                    {/* El NOMBRE es lo que se busca al cruzar la sala: va al
-                        mismo tamaño que el codigo de mesa y en semibold.
-                        Estaba en 9px y a un metro del monitor no se leia. */}
-                    {firstR && !mesaCompartida && (
-                      <span
-                        className={cn(
-                          // El nombre va SIEMPRE a color pleno y en bold: es el
-                          // dato que se busca cruzando la sala. Con opacidad
-                          // heredada se lavaba sobre los verdes.
-                          "text-[12px] font-bold leading-tight truncate max-w-full !opacity-100",
-                          isLibre && "text-white",
-                        )}
+                      onSelectMesa(m);
+                    }}
+                  >
+                    {/* MESA VENDIDA DOS VECES: se parte en diagonal y CADA MITAD
+                        lleva su reserva —su color de estado y su nombre—. Antes
+                        la diagonal era solo una raya sobre un fondo único: se
+                        veia que habia doble servicio, pero no cual era cual ni
+                        por donde iba cada una.
+
+                        ARRIBA-IZQUIERDA la PRIMERA por horario y abajo-derecha la
+                        siguiente: `rs` ya viene ordenado por hora, asi que se lee
+                        en el orden en que va a pasar el servicio. Si a una se le
+                        cambia el estado, cambia SOLO su mitad. */}
+                    {mesaCompartida && (
+                      <svg
+                        className="absolute inset-0 h-full w-full pointer-events-none"
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                        aria-hidden="true"
                       >
-                        {isWalkIn ? "WALK IN" : firstR.cliente}
-                      </span>
+                        {/* Triangulo superior-izquierdo: la reserva mas temprana. */}
+                        <polygon
+                          points="0,0 100,0 0,100"
+                          fill={colorMitadReserva(rs[0].estado)}
+                        />
+                        {/* Triangulo inferior-derecho: la siguiente. */}
+                        <polygon
+                          points="100,0 100,100 0,100"
+                          fill={colorMitadReserva(rs[1].estado)}
+                        />
+                        {/* La linea de separacion se mantiene: sin ella dos
+                            mitades del mismo color se leen como una mesa entera. */}
+                        <line
+                          x1="0"
+                          y1="100"
+                          x2="100"
+                          y2="0"
+                          stroke="#00000055"
+                          strokeWidth="2"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </svg>
                     )}
-                  </div>
-                </button>
+                    {/* Los DOS nombres, uno por mitad. Van en el color que se lee
+                        sobre SU relleno, no sobre el de la mesa: una mitad puede
+                        ser verde oscuro y la otra verde claro a la vez. */}
+                    {mesaCompartida && (
+                      <div className="absolute inset-0 pointer-events-none">
+                        {/* NOMBRE arriba y hora debajo, no los dos en una linea:
+                            en una linea sola el nombre —que es lo que se busca
+                            cruzando la sala— era siempre lo que se cortaba, y en
+                            las mesas pequeñas se quedaba en "21:00…" sin cliente.
+                            La hora va en su propia linea, mas pequeña y sin
+                            truncar: son cinco cifras fijas y cortarlas no sirve
+                            de nada. */}
+                        <span
+                          className="absolute left-[6%] top-[5%] flex max-w-[64%] flex-col leading-none"
+                          style={{ color: textoMitadReserva(rs[0].estado) }}
+                        >
+                          <span className="truncate text-[11px] font-bold">
+                            {esReservaWalkIn(rs[0]) ? "WALK IN" : rs[0].cliente}
+                          </span>
+                          <span className="text-[9px] font-medium tabular-nums opacity-85">
+                            {rs[0].hora.slice(0, 5)}
+                          </span>
+                        </span>
+                        <span
+                          className="absolute bottom-[5%] right-[6%] flex max-w-[64%] flex-col items-end text-right leading-none"
+                          style={{ color: textoMitadReserva(rs[1].estado) }}
+                        >
+                          <span className="truncate max-w-full text-[11px] font-bold">
+                            {esReservaWalkIn(rs[1]) ? "WALK IN" : rs[1].cliente}
+                          </span>
+                          <span className="text-[9px] font-medium tabular-nums opacity-85">
+                            {rs[1].hora.slice(0, 5)}
+                          </span>
+                        </span>
+                      </div>
+                    )}
+                    {/* Contra-rotación para mantener el texto legible aunque la mesa esté girada. */}
+                    <div
+                      className="relative flex w-full min-w-0 flex-col items-center justify-center leading-tight pointer-events-none"
+                      style={pos.rotation ? { transform: `rotate(${-pos.rotation}deg)` } : undefined}
+                    >
+                      {/* Tres lineas como mucho: la mesa mas pequeña son 60x60
+                          (48 de alto si es rectangular) y con cuatro no cabia el
+                          texto grande. Con reserva, la capacidad se pega a la
+                          hora en la misma linea y el nombre se queda una entera
+                          para el. */}
+                      <span
+                        className="text-[13px] leading-none"
+                        // Mesa partida: el codigo cae justo sobre la diagonal, con
+                        // un relleno distinto a cada lado. Un halo del color
+                        // contrario lo mantiene legible sobre los dos.
+                        style={
+                          mesaCompartida
+                            ? { color: "#FFFFFF", textShadow: "0 0 3px #000, 0 1px 2px #000" }
+                            : undefined
+                        }
+                      >
+                        {m.codigo}
+                      </span>
+                      {/* Mesa partida: en el centro SOLO el codigo. La hora y el
+                          nombre de cada reserva ya van en su mitad, y repetidos
+                          aqui en medio se pisaban con ellos. */}
+                      {mesaCompartida ? null : firstR ? (
+                        /* La hora va SIN truncar: son cinco cifras fijas y
+                           cortarlas ("14:0…") destruye el dato. La capacidad se
+                           queda detras porque, si algo sobra, es ella. */
+                        <span className={cn("text-[10px] font-medium tabular-nums leading-tight whitespace-nowrap", isLibre ? "text-white/75" : "opacity-90")}>
+                          {firstR.hora.slice(0, 5)} · {m.capacidad}p
+                        </span>
+                      ) : (
+                        <span className={cn("text-[10px] font-normal mt-0.5", isLibre ? "text-white/70" : "opacity-75")}>
+                          ({m.capacidad}p)
+                        </span>
+                      )}
+                      {/* El NOMBRE es lo que se busca al cruzar la sala: va al
+                          mismo tamaño que el codigo de mesa y en semibold.
+                          Estaba en 9px y a un metro del monitor no se leia. */}
+                      {firstR && !mesaCompartida && (
+                        <span
+                          className={cn(
+                            // El nombre va SIEMPRE a color pleno y en bold: es el
+                            // dato que se busca cruzando la sala. Con opacidad
+                            // heredada se lavaba sobre los verdes.
+                            "text-[12px] font-bold leading-tight truncate max-w-full !opacity-100",
+                            isLibre && "text-white",
+                          )}
+                        >
+                          {isWalkIn ? "WALK IN" : firstR.cliente}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                </ToolTooltip>
               </PopoverTrigger>
               <PopoverContent className="w-72 max-h-[min(80vh,560px)] overflow-y-auto p-3" collisionPadding={12}>
                 {estado === "BLOQUEADA" && onQuitarBloqueoMesa ? (
@@ -6018,26 +6025,27 @@ export function ReservasView() {
               </Button>
             );
           })}
-          <div
-            className="ml-1 inline-flex items-center gap-2.5 h-8 px-2.5 rounded-md border border-input bg-background text-xs font-semibold"
-            title={`${turno === "COMIDA" ? "Comida" : "Cena"} · ${fecha} · total del plano completo`}
-          >
-            {/* En color, como los KPI del mes: en gris los dos iconos se
-                confundían entre sí y con el resto de la barra. Verde las
-                personas, azul las mesas. */}
-            <span className="inline-flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5 text-emerald-500" />
-              <span className="tabular-nums">{cubiertosReservados}</span>
-              <span className="text-muted-foreground">/</span>
-              <span className="tabular-nums">{capacidadTotal}</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <LayoutGrid className="h-3.5 w-3.5 text-sky-500" />
-              <span className="tabular-nums">{mesasOcupadas}</span>
-              <span className="text-muted-foreground">/</span>
-              <span className="tabular-nums">{mesasPlano.length}</span>
-            </span>
-          </div>
+          <ToolTooltip label={`${turno === "COMIDA" ? "Comida" : "Cena"} · ${fecha} · total del plano completo`}>
+            <div
+              className="ml-1 inline-flex items-center gap-2.5 h-8 px-2.5 rounded-md border border-input bg-background text-xs font-semibold"
+            >
+              {/* En color, como los KPI del mes: en gris los dos iconos se
+                  confundían entre sí y con el resto de la barra. Verde las
+                  personas, azul las mesas. */}
+              <span className="inline-flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5 text-emerald-500" />
+                <span className="tabular-nums">{cubiertosReservados}</span>
+                <span className="text-muted-foreground">/</span>
+                <span className="tabular-nums">{capacidadTotal}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <LayoutGrid className="h-3.5 w-3.5 text-sky-500" />
+                <span className="tabular-nums">{mesasOcupadas}</span>
+                <span className="text-muted-foreground">/</span>
+                <span className="tabular-nums">{mesasPlano.length}</span>
+              </span>
+            </div>
+          </ToolTooltip>
         </div>
 
         {/* SEGUNDA FILA de la barra: los mandos del PLANO (planos, salas,
@@ -6404,12 +6412,13 @@ export function ReservasView() {
                             asi que una union se leia "TI5" y parecia que TI5 y
                             TI6 se duplicaban solas en el plano; en realidad esa
                             reserva ocupa las dos. */}
-                        <span
-                          className="truncate font-mono text-[15px] font-bold leading-tight"
-                          title={r.mesaCodigo || mesa?.codigo || undefined}
-                        >
-                          {r.mesaCodigo || mesa?.codigo || "—"}
-                        </span>
+                        <ToolTooltip label={r.mesaCodigo || mesa?.codigo || undefined}>
+                          <span
+                            className="truncate font-mono text-[15px] font-bold leading-tight"
+                          >
+                            {r.mesaCodigo || mesa?.codigo || "—"}
+                          </span>
+                        </ToolTooltip>
                         <span className="truncate text-[10px] text-muted-foreground">
                           {zonaLabel(r.zona ? String(r.zona) : null) || "—"}
                         </span>
@@ -6437,12 +6446,13 @@ export function ReservasView() {
                               </TooltipContent>
                             </Tooltip>
                           )}
-                          <span
-                            className="truncate font-medium"
-                            title={`${r.cliente || "WALK IN"} ${r.apellidos ?? ""}`.trim()}
-                          >
-                            {r.cliente || "WALK IN"} {r.apellidos}
-                          </span>
+                          <ToolTooltip label={`${r.cliente || "WALK IN"} ${r.apellidos ?? ""}`.trim()}>
+                            <span
+                              className="truncate font-medium"
+                            >
+                              {r.cliente || "WALK IN"} {r.apellidos}
+                            </span>
+                          </ToolTooltip>
                           {/* Veces que ha reservado: solo a partir de la
                               segunda, para que la gente nueva no lleve un "1"
                               que no dice nada. */}
@@ -6495,9 +6505,11 @@ export function ReservasView() {
                       </span>
                       <StatusDot estado={r.estado} />
                       <span className="min-w-0 text-center tabular-nums">{r.comensales}</span>
-                      <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={origenLabel(r.origen)}>
-                        {origenLabel(r.origen)}
-                      </span>
+                      <ToolTooltip label={origenLabel(r.origen)}>
+                        <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                          {origenLabel(r.origen)}
+                        </span>
+                      </ToolTooltip>
                       {/* TIPO: qué condiciones lleva la reserva (tarjeta,
                           ticket, cupón). No aparecía en ninguna columna, así
                           que para saberlo había que abrir la ficha una por
@@ -6535,48 +6547,48 @@ export function ReservasView() {
         {panelOculto === "ninguno" && (
           <div className="relative flex flex-col items-center justify-center w-0 z-30">
             <div className="absolute top-1/2 -translate-y-1/2 flex flex-col gap-1 -translate-x-1/2">
-              <button
-                type="button"
-                onClick={() => setPanelOculto("lista")}
-                title="Ocultar listado"
-                className="h-7 w-5 rounded bg-background border shadow-sm hover:bg-muted flex items-center justify-center"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setPanelOculto("mapa")}
-                title="Ocultar mapa"
-                className="h-7 w-5 rounded bg-background border shadow-sm hover:bg-muted flex items-center justify-center"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
+              <ToolTooltip label="Ocultar listado">
+                <button
+                  type="button"
+                  onClick={() => setPanelOculto("lista")}
+                  className="h-7 w-5 rounded bg-background border shadow-sm hover:bg-muted flex items-center justify-center" aria-label="Ocultar listado">
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+              </ToolTooltip>
+              <ToolTooltip label="Ocultar mapa">
+                <button
+                  type="button"
+                  onClick={() => setPanelOculto("mapa")}
+                  className="h-7 w-5 rounded bg-background border shadow-sm hover:bg-muted flex items-center justify-center" aria-label="Ocultar mapa">
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </ToolTooltip>
             </div>
           </div>
         )}
 
         {/* Botón flotante para restaurar la lista cuando está oculta */}
         {panelOculto === "lista" && (
-          <button
-            type="button"
-            onClick={() => setPanelOculto("ninguno")}
-            title="Mostrar listado"
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-40 h-9 w-6 rounded-r bg-background border border-l-0 shadow-md hover:bg-muted flex items-center justify-center"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          <ToolTooltip label="Mostrar listado">
+            <button
+              type="button"
+              onClick={() => setPanelOculto("ninguno")}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-40 h-9 w-6 rounded-r bg-background border border-l-0 shadow-md hover:bg-muted flex items-center justify-center" aria-label="Mostrar listado">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </ToolTooltip>
         )}
 
         {/* Botón flotante para restaurar el mapa cuando está oculto */}
         {panelOculto === "mapa" && (
-          <button
-            type="button"
-            onClick={() => setPanelOculto("ninguno")}
-            title="Mostrar mapa"
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-40 h-9 w-6 rounded-l bg-background border border-r-0 shadow-md hover:bg-muted flex items-center justify-center"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
+          <ToolTooltip label="Mostrar mapa">
+            <button
+              type="button"
+              onClick={() => setPanelOculto("ninguno")}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-40 h-9 w-6 rounded-l bg-background border border-r-0 shadow-md hover:bg-muted flex items-center justify-center" aria-label="Mostrar mapa">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          </ToolTooltip>
         )}
 
         {/* RIGHT PANEL — CANVAS PLANO si vistaPlano === "mapa" y hay intersección posiciones↔mesasActivas; sino, GRID agrupado por zona */}
@@ -6620,19 +6632,20 @@ export function ReservasView() {
             </Button>
           </div>
           {salasLocal.length >= 2 && siguienteSala && (
-            <button
-              type="button"
-              onClick={irSiguienteSala}
-              title={`Ir a sala "${siguienteSala.nombre}"`}
-              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full border bg-background/90 backdrop-blur shadow-md flex items-center justify-center text-foreground hover:bg-background hover:shadow-lg transition-all"
-              aria-label={`Cambiar a sala ${siguienteSala.nombre}`}
-            >
-              {navDirSala === 1 ? (
-                <ChevronRight className="h-5 w-5" />
-              ) : (
-                <ChevronLeft className="h-5 w-5" />
-              )}
-            </button>
+            <ToolTooltip label={`Ir a sala "${siguienteSala.nombre}"`}>
+              <button
+                type="button"
+                onClick={irSiguienteSala}
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full border bg-background/90 backdrop-blur shadow-md flex items-center justify-center text-foreground hover:bg-background hover:shadow-lg transition-all"
+                aria-label={`Cambiar a sala ${siguienteSala.nombre}`}
+              >
+                {navDirSala === 1 ? (
+                  <ChevronRight className="h-5 w-5" />
+                ) : (
+                  <ChevronLeft className="h-5 w-5" />
+                )}
+              </button>
+            </ToolTooltip>
           )}
           {vistaPlano === "mapa" ? (
             <PlanoCanvas
@@ -7424,30 +7437,31 @@ export function ReservasView() {
                         quedar con un número al que nadie sabe a qué país
                         llamar. */}
                     <div className="flex gap-1.5">
-                      <select
-                        value={separarPrefijo(clienteEdit.telefono).prefijo}
-                        onChange={(e) =>
-                          setClienteEdit((p) => ({
-                            ...p,
-                            telefono: componerTelefono(
-                              e.target.value,
-                              separarPrefijo(p.telefono).numero,
-                            ),
-                          }))
-                        }
-                        className="h-8 w-[86px] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs"
-                        title={
+                      <ToolTooltip label={
                           PREFIJOS_TELEFONO.find(
                             (x) => x.prefijo === separarPrefijo(clienteEdit.telefono).prefijo,
                           )?.label ?? ""
-                        }
-                      >
-                        {PREFIJOS_TELEFONO.map((x) => (
-                          <option key={x.prefijo} value={x.prefijo}>
-                            {x.flag} {x.prefijo}
-                          </option>
-                        ))}
-                      </select>
+                        }>
+                        <select
+                          value={separarPrefijo(clienteEdit.telefono).prefijo}
+                          onChange={(e) =>
+                            setClienteEdit((p) => ({
+                              ...p,
+                              telefono: componerTelefono(
+                                e.target.value,
+                                separarPrefijo(p.telefono).numero,
+                              ),
+                            }))
+                          }
+                          className="h-8 w-[86px] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs"
+                        >
+                          {PREFIJOS_TELEFONO.map((x) => (
+                            <option key={x.prefijo} value={x.prefijo}>
+                              {x.flag} {x.prefijo}
+                            </option>
+                          ))}
+                        </select>
+                      </ToolTooltip>
                       <Input
                         type="tel"
                         className="h-8 flex-1 text-xs"

@@ -44,6 +44,7 @@ import {
 import { getRolesEmpresaNombres } from "@/features/ajustes/actions/roles-actions";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { AppLogo } from "@/features/ajustes/components/AppLogo";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const accesoVacio: AccesoCredencial = {
   etiqueta: "",
@@ -99,25 +100,25 @@ function PasswordAdmin({
     <span className="inline-flex min-w-0 max-w-full items-start gap-1 font-mono text-xs">
       <span className="min-w-0 break-all">{valor !== null ? valor : "••••••••"}</span>
       {valor !== null ? (
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(valor);
-            toast.success(nombreExtra ? `${nombreExtra} copiado` : "Clave copiada");
-          }}
-          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
-          title="Copiar"
-        >
-          <Copy className="h-3.5 w-3.5" />
-        </button>
+        <ToolTooltip label="Copiar">
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(valor);
+              toast.success(nombreExtra ? `${nombreExtra} copiado` : "Clave copiada");
+            }}
+            className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground" aria-label="Copiar">
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+        </ToolTooltip>
       ) : (
-        <button
-          onClick={revelar}
-          disabled={loading}
-          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50"
-          title="Ver clave"
-        >
-          <Eye className="h-3.5 w-3.5" />
-        </button>
+        <ToolTooltip label="Ver clave">
+          <button
+            onClick={revelar}
+            disabled={loading}
+            className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50" aria-label="Ver clave">
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+        </ToolTooltip>
       )}
     </span>
   );
@@ -132,26 +133,28 @@ function EnlaceCelda({ url, nombre }: { url?: string; nombre: string }) {
   const limpia = (url ?? "").trim();
   if (!limpia) {
     return (
-      <span
-        aria-disabled
-        title="Sin enlace"
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground/60"
-      >
-        <ArrowUpRight className="h-3.5 w-3.5" />
-      </span>
+      <ToolTooltip label="Sin enlace">
+        <span
+          aria-disabled
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground/60"
+        >
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        </span>
+      </ToolTooltip>
     );
   }
   const href = limpia.startsWith("http") ? limpia : `https://${limpia}`;
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={`Abrir ${nombre}`}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-emerald-600/40 bg-emerald-500/15 text-emerald-600 transition-colors hover:bg-emerald-500/25 dark:text-emerald-400"
-    >
-      <ArrowUpRight className="h-3.5 w-3.5" />
-    </a>
+    <ToolTooltip label={`Abrir ${nombre}`}>
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-emerald-600/40 bg-emerald-500/15 text-emerald-600 transition-colors hover:bg-emerald-500/25 dark:text-emerald-400"
+      >
+        <ArrowUpRight className="h-3.5 w-3.5" />
+      </a>
+    </ToolTooltip>
   );
 }
 

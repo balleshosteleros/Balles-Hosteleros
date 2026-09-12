@@ -66,6 +66,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, Trash2, Save, X, Loader2, Info, ChevronDown, UserRound, Users, Layers, Pencil, Check } from "lucide-react";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Etiquetas reales de la estructura (departamentos + puestos por departamento).
@@ -280,22 +281,23 @@ function PuestosDesplegable({ deptName, ring, bg }: { deptName: string; ring: st
   return (
     <>
       {/* Pestaña inferior con el contador (clase nodrag para no arrastrar el nodo al pulsar) */}
-      <button
-        type="button"
-        className="nodrag nopan absolute -bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border bg-white px-2 py-0.5 text-[10px] font-semibold shadow"
-        style={{ color: bg, borderColor: ring }}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((o) => !o);
-        }}
-        title={open ? "Ocultar puestos" : "Ver puestos"}
-      >
-        <UserRound className="h-3 w-3" />
-        {puestos.length}
-        <ChevronDown
-          className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
+      <ToolTooltip label={open ? "Ocultar puestos" : "Ver puestos"}>
+        <button
+          type="button"
+          className="nodrag nopan absolute -bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border bg-white px-2 py-0.5 text-[10px] font-semibold shadow"
+          style={{ color: bg, borderColor: ring }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
+        >
+          <UserRound className="h-3 w-3" />
+          {puestos.length}
+          <ChevronDown
+            className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </ToolTooltip>
 
       {open && (
         <div

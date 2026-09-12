@@ -12,6 +12,7 @@ import {
   type DepartamentoColor,
 } from "@/features/rrhh/actions/departamento-colores-actions";
 import { pillStyleDepartamento } from "@/features/rrhh/data/horarios";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // Paleta sugerida (clics rápidos). El usuario puede elegir cualquier hex con el
 // selector nativo; estas son las teclas que cubren bien el catálogo canónico.
@@ -147,43 +148,44 @@ function FilaDepartamento({
       </span>
 
       {/* Selector nativo de color (cualquier hex). */}
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="relative h-8 w-8 shrink-0 rounded-md border shadow-sm transition-transform hover:scale-105"
-        style={{ backgroundColor: color }}
-        title="Elegir color personalizado"
-        aria-label={`Color de ${departamento.nombre}`}
-      >
-        <input
-          ref={inputRef}
-          type="color"
-          value={color}
-          onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          tabIndex={-1}
-        />
-      </button>
+      <ToolTooltip label="Elegir color personalizado">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="relative h-8 w-8 shrink-0 rounded-md border shadow-sm transition-transform hover:scale-105"
+          style={{ backgroundColor: color }}
+          aria-label={`Color de ${departamento.nombre}`}
+        >
+          <input
+            ref={inputRef}
+            type="color"
+            value={color}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            tabIndex={-1}
+          />
+        </button>
+      </ToolTooltip>
 
       {/* Paleta de clics rápidos. */}
       <div className="hidden sm:flex items-center gap-1">
         {PALETA_SUGERIDA.map((c) => {
           const activo = c.toLowerCase() === color.toLowerCase();
           return (
-            <button
-              key={c}
-              type="button"
-              onClick={() => onChange(c)}
-              className={cn(
-                "flex h-5 w-5 items-center justify-center rounded-full border transition-transform hover:scale-110",
-                activo ? "border-foreground" : "border-transparent",
-              )}
-              style={{ backgroundColor: c }}
-              title={c}
-              aria-label={`Usar ${c}`}
-            >
-              {activo && <Check className="h-3 w-3 text-white" />}
-            </button>
+            <ToolTooltip key={c} label={c}>
+              <button
+                type="button"
+                onClick={() => onChange(c)}
+                className={cn(
+                  "flex h-5 w-5 items-center justify-center rounded-full border transition-transform hover:scale-110",
+                  activo ? "border-foreground" : "border-transparent",
+                )}
+                style={{ backgroundColor: c }}
+                aria-label={`Usar ${c}`}
+              >
+                {activo && <Check className="h-3 w-3 text-white" />}
+              </button>
+            </ToolTooltip>
           );
         })}
       </div>

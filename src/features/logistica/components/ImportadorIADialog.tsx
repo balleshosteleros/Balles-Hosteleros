@@ -37,6 +37,7 @@ import {
 } from "@/features/logistica/lib/importador-ia/extractor";
 import { analizarImportacionIA } from "@/features/logistica/actions/importador-ia-actions";
 import { bulkImportProductos } from "@/features/logistica/actions/producto-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface ImportadorIADialogProps {
   open: boolean;
@@ -374,9 +375,11 @@ export function ImportadorIADialog({
                       >
                         {ETIQUETAS_CAMPOS[c]}
                         {obligatorias.includes(c) && (
-                          <span className="ml-0.5 text-destructive" title="Obligatorio">
-                            *
-                          </span>
+                          <ToolTooltip label="Obligatorio">
+                            <span className="ml-0.5 text-destructive">
+                              *
+                            </span>
+                          </ToolTooltip>
                         )}
                       </th>
                     ))}
@@ -450,15 +453,16 @@ export function ImportadorIADialog({
                           </td>
                         ))}
                         <td className="px-1 py-1 align-top">
-                          <button
-                            type="button"
-                            onClick={() => eliminarFila(f.tempId)}
-                            className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                            title="Eliminar fila"
-                            aria-label="Eliminar fila"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          <ToolTooltip label="Eliminar fila">
+                            <button
+                              type="button"
+                              onClick={() => eliminarFila(f.tempId)}
+                              className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                              aria-label="Eliminar fila"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </ToolTooltip>
                         </td>
                       </tr>
                     );

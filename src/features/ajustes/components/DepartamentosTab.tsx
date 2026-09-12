@@ -13,6 +13,7 @@ import { Users, ChevronDown, ChevronRight } from "lucide-react";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { ReglasSubmodulosPanel } from "@/features/ajustes/components/ReglasSubmodulosPanel";
 import { moduloKeyDesdeNombreDept } from "@/features/ajustes/lib/reglas-submodulos-catalogo";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface UsuarioOption {
   id: string;
@@ -180,15 +181,16 @@ export function DepartamentosTab() {
                   <div className="flex items-center gap-2 shrink-0">
                     <Popover>
                       <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                          title={`${usuariosConAcceso.length} ${usuariosConAcceso.length === 1 ? "usuario" : "usuarios"} con acceso`}
-                        >
-                          <Users className="h-3.5 w-3.5" />
-                          <span className="font-semibold tabular-nums">{usuariosConAcceso.length}</span>
-                        </button>
+                        <ToolTooltip label={`${usuariosConAcceso.length} ${usuariosConAcceso.length === 1 ? "usuario" : "usuarios"} con acceso`}>
+                          <button
+                            type="button"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                          >
+                            <Users className="h-3.5 w-3.5" />
+                            <span className="font-semibold tabular-nums">{usuariosConAcceso.length}</span>
+                          </button>
+                        </ToolTooltip>
                       </PopoverTrigger>
                       <PopoverContent
                         align="end"

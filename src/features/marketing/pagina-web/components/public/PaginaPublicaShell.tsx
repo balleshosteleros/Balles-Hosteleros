@@ -8,6 +8,7 @@ import { BannerCookies, EnlaceConfigurarCookies } from "./BannerCookies";
 import { MedidorWeb } from "./MedidorWeb";
 import { SorteoMensual } from "./SorteoMensual";
 import { premioMensualDe } from "@/features/marketing/data/premio-mensual";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 export interface PaginaContexto {
   empresaId: string | null;
@@ -486,27 +487,28 @@ function FuenteMarca({ nombre }: { nombre: string }) {
 function BotonWhatsApp({ url }: { url: string | null }) {
   if (!url) return null;
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer noopener"
-      aria-label="Escríbenos por WhatsApp"
-      title="Escríbenos por WhatsApp"
-      className="fixed bottom-5 right-5 z-[55] flex h-[60px] w-[60px] items-center justify-center rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.25)] transition-transform hover:scale-110"
-      style={{ backgroundColor: "#25D366" }}
-    >
-      {/* Logo de WhatsApp: el MISMO que la web de Balles, que es el que se
-          eligió (Iván, 10-09-2026: "el icono de WhatsApp me gusta más el de
-          Balles, pónselo igual a HABANA y BACANAL"). El anterior llevaba el
-          glifo pegado al borde del círculo; este lo deja con aire dentro. */}
-      <svg viewBox="0 0 32 32" fill="#fff" className="h-8 w-8" aria-hidden>
-        <path
-          fillRule="evenodd"
-          clipRule="evenodd"
-          d="M16.003 3.2c-7.06 0-12.8 5.74-12.8 12.8 0 2.257.589 4.458 1.71 6.4L3.2 28.8l6.56-1.68a12.743 12.743 0 0 0 6.243 1.683h.005c7.058 0 12.792-5.74 12.792-12.803 0-3.42-1.33-6.635-3.748-9.053A12.714 12.714 0 0 0 16.003 3.2zm0 23.467h-.004a10.65 10.65 0 0 1-5.43-1.49l-.39-.23-3.893.998 1.04-3.796-.254-.39a10.61 10.61 0 0 1-1.63-5.66c0-5.89 4.79-10.68 10.683-10.68 2.85 0 5.53 1.108 7.54 3.12a10.59 10.59 0 0 1 3.126 7.56c-.002 5.89-4.793 10.68-10.688 10.68zm5.856-7.99c-.32-.16-1.89-.932-2.183-1.038-.294-.107-.507-.16-.72.16-.214.32-.827 1.037-1.014 1.25-.187.214-.373.24-.693.08-.32-.16-1.35-.497-2.572-1.586-.95-.846-1.59-1.89-1.777-2.21-.187-.32-.02-.493.14-.652.144-.143.32-.373.48-.56.16-.187.214-.32.32-.534.107-.214.053-.4-.027-.56-.08-.16-.72-1.73-.986-2.37-.26-.624-.525-.54-.72-.55l-.614-.01c-.213 0-.56.08-.853.4-.294.32-1.12 1.094-1.12 2.667 0 1.57 1.147 3.09 1.307 3.304.16.214 2.258 3.45 5.47 4.837.764.33 1.36.528 1.824.676.766.244 1.463.21 2.014.128.614-.09 1.89-.772 2.156-1.52.267-.746.267-1.386.187-1.52-.08-.133-.293-.213-.613-.373z"
-        />
-      </svg>
-    </a>
+    <ToolTooltip label="Escríbenos por WhatsApp">
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer noopener"
+        aria-label="Escríbenos por WhatsApp"
+        className="fixed bottom-5 right-5 z-[55] flex h-[60px] w-[60px] items-center justify-center rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.25)] transition-transform hover:scale-110"
+        style={{ backgroundColor: "#25D366" }}
+      >
+        {/* Logo de WhatsApp: el MISMO que la web de Balles, que es el que se
+            eligió (Iván, 10-09-2026: "el icono de WhatsApp me gusta más el de
+            Balles, pónselo igual a HABANA y BACANAL"). El anterior llevaba el
+            glifo pegado al borde del círculo; este lo deja con aire dentro. */}
+        <svg viewBox="0 0 32 32" fill="#fff" className="h-8 w-8" aria-hidden>
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M16.003 3.2c-7.06 0-12.8 5.74-12.8 12.8 0 2.257.589 4.458 1.71 6.4L3.2 28.8l6.56-1.68a12.743 12.743 0 0 0 6.243 1.683h.005c7.058 0 12.792-5.74 12.792-12.803 0-3.42-1.33-6.635-3.748-9.053A12.714 12.714 0 0 0 16.003 3.2zm0 23.467h-.004a10.65 10.65 0 0 1-5.43-1.49l-.39-.23-3.893.998 1.04-3.796-.254-.39a10.61 10.61 0 0 1-1.63-5.66c0-5.89 4.79-10.68 10.683-10.68 2.85 0 5.53 1.108 7.54 3.12a10.59 10.59 0 0 1 3.126 7.56c-.002 5.89-4.793 10.68-10.688 10.68zm5.856-7.99c-.32-.16-1.89-.932-2.183-1.038-.294-.107-.507-.16-.72.16-.214.32-.827 1.037-1.014 1.25-.187.214-.373.24-.693.08-.32-.16-1.35-.497-2.572-1.586-.95-.846-1.59-1.89-1.777-2.21-.187-.32-.02-.493.14-.652.144-.143.32-.373.48-.56.16-.187.214-.32.32-.534.107-.214.053-.4-.027-.56-.08-.16-.72-1.73-.986-2.37-.26-.624-.525-.54-.72-.55l-.614-.01c-.213 0-.56.08-.853.4-.294.32-1.12 1.094-1.12 2.667 0 1.57 1.147 3.09 1.307 3.304.16.214 2.258 3.45 5.47 4.837.764.33 1.36.528 1.824.676.766.244 1.463.21 2.014.128.614-.09 1.89-.772 2.156-1.52.267-.746.267-1.386.187-1.52-.08-.133-.293-.213-.613-.373z"
+          />
+        </svg>
+      </a>
+    </ToolTooltip>
   );
 }
 
@@ -540,20 +542,20 @@ function RedesPie({ redes }: { redes: NonNullable<PaginaContexto["redes"]> }) {
   return (
     <div className="mb-7 flex items-center justify-center gap-4">
       {items.map((r) => (
-        <a
-          key={r.k}
-          href={r.url as string}
-          target="_blank"
-          rel="noreferrer noopener"
-          aria-label={r.label}
-          title={`Síguenos en ${r.label}`}
-          className="flex h-11 w-11 items-center justify-center rounded-full text-white transition-transform hover:scale-110"
-          style={{ background: r.fondo, border: r.k === "tiktok" ? "1px solid rgba(255,255,255,0.22)" : undefined }}
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor" className="h-[22px] w-[22px]">
-            <path d={r.d} />
-          </svg>
-        </a>
+        <ToolTooltip key={r.k} label={`Síguenos en ${r.label}`}>
+          <a
+            href={r.url as string}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label={r.label}
+            className="flex h-11 w-11 items-center justify-center rounded-full text-white transition-transform hover:scale-110"
+            style={{ background: r.fondo, border: r.k === "tiktok" ? "1px solid rgba(255,255,255,0.22)" : undefined }}
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" className="h-[22px] w-[22px]">
+              <path d={r.d} />
+            </svg>
+          </a>
+        </ToolTooltip>
       ))}
     </div>
   );

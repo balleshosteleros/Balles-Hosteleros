@@ -103,6 +103,7 @@ import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { ResenasAnaliticaPanel } from "@/features/calidad/components/ResenasAnaliticaPanel";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // ─── Filtro de período ────────────────────────────────────────
 type PeriodoResenas = "todo" | "semana" | "mes" | "personalizado";
@@ -391,12 +392,13 @@ export function ResenasView() {
         ocultarNuevo
         extraDerecha={
           <>
-            <span
-              className="hidden md:inline-flex items-center text-[11px] text-muted-foreground mr-1"
-              title="Reseñas acumuladas históricas — nunca se borran"
-            >
-              {resenas.length} acumuladas
-            </span>
+            <ToolTooltip label="Reseñas acumuladas históricas — nunca se borran">
+              <span
+                className="hidden md:inline-flex items-center text-[11px] text-muted-foreground mr-1"
+              >
+                {resenas.length} acumuladas
+              </span>
+            </ToolTooltip>
             <Button
               variant="outline"
               size="sm"

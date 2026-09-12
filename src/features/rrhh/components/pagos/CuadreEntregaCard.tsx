@@ -30,6 +30,7 @@ import { cn } from "@/shared/lib/utils";
 import { CheckCircle2, XCircle, AlertTriangle, ChevronDown, Loader2 } from "lucide-react";
 import type { HistoricoEntrada } from "@/features/rrhh/actions/nominas-aprobacion-actions";
 import { HistoricoEntrega } from "./HistoricoEntrega";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /** Un bloque de la franja, ya resuelto por quien la usa. */
 export interface BloqueCuadre {
@@ -215,9 +216,11 @@ function Bloque({
       {/* La aclaración no puede crecer la franja: una línea, y el resto al pasar
           el ratón por encima. */}
       {b.nota && !resuelto && (
-        <p className="mt-1.5 truncate text-[11px] text-muted-foreground" title={b.nota}>
-          {b.nota}
-        </p>
+        <ToolTooltip label={b.nota}>
+          <p className="mt-1.5 truncate text-[11px] text-muted-foreground">
+            {b.nota}
+          </p>
+        </ToolTooltip>
       )}
     </div>
   );

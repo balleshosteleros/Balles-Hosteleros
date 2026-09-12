@@ -47,6 +47,7 @@ import {
   getTareasValidacionPendientes,
   type TareasValidacion,
 } from "@/features/mi-panel/actions/mi-panel-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 type InfoTarea = {
   id: string;
@@ -70,19 +71,19 @@ function InfoPopover({ aclaraciones }: { aclaraciones?: InfoTarea[] }) {
   if (!aclaraciones || aclaraciones.length === 0) return null;
   return (
     <span className="relative shrink-0 inline-flex">
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          setOpen((o) => !o);
-        }}
-        title="Ver aclaraciones"
-        className="inline-flex items-center gap-0.5 rounded-full px-1 h-5 text-violet-500 hover:bg-violet-100 hover:text-violet-700 transition-colors"
-      >
-        <Info className="h-3.5 w-3.5" />
-        <span className="text-[9px] font-bold leading-none">{aclaraciones.length}</span>
-      </button>
+      <ToolTooltip label="Ver aclaraciones">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setOpen((o) => !o);
+          }}
+          className="inline-flex items-center gap-0.5 rounded-full px-1 h-5 text-violet-500 hover:bg-violet-100 hover:text-violet-700 transition-colors" aria-label="Ver aclaraciones">
+          <Info className="h-3.5 w-3.5" />
+          <span className="text-[9px] font-bold leading-none">{aclaraciones.length}</span>
+        </button>
+      </ToolTooltip>
       {open && (
         <>
           <div
@@ -194,16 +195,17 @@ function TareaItem({
         {t.titulo}
         {t.link_url && <Link2 className="h-3 w-3 inline ml-1 text-muted-foreground" />}
         {pospuestaCount > 0 && (
-          <span
-            className={`ml-1.5 text-[9px] font-bold px-1 py-px rounded ${
-              pospuestaCount >= 3
-                ? "bg-red-100 text-red-700"
-                : "bg-amber-100 text-amber-700"
-            }`}
-            title={`Pospuesta ${pospuestaCount}× — última: ${t.pospuesta_ultima ?? ""}`}
-          >
-            {pospuestaCount}×
-          </span>
+          <ToolTooltip label={`Pospuesta ${pospuestaCount}× — última: ${t.pospuesta_ultima ?? ""}`}>
+            <span
+              className={`ml-1.5 text-[9px] font-bold px-1 py-px rounded ${
+                pospuestaCount >= 3
+                  ? "bg-red-100 text-red-700"
+                  : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {pospuestaCount}×
+            </span>
+          </ToolTooltip>
         )}
       </span>
       <InfoPopover aclaraciones={aclaraciones} />
@@ -228,12 +230,13 @@ function TareaItem({
           <CalendarClock className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
         </Button>
       ) : esEncargo ? (
-        <span
-          className={`${compact ? "h-5 w-5" : "h-6 w-6"} shrink-0 inline-flex items-center justify-center text-muted-foreground/70`}
-          title="Asignada por otro usuario · no se puede eliminar"
-        >
-          <Lock className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
-        </span>
+        <ToolTooltip label="Asignada por otro usuario · no se puede eliminar">
+          <span
+            className={`${compact ? "h-5 w-5" : "h-6 w-6"} shrink-0 inline-flex items-center justify-center text-muted-foreground/70`}
+          >
+            <Lock className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
+          </span>
+        </ToolTooltip>
       ) : (
         <Button
           variant="ghost"
@@ -1104,17 +1107,18 @@ function SeccionPorNecesidad({
           const done = hechas.has(it.id);
           return (
             <div key={it.id} className="px-5 py-2.5 flex items-start gap-3">
-              <button
-                onClick={() => onToggle(it)}
-                className="shrink-0 mt-0.5"
-                title={done ? "Hecha hoy — desmarcar" : "Marcar como hecha hoy"}
-              >
-                {done ? (
-                  <CheckSquare2 className="h-5 w-5 text-red-600" />
-                ) : (
-                  <Square className="h-5 w-5 text-red-300" />
-                )}
-              </button>
+              <ToolTooltip label={done ? "Hecha hoy — desmarcar" : "Marcar como hecha hoy"}>
+                <button
+                  onClick={() => onToggle(it)}
+                  className="shrink-0 mt-0.5"
+                >
+                  {done ? (
+                    <CheckSquare2 className="h-5 w-5 text-red-600" />
+                  ) : (
+                    <Square className="h-5 w-5 text-red-300" />
+                  )}
+                </button>
+              </ToolTooltip>
               <p className={`flex-1 min-w-0 text-sm leading-snug ${done ? "line-through opacity-50" : "text-red-900"}`}>
                 {it.tarea}
               </p>

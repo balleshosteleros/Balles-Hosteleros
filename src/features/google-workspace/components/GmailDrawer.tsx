@@ -88,6 +88,7 @@ import { sanitizeEmailHtml } from "@/shared/lib/sanitize-email-html";
 import { refreshDailyCounts } from "./useDailyCounts";
 import { loadUserPref, saveUserPref } from "@/shared/io/user-preferences";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /** Clave del estilo personal de redacción en `usuario_preferencias.prefs`. */
 const PREF_ESTILO_IA = "email.estiloIA";
@@ -912,14 +913,14 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
         {/* Header estilo Gmail */}
         <SheetHeader className="bg-[#f6f8fc] px-2 py-2 border-b border-transparent">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSidebarAbierto((v) => !v)}
-              className="rounded-full p-3 hover:bg-black/5 transition-colors"
-              title="Menú principal"
-            >
-              <MenuIcon className="h-5 w-5 text-[#5f6368]" />
-            </button>
+            <ToolTooltip label="Menú principal">
+              <button
+                type="button"
+                onClick={() => setSidebarAbierto((v) => !v)}
+                className="rounded-full p-3 hover:bg-black/5 transition-colors" aria-label="Menú principal">
+                <MenuIcon className="h-5 w-5 text-[#5f6368]" />
+              </button>
+            </ToolTooltip>
             <div className="flex items-center gap-1 pl-1 pr-3">
               <GmailLogo className="h-9 w-auto" />
             </div>
@@ -935,13 +936,13 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                   onChange={(e) => setBusqueda(e.target.value)}
                   className="flex-1 bg-transparent text-[15px] text-[#202124] outline-none placeholder:text-[#5f6368]"
                 />
-                <button
-                  type="button"
-                  className="rounded-full p-1 text-[#5f6368] hover:bg-black/5"
-                  title="Mostrar opciones de búsqueda"
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                </button>
+                <ToolTooltip label="Mostrar opciones de búsqueda">
+                  <button
+                    type="button"
+                    className="rounded-full p-1 text-[#5f6368] hover:bg-black/5" aria-label="Mostrar opciones de búsqueda">
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </button>
+                </ToolTooltip>
               </div>
             </div>
 
@@ -950,13 +951,13 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
             </div>
             <SheetMaximizeButton className="text-[#5f6368]" />
             <SheetClose asChild>
-              <button
-                type="button"
-                className="ml-1 rounded-full p-3 hover:bg-black/5 transition-colors"
-                title="Cerrar"
-              >
-                <X className="h-5 w-5 text-[#5f6368]" />
-              </button>
+              <ToolTooltip label="Cerrar">
+                <button
+                  type="button"
+                  className="ml-1 rounded-full p-3 hover:bg-black/5 transition-colors" aria-label="Cerrar">
+                  <X className="h-5 w-5 text-[#5f6368]" />
+                </button>
+              </ToolTooltip>
             </SheetClose>
           </div>
         </SheetHeader>
@@ -1019,13 +1020,13 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                 <>
                   <div className="mt-3 mb-1 flex items-center justify-between pl-6 pr-2">
                     <p className="text-sm font-medium text-[#202124]">Etiquetas</p>
-                    <button
-                      type="button"
-                      className="rounded-full p-1.5 text-[#5f6368] hover:bg-black/5"
-                      title="Crear etiqueta"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
+                    <ToolTooltip label="Crear etiqueta">
+                      <button
+                        type="button"
+                        className="rounded-full p-1.5 text-[#5f6368] hover:bg-black/5" aria-label="Crear etiqueta">
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </ToolTooltip>
                   </div>
                   <ul className="space-y-0.5">
                     {arbolCarpetas.map((nodo) => (
@@ -1133,32 +1134,34 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                       : "Mensaje nuevo"}
                 </p>
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setComposeGrande((v) => !v)}
-                    className="rounded p-1 hover:bg-white/20"
-                    title={
+                  <ToolTooltip label={
                       composeGrande ? "Salir de pantalla completa" : "Pantalla completa"
-                    }
-                    aria-label={
-                      composeGrande ? "Salir de pantalla completa" : "Pantalla completa"
-                    }
-                  >
-                    {composeGrande ? (
-                      <Shrink className="h-4 w-4" />
-                    ) : (
-                      <Expand className="h-4 w-4" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cerrarCompose}
-                    className="rounded p-1 hover:bg-white/20"
-                    title="Cerrar"
-                    aria-label="Cerrar"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                    }>
+                    <button
+                      type="button"
+                      onClick={() => setComposeGrande((v) => !v)}
+                      className="rounded p-1 hover:bg-white/20"
+                      aria-label={
+                        composeGrande ? "Salir de pantalla completa" : "Pantalla completa"
+                      }
+                    >
+                      {composeGrande ? (
+                        <Shrink className="h-4 w-4" />
+                      ) : (
+                        <Expand className="h-4 w-4" />
+                      )}
+                    </button>
+                  </ToolTooltip>
+                  <ToolTooltip label="Cerrar">
+                    <button
+                      type="button"
+                      onClick={cerrarCompose}
+                      className="rounded p-1 hover:bg-white/20"
+                      aria-label="Cerrar"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </ToolTooltip>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -1236,14 +1239,14 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                         <Sparkles className="h-3.5 w-3.5" />
                         Sugerencia de la IA
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setAiSugerencia(null)}
-                        className="rounded p-1 text-violet-700 hover:bg-violet-100"
-                        title="Descartar sugerencia"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                      <ToolTooltip label="Descartar sugerencia">
+                        <button
+                          type="button"
+                          onClick={() => setAiSugerencia(null)}
+                          className="rounded p-1 text-violet-700 hover:bg-violet-100" aria-label="Descartar sugerencia">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </ToolTooltip>
                     </div>
 
                     {aiSugerencia.asunto &&
@@ -1365,20 +1368,20 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                         }
                       }}
                     />
-                    <button
-                      type="button"
-                      onClick={pedirIA}
-                      disabled={aiCargando}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow hover:from-violet-700 hover:to-blue-700 disabled:opacity-60"
-                      title="Mejorar con IA"
-                    >
-                      {aiCargando ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Wand2 className="h-3.5 w-3.5" />
-                      )}
-                      {compose.body.trim() ? "Mejorar con IA" : "Redactar con IA"}
-                    </button>
+                    <ToolTooltip label="Mejorar con IA">
+                      <button
+                        type="button"
+                        onClick={pedirIA}
+                        disabled={aiCargando}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow hover:from-violet-700 hover:to-blue-700 disabled:opacity-60" aria-label="Mejorar con IA">
+                        {aiCargando ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Wand2 className="h-3.5 w-3.5" />
+                        )}
+                        {compose.body.trim() ? "Mejorar con IA" : "Redactar con IA"}
+                      </button>
+                    </ToolTooltip>
                   </div>
                 </div>
 
@@ -1522,42 +1525,43 @@ function ListaMensajes({
         {/* Casilla de cabecera con los tres estados de Gmail: vacía, marcada y
             "algunas" (guion). Es un botón y no un <input>, porque el estado
             intermedio no se puede pintar con una casilla nativa. */}
-        <button
-          type="button"
-          onClick={alternarTodos}
-          disabled={idsPagina.length === 0}
-          className="rounded-full p-2 hover:bg-black/5 disabled:opacity-30"
-          title={algunoMarcado ? "Anular la selección" : "Seleccionar todos"}
-          aria-label={algunoMarcado ? "Anular la selección" : "Seleccionar todos"}
-          aria-checked={
-            todosMarcados ? "true" : algunoMarcado ? "mixed" : "false"
-          }
-          role="checkbox"
-        >
-          <span
-            className={cn(
-              "flex h-4 w-4 items-center justify-center rounded-[2px] border-2",
-              algunoMarcado
-                ? "border-[#1a73e8] bg-[#1a73e8] text-white"
-                : "border-[#5f6368] bg-transparent",
-            )}
+        <ToolTooltip label={algunoMarcado ? "Anular la selección" : "Seleccionar todos"}>
+          <button
+            type="button"
+            onClick={alternarTodos}
+            disabled={idsPagina.length === 0}
+            className="rounded-full p-2 hover:bg-black/5 disabled:opacity-30"
+            aria-label={algunoMarcado ? "Anular la selección" : "Seleccionar todos"}
+            aria-checked={
+              todosMarcados ? "true" : algunoMarcado ? "mixed" : "false"
+            }
+            role="checkbox"
           >
-            {todosMarcados ? (
-              <Check className="h-3 w-3" strokeWidth={3} />
-            ) : algunoMarcado ? (
-              <Minus className="h-3 w-3" strokeWidth={3} />
-            ) : null}
-          </span>
-        </button>
+            <span
+              className={cn(
+                "flex h-4 w-4 items-center justify-center rounded-[2px] border-2",
+                algunoMarcado
+                  ? "border-[#1a73e8] bg-[#1a73e8] text-white"
+                  : "border-[#5f6368] bg-transparent",
+              )}
+            >
+              {todosMarcados ? (
+                <Check className="h-3 w-3" strokeWidth={3} />
+              ) : algunoMarcado ? (
+                <Minus className="h-3 w-3" strokeWidth={3} />
+              ) : null}
+            </span>
+          </button>
+        </ToolTooltip>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
-              title="Más opciones de selección"
-            >
-              <ChevronDown className="h-4 w-4" />
-            </button>
+            <ToolTooltip label="Más opciones de selección">
+              <button
+                type="button"
+                className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]" aria-label="Más opciones de selección">
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            </ToolTooltip>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-44">
             <DropdownMenuItem onClick={() => seleccionar(idsPagina)}>
@@ -1601,79 +1605,81 @@ function ListaMensajes({
             por las acciones que se aplican a lo marcado. */}
         {!algunoMarcado ? (
           <>
-            <button
-              type="button"
-              onClick={onRefrescar}
-              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
-              title="Recibir correo nuevo"
-            >
-              <RefreshCw className={cn("h-4 w-4", cargando && "animate-spin")} />
-            </button>
-            <button
-              type="button"
-              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
-              title="Más"
-            >
-              <MoreVertical className="h-4 w-4" />
-            </button>
+            <ToolTooltip label="Recibir correo nuevo">
+              <button
+                type="button"
+                onClick={onRefrescar}
+                className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]" aria-label="Recibir correo nuevo">
+                <RefreshCw className={cn("h-4 w-4", cargando && "animate-spin")} />
+              </button>
+            </ToolTooltip>
+            <ToolTooltip label="Más">
+              <button
+                type="button"
+                className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]" aria-label="Más">
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </ToolTooltip>
           </>
         ) : (
           <>
             <div className="w-px h-6 bg-[#e8eaed] mx-1" />
-            <button
-              type="button"
-              disabled={aplicandoLote}
-              onClick={() => onAccionLote("archive")}
-              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
-              title="Archivar"
-            >
-              <Archive className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              disabled={aplicandoLote}
-              onClick={() => onAccionLote(enSpam ? "unspam" : "spam")}
-              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
-              title={enSpam ? "No es spam" : "Marcar como spam"}
-            >
-              <OctagonAlert className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              disabled={aplicandoLote}
-              onClick={() => onAccionLote("trash")}
-              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
-              title="Eliminar"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            <ToolTooltip label="Archivar">
+              <button
+                type="button"
+                disabled={aplicandoLote}
+                onClick={() => onAccionLote("archive")}
+                className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40" aria-label="Archivar">
+                <Archive className="h-4 w-4" />
+              </button>
+            </ToolTooltip>
+            <ToolTooltip label={enSpam ? "No es spam" : "Marcar como spam"}>
+              <button
+                type="button"
+                disabled={aplicandoLote}
+                onClick={() => onAccionLote(enSpam ? "unspam" : "spam")}
+                className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
+              >
+                <OctagonAlert className="h-4 w-4" />
+              </button>
+            </ToolTooltip>
+            <ToolTooltip label="Eliminar">
+              <button
+                type="button"
+                disabled={aplicandoLote}
+                onClick={() => onAccionLote("trash")}
+                className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40" aria-label="Eliminar">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </ToolTooltip>
             <div className="w-px h-6 bg-[#e8eaed] mx-1" />
-            <button
-              type="button"
-              disabled={aplicandoLote}
-              onClick={() => onAccionLote(hayNoLeidos ? "read" : "unread")}
-              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
-              title={
+            <ToolTooltip label={
                 hayNoLeidos ? "Marcar como leído" : "Marcar como no leído"
-              }
-            >
-              {hayNoLeidos ? (
-                <MailOpen className="h-4 w-4" />
-              ) : (
-                <Mail className="h-4 w-4" />
-              )}
-            </button>
+              }>
+              <button
+                type="button"
+                disabled={aplicandoLote}
+                onClick={() => onAccionLote(hayNoLeidos ? "read" : "unread")}
+                className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
+              >
+                {hayNoLeidos ? (
+                  <MailOpen className="h-4 w-4" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
+              </button>
+            </ToolTooltip>
             {carpetasUsuario.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    disabled={aplicandoLote}
-                    className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
-                    title="Mover a"
-                  >
-                    <FolderInput className="h-4 w-4" />
-                  </button>
+                  <ToolTooltip label="Mover a">
+                    <button
+                      type="button"
+                      disabled={aplicandoLote}
+                      className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40" aria-label="Mover a">
+                      <FolderInput className="h-4 w-4" />
+                    </button>
+                  </ToolTooltip>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="start"
@@ -1708,24 +1714,24 @@ function ListaMensajes({
               ? "0"
               : `${pagina * PAGINA + 1}–${pagina * PAGINA + mensajes.length}`}
           </span>
-          <button
-            type="button"
-            onClick={onPaginaAnterior}
-            className="rounded-full p-2 hover:bg-black/5 disabled:opacity-30"
-            title="Anterior"
-            disabled={pagina === 0 || cargando}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onPaginaSiguiente}
-            className="rounded-full p-2 hover:bg-black/5 disabled:opacity-30"
-            title="Siguiente"
-            disabled={!hayPaginaSiguiente || cargando}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          <ToolTooltip label="Anterior">
+            <button
+              type="button"
+              onClick={onPaginaAnterior}
+              className="rounded-full p-2 hover:bg-black/5 disabled:opacity-30"
+              disabled={pagina === 0 || cargando} aria-label="Anterior">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          </ToolTooltip>
+          <ToolTooltip label="Siguiente">
+            <button
+              type="button"
+              onClick={onPaginaSiguiente}
+              className="rounded-full p-2 hover:bg-black/5 disabled:opacity-30"
+              disabled={!hayPaginaSiguiente || cargando} aria-label="Siguiente">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </ToolTooltip>
         </div>
       </div>
 
@@ -1762,51 +1768,53 @@ function ListaMensajes({
                     )}
                     onClick={() => onSeleccionar(m)}
                   >
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        alternarUno(m.id);
-                      }}
-                      className="rounded-full p-1 hover:bg-black/5 shrink-0"
-                      title={seleccion.has(m.id) ? "Anular la selección" : "Seleccionar"}
-                      aria-label={
-                        seleccion.has(m.id) ? "Anular la selección" : "Seleccionar"
-                      }
-                      role="checkbox"
-                      aria-checked={seleccion.has(m.id)}
-                    >
-                      <span
-                        className={cn(
-                          "flex h-4 w-4 items-center justify-center rounded-[2px] border-2",
-                          seleccion.has(m.id)
-                            ? "border-[#1a73e8] bg-[#1a73e8] text-white"
-                            : "border-[#5f6368] bg-transparent",
-                        )}
+                    <ToolTooltip label={seleccion.has(m.id) ? "Anular la selección" : "Seleccionar"}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          alternarUno(m.id);
+                        }}
+                        className="rounded-full p-1 hover:bg-black/5 shrink-0"
+                        aria-label={
+                          seleccion.has(m.id) ? "Anular la selección" : "Seleccionar"
+                        }
+                        role="checkbox"
+                        aria-checked={seleccion.has(m.id)}
                       >
-                        {seleccion.has(m.id) && (
-                          <Check className="h-3 w-3" strokeWidth={3} />
-                        )}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEstrella(m);
-                      }}
-                      className="rounded-full p-1 hover:bg-black/5 shrink-0"
-                      title={m.estrella ? "Quitar estrella" : "Destacar"}
-                    >
-                      <Star
-                        className={cn(
-                          "h-4 w-4",
-                          m.estrella
-                            ? "fill-[#f9ab00] text-[#f9ab00]"
-                            : "text-[#5f6368]",
-                        )}
-                      />
-                    </button>
+                        <span
+                          className={cn(
+                            "flex h-4 w-4 items-center justify-center rounded-[2px] border-2",
+                            seleccion.has(m.id)
+                              ? "border-[#1a73e8] bg-[#1a73e8] text-white"
+                              : "border-[#5f6368] bg-transparent",
+                          )}
+                        >
+                          {seleccion.has(m.id) && (
+                            <Check className="h-3 w-3" strokeWidth={3} />
+                          )}
+                        </span>
+                      </button>
+                    </ToolTooltip>
+                    <ToolTooltip label={m.estrella ? "Quitar estrella" : "Destacar"}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEstrella(m);
+                        }}
+                        className="rounded-full p-1 hover:bg-black/5 shrink-0"
+                      >
+                        <Star
+                          className={cn(
+                            "h-4 w-4",
+                            m.estrella
+                              ? "fill-[#f9ab00] text-[#f9ab00]"
+                              : "text-[#5f6368]",
+                          )}
+                        />
+                      </button>
+                    </ToolTooltip>
 
                     <span
                       className={cn(
@@ -1831,13 +1839,13 @@ function ListaMensajes({
                       {labelsVisibles.length > 0 && (
                         <div className="flex items-center gap-1 shrink-0">
                           {labelsVisibles.slice(0, 3).map((l) => (
-                            <span
-                              key={l.id}
-                              className="inline-flex items-center rounded border border-[#dadce0] bg-white px-1.5 py-px text-[11px] uppercase tracking-wide text-[#5f6368] max-w-[180px] truncate"
-                              title={l.nombre}
-                            >
-                              {acortarLabel(l.nombre)}
-                            </span>
+                            <ToolTooltip key={l.id} label={l.nombre}>
+                              <span
+                                className="inline-flex items-center rounded border border-[#dadce0] bg-white px-1.5 py-px text-[11px] uppercase tracking-wide text-[#5f6368] max-w-[180px] truncate"
+                              >
+                                {acortarLabel(l.nombre)}
+                              </span>
+                            </ToolTooltip>
                           ))}
                         </div>
                       )}
@@ -1865,28 +1873,28 @@ function ListaMensajes({
 
                     {/* Acciones hover (a la derecha, sustituyen a la fecha) */}
                     <div className="hidden group-hover:flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onArchivar(m.id);
-                        }}
-                        className="rounded-full p-1.5 hover:bg-black/10 text-[#5f6368]"
-                        title="Archivar"
-                      >
-                        <Archive className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onPapelera(m.id);
-                        }}
-                        className="rounded-full p-1.5 hover:bg-black/10 text-[#5f6368]"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <ToolTooltip label="Archivar">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onArchivar(m.id);
+                          }}
+                          className="rounded-full p-1.5 hover:bg-black/10 text-[#5f6368]" aria-label="Archivar">
+                          <Archive className="h-4 w-4" />
+                        </button>
+                      </ToolTooltip>
+                      <ToolTooltip label="Eliminar">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onPapelera(m.id);
+                          }}
+                          className="rounded-full p-1.5 hover:bg-black/10 text-[#5f6368]" aria-label="Eliminar">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </ToolTooltip>
                     </div>
 
                     <span
@@ -2000,41 +2008,41 @@ function VistaMensaje({
   return (
     <>
       <div className="flex items-center gap-1 px-4 py-2 border-b border-[#e8eaed]">
-        <button
-          type="button"
-          onClick={onVolver}
-          className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
-          title="Volver a Recibidos"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
+        <ToolTooltip label="Volver a Recibidos">
+          <button
+            type="button"
+            onClick={onVolver}
+            className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]" aria-label="Volver a Recibidos">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+        </ToolTooltip>
         <div className="w-px h-6 bg-[#e8eaed] mx-1" />
-        <button
-          type="button"
-          onClick={onArchivar}
-          className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
-          title="Archivar"
-        >
-          <Archive className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={onPapelera}
-          className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
-          title="Eliminar"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <ToolTooltip label="Archivar">
+          <button
+            type="button"
+            onClick={onArchivar}
+            className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]" aria-label="Archivar">
+            <Archive className="h-4 w-4" />
+          </button>
+        </ToolTooltip>
+        <ToolTooltip label="Eliminar">
+          <button
+            type="button"
+            onClick={onPapelera}
+            className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]" aria-label="Eliminar">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </ToolTooltip>
         {carpetasUsuario.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
-                title="Mover a"
-              >
-                <FolderInput className="h-4 w-4" />
-              </button>
+              <ToolTooltip label="Mover a">
+                <button
+                  type="button"
+                  className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]" aria-label="Mover a">
+                  <FolderInput className="h-4 w-4" />
+                </button>
+              </ToolTooltip>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
@@ -2208,31 +2216,32 @@ function AdjuntosMensaje({
             key={a.attachmentId}
             className="group relative flex w-64 items-center gap-3 rounded-lg border border-[#dadce0] bg-white p-3 transition-shadow hover:shadow-md"
           >
-            <a
-              href={urlAdjunto(messageId, a)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex min-w-0 flex-1 items-center gap-3"
-              title={a.nombre}
-            >
-              <IconoAdjunto mimeType={a.mimeType} nombre={a.nombre} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-[#202124]">
-                  {a.nombre}
+            <ToolTooltip label={a.nombre}>
+              <a
+                href={urlAdjunto(messageId, a)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-w-0 flex-1 items-center gap-3"
+              >
+                <IconoAdjunto mimeType={a.mimeType} nombre={a.nombre} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-[#202124]">
+                    {a.nombre}
+                  </span>
+                  <span className="block text-xs text-[#5f6368]">
+                    {tamanoLegible(a.tamano)}
+                  </span>
                 </span>
-                <span className="block text-xs text-[#5f6368]">
-                  {tamanoLegible(a.tamano)}
-                </span>
-              </span>
-            </a>
-            <a
-              href={urlAdjunto(messageId, a, true)}
-              download={a.nombre}
-              className="shrink-0 rounded-full p-2 text-[#5f6368] hover:bg-black/5"
-              title="Descargar"
-            >
-              <Download className="h-4 w-4" />
-            </a>
+              </a>
+            </ToolTooltip>
+            <ToolTooltip label="Descargar">
+              <a
+                href={urlAdjunto(messageId, a, true)}
+                download={a.nombre}
+                className="shrink-0 rounded-full p-2 text-[#5f6368] hover:bg-black/5" aria-label="Descargar">
+                <Download className="h-4 w-4" />
+              </a>
+            </ToolTooltip>
           </div>
         ))}
       </div>
@@ -2294,66 +2303,68 @@ function MensajeHiloItem({
   return (
     <div className="border-b border-[#e8eaed] pb-4 last:border-b-0">
       {/* Como Gmail: pulsar la cabecera de un mensaje abierto vuelve a plegarlo. */}
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => setExpandido(false)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setExpandido(false);
-          }
-        }}
-        title="Contraer"
-        className="flex items-start gap-3 mb-3 cursor-pointer rounded-lg px-1 -mx-1 hover:bg-[#f8f9fa]"
-      >
-        {fotoRemitente ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={fotoRemitente}
-            alt={mensaje.remitente}
-            referrerPolicy="no-referrer"
-            className="h-10 w-10 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1a73e8] text-sm font-medium text-white">
-            {inicialAvatar(mensaje.remitente, mensaje.email)}
+      <ToolTooltip label="Contraer">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setExpandido(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setExpandido(false);
+            }
+          }}
+          className="flex items-start gap-3 mb-3 cursor-pointer rounded-lg px-1 -mx-1 hover:bg-[#f8f9fa]"
+        >
+          {fotoRemitente ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={fotoRemitente}
+              alt={mensaje.remitente}
+              referrerPolicy="no-referrer"
+              className="h-10 w-10 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1a73e8] text-sm font-medium text-white">
+              {inicialAvatar(mensaje.remitente, mensaje.email)}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-[#202124]">
+                {mensaje.remitente}
+              </span>
+              <span className="text-xs text-[#5f6368]">
+                &lt;{mensaje.email}&gt;
+              </span>
+              {mostrarEstrella && (
+                <ToolTooltip label={estrellaActiva ? "Quitar estrella" : "Destacar"}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEstrella();
+                    }}
+                    className="ml-auto rounded-full p-1 hover:bg-black/5"
+                  >
+                    <Star
+                      className={cn(
+                        "h-4 w-4",
+                        estrellaActiva
+                          ? "fill-[#f9ab00] text-[#f9ab00]"
+                          : "text-[#5f6368]",
+                      )}
+                    />
+                  </button>
+                </ToolTooltip>
+              )}
+            </div>
+            <p className="text-xs text-[#5f6368] mt-0.5">
+              para mí · {mensaje.fecha}
+            </p>
           </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-[#202124]">
-              {mensaje.remitente}
-            </span>
-            <span className="text-xs text-[#5f6368]">
-              &lt;{mensaje.email}&gt;
-            </span>
-            {mostrarEstrella && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEstrella();
-                }}
-                className="ml-auto rounded-full p-1 hover:bg-black/5"
-                title={estrellaActiva ? "Quitar estrella" : "Destacar"}
-              >
-                <Star
-                  className={cn(
-                    "h-4 w-4",
-                    estrellaActiva
-                      ? "fill-[#f9ab00] text-[#f9ab00]"
-                      : "text-[#5f6368]",
-                  )}
-                />
-              </button>
-            )}
-          </div>
-          <p className="text-xs text-[#5f6368] mt-0.5">
-            para mí · {mensaje.fecha}
-          </p>
         </div>
-      </div>
+      </ToolTooltip>
 
       {mensaje.cuerpoHtml ? (
         <div
@@ -2419,21 +2430,22 @@ function BloqueMensajeUnico({
             <span className="text-xs text-[#5f6368]">
               &lt;{mensaje.email}&gt;
             </span>
-            <button
-              type="button"
-              onClick={onEstrella}
-              className="ml-auto rounded-full p-1 hover:bg-black/5"
-              title={estrella ? "Quitar estrella" : "Destacar"}
-            >
-              <Star
-                className={cn(
-                  "h-4 w-4",
-                  estrella
-                    ? "fill-[#f9ab00] text-[#f9ab00]"
-                    : "text-[#5f6368]",
-                )}
-              />
-            </button>
+            <ToolTooltip label={estrella ? "Quitar estrella" : "Destacar"}>
+              <button
+                type="button"
+                onClick={onEstrella}
+                className="ml-auto rounded-full p-1 hover:bg-black/5"
+              >
+                <Star
+                  className={cn(
+                    "h-4 w-4",
+                    estrella
+                      ? "fill-[#f9ab00] text-[#f9ab00]"
+                      : "text-[#5f6368]",
+                  )}
+                />
+              </button>
+            </ToolTooltip>
           </div>
           <p className="text-xs text-[#5f6368] mt-0.5">
             para mí · {mensaje.fecha}
@@ -2582,9 +2594,11 @@ function CarpetaArbolItem({
           ) : (
             <Folder className="h-[18px] w-[18px] shrink-0" />
           )}
-          <span className="truncate" title={nodo.ruta}>
-            {nodo.label}
-          </span>
+          <ToolTooltip label={nodo.ruta}>
+            <span className="truncate">
+              {nodo.label}
+            </span>
+          </ToolTooltip>
         </button>
       </div>
       {tieneHijos && abierto && (

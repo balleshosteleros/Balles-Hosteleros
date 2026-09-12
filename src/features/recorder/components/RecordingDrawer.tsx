@@ -59,6 +59,7 @@ import {
   formatFechaEnZona,
   formatFechaHoraEnZona,
 } from "@/features/empresa/lib/zona-horaria";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes < 0) return "0 B";
@@ -819,80 +820,86 @@ function RecordingsList() {
                         />
                       </div>
                     ) : (
-                      <a
-                        href={rec.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 min-w-0 group"
-                        title={rec.title}
-                      >
-                        <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">
-                          {rec.title}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap">
-                          {rec.departamento && (
-                            <span className="inline-flex items-center gap-0.5 text-muted-foreground/90 capitalize">
-                              <FolderClosed className="h-2.5 w-2.5" />
-                              {rec.departamento.toLowerCase()} ·
-                            </span>
-                          )}
-                          {formatFechaEnZona(rec.created_at, tz)} ·{" "}
-                          {formatDuration(rec.duration)} · {formatBytes(rec.file_size)}
-                        </p>
-                      </a>
-                    )}
-
-                    {!isEditing && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => startEdit(rec)}
-                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
-                          title="Renombrar"
-                          aria-label="Renombrar"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyLink(rec)}
-                          className={cn(
-                            "p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary",
-                            isCopied && "text-green-600"
-                          )}
-                          title={isCopied ? "Copiado" : "Copiar enlace"}
-                          aria-label="Copiar enlace"
-                        >
-                          {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                        </button>
+                      <ToolTooltip label={rec.title}>
                         <a
                           href={rec.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
-                          title="Abrir"
-                          aria-label="Abrir"
+                          className="flex-1 min-w-0 group"
                         >
-                          <ExternalLink className="h-3.5 w-3.5" />
+                          <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">
+                            {rec.title}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap">
+                            {rec.departamento && (
+                              <span className="inline-flex items-center gap-0.5 text-muted-foreground/90 capitalize">
+                                <FolderClosed className="h-2.5 w-2.5" />
+                                {rec.departamento.toLowerCase()} ·
+                              </span>
+                            )}
+                            {formatFechaEnZona(rec.created_at, tz)} ·{" "}
+                            {formatDuration(rec.duration)} · {formatBytes(rec.file_size)}
+                          </p>
                         </a>
-                        <a
-                          href={`/api/recordings/download?id=${encodeURIComponent(rec.id)}`}
-                          download={`${rec.title}.webm`}
-                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
-                          title="Descargar"
-                          aria-label="Descargar"
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(rec.id)}
-                          className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                          title="Eliminar"
-                          aria-label="Eliminar"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                      </ToolTooltip>
+                    )}
+
+                    {!isEditing && (
+                      <>
+                        <ToolTooltip label="Renombrar">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(rec)}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                            aria-label="Renombrar"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        </ToolTooltip>
+                        <ToolTooltip label={isCopied ? "Copiado" : "Copiar enlace"}>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyLink(rec)}
+                            className={cn(
+                              "p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary",
+                              isCopied && "text-green-600"
+                            )}
+                            aria-label="Copiar enlace"
+                          >
+                            {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          </button>
+                        </ToolTooltip>
+                        <ToolTooltip label="Abrir">
+                          <a
+                            href={rec.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                            aria-label="Abrir"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        </ToolTooltip>
+                        <ToolTooltip label="Descargar">
+                          <a
+                            href={`/api/recordings/download?id=${encodeURIComponent(rec.id)}`}
+                            download={`${rec.title}.webm`}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                            aria-label="Descargar"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </a>
+                        </ToolTooltip>
+                        <ToolTooltip label="Eliminar">
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(rec.id)}
+                            className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                            aria-label="Eliminar"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </ToolTooltip>
                       </>
                     )}
                   </div>
@@ -1043,57 +1050,63 @@ function PendingUploadsList() {
                 <FileVideo className="h-4 w-4" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate" title={rec.title}>
-                  {rec.title}
-                </p>
+                <ToolTooltip label={rec.title}>
+                  <p className="text-xs font-medium truncate">
+                    {rec.title}
+                  </p>
+                </ToolTooltip>
                 <p className="text-[10px] text-muted-foreground">
                   {formatDuration(rec.duration)} ·{" "}
                   {(rec.fileSize / (1024 * 1024)).toFixed(1)} MB
                   {rec.retryCount > 0 ? ` · ${rec.retryCount} intentos` : ""}
                 </p>
                 {rec.lastError && (
-                  <p
-                    className="text-[10px] text-amber-700 truncate"
-                    title={rec.lastError}
-                  >
-                    {rec.lastError.includes("413")
-                      ? "Almacenamiento lleno: libera espacio para que se suba."
-                      : "Sin conexión con el servidor. Se reintenta solo."}
-                  </p>
+                  <ToolTooltip label={rec.lastError}>
+                    <p
+                      className="text-[10px] text-amber-700 truncate"
+                    >
+                      {rec.lastError.includes("413")
+                        ? "Almacenamiento lleno: libera espacio para que se suba."
+                        : "Sin conexión con el servidor. Se reintenta solo."}
+                    </p>
+                  </ToolTooltip>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => handleRetry(rec.id)}
-                disabled={isBusy}
-                className="p-1.5 rounded hover:bg-amber-100 text-amber-700 disabled:opacity-50"
-                title="Subir ahora"
-                aria-label="Subir ahora"
-              >
-                {isBusy ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <UploadCloud className="h-3.5 w-3.5" />
-                )}
-              </button>
-              <a
-                href={localUrl}
-                download={`${rec.title}.webm`}
-                className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
-                title="Descargar"
-                aria-label="Descargar"
-              >
-                <Download className="h-3.5 w-3.5" />
-              </a>
-              <button
-                type="button"
-                onClick={() => handleDelete(rec.id)}
-                className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                title="Eliminar"
-                aria-label="Eliminar"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <ToolTooltip label="Subir ahora">
+                <button
+                  type="button"
+                  onClick={() => handleRetry(rec.id)}
+                  disabled={isBusy}
+                  className="p-1.5 rounded hover:bg-amber-100 text-amber-700 disabled:opacity-50"
+                  aria-label="Subir ahora"
+                >
+                  {isBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <UploadCloud className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </ToolTooltip>
+              <ToolTooltip label="Descargar">
+                <a
+                  href={localUrl}
+                  download={`${rec.title}.webm`}
+                  className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                  aria-label="Descargar"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </a>
+              </ToolTooltip>
+              <ToolTooltip label="Eliminar">
+                <button
+                  type="button"
+                  onClick={() => handleDelete(rec.id)}
+                  className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                  aria-label="Eliminar"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </ToolTooltip>
             </div>
           );
         })}

@@ -47,6 +47,7 @@ import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { AppLogo } from "@/features/ajustes/components/AppLogo";
 import { tieneEnlaceWeb } from "@/features/layout/components/AccesosDrawers";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   nombre: "",
@@ -334,15 +335,16 @@ export function AplicacionesTab() {
               </TableCell>
               <TableCell className="text-xs">{app.categoria}</TableCell>
               <TableCell className="max-w-[220px]">
-                <a
-                  href={app.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block truncate text-xs text-primary hover:underline"
-                  title={app.url}
-                >
-                  {app.url}
-                </a>
+                <ToolTooltip label={app.url}>
+                  <a
+                    href={app.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block truncate text-xs text-primary hover:underline"
+                  >
+                    {app.url}
+                  </a>
+                </ToolTooltip>
               </TableCell>
               <TableCell>
                 <Badge

@@ -38,6 +38,7 @@ import { FacturaAgoraInline } from "./FacturaAgoraInline";
 import { formatNumero } from "@/shared/lib/numero";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // `fecha` es TIMESTAMPTZ (instante): se muestra en la zona de la empresa (PRP-069).
 function fmtFecha(iso: string, tz: string): string {
@@ -295,9 +296,11 @@ export function MovimientosStockSection({
                         </td>
                         <td className="py-2 text-right tabular-nums">
                           {fijado ? (
-                            <span title="Recuento: esta fila FIJA el saldo, no lo suma ni lo resta">
-                              {fmtNum(m.saldo_resultante)} <span className="text-muted-foreground">=</span>
-                            </span>
+                            <ToolTooltip label="Recuento: esta fila FIJA el saldo, no lo suma ni lo resta">
+                              <span>
+                                {fmtNum(m.saldo_resultante)} <span className="text-muted-foreground">=</span>
+                              </span>
+                            </ToolTooltip>
                           ) : (
                             fmtNum(m.saldo_resultante)
                           )}

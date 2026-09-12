@@ -27,6 +27,7 @@ import {
 } from "../../email-plantillas-actions";
 import { FASES_INSPECTOR_CONFIG } from "../../data";
 import type { InspectorFase } from "../../types";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const PLACEHOLDERS: Array<{ token: string; descripcion: string }> = [
   { token: "{{nombre}}", descripcion: "Nombre del inspector" },
@@ -264,15 +265,15 @@ function EditPlantillaDialog({
             </p>
             <div className="flex flex-wrap gap-1.5">
               {PLACEHOLDERS.map((ph) => (
-                <button
-                  key={ph.token}
-                  type="button"
-                  onClick={() => handleInsertToken(ph.token)}
-                  title={ph.descripcion}
-                  className="text-[11px] font-mono bg-background border border-border hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-colors rounded px-1.5 py-0.5"
-                >
-                  {ph.token}
-                </button>
+                <ToolTooltip key={ph.token} label={ph.descripcion}>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertToken(ph.token)}
+                    className="text-[11px] font-mono bg-background border border-border hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-colors rounded px-1.5 py-0.5"
+                  >
+                    {ph.token}
+                  </button>
+                </ToolTooltip>
               ))}
             </div>
           </div>

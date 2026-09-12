@@ -82,6 +82,7 @@ import {
   type EstadoFirma,
 } from "@/features/rrhh/data/firmas";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 const MAX_PDF_BYTES = MAX_DOCUMENTO_BYTES; // 50 MB (tope unificado de documentos)
 
@@ -447,12 +448,13 @@ export function FirmasView() {
             {/* Acuse de LECTURA: solo aporta información mientras el documento
                 no está firmado. Una vez firmado, la firma ya lo dice todo. */}
             {d.leidoEn && d.estado !== "firmado" && (
-              <span
-                className="flex items-center gap-1 text-[11px] text-muted-foreground"
-                title={`Abierto el ${formatFechaHora(d.leidoEn)}`}
-              >
-                <MailOpen className="h-3 w-3" /> Leído {formatFechaHora(d.leidoEn)}
-              </span>
+              <ToolTooltip label={`Abierto el ${formatFechaHora(d.leidoEn)}`}>
+                <span
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground"
+                >
+                  <MailOpen className="h-3 w-3" /> Leído {formatFechaHora(d.leidoEn)}
+                </span>
+              </ToolTooltip>
             )}
             {!d.leidoEn && d.estado === "pendiente" && (
               <span className="text-[11px] text-muted-foreground">Sin abrir</span>

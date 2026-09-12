@@ -28,6 +28,7 @@ import {
 import { formatFechaAuditoria } from "@/features/calidad/lib/fecha-auditoria";
 import { ESCALA_MAX, calcularNota } from "@/features/calidad/lib/nota-auditoria";
 import { cn } from "@/lib/utils";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /** Lo contestado en pantalla, antes de guardarse. */
 interface ValorRespuesta {
@@ -408,22 +409,22 @@ function ControlRespuesta({
             {Array.from({ length: max }, (_, i) => i + 1).map((n) => {
               const encendida = n <= marcadas;
               return (
-                <button
-                  key={n}
-                  type="button"
-                  // Volver a pulsar la estrella marcada borra la respuesta.
-                  onClick={() => onChange({ valorNumero: marcadas === n ? null : n })}
-                  title={`${n} de ${max}`}
-                  aria-label={`${n} de ${max}`}
-                  className="p-0.5 transition-transform hover:scale-110"
-                >
-                  <Star
-                    className={cn(
-                      "h-6 w-6",
-                      encendida ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30",
-                    )}
-                  />
-                </button>
+                <ToolTooltip key={n} label={`${n} de ${max}`}>
+                  <button
+                    type="button"
+                    // Volver a pulsar la estrella marcada borra la respuesta.
+                    onClick={() => onChange({ valorNumero: marcadas === n ? null : n })}
+                    aria-label={`${n} de ${max}`}
+                    className="p-0.5 transition-transform hover:scale-110"
+                  >
+                    <Star
+                      className={cn(
+                        "h-6 w-6",
+                        encendida ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30",
+                      )}
+                    />
+                  </button>
+                </ToolTooltip>
               );
             })}
             {marcadas > 0 && (

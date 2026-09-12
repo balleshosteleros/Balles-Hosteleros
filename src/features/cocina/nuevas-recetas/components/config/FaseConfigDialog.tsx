@@ -25,6 +25,7 @@ import { updateFase, deleteFase, createFase,
 } from "../../actions/fases-actions";
 import { listUsuariosEmpresa, type UsuarioEmpresa } from "../../actions/usuarios-empresa-actions";
 import { COLOR_PALETTE, type FaseColor } from "../../types";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   open: boolean;
@@ -185,19 +186,19 @@ export function FaseConfigDialog({ open, onOpenChange, fase, onSaved }: Props) {
                 {COLOR_KEYS.map((c) => {
                   const p = COLOR_PALETTE[c];
                   return (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setColor(c)}
-                      className={cn(
-                        "h-8 w-8 rounded-full border-2 transition-all",
-                        color === c ? "border-foreground scale-110" : "border-transparent",
-                      )}
-                      style={{
-                        background: `linear-gradient(135deg, ${p.from}, ${p.to})`,
-                      }}
-                      title={c}
-                    />
+                    <ToolTooltip key={c} label={c}>
+                      <button
+                        type="button"
+                        onClick={() => setColor(c)}
+                        className={cn(
+                          "h-8 w-8 rounded-full border-2 transition-all",
+                          color === c ? "border-foreground scale-110" : "border-transparent",
+                        )}
+                        style={{
+                          background: `linear-gradient(135deg, ${p.from}, ${p.to})`,
+                        }}
+                      />
+                    </ToolTooltip>
                   );
                 })}
               </div>

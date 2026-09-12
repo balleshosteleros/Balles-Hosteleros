@@ -56,6 +56,7 @@ import {
 } from "../actions";
 import type { Slide, SlideBlock, SlideLayout, EmpresaTheme } from "../types";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface PresentacionEditorProps {
   slidesInitial: Slide[];
@@ -823,22 +824,22 @@ function IconPicker({ value, onChange }: { value: string; onChange: (v: string) 
           {ICON_CATALOG.map(({ value: v, label, Icon }) => {
             const active = v === value;
             return (
-              <button
-                key={v}
-                type="button"
-                onClick={() => {
-                  onChange(v);
-                  setOpen(false);
-                }}
-                title={label}
-                className={`flex h-10 w-10 items-center justify-center rounded-md border transition-colors ${
-                  active
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-transparent hover:bg-muted"
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-              </button>
+              <ToolTooltip key={v} label={label}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(v);
+                    setOpen(false);
+                  }}
+                  className={`flex h-10 w-10 items-center justify-center rounded-md border transition-colors ${
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-transparent hover:bg-muted"
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                </button>
+              </ToolTooltip>
             );
           })}
         </div>

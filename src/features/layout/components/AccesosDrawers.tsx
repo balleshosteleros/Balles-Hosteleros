@@ -37,6 +37,7 @@ import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
 import { faviconDesdeUrl } from "@/features/rrhh/data/accesos-apps";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { GoogleIcon } from "@/shared/components/GoogleIcon";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // ── Logo de la app (logo propio en /logos-apps, con fallback a inicial) ──
 // `size` permite agrandarlo en el panel de aplicaciones (lanzador visual).
@@ -125,25 +126,25 @@ function PasswordCell({
     <span className="inline-flex min-w-0 max-w-full items-start gap-1 font-mono text-xs">
       <span className="min-w-0 break-all">{valor !== null ? valor : "••••••••"}</span>
       {valor !== null ? (
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(valor);
-            toast.success(nombreExtra ? `${nombreExtra} copiado` : "Clave copiada");
-          }}
-          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
-          title="Copiar"
-        >
-          <Copy className="h-3.5 w-3.5" />
-        </button>
+        <ToolTooltip label="Copiar">
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(valor);
+              toast.success(nombreExtra ? `${nombreExtra} copiado` : "Clave copiada");
+            }}
+            className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground" aria-label="Copiar">
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+        </ToolTooltip>
       ) : (
-        <button
-          onClick={revelar}
-          disabled={loading}
-          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50"
-          title="Ver"
-        >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
-        </button>
+        <ToolTooltip label="Ver">
+          <button
+            onClick={revelar}
+            disabled={loading}
+            className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50" aria-label="Ver">
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+          </button>
+        </ToolTooltip>
       )}
     </span>
   );
@@ -368,22 +369,21 @@ export function AplicacionesDrawer({
                   window.open(href, "_blank", "noopener,noreferrer");
                 };
                 return (
-                  <button
-                    key={app.id}
-                    type="button"
-                    onClick={abrir}
-                    className="flex items-center gap-3 rounded-lg border border-border/50 p-3 text-left hover:bg-muted/50 hover:border-border transition-colors"
-                    title="Abrir aplicación"
-                  >
-                    <AppLogo nombre={app.nombre} logoUrl={app.logoUrl} url={app.url} size="lg" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold truncate">{app.nombre}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {app.categoria}
+                  <ToolTooltip key={app.id} label="Abrir aplicación">
+                    <button
+                      type="button"
+                      onClick={abrir}
+                      className="flex items-center gap-3 rounded-lg border border-border/50 p-3 text-left hover:bg-muted/50 hover:border-border transition-colors" aria-label="Abrir aplicación">
+                      <AppLogo nombre={app.nombre} logoUrl={app.logoUrl} url={app.url} size="lg" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold truncate">{app.nombre}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {app.categoria}
+                        </div>
                       </div>
-                    </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
-                  </button>
+                      <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </button>
+                  </ToolTooltip>
                 );
               })}
             </div>
@@ -505,22 +505,23 @@ export function AccesosDrawer({
                     <AppLogo nombre={app.nombre} logoUrl={app.logoUrl} url={app.url} />
                     <span className="text-sm font-semibold truncate flex-1">{app.nombre}</span>
                     {app.url ? (
-                      <a
-                        href={app.url.startsWith("http") ? app.url : `https://${app.url}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 text-emerald-600 hover:text-emerald-700 dark:text-emerald-500 dark:hover:text-emerald-400"
-                        title="Abrir aplicación"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
+                      <ToolTooltip label="Abrir aplicación">
+                        <a
+                          href={app.url.startsWith("http") ? app.url : `https://${app.url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 text-emerald-600 hover:text-emerald-700 dark:text-emerald-500 dark:hover:text-emerald-400" aria-label="Abrir aplicación">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </ToolTooltip>
                     ) : (
-                      <span
-                        className="shrink-0 text-muted-foreground/40"
-                        title="Sin enlace añadido"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </span>
+                      <ToolTooltip label="Sin enlace añadido">
+                        <span
+                          className="shrink-0 text-muted-foreground/40"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </span>
+                      </ToolTooltip>
                     )}
                   </div>
                   <div className="divide-y divide-border/40">

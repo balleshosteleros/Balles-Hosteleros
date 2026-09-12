@@ -5,6 +5,7 @@ import { FileDown, Loader2, FileX } from "lucide-react";
 import { toast } from "sonner";
 import { getModeloPdfSignedUrl } from "../actions/modelos-pdf-actions";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /**
  * Icono clicable que abre el PDF adjunto de un modelo en una pestaña nueva
@@ -22,13 +23,14 @@ export function ModeloPdfButton({
 
   if (!tienePdf) {
     return (
-      <span
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-        title="Sin documento adjunto"
-      >
-        <FileX className="h-4 w-4" />
-        Sin documento
-      </span>
+      <ToolTooltip label="Sin documento adjunto">
+        <span
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+        >
+          <FileX className="h-4 w-4" />
+          Sin documento
+        </span>
+      </ToolTooltip>
     );
   }
 
@@ -51,19 +53,19 @@ export function ModeloPdfButton({
   }
 
   return (
-    <button
-      type="button"
-      onClick={abrir}
-      disabled={cargando}
-      title="Ver documento adjunto"
-      className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
-    >
-      {cargando ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        <FileDown className="h-4 w-4" />
-      )}
-      Documento
-    </button>
+    <ToolTooltip label="Ver documento adjunto">
+      <button
+        type="button"
+        onClick={abrir}
+        disabled={cargando}
+        className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50" aria-label="Ver documento adjunto">
+        {cargando ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <FileDown className="h-4 w-4" />
+        )}
+        Documento
+      </button>
+    </ToolTooltip>
   );
 }

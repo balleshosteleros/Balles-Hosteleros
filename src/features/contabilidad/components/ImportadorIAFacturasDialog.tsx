@@ -36,6 +36,7 @@ import {
   analizarFacturasIA,
   bulkImportFacturas,
 } from "@/features/contabilidad/actions/importador-ia-actions";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface Props {
   open: boolean;
@@ -278,7 +279,9 @@ export function ImportadorIAFacturasDialog({ open, onOpenChange, onImportSuccess
                       <th key={c} className="text-left px-2 py-2 font-semibold whitespace-nowrap">
                         {ETIQUETAS_CAMPOS_FACTURA[c]}
                         {CAMPOS_OBLIGATORIOS_FACTURA.includes(c) && (
-                          <span className="ml-0.5 text-destructive" title="Obligatorio">*</span>
+                          <ToolTooltip label="Obligatorio">
+                            <span className="ml-0.5 text-destructive">*</span>
+                          </ToolTooltip>
                         )}
                       </th>
                     ))}

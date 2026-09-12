@@ -24,6 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 interface GestorCategoriasProductoProps {
   tipo: TipoProducto;
@@ -209,54 +210,58 @@ export function GestorCategoriasProducto({
                         }
                       }}
                     />
-                    <button
-                      type="button"
-                      onClick={() => onRename(cat.id)}
-                      disabled={isPending || !editandoValor.trim()}
-                      className="rounded p-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-40"
-                      title="Guardar"
-                      aria-label="Guardar"
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditandoId(null);
-                        setEditandoValor("");
-                      }}
-                      className="rounded p-1 text-muted-foreground hover:bg-muted"
-                      title="Cancelar"
-                      aria-label="Cancelar"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <ToolTooltip label="Guardar">
+                      <button
+                        type="button"
+                        onClick={() => onRename(cat.id)}
+                        disabled={isPending || !editandoValor.trim()}
+                        className="rounded p-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-40"
+                        aria-label="Guardar"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                    </ToolTooltip>
+                    <ToolTooltip label="Cancelar">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditandoId(null);
+                          setEditandoValor("");
+                        }}
+                        className="rounded p-1 text-muted-foreground hover:bg-muted"
+                        aria-label="Cancelar"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </ToolTooltip>
                   </>
                 ) : (
                   <>
                     <span className="flex-1 font-medium">{cat.nombre}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditandoId(cat.id);
-                        setEditandoValor(cat.nombre);
-                      }}
-                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      title="Editar"
-                      aria-label="Editar"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPendiente({ id: cat.id, nombre: cat.nombre })}
-                      disabled={isPending}
-                      className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
-                      title="Borrar"
-                      aria-label="Borrar"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <ToolTooltip label="Editar">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditandoId(cat.id);
+                          setEditandoValor(cat.nombre);
+                        }}
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-label="Editar"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </ToolTooltip>
+                    <ToolTooltip label="Borrar">
+                      <button
+                        type="button"
+                        onClick={() => setPendiente({ id: cat.id, nombre: cat.nombre })}
+                        disabled={isPending}
+                        className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                        aria-label="Borrar"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </ToolTooltip>
                   </>
                 )}
               </li>

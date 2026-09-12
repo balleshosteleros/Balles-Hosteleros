@@ -31,6 +31,7 @@ import {
   type ToolbarOrdenActivo,
 } from "@/shared/components/SubmoduleToolbar";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 /** Estrellas de una nota. Media estrella no se pinta: se redondea al pintar. */
 function Estrellas({ nota, size = 13 }: { nota: number; size?: number }) {
@@ -217,67 +218,68 @@ export function TablaResenas({
               const nota = notaDe(r);
               const tresPreguntas = preguntasContestadas(r) === 3;
               return (
-                <tr
-                  key={r.id}
-                  onClick={() => onAbrir(r)}
-                  className="border-t cursor-pointer hover:bg-muted/40"
-                  title="Ver la valoración completa"
-                >
-                  <td className="p-3 font-medium whitespace-nowrap">
-                    {r.nombre_comensal}
-                  </td>
-                  <td className="p-3 whitespace-nowrap">
-                    {nota === null ? (
-                      <span className="text-muted-foreground">Sin nota</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5">
-                        <Estrellas nota={nota} />
-                        <span className="tabular-nums text-xs text-muted-foreground">
-                          {formatNota(nota)}
-                        </span>
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-3 whitespace-nowrap">
-                    {/* Quién puntuó comida, servicio y ambiente por separado, que
-                        es la valoración que de verdad dice algo. El detalle se
-                        abre al pulsar la fila. */}
-                    <span
-                      className={cn(
-                        "text-xs",
-                        tresPreguntas
-                          ? "text-emerald-700"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      {tresPreguntas ? "Sí" : "No"}
-                    </span>
-                  </td>
-                  <td className="p-3 whitespace-nowrap">
-                    {ORIGEN_LABEL[r.origen] ?? r.origen}
-                  </td>
-                  <td className="p-3 whitespace-nowrap">
-                    <span className={cn("text-xs font-medium", COLOR_ESTADO[r.estado])}>
-                      {ESTADO_LABEL[r.estado] ?? r.estado}
-                    </span>
-                  </td>
-                  <td className="p-3 whitespace-nowrap text-muted-foreground">
-                    {r.fecha_registro
-                      ? formatearFechaEs(r.fecha_registro)
-                      : r.fecha_reseña
-                        ? formatearFechaEs(r.fecha_reseña.slice(0, 10))
-                        : "—"}
-                  </td>
-                  <td
-                    className="p-3 max-w-[22rem] truncate text-muted-foreground"
-                    title={r.comentario ?? undefined}
+                <ToolTooltip key={r.id} label="Ver la valoración completa">
+                  <tr
+                    onClick={() => onAbrir(r)}
+                    className="border-t cursor-pointer hover:bg-muted/40"
                   >
-                    {r.comentario || "—"}
-                  </td>
-                  <td className="p-3 whitespace-nowrap text-muted-foreground">
-                    {nombreGestor(r.gestionada_por) ?? "—"}
-                  </td>
-                </tr>
+                    <td className="p-3 font-medium whitespace-nowrap">
+                      {r.nombre_comensal}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      {nota === null ? (
+                        <span className="text-muted-foreground">Sin nota</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Estrellas nota={nota} />
+                          <span className="tabular-nums text-xs text-muted-foreground">
+                            {formatNota(nota)}
+                          </span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      {/* Quién puntuó comida, servicio y ambiente por separado, que
+                          es la valoración que de verdad dice algo. El detalle se
+                          abre al pulsar la fila. */}
+                      <span
+                        className={cn(
+                          "text-xs",
+                          tresPreguntas
+                            ? "text-emerald-700"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {tresPreguntas ? "Sí" : "No"}
+                      </span>
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      {ORIGEN_LABEL[r.origen] ?? r.origen}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      <span className={cn("text-xs font-medium", COLOR_ESTADO[r.estado])}>
+                        {ESTADO_LABEL[r.estado] ?? r.estado}
+                      </span>
+                    </td>
+                    <td className="p-3 whitespace-nowrap text-muted-foreground">
+                      {r.fecha_registro
+                        ? formatearFechaEs(r.fecha_registro)
+                        : r.fecha_reseña
+                          ? formatearFechaEs(r.fecha_reseña.slice(0, 10))
+                          : "—"}
+                    </td>
+                    <ToolTooltip label={r.comentario ?? undefined}>
+                      <td
+                        className="p-3 max-w-[22rem] truncate text-muted-foreground"
+                      >
+                        {r.comentario || "—"}
+                      </td>
+                    </ToolTooltip>
+                    <td className="p-3 whitespace-nowrap text-muted-foreground">
+                      {nombreGestor(r.gestionada_por) ?? "—"}
+                    </td>
+                  </tr>
+                </ToolTooltip>
               );
             })}
           </tbody>

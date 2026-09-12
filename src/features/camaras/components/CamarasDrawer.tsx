@@ -61,6 +61,7 @@ import {
 } from "@/features/camaras/actions/camaras-actions";
 import { ConectorPairingDialog } from "@/features/camaras/components/ConectorPairingDialog";
 import { CamaraTile } from "@/features/camaras/components/CamaraTile";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 type Camara = {
   id: string;
@@ -440,22 +441,22 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                           </span>
                         </button>
                         <div className="hidden opacity-0 group-hover:opacity-100 md:flex">
-                          <button
-                            type="button"
-                            onClick={() => abrirEditar(c)}
-                            className="p-1 text-muted-foreground hover:text-foreground"
-                            title="Editar"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => eliminarCamara(c.id)}
-                            className="p-1 text-muted-foreground hover:text-destructive"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                          <ToolTooltip label="Editar">
+                            <button
+                              type="button"
+                              onClick={() => abrirEditar(c)}
+                              className="p-1 text-muted-foreground hover:text-foreground" aria-label="Editar">
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          </ToolTooltip>
+                          <ToolTooltip label="Eliminar">
+                            <button
+                              type="button"
+                              onClick={() => eliminarCamara(c.id)}
+                              className="p-1 text-muted-foreground hover:text-destructive" aria-label="Eliminar">
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </ToolTooltip>
                         </div>
                       </li>
                     );
