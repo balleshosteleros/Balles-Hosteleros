@@ -1,0 +1,19 @@
+-- Reencuadre de los platos que se veian cortados.
+--
+-- La causa era un RECORTE DOBLE. Al pasar las fotos a su proporcion propia
+-- tome como punto de partida lo que habia guardado en el servidor, que ya
+-- estaba recortado a 4:3 de la vuelta anterior. Recortar un recorte se comia
+-- el vaso: en el Habanito y el Orange Oasis solo quedaba la llama. Se vuelve
+-- al original de Agora, que es la foto entera.
+--
+-- Ademas, el sobrante de alto ya no se quita todo del borde inferior sino
+-- repartido arriba y abajo: asi no se pierde ni la decoracion de la copa ni
+-- su pie.
+--
+-- Zumo de mango: la foto venia apaisada y con el vaso lejos, asi que se cierra
+-- el plano sobre el vaso en vez de enseñar medio jardin.
+--
+-- Champagne: una botella es vertical y en un marco horizontal quedaba pequeña
+-- rodeada de fondo. Las tres pasan a marco vertical, donde llenan.
+--
+-- Solo se han tocado los platos señalados. Ver scripts/carta-encuadre.py.

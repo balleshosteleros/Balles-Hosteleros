@@ -109,7 +109,7 @@ def fondo_humo(W, H, seed):
     vin = vin.filter(ImageFilter.GaussianBlur(160 * esc))
     return Image.composite(base, Image.new('RGB', (W, H), (5, 5, 6)), vin)
 
-def componer(src, dst, seed=0):
+def componer(src, dst, seed=0, ratio=4/3):
     bot = quitar_fondo(Image.open(src))
     bb = bot.getbbox()
     if bb:
@@ -121,11 +121,12 @@ def componer(src, dst, seed=0):
     # y, al no ampliarlo nada, salia diminuto al lado de los demas. Se permite
     # un estiron corto (1,4x) que no llega a verse borroso.
     H = max(340, min(900, round(bot.height / 0.78)))
-    W = round(H * 4 / 3)
+    W = round(H * ratio)
     alto = min(int(bot.height * 1.4), int(H * 0.78))
     ancho = round(bot.width * alto / bot.height)
-    if ancho > W * 0.58:
-        ancho = int(W * 0.58)
+    tope = 0.58 if ratio >= 1 else 0.80   # en marco vertical la botella puede
+    if ancho > W * tope:                  # ocupar mas ancho sin apretarse
+        ancho = int(W * tope)
         alto = round(bot.height * ancho / bot.width)
     bot = bot.resize((max(1, ancho), max(1, alto)), Image.LANCZOS)
 

@@ -25,9 +25,10 @@ def recortar(src, dst, ancho_max=1000):
         ancho = int(round(im.height * r))
         x = (im.width - ancho) // 2
         im = im.crop((x, 0, x + ancho, im.height))
-    elif actual < r:                     # sobra alto: se quita del borde inferior,
-        alto = int(round(im.width / r))  # que es mesa o suelo, no producto
-        im = im.crop((0, 0, im.width, alto))
+    elif actual < r:                     # sobra alto: se reparte arriba y abajo
+        alto = int(round(im.width / r))  # para no llevarse ni la decoracion de
+        y = (im.height - alto) // 2      # arriba ni el pie de la copa
+        im = im.crop((0, y, im.width, y + alto))
     if im.width > ancho_max:
         im = im.resize((ancho_max, int(round(ancho_max / r))), Image.LANCZOS)
     im.save(dst, 'JPEG', quality=88, optimize=True)
