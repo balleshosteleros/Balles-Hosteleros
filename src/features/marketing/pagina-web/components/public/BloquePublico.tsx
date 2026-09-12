@@ -517,7 +517,8 @@ function IconoInstagram({ className }: { className?: string }) {
 }
 
 function HistoriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "historia" }> }) {
-  const { desde, titulo, parrafos, imagen_url, rating, rating_total, rating_href } = bloque.datos;
+  const { desde, titulo, parrafos, enlaces, imagen_url, rating, rating_total, rating_href } =
+    bloque.datos;
 
   return (
     <section className="px-4 py-20 md:py-28" id="historia">
@@ -562,6 +563,32 @@ function HistoriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "historia
               </p>
             ))}
           </div>
+
+          {enlaces?.length ? (
+            /* Cada botón con el color de SU casa: son dos cartas de dos
+               locales, y el color es lo que dice cuál se está abriendo. */
+            <div className="mt-8 flex flex-wrap gap-3">
+              {enlaces.map((e) => {
+                const color = e.color ?? "var(--pw-primario)";
+                const externo = /^https?:\/\//i.test(e.href);
+                return (
+                  <a
+                    key={e.href + e.label}
+                    href={e.href}
+                    {...(externo ? { target: "_blank", rel: "noreferrer noopener" } : {})}
+                    className="inline-block rounded-full px-6 py-3 text-[13px] font-bold uppercase tracking-wider transition-transform hover:scale-105"
+                    style={{
+                      backgroundColor: `color-mix(in srgb, ${color} 16%, transparent)`,
+                      border: `1px solid ${color}`,
+                      color,
+                    }}
+                  >
+                    {e.label}
+                  </a>
+                );
+              })}
+            </div>
+          ) : null}
 
           {rating ? (
             <NotaGoogle
@@ -806,11 +833,10 @@ function CollageCartaPublico({
           <p className="mt-5 max-w-xl text-sm text-white/80 md:text-base">{frase}</p>
         ) : null}
         <a
-          // `?web=1`: se llega desde la web, no desde el QR de la mesa. Con
-          // esa marca la carta enseña también el menú del día fuera de su
-          // horario —con la franja escrita—, que es justo lo que viene a
-          // consultar quien está decidiendo si reserva.
-          href={`/carta?web=1`}
+          // Un solo enlace de carta: el mismo que lleva el QR de la mesa. Lo
+          // que se sirve a cada hora lo decide el horario de cada categoría,
+          // no por dónde haya entrado el cliente.
+          href={`/carta`}
           className="mt-9 inline-block rounded-full px-10 py-4 text-xs font-bold uppercase tracking-[0.2em] text-black transition-transform hover:scale-105 md:text-sm"
           style={{ backgroundColor: "var(--pw-primario)" }}
         >
@@ -961,6 +987,9 @@ function GaleriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "galeria" 
             loading={i < 4 ? "eager" : "lazy"}
             decoding="async"
             className="aspect-square w-full rounded-lg object-cover transition-transform duration-500 hover:scale-[1.03]"
+            // El recorte cuadrado se come los lados de una foto apaisada.
+            // `foco_x` dice qué lado hay que salvar (la cantante y su micro).
+            style={{ objectPosition: `${img.foco_x ?? 50}% center` }}
           />
         ))}
       </div>
@@ -1382,7 +1411,7 @@ function TestimoniosPublico({
 }
 
 function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
-  const { titulo, texto, boton, imagen_url, foco_y } = bloque.datos;
+  const { titulo, texto, boton, imagen_url, foco_y, fondo_imagenes } = bloque.datos;
 
   // Los colores salen del tema de la empresa (--pw-primario). Antes eran negro
   // fijo sobre `bg-muted/30`: en una web de fondo oscuro, el botón secundario
@@ -1468,6 +1497,39 @@ function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
             "linear-gradient(180deg, rgba(0,0,0,0.68) 0%, rgba(0,0,0,0.34) 45%, rgba(0,0,0,0.72) 100%)",
         }}
       />
+      {/* Fotos de acompañamiento, difuminadas y a los lados: la de fondo dice
+          DÓNDE se está, y estas dicen QUÉ se come y se bebe. Se esconden en el
+          móvil, donde no hay hueco a los lados del titular. */}
+      {fondo_imagenes?.length ? (
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 hidden md:block">
+          {fondo_imagenes.slice(0, 4).map((img, i) => {
+            const izquierda = i % 2 === 0;
+            const fila = Math.floor(i / 2);
+            return (
+              <span
+                key={img.url + i}
+                className="absolute block overflow-hidden rounded-[2rem]"
+                style={{
+                  width: "clamp(190px, 19vw, 330px)",
+                  aspectRatio: "4 / 5",
+                  [izquierda ? "left" : "right"]: fila === 0 ? "2%" : "9%",
+                  top: fila === 0 ? "8%" : "52%",
+                  transform: `rotate(${izquierda ? -4 : 4}deg)`,
+                  backgroundImage: `url(${imagenOptimizada(img.url, { width: 700, quality: 70 })})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  filter: "blur(5px) saturate(120%)",
+                  opacity: 0.42,
+                  // Sin máscara se ve el rectángulo de la foto recortado sobre
+                  // el fondo; así se funde por los bordes y solo queda el color.
+                  maskImage: "radial-gradient(62% 62% at 50% 50%, #000 10%, transparent 100%)",
+                  WebkitMaskImage: "radial-gradient(62% 62% at 50% 50%, #000 10%, transparent 100%)",
+                }}
+              />
+            );
+          })}
+        </div>
+      ) : null}
       <div className="relative">{contenido}</div>
     </section>
   );
@@ -1723,12 +1785,16 @@ function FooterPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "footer" }>
        viven teléfono, correo y horarios. */
     <footer className="bg-black text-white py-16 px-4 scroll-mt-24" id="contacto">
       <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-3">
-        {columnas.map((c, i) => (
+        {columnas.map((c, i) => {
+          // Color de la columna: el de su casa cuando la página es de dos
+          // (Habana rosa, Bacanal dorado) y, si no se declara, el de la web.
+          const color = c.color ?? "var(--pw-primario)";
+          return (
           <div key={i}>
-            <h4 className="mb-1 text-xs font-bold uppercase tracking-[0.22em]" style={{ color: "var(--pw-primario)" }}>
+            <h4 className="mb-1 text-xs font-bold uppercase tracking-[0.22em]" style={{ color }}>
               {c.titulo}
             </h4>
-            <span className="mb-4 block h-px w-10" style={{ backgroundColor: "var(--pw-primario)", opacity: 0.5 }} />
+            <span className="mb-4 block h-px w-10" style={{ backgroundColor: color, opacity: 0.5 }} />
             <ul className="space-y-2 text-sm opacity-75">
               {c.items.map((it, j) => {
                 // Los horarios se guardan como items con href="#" porque no
@@ -1749,7 +1815,8 @@ function FooterPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "footer" }>
               })}
             </ul>
           </div>
-        ))}
+          );
+        })}
       </div>
       {/* Ni iconos de redes ni texto legal aquí: ambos viven ahora en el pie
           del shell (PieLegal), que cierra TODAS las páginas —incluidas las
@@ -1769,9 +1836,26 @@ function TextoLibrePublico({
   // HTML salía sin jerarquía (títulos y párrafos iguales).
   // `pt-28` deja sitio a la nav fija, que si no tapa el primer titular en las
   // páginas que empiezan por texto — las legales, sin hero.
+  // "realce": el texto sale del negro y se mete en una tarjeta con un degradado
+  // suave del color de la marca. Un aviso importante sobre fondo negro, con el
+  // mismo gris que todo lo demás, se lee como letra pequeña y nadie lo mira.
+  const realce = bloque.datos.fondo === "realce";
+
   return (
-    <section className="pw-texto mx-auto max-w-3xl px-4 pb-10 pt-28">
+    <section
+      className={
+        realce
+          ? "pw-texto pw-texto-realce mx-auto max-w-3xl px-4 py-14 md:py-20"
+          : "pw-texto mx-auto max-w-3xl px-4 pb-10 pt-28"
+      }
+    >
+      {realce ? (
+        <div className="pw-tarjeta">
+          <div dangerouslySetInnerHTML={{ __html: bloque.datos.html_seguro }} />
+        </div>
+      ) : (
       <div dangerouslySetInnerHTML={{ __html: bloque.datos.html_seguro }} />
+      )}
       <style>{`
         .pw-texto { color: rgba(245,245,244,.82); line-height: 1.7; }
         .pw-texto h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); font-weight: 700; color: var(--pw-primario); margin: 0 0 1.2rem; line-height: 1.15; }
@@ -1787,6 +1871,18 @@ function TextoLibrePublico({
         .pw-texto table { width: 100%; border-collapse: collapse; margin: 0 0 1.5rem; font-size: .9rem; display: block; overflow-x: auto; }
         .pw-texto th, .pw-texto td { border: 1px solid rgba(255,255,255,.14); padding: .55rem .7rem; text-align: left; vertical-align: top; }
         .pw-texto th { background: rgba(255,255,255,.06); color: #fff; font-weight: 600; }
+        .pw-texto-realce .pw-tarjeta {
+          background:
+            radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--pw-primario) 20%, transparent) 0%, transparent 62%),
+            linear-gradient(180deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,.02) 100%);
+          border: 1px solid color-mix(in srgb, var(--pw-primario) 38%, transparent);
+          border-radius: 1.5rem;
+          padding: clamp(1.8rem, 5vw, 3rem);
+          box-shadow: 0 24px 60px -30px rgba(0,0,0,.9);
+          text-align: center;
+        }
+        .pw-texto-realce .pw-tarjeta p { color: rgba(245,245,244,.9); }
+        .pw-texto-realce .pw-tarjeta p:last-child { margin-bottom: 0; }
       `}</style>
     </section>
   );

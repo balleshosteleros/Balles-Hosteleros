@@ -52,7 +52,13 @@ export interface HeroDatos {
 }
 
 export interface GaleriaDatos {
-  imagenes: Array<{ url: string; alt: string }>;
+  /**
+   * `foco_x`: el punto de la foto que NO se puede perder al recortarla en
+   * cuadrado, en % desde la izquierda (0-100, por defecto 50 = centrado). La
+   * cantante de la experiencia salía sin micrófono porque el recorte centrado
+   * se lo comía por la derecha.
+   */
+  imagenes: Array<{ url: string; alt: string; foco_x?: number }>;
   layout: "grid" | "masonry" | "carrusel";
 }
 
@@ -147,6 +153,13 @@ export interface MapaDatos {
 
 export interface FooterColumna {
   titulo: string;
+  /**
+   * Color del título y su línea. Sin él manda el color de la web. Se usa
+   * cuando una misma página firma por dos casas (la experiencia Habana ×
+   * Bacanal): cada contacto va con el color de su marca para que se vea de un
+   * vistazo a quién se está llamando.
+   */
+  color?: string;
   items: Array<{ label: string; href: string }>;
 }
 
@@ -158,6 +171,12 @@ export interface FooterDatos {
 
 export interface TextoLibreDatos {
   html_seguro: string;
+  /**
+   * "realce" saca el texto del negro y lo mete en una tarjeta con un
+   * degradado suave del color de la marca. Para los avisos que interesa que se
+   * lean (la política de 30 días), que sobre fondo negro pasaban inadvertidos.
+   */
+  fondo?: "plano" | "realce";
 }
 
 export interface VideoDatos {
@@ -275,6 +294,12 @@ export interface HistoriaDatos {
   desde: string;
   titulo: string;
   parrafos: string[];
+  /**
+   * Botones al pie del texto, cada uno con el color de su casa (las dos cartas
+   * de la experiencia: Habana en rosa, Bacanal en dorado). Sin `color` salen
+   * con el de la web.
+   */
+  enlaces?: Array<{ label: string; href: string; color?: string }>;
   imagen_url?: string;
   /** Valoración de Google: se muestra como prueba social junto a la historia. */
   rating?: string;
@@ -322,6 +347,12 @@ export interface BrandingSnapshot {
   color_fondo?: string;
   tipografia?: string;
   logo_url?: string;
+  /**
+   * Las casas que firman la página. Una web normal es de una sola empresa y su
+   * logo sale del isotipo de esa empresa; pero la experiencia es de Habana Y de
+   * Bacanal, y en la barra tienen que verse los dos, cada uno con su color.
+   */
+  marcas?: Array<{ nombre: string; logo_url: string; color?: string }>;
 }
 
 export interface PaginaWeb {

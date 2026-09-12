@@ -63,6 +63,59 @@ export function HistoriaForm({ bloque }: { bloque: Extract<Bloque, { tipo: "hist
         </Button>
       </Section>
 
+      <Section title="Botones">
+        {(datos.enlaces ?? []).map((e, i) => {
+          const enlaces = datos.enlaces ?? [];
+          const cambiar = (patch: Partial<(typeof enlaces)[number]>) => {
+            const copia = [...enlaces];
+            copia[i] = { ...copia[i], ...patch };
+            set({ enlaces: copia });
+          };
+          return (
+            <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-1">
+              <Input
+                value={e.label}
+                onChange={(ev) => cambiar({ label: ev.target.value })}
+                placeholder="Texto"
+              />
+              <Input
+                value={e.href}
+                onChange={(ev) => cambiar({ href: ev.target.value })}
+                placeholder="https://…"
+              />
+              <input
+                type="color"
+                aria-label={`Color del botón ${e.label}`}
+                title="Color del botón (vacío = el de la web)"
+                value={e.color ?? "#d0a000"}
+                onChange={(ev) => cambiar({ color: ev.target.value })}
+                className="h-8 w-8 cursor-pointer rounded border bg-transparent p-0.5"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-red-600"
+                onClick={() => set({ enlaces: enlaces.filter((_, idx) => idx !== i) })}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          );
+        })}
+        {(datos.enlaces?.length ?? 0) < 4 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() =>
+              set({ enlaces: [...(datos.enlaces ?? []), { label: "Ver la carta", href: "/carta" }] })
+            }
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" /> Añadir botón
+          </Button>
+        )}
+      </Section>
+
       <Section title="Foto">
         <SubirImagenUnica
           valor={datos.imagen_url}

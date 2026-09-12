@@ -31,6 +31,7 @@ import { ItemEditorModal } from "./ItemEditorModal";
 import { SlugConfigCard } from "./SlugConfigCard";
 import { QrDownloadButton } from "./QrDownloadButton";
 import { CartaTemaCard } from "./CartaTemaCard";
+import { CartaValoracionCard } from "./CartaValoracionCard";
 
 export function CartaAdminBoard({
   data,
@@ -169,6 +170,8 @@ export function CartaAdminBoard({
       {data.empresa.slug ? (
         <CartaTemaCard empresaSlug={data.empresa.slug} nombreEmpresa={data.empresa.nombre} />
       ) : null}
+
+      <CartaValoracionCard />
 
       <Card>
         <CardHeader>

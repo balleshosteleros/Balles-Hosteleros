@@ -33,6 +33,9 @@ export const galeriaDatosSchema = z.object({
       z.object({
         url: z.string().url().max(1000),
         alt: z.string().max(200),
+        // Punto que no se puede perder al recortar en cuadrado, en % desde la
+        // izquierda. Sin él el recorte va al centro y se come lo que importa.
+        foco_x: z.number().min(0).max(100).optional(),
       }),
     )
     .max(60),
@@ -105,6 +108,11 @@ export const ctaDatosSchema = z.object({
     href: z.string().min(1).max(500),
     variante: z.enum(["primary", "ghost"]),
   }),
+  // La foto de fondo y su encuadre YA los pintaba el bloque público, pero no
+  // estaban aquí: al guardar desde el editor, zod los descartaba y la sección
+  // se quedaba sin foto.
+  imagen_url: z.string().url().max(1000).optional(),
+  foco_y: z.number().min(0).max(100).optional(),
 });
 
 export const formularioCampoSchema = z.object({
@@ -136,6 +144,8 @@ export const footerDatosSchema = z.object({
     .array(
       z.object({
         titulo: z.string().min(1).max(80),
+        // Color de la marca a la que pertenece la columna (ver FooterColumna).
+        color: z.string().max(32).optional(),
         items: z
           .array(
             z.object({
@@ -161,6 +171,7 @@ export const footerDatosSchema = z.object({
 
 export const textoLibreDatosSchema = z.object({
   html_seguro: z.string().max(50_000),
+  fondo: z.enum(["plano", "realce"]).optional(),
 });
 
 export const videoDatosSchema = z.object({
@@ -207,6 +218,16 @@ export const historiaDatosSchema = z.object({
   desde: z.string().min(1).max(20),
   titulo: z.string().min(1).max(200),
   parrafos: z.array(z.string().max(1200)).max(6),
+  enlaces: z
+    .array(
+      z.object({
+        label: z.string().min(1).max(60),
+        href: z.string().min(1).max(500),
+        color: z.string().max(32).optional(),
+      }),
+    )
+    .max(4)
+    .optional(),
   imagen_url: z.string().url().max(1000).optional(),
   rating: z.string().max(10).optional(),
   rating_total: z.string().max(30).optional(),
@@ -302,6 +323,16 @@ export const brandingSnapshotSchema = z.object({
   color_fondo: z.string().max(32).optional(),
   tipografia: z.string().max(120).optional(),
   logo_url: z.string().url().max(1000).optional(),
+  marcas: z
+    .array(
+      z.object({
+        nombre: z.string().min(1).max(80),
+        logo_url: z.string().url().max(1000),
+        color: z.string().max(32).optional(),
+      }),
+    )
+    .max(4)
+    .optional(),
 });
 
 export function validarBloque(tipo: BloqueTipo, datos: unknown) {

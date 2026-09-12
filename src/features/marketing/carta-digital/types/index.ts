@@ -39,22 +39,14 @@ export type CartaCategoria = {
   /** Dietas especiales (celíacos, veganos, niños): botón con estilo propio. */
   destacada: boolean;
   /**
-   * Ventana de disponibilidad. El menú del día solo existe de lunes a viernes
-   * al mediodía: enseñarlo un sábado por la noche es prometer algo que no se
-   * sirve. `null` en los tres campos = siempre visible.
+   * Ventana de disponibilidad, configurable desde el panel. El menú del día
+   * solo existe a sus horas: enseñarlo cuando no se sirve es prometer algo que
+   * no hay. `null` en los tres campos = siempre visible. La hora de fin puede
+   * ser menor que la de inicio: entonces la ventana cruza la medianoche.
    */
   dias_semana: number[] | null;
   hora_desde: string | null;
   hora_hasta: string | null;
-  /**
-   * Solo en la carta abierta DESDE LA WEB: la categoría se enseña aunque
-   * ahora mismo no se sirva. Quien mira la web un domingo quiere saber qué
-   * lleva el menú del día; quien escanea el QR sentado en la mesa, no, porque
-   * ahí solo puede pedir lo que la cocina está sirviendo.
-   */
-  fuera_de_horario?: boolean;
-  /** "De lunes a viernes, de 12:30 a 16:30" — se pinta bajo el título. */
-  horario_texto?: string | null;
   created_at: string;
   updated_at: string;
 };

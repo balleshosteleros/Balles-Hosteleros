@@ -70,6 +70,26 @@ export function FooterForm({ bloque }: { bloque: Extract<Bloque, { tipo: "footer
                 onChange={(e) => updateColumna(ci, { titulo: e.target.value })}
                 className="flex-1"
               />
+              {/* Color de la columna: sirve cuando una página es de dos casas
+                  y cada contacto tiene que verse con el color de la suya. */}
+              <input
+                type="color"
+                aria-label={`Color de la columna ${c.titulo}`}
+                title="Color del título (vacío = el de la web)"
+                value={c.color ?? "#d0a000"}
+                onChange={(e) => updateColumna(ci, { color: e.target.value })}
+                className="h-8 w-8 shrink-0 cursor-pointer rounded border bg-transparent p-0.5"
+              />
+              {c.color ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={() => updateColumna(ci, { color: undefined })}
+                >
+                  Color de la web
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 size="icon"

@@ -20,6 +20,12 @@ export interface PaginaContexto {
   /** Isotipo de la empresa: marcador del mapa. */
   logoUrl?: string | null;
   /**
+   * Es la página que abre el dominio. El sorteo del mes vive SOLO aquí: en una
+   * landing de venta (la experiencia Habana × Bacanal) compite con lo que se
+   * está vendiendo, y en las legales no pinta nada.
+   */
+  esPortada?: boolean;
+  /**
    * Portal de empleo abierto. `false` esconde el enlace del menú aunque la web
    * monte la llamada a empleo: un cliente puede no captar personal por aquí, y
    * enviarle visitantes a un portal sin vacantes es una vía muerta.
@@ -125,7 +131,7 @@ export function PaginaPublicaShell({
   })();
 
   const hayMapa = ordenados.some((b) => b.tipo === "mapa" && b.visible);
-  const sorteo = contexto?.empresaSlug ? (
+  const sorteo = contexto?.empresaSlug && contexto?.esPortada !== false ? (
     <SorteoMensual
       key="sorteo-mensual"
       empresaSlug={contexto.empresaSlug}
@@ -209,7 +215,7 @@ export function PaginaPublicaShell({
       (b) => b.tipo === "collage_carta" && b.visible && (b.datos.imagenes?.length ?? 0) > 0,
     ) || visible("menu");
   if (contexto?.empresaSlug && hayCarta) {
-    nav.push({ href: `/carta?web=1`, label: "Carta" });
+    nav.push({ href: `/carta`, label: "Carta" });
   }
   if (visible("mapa")) nav.push({ href: "#mapa", label: "Ubicación" });
   if (visible("footer")) nav.push({ href: "#contacto", label: "Contacto" });
@@ -236,7 +242,13 @@ export function PaginaPublicaShell({
         } as React.CSSProperties
       }
     >
-      <NavPublica logo={logo} titulo={tituloNav} hrefReservar={hrefReservar} enlaces={nav} />
+      <NavPublica
+        logo={logo}
+        marcas={branding?.marcas ?? null}
+        titulo={tituloNav}
+        hrefReservar={hrefReservar}
+        enlaces={nav}
+      />
       <main>
         {bloquesLimpios.map((b) => (
           <Fragment key={b.id}>
@@ -381,11 +393,14 @@ function PieLegal({ redes, textoLegal }: { redes?: PaginaContexto["redes"]; text
 
 function NavPublica({
   logo,
+  marcas,
   titulo,
   hrefReservar,
   enlaces,
 }: {
   logo: string | null;
+  /** Las dos casas que firman la página, cuando la web es de más de una. */
+  marcas: BrandingSnapshot["marcas"] | null;
   titulo: string;
   /** Portal de reservas de esta empresa, o null si aún no tiene slug. */
   hrefReservar: string | null;
@@ -414,7 +429,43 @@ function NavPublica({
       }`}
     >
       <div className="mx-auto max-w-6xl px-5 flex items-center gap-3">
-        {logo ? (
+        {marcas && marcas.length > 0 ? (
+          /* Página firmada por varias casas: sus isotipos, uno al lado del
+             otro y cada uno con SU color, separados por un aspa. Es la primera
+             prueba de que la noche es de las dos y no de una sola. */
+          <span className="flex shrink-0 items-center gap-2 md:gap-3">
+            {marcas.map((m, i) => (
+              <Fragment key={m.nombre}>
+                {i > 0 ? (
+                  <span
+                    aria-hidden
+                    className={`text-white/35 transition-all ${solida ? "text-sm" : "text-base"}`}
+                  >
+                    ×
+                  </span>
+                ) : null}
+                <span
+                  role="img"
+                  aria-label={m.nombre}
+                  title={m.nombre}
+                  className={`block transition-all ${solida ? "h-10 w-10" : "h-12 w-12 md:h-14 md:w-14"}`}
+                  style={{
+                    backgroundColor: m.color ?? "var(--pw-primario)",
+                    WebkitMaskImage: `url(${m.logo_url})`,
+                    maskImage: `url(${m.logo_url})`,
+                    WebkitMaskRepeat: "no-repeat",
+                    maskRepeat: "no-repeat",
+                    WebkitMaskPosition: "center",
+                    maskPosition: "center",
+                    WebkitMaskSize: "contain",
+                    maskSize: "contain",
+                    filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6))",
+                  }}
+                />
+              </Fragment>
+            ))}
+          </span>
+        ) : logo ? (
           /* El isotipo es un PNG negro con transparencia: sobre la barra negra
              se perdía por completo. Se pinta con `mask-image` usando el color
              de marca, así el trazo se lee siempre sea cual sea el fondo. */

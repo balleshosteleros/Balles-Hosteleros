@@ -142,6 +142,27 @@ export function GaleriaForm({ bloque }: { bloque: Extract<Bloque, { tipo: "galer
                   }}
                   placeholder="Texto alternativo (SEO)"
                 />
+                {/* La rejilla recorta en cuadrado: esto dice qué lado de la
+                    foto hay que salvar cuando lo importante no está centrado. */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground shrink-0">Encuadre</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={img.foco_x ?? 50}
+                    onChange={(e) => {
+                      const imagenes = [...datos.imagenes];
+                      imagenes[i] = { ...imagenes[i], foco_x: Number(e.target.value) };
+                      set({ imagenes });
+                    }}
+                    className="w-full accent-primary"
+                  />
+                  <span className="w-9 text-right text-[11px] tabular-nums text-muted-foreground">
+                    {img.foco_x ?? 50}%
+                  </span>
+                </div>
               </div>
               <Button
                 variant="ghost"
