@@ -52,7 +52,8 @@ export type TipoNotificacion =
   // Cumpleaños del trabajador: felicitación + points. Se enciende y se apaga en
   // Points (regla «Cumpleaños»), NO en Ajustes → Notificaciones: un solo
   // interruptor para el mensaje y para el regalo.
-  | "cumpleanos";
+  | "cumpleanos"
+  | "producto_agora_sin_alta";
 
 export interface TipoMeta {
   /** Etiqueta legible (sentence case). */
@@ -295,6 +296,16 @@ export const TIPOS_NOTIFICACION: Record<TipoNotificacion, TipoMeta> = {
     badge: "bg-pink-100 text-pink-700",
     accionLabel: "¡Gracias!",
     requiereAccion: false,
+  },
+  // El TPV vende algo que Balles no conoce: mientras nadie lo dé de alta, lo que
+  // gasta no sale del almacén. Pide acción a propósito — no es un "enterado".
+  producto_agora_sin_alta: {
+    label: "Producto de Ágora sin dar de alta",
+    icono: "producto_agora_sin_alta",
+    color: "text-amber-600",
+    badge: "bg-amber-100 text-amber-700",
+    accionLabel: "Dar de alta",
+    requiereAccion: true,
   },
 };
 

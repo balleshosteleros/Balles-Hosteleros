@@ -22,6 +22,7 @@ import {
   Loader2,
   WifiOff,
   Lock,
+  PackagePlus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,8 @@ import {
   type AgoraSyncLog,
 } from "@/features/logistica/actions/agora-actions";
 import type { AgoraSyncStatus } from "@/features/logistica/types/agora";
+import Link from "next/link";
+import { listAltasPendientes } from "@/features/logistica/actions/altas-agora-actions";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
@@ -74,6 +77,9 @@ export function AgoraSyncStatus() {
   const { empresaActual } = useEmpresa();
   const [lastLog, setLastLog] = useState<AgoraSyncLog | null>(null);
   const [loadingLog, setLoadingLog] = useState(true);
+  // Cuántas cosas vende el TPV que Balles no reconoce. Se enseña aquí porque es el
+  // panel de Ágora: es donde se mira cuando algo del TPV no cuadra.
+  const [pendientesAlta, setPendientesAlta] = useState(0);
 
   const cargarUltimoLog = useCallback(async () => {
     setLoadingLog(true);
@@ -85,6 +91,14 @@ export function AgoraSyncStatus() {
   useEffect(() => {
     cargarUltimoLog();
   }, [cargarUltimoLog]);
+
+  useEffect(() => {
+    let vivo = true;
+    void listAltasPendientes().then((r) => {
+      if (vivo) setPendientesAlta(r.data.length);
+    });
+    return () => { vivo = false; };
+  }, []);
 
   const statusCfg = lastLog ? STATUS_CONFIG[lastLog.status as AgoraSyncStatus] : null;
 
@@ -138,6 +152,21 @@ export function AgoraSyncStatus() {
                 <span className="text-muted-foreground">Reintentos:</span>
                 <span className="text-yellow-600">{lastLog.retry_count}</span>
               </div>
+            )}
+            {pendientesAlta > 0 && (
+              <Link
+                href="/logistica/altas-agora"
+                className="flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/40"
+              >
+                <PackagePlus className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  <strong>
+                    {pendientesAlta} {pendientesAlta === 1 ? "producto" : "productos"}
+                  </strong>{" "}
+                  que el TPV vende y Balles no conoce. Mientras tanto, lo que gastan no sale
+                  del almacén. <span className="underline">Darlos de alta</span>
+                </span>
+              </Link>
             )}
             {sinDescontar > 0 && (
               <p className="flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">

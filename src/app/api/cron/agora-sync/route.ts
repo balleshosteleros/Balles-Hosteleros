@@ -16,6 +16,7 @@ import {
 } from "@/features/logistica/services/agora-ventas-ingesta";
 import { getAgoraCredenciales } from "@/features/logistica/services/agora-credenciales";
 import { descontarDiaSiCorte } from "@/features/logistica/services/agora-descuento-dia";
+import { avisarDeAltasPendientes } from "@/features/logistica/services/avisar-altas-agora";
 import { recalcularVentasDiaPromedio } from "@/features/logistica/services/ventas-dia-promedio";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +89,19 @@ export async function GET(request: Request) {
         console.error(`[cron/agora-sync] ventas_dia_promedio empresa ${empresaId}:`, msg);
         ventasDia = { error: msg };
       }
+      // Avisar a quien pueda darlos de alta. Va DESPUÉS de la ingesta y aislado: un
+      // fallo del aviso no puede tumbar la entrada de ventas, que es lo que importa.
+      let avisos: Record<string, unknown> = {};
+      if (r.sinProducto > 0 || r.addinsSinProducto > 0) {
+        try {
+          avisos = { ...(await avisarDeAltasPendientes(empresaId)) };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(`[cron/agora-sync] avisos de altas empresa ${empresaId}:`, msg);
+          avisos = { error: msg };
+        }
+      }
+
       await supabase.from("agora_sync_log").insert({
         empresa_id: empresaId,
         status: "ok",
@@ -104,6 +118,7 @@ export async function GET(request: Request) {
           addins_sin_producto: r.addinsSinProducto,
           stock: desc,
           ventas_dia: ventasDia,
+          altas_pendientes: avisos,
         },
       });
       resultados.push({ empresaId, ...r, stock: desc, ventasDia });
