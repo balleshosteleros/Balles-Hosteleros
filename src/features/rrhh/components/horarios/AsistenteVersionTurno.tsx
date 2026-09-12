@@ -32,6 +32,7 @@ import {
   History,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 function hoyISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -182,10 +183,9 @@ export function AsistenteVersionTurno({
                 <span className="text-sm font-medium">Desde qué fecha</span>
               </div>
               <div className="pl-6">
-                <Input
-                  type="date"
+                <SelectorFecha
                   value={vigenteDesde}
-                  onChange={(e) => setVigenteDesde(e.target.value)}
+                  onChange={setVigenteDesde}
                   className="w-44"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">

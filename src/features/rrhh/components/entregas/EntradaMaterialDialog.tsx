@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { listTiposMaterial } from "@/features/rrhh/actions/entregas-tipos-actions";
 import { registrarEntradaMaterial } from "@/features/rrhh/actions/material-almacen-actions";
 import { TALLAS_ROPA, type TipoMaterial } from "@/features/rrhh/data/entregas";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 function hoyISO(): string {
   const d = new Date();
@@ -217,11 +218,10 @@ export function EntradaMaterialDialog({
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="entrada-fecha">Fecha</Label>
-                <Input
+                <SelectorFecha
                   id="entrada-fecha"
-                  type="date"
                   value={fecha}
-                  onChange={(e) => setFecha(e.target.value)}
+                  onChange={setFecha}
                 />
               </div>
               <div className="space-y-2">

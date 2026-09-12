@@ -25,6 +25,7 @@ import { Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { listSaldosMaterial, registrarBajaAlmacen } from "@/features/rrhh/actions/material-almacen-actions";
 import { nombrePieza, type SaldoMaterial } from "@/features/rrhh/data/material-stock";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 function hoyISO(): string {
   const d = new Date();
@@ -175,11 +176,10 @@ export function BajaAlmacenDialog({
 
             <div className="space-y-2">
               <Label htmlFor="baja-fecha">Fecha</Label>
-              <Input
+              <SelectorFecha
                 id="baja-fecha"
-                type="date"
                 value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
+                onChange={setFecha}
               />
             </div>
 

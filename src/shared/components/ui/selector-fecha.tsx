@@ -219,12 +219,13 @@ export function SelectorFecha({
               "inline-flex h-9 w-9 items-center justify-center rounded-full font-normal text-zinc-700 transition-colors",
               // Velo del color de la empresa al pasar el ratón, no el gris
               // del sistema.
-              "hover:bg-[color-mix(in_srgb,var(--brand,#18181b)_12%,white)]",
+              "hover:bg-[color-mix(in_srgb,var(--brand,hsl(var(--primary)))_12%,white)]",
             ),
-            // El color sale de Imagen de marca (`--brand`), con negro de
-            // reserva: cada empresa ve su calendario con su color sin tocar nada.
+            // El color sale de Imagen de marca (`--brand`): en las webs de cada
+            // restaurante, el suyo; dentro del software, el del propio software.
+            // Nunca el azul de reserva del sistema.
             day_selected:
-              "!bg-[var(--brand,#18181b)] !text-[var(--brand-fg,#fff)] font-semibold hover:!bg-[var(--brand,#18181b)]",
+              "!bg-[var(--brand,hsl(var(--primary)))] !text-[var(--brand-fg,#fff)] font-semibold hover:!bg-[var(--brand,hsl(var(--primary)))]",
             day_today: "font-semibold text-zinc-900 ring-1 ring-inset ring-zinc-200",
             day_outside: "text-zinc-300",
             // Los días no elegibles se apagan; tacharlos gritaba demasiado.

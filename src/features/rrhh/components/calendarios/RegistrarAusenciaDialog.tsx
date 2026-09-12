@@ -20,6 +20,7 @@ import { registrarAusenciaEmpleado } from "@/features/rrhh/actions/calendario-au
 import { SUBTIPO_LABEL } from "@/features/mi-panel/types";
 import type { SolicitudSubtipoAusencia } from "@/features/mi-panel/types";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   /** Tipo a registrar; null cierra el diálogo. */
@@ -147,21 +148,19 @@ export function RegistrarAusenciaDialog({ subtipo, onOpenChange, onRegistrada }:
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="ra-inicio">Desde</Label>
-              <Input
+              <SelectorFecha
                 id="ra-inicio"
-                type="date"
                 value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
+                onChange={setFechaInicio}
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ra-fin">Hasta{finOpcional ? " (opcional)" : ""}</Label>
-              <Input
+              <SelectorFecha
                 id="ra-fin"
-                type="date"
                 value={fechaFin}
                 min={fechaInicio || undefined}
-                onChange={(e) => setFechaFin(e.target.value)}
+                onChange={setFechaFin}
               />
               {finOpcional && (
                 <p className="text-[11px] text-muted-foreground">

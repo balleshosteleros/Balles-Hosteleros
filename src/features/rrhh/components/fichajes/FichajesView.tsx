@@ -49,6 +49,7 @@ import { fichajesIO } from "@/features/rrhh/io/fichajes.io";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
   const localRaw = row.locales as
@@ -559,19 +560,17 @@ export function FichajesView() {
       />
       <div className="flex flex-wrap items-center gap-2 px-1">
         <span className="text-xs text-muted-foreground">Histórico desde</span>
-        <Input
-          type="date"
+        <SelectorFecha
           value={fechaDesde}
           max={fechaHasta || undefined}
-          onChange={(e) => setFechaDesde(e.target.value)}
+          onChange={setFechaDesde}
           className="h-8 w-auto text-xs"
         />
         <span className="text-xs text-muted-foreground">hasta</span>
-        <Input
-          type="date"
+        <SelectorFecha
           value={fechaHasta}
           min={fechaDesde || undefined}
-          onChange={(e) => setFechaHasta(e.target.value)}
+          onChange={setFechaHasta}
           className="h-8 w-auto text-xs"
         />
         {(fechaDesde || fechaHasta) && (
@@ -652,10 +651,9 @@ export function FichajesView() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Fecha</Label>
-                <Input
-                  type="date"
+                <SelectorFecha
                   value={manualForm.fecha}
-                  onChange={(e) => setManualForm((f) => ({ ...f, fecha: e.target.value }))}
+                  onChange={(valor) => setManualForm((f) => ({ ...f, fecha: valor }))}
                 />
               </div>
               <div />

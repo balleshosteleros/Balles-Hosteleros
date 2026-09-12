@@ -18,6 +18,7 @@ import {
   type EmailContratacionPreview,
 } from "@/features/rrhh/actions/contratacion-fase-actions";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface PuestoRef { id: string; nombre: string; departamento_id?: string | null }
 interface DeptoRef { id: string; nombre: string; area?: string | null }
@@ -387,12 +388,11 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
                 <Label htmlFor="ct-fecha">Primer día de trabajo</Label>
                 {/* `min` deja en gris (no pulsables) los días anteriores a hoy en el
                     calendario: nunca se puede contratar con fecha pasada. */}
-                <Input
+                <SelectorFecha
                   id="ct-fecha"
-                  type="date"
                   min={hoy()}
                   value={primerDia}
-                  onChange={(e) => setPrimerDia(e.target.value)}
+                  onChange={setPrimerDia}
                 />
                 {esFechaPasada && (
                   <p className="text-xs text-destructive">

@@ -15,6 +15,7 @@ import {
   type ReclutamientoConfigGeneral,
 } from "@/features/rrhh/actions/gestoria-actions";
 import type { ConfigSectionHandle } from "./tipos";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 type BoolKey = {
   [K in keyof ReclutamientoConfigGeneral]: ReclutamientoConfigGeneral[K] extends boolean ? K : never;
@@ -232,13 +233,12 @@ export const ConfigGeneralConfig = forwardRef<
                 Déjalo vacío si todas las contrataciones se han hecho desde aquí.
               </p>
             </div>
-            <Input
+            <SelectorFecha
               id="migracion-hasta"
-              type="date"
               className="w-44 h-9 shrink-0"
               value={config.gestoria_migracion_hasta ?? ""}
-              onChange={(e) =>
-                setConfig((c) => c && { ...c, gestoria_migracion_hasta: e.target.value || null })
+              onChange={(valor) =>
+                setConfig((c) => c && { ...c, gestoria_migracion_hasta: valor || null })
               }
             />
           </div>

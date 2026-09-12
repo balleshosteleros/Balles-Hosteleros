@@ -44,6 +44,7 @@ import {
   type CondicionesActualesEmpleado,
   type PreviewPuestoDestino,
 } from "@/features/rrhh/actions/promocion-interna-actions";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 function fmtEur(n: number | null | undefined): string {
   if (n == null) return "—";
@@ -374,7 +375,7 @@ export function PromocionInternaDialog({
             <Label className="flex items-center gap-1.5">
               <CalendarDays className="h-3.5 w-3.5" /> Primer día en el nuevo puesto
             </Label>
-            <Input type="date" value={primerDia} onChange={(e) => setPrimerDia(e.target.value)} />
+            <SelectorFecha value={primerDia} onChange={setPrimerDia} />
           </div>
 
           {/* Opciones */}

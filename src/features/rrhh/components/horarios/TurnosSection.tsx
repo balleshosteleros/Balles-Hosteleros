@@ -74,6 +74,7 @@ import {
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface TurnoDraft {
   nombre: string;
@@ -741,22 +742,20 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
               <div className="flex flex-1 flex-wrap items-end gap-3">
                 <div>
                   <label className="block text-xs font-medium mb-1 text-muted-foreground">Fecha de inicio</label>
-                  <Input
-                    type="date"
+                  <SelectorFecha
                     value={draft.vigenteDesde}
                     disabled={!!editandoId}
-                    onChange={(e) => setDraft((d) => ({ ...d, vigenteDesde: e.target.value }))}
+                    onChange={(valor) => setDraft((d) => ({ ...d, vigenteDesde: valor }))}
                     className="w-40"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1 text-muted-foreground">Fecha de fin</label>
-                  <Input
-                    type="date"
+                  <SelectorFecha
                     value={draft.vigenteHasta}
                     min={draft.vigenteDesde || undefined}
                     disabled={!!editandoId}
-                    onChange={(e) => setDraft((d) => ({ ...d, vigenteHasta: e.target.value }))}
+                    onChange={(valor) => setDraft((d) => ({ ...d, vigenteHasta: valor }))}
                     className="w-40"
                   />
                 </div>

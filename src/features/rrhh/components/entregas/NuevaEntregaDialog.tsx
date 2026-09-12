@@ -18,6 +18,7 @@ import { crearEntrega } from "@/features/rrhh/actions/entregas-actions";
 import { listTiposMaterial } from "@/features/rrhh/actions/entregas-tipos-actions";
 import { getEmpleadosActivos } from "@/features/rrhh/actions/empleados-actions";
 import { TALLAS_ROPA, type TipoMaterial } from "@/features/rrhh/data/entregas";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 /**
  * Registrar la entrega de UNA pieza.
@@ -187,11 +188,10 @@ export function NuevaEntregaDialog({
 
               <div className="space-y-2">
                 <Label htmlFor="entrega-fecha">Fecha</Label>
-                <Input
+                <SelectorFecha
                   id="entrega-fecha"
-                  type="date"
                   value={fecha}
-                  onChange={(e) => setFecha(e.target.value)}
+                  onChange={setFecha}
                 />
               </div>
             </div>

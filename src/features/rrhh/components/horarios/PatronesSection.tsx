@@ -64,6 +64,7 @@ import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { toast } from "sonner";
 import { Desplegable } from "@/components/ui/desplegable";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -861,20 +862,18 @@ function PatronEditor({
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Fecha de inicio</label>
-          <Input
-            type="date"
+          <SelectorFecha
             value={borrador.vigenteDesde}
-            onChange={(e) => setBorrador((prev) => ({ ...prev, vigenteDesde: e.target.value }))}
+            onChange={(valor) => setBorrador((prev) => ({ ...prev, vigenteDesde: valor }))}
             className="w-44"
           />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Fecha de fin</label>
-          <Input
-            type="date"
+          <SelectorFecha
             value={borrador.vigenteHasta}
             min={borrador.vigenteDesde || undefined}
-            onChange={(e) => setBorrador((prev) => ({ ...prev, vigenteHasta: e.target.value }))}
+            onChange={(valor) => setBorrador((prev) => ({ ...prev, vigenteHasta: valor }))}
             className="w-44"
           />
           <p className="text-[11px] text-muted-foreground mt-1">Vacío = sin fecha de fin.</p>

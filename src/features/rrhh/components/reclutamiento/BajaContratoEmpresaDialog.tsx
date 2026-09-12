@@ -41,6 +41,7 @@ import {
 } from "@/features/rrhh/data/campos-gestoria";
 import { darBajaContratoEmpresa } from "@/features/rrhh/actions/candidatos-actions";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 function hoyIso(): string {
   const d = new Date();
@@ -227,11 +228,10 @@ export function BajaContratoEmpresaDialog({
           {/* Último día de trabajo */}
           <div className="space-y-1.5">
             <Label htmlFor="ultimoDiaBaja">Último día de trabajo</Label>
-            <Input
+            <SelectorFecha
               id="ultimoDiaBaja"
-              type="date"
               value={ultimoDia}
-              onChange={(e) => setUltimoDia(e.target.value)}
+              onChange={setUltimoDia}
             />
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <CalendarDays className="h-3.5 w-3.5" />
