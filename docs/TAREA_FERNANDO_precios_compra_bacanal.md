@@ -5,6 +5,35 @@
 
 ---
 
+## 🔎 12-SEP — POR QUÉ TU CLAUDE NO COMPRUEBA COSAS (y cómo se arregla)
+
+Me dices que tu Claude no recuerda entre sesiones y que no mira cosas por su cuenta como
+hago yo. He mirado el repositorio y **no es cosa suya, le faltan tres piezas**. Lo tienes
+detallado aquí:
+
+> ### 👉 **`docs/COMO_COMPROBAR_LAS_COSAS.md`**
+
+El resumen:
+
+1. **No sabe que puede mirar la base de datos de verdad.** Es el hueco grande. Tu
+   `CLAUDE.md` no lo menciona, así que solo puede leer el código y deducir — que es otra
+   forma de decir suponer. **El permiso ya lo tienes** (está en tu `.env.local` de
+   siempre); solo faltaba la herramienta, y te la he dejado hecha:
+   `bash scripts/sql-produccion.sh -c "select ..."`.
+   Con eso se pasa de «creo que hay unos cuantos» a «hay 49, en 17 productos, y son estos».
+2. **Tampoco sabe comprobar si un despliegue ha fallado.** Una línea y lo ve.
+3. **Se le cuelan fichas de memoria.** El sistema está bien montado, pero **8 fichas no
+   están nombradas en el índice**, y una ficha que el índice no nombra no la abre nadie.
+   Una de ellas es la del cierre de la revisión con Borja, del 8 de septiembre, titulada
+   «Nota para Fernando» — **ni tu Claude ni el mío la abriríamos jamás**; yo la encontré de
+   casualidad leyendo los commits.
+
+Y un apunte: tu `CLAUDE.md` **lleva sin tocarse desde el 14 de abril**. El software ha
+cambiado enormemente desde entonces. Un manual desactualizado no es neutral: manda a
+Claude en la dirección equivocada con toda la confianza del mundo.
+
+---
+
 ## 🗂️ 12-SEP — TODO LO PENDIENTE, EN UN SOLO SITIO
 
 Este fichero se ha hecho largo y las cosas pendientes están repartidas por él. Las he
