@@ -232,6 +232,8 @@ export const POST = withMetricas("CreateBooking", async (request) => {
     apellidos: data.user_information.family_name ?? null,
     email: data.user_information.email ?? null,
     telefono: data.user_information.telephone ?? null,
+    // Nos conoció por la ficha de Google: así consta en su ficha.
+    origen: RWG_ORIGEN_CANONICO,
   });
   if (!linkRes.ok) {
     // Liberar slot (best-effort): el trigger no aplica aquí porque no hay reserva todavía.

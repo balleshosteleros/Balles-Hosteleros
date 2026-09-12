@@ -1047,16 +1047,14 @@ export function ClientesView() {
         onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
           <>
-            {/* Discreto a propósito: se consulta de vez en cuando, no es una
-                acción del día a día. Icono suelto, sin texto ni contador, para
-                no romper la barra (BARRA HORIZONTAL 1). */}
+            {/* Mismo formato que los demás iconos de la barra. */}
             <Button
               size="icon"
-              variant="ghost"
-              className="h-9 w-9 text-muted-foreground hover:text-foreground"
+              variant="outline"
+              className="h-9 w-9"
               onClick={() => setShowCalendario(true)}
-              title="Calendario de cumpleaños y visitas"
-              aria-label="Calendario de cumpleaños y visitas"
+              title="Calendario de cumpleaños"
+              aria-label="Calendario de cumpleaños"
             >
               <CalendarDays className="h-4 w-4" strokeWidth={1.75} />
             </Button>
@@ -1090,18 +1088,25 @@ export function ClientesView() {
 
       <Card>
         <CardContent className="p-0">
-          <table data-tabla-consulta className="w-full text-sm">
-            <thead><tr className="border-b bg-muted/40">
-              {columnasRender.map((c) => columnDefs[c.campo]?.th)}
-            </tr></thead>
-            <tbody>
-              {visibles.map(c => (
-                <tr key={c.id} className="border-b hover:bg-muted/20 cursor-pointer" onClick={() => abrirFicha(c)}>
-                  {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Con muchas columnas puestas la tabla no cabe de ancho: se
+              aplastaban unas contra otras y las últimas quedaban ilegibles.
+              Ahora cada columna ocupa lo suyo y el listado se desplaza a lo
+              ancho. Solo en ordenador: en el móvil la tabla se lee como fichas
+              apiladas (ver `data-tabla-consulta` en globals.css). */}
+          <div className="md:overflow-x-auto">
+            <table data-tabla-consulta className="w-full text-sm md:min-w-max">
+              <thead><tr className="border-b bg-muted/40">
+                {columnasRender.map((c) => columnDefs[c.campo]?.th)}
+              </tr></thead>
+              <tbody>
+                {visibles.map(c => (
+                  <tr key={c.id} className="border-b hover:bg-muted/20 cursor-pointer" onClick={() => abrirFicha(c)}>
+                    {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {filtrados.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted-foreground">

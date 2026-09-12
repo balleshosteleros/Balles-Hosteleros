@@ -296,6 +296,8 @@ export async function crearReservaPublicaAction(
     apellidos: data.apellidos,
     email: data.email,
     telefono: data.telefono,
+    // El mismo canal que se guarda en la reserva: por aquí nos conoció.
+    origen: data.origen ?? "RESERVA_WEB",
   });
   if (!link.ok) {
     console.error("[reservar-publica] vincular cliente:", link.error);

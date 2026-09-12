@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizarNombre, normalizarNombreOrNull } from "@/shared/lib/normalizar-nombre";
+import { normalizarOrigen, ORIGEN_SIN_DATO } from "@/features/sala/data/origenes";
 
 export interface ClienteSalaRow {
   id: string;
@@ -13,6 +14,8 @@ export interface ClienteSalaRow {
   clasificacion: string;
   visitas: number;
   ultima_visita: string | null;
+  /** Canal por el que nos dejó sus datos la primera vez. NULL = no se sabe. */
+  origen?: string | null;
 }
 
 export type CampoDistinto = "nombre" | "apellidos" | "email" | "telefono";
@@ -80,6 +83,13 @@ interface FindOrLinkInput {
   apellidos?: string | null;
   email?: string | null;
   telefono?: string | null;
+  /**
+   * Canal por el que esta persona nos deja sus datos: el origen de la reserva
+   * que está creando la ficha (WEB, GOOGLE, TELEFONO, la palabra clave de una
+   * campaña…). Solo se usa cuando la ficha NACE aquí o cuando la que ya existe
+   * no tiene origen anotado.
+   */
+  origen?: string | null;
 }
 
 /**
@@ -111,7 +121,45 @@ export async function findOrLinkClienteSala(
   if (!r?.cliente?.id) {
     return { ok: false, error: "No se pudo vincular el cliente" };
   }
+
+  await anotarOrigenSiFalta(supabase, r.cliente, input.origen);
+
   return { ok: true, result: r };
+}
+
+/**
+ * Deja anotado por dónde entró la persona, si aún no se sabía.
+ *
+ * POR QUÉ aquí y no en la RPC: la función de base que crea la ficha no recibe
+ * el origen, así que TODA ficha nacida al reservar se quedaba con el canal en
+ * blanco —el dato que dice qué capta clientes y que después no se puede
+ * reconstruir—. Se rellena justo después de crearla, con el origen de la
+ * reserva que la ha traído.
+ *
+ * Solo RELLENA HUECOS: a una ficha que ya tiene origen no se la toca nunca. El
+ * origen del cliente es por dónde nos conoció la PRIMERA vez; que hoy reserve
+ * por Google no cambia que llegara por la web hace dos años.
+ */
+async function anotarOrigenSiFalta(
+  supabase: SupabaseClient,
+  cliente: ClienteSalaRow,
+  origen: string | null | undefined,
+): Promise<void> {
+  if (cliente.origen) return;
+  const clave = normalizarOrigen(origen);
+  // Sin dato no se inventa un canal: NULL sigue queriendo decir "no se sabe".
+  if (clave === ORIGEN_SIN_DATO) return;
+  try {
+    await supabase
+      .from("clientes_sala")
+      .update({ origen: clave, updated_at: new Date().toISOString() })
+      .eq("id", cliente.id)
+      .is("origen", null);
+    cliente.origen = clave;
+  } catch (err) {
+    // Anotar el canal no puede tumbar una reserva que ya está aceptada.
+    console.error("[cliente-link] anotarOrigen:", err);
+  }
 }
 
 /**

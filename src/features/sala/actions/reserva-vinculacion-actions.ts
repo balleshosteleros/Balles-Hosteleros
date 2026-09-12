@@ -9,6 +9,7 @@ import {
 } from "@/features/sala/lib/cliente-actividad";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizarNombre, normalizarNombreOrNull } from "@/shared/lib/normalizar-nombre";
+import { normalizarOrigen, ORIGEN_SIN_DATO } from "@/features/sala/data/origenes";
 
 /**
  * Resolución de una reserva vinculada a un cliente que ya existía.
@@ -205,7 +206,7 @@ export async function resolverVinculacion(
     const { data: r, error: errR } = await supabase
       .from("reservas")
       .select(
-        "id, cliente_id, fecha, vinculacion_estado, vinculacion_motivo, datos_declarados, cliente_nombre, cliente_apellidos, cliente_email, cliente_telefono",
+        "id, cliente_id, fecha, origen, vinculacion_estado, vinculacion_motivo, datos_declarados, cliente_nombre, cliente_apellidos, cliente_email, cliente_telefono",
       )
       .eq("id", reservaId)
       .eq("empresa_id", empresaId)
@@ -425,6 +426,11 @@ export async function resolverVinculacion(
         telefono: motivo === "telefono" ? (declarados.telefono ?? null) : (r.cliente_telefono as string | null),
         clasificacion: "NUEVO",
         visitas: 0,
+        // La ficha nueva hereda el canal de la reserva que la separa: es por
+        // donde esa persona nos ha dejado sus datos.
+        origen: normalizarOrigen(r.origen as string | null) === ORIGEN_SIN_DATO
+          ? null
+          : normalizarOrigen(r.origen as string | null),
       })
       .select("id")
       .single();

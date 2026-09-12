@@ -321,6 +321,8 @@ export async function createReserva(input: {
         apellidos: input.clienteApellidos,
         email: input.clienteEmail,
         telefono: input.clienteTelefono,
+        // Por dónde entra la persona: el canal de la reserva que crea su ficha.
+        origen: input.origen,
       });
       if (!link.ok) {
         console.error("[reservas] vincular cliente:", link.error);
@@ -795,7 +797,7 @@ export async function updateReserva(
     if (tocaContacto && empresaId) {
       const { data: actual } = await supabase
         .from("reservas")
-        .select("cliente_nombre, cliente_apellidos, cliente_email, cliente_telefono, cliente_id")
+        .select("cliente_nombre, cliente_apellidos, cliente_email, cliente_telefono, cliente_id, origen")
         .eq("id", id)
         .maybeSingle();
       const nombre = updates.clienteNombre ?? actual?.cliente_nombre ?? "Cliente";
@@ -815,6 +817,9 @@ export async function updateReserva(
           apellidos,
           email,
           telefono,
+          // Si al cambiar el contacto nace una ficha nueva, hereda el canal de
+          // esta reserva —el que se esté guardando, o el que ya tenía.
+          origen: updates.origen ?? actual?.origen ?? null,
         });
         if (!link.ok) {
           return { ok: false, error: "No se pudo vincular el cliente" };
