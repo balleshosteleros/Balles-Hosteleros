@@ -2443,16 +2443,22 @@ export function ComunicadosView() {
                         </div>
                       ) : (
                       <div className="flex items-center justify-end gap-1">
-                        {/* Solo el BORRADOR se publica desde aquí: es lo que
-                            está escrito y esperando a que alguien lo mande. El
+                        {/* Solo el BORRADOR se manda desde aquí: es lo único
+                            escrito y a la espera de que alguien lo mande. El
                             programado ya tiene día y hora y sale solo, así que
                             el botón sobra; si hay que adelantarlo, se le quita
-                            la fecha desde su ficha. Una sanción tampoco:
-                            publicarla es emitir su documento, y eso se hace
-                            desde su ficha o el día que le toca. */}
-                        {c.estado === "borrador" && c.tipo !== "sancion" && (
-                          <Button size="sm" className="h-8 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => pedirPublicar(c)}>
-                            <Send className="h-3.5 w-3.5 mr-1" />Publicar
+                            la fecha desde su ficha.
+                            La sanción entra igual que el resto, pero el botón
+                            la LLEVA A SU FICHA: mandarla no es cambiarle el
+                            estado, es emitir el documento que se firma. */}
+                        {c.estado === "borrador" && (
+                          <Button
+                            size="sm"
+                            className="h-8 bg-emerald-600 text-white hover:bg-emerald-700"
+                            onClick={() => (c.tipo === "sancion" ? openEdit(c) : pedirPublicar(c))}
+                          >
+                            <Send className="h-3.5 w-3.5 mr-1" />
+                            {c.tipo === "sancion" ? "Enviar" : "Publicar"}
                           </Button>
                         )}
                       <DropdownMenu>
