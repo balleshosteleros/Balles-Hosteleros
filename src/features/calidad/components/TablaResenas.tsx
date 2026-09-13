@@ -77,8 +77,15 @@ function notaDe(r: Resena): number | null {
   });
 }
 
-/** Cuántas de las tres preguntas contestó. 0 = solo dio una nota global. */
-function preguntasContestadas(r: Resena): number {
+/**
+ * Cuántas notas por apartado trae la valoración. 0 = solo dio una nota global.
+ *
+ * No se compara con un número fijo: cada empresa pregunta lo suyo —BACANAL
+ * puntúa comida, bebida, servicio y ambiente; HABANA no puntúa comida— y una
+ * valoración completa de BACANAL tiene CUATRO. Dando por buena solo la de tres,
+ * la columna decía "No" a las más completas que hay.
+ */
+function desgloseContestado(r: Resena): number {
   return [
     r.rating_comida,
     r.rating_bebida,
@@ -115,7 +122,7 @@ export function crearAccesoResena(
     if (campo === "nota") return notaDe(r) ?? 0;
     if (campo === "origen") return ORIGEN_LABEL[r.origen] ?? r.origen;
     if (campo === "estado") return ESTADO_LABEL[r.estado] ?? r.estado;
-    if (campo === "preguntas") return preguntasContestadas(r) === 3 ? "Sí" : "No";
+    if (campo === "preguntas") return desgloseContestado(r) > 0 ? "Sí" : "No";
     // Cuándo se puso la reseña. `fecha_registro` es la del informe de Cover;
     // `fecha_reseña` la de Google y la de las nuestras.
     if (campo === "fecha") return r.fecha_registro ?? r.fecha_reseña ?? "";
@@ -183,7 +190,7 @@ export function TablaResenas({
             <tr>
               {cabecera("cliente", "Cliente", "texto")}
               {cabecera("nota", "Valoración", "numero")}
-              {cabecera("preguntas", "Las 3 preguntas", "lista", ["Sí", "No"])}
+              {cabecera("preguntas", "Valoración separada", "lista", ["Sí", "No"])}
               {cabecera(
                 "origen",
                 "Origen",
@@ -218,7 +225,7 @@ export function TablaResenas({
             )}
             {visibles.map((r) => {
               const nota = notaDe(r);
-              const tresPreguntas = preguntasContestadas(r) === 3;
+              const apartados = desgloseContestado(r);
               return (
                 <ToolTooltip key={r.id} label="Ver la valoración completa">
                   <tr
@@ -241,18 +248,17 @@ export function TablaResenas({
                       )}
                     </td>
                     <td className="p-3 whitespace-nowrap">
-                      {/* Quién puntuó comida, servicio y ambiente por separado, que
-                          es la valoración que de verdad dice algo. El detalle se
-                          abre al pulsar la fila. */}
+                      {/* Si además de la nota general puntuó los apartados por
+                          separado. Aquí solo el sí o el no: las notas de cada
+                          apartado se ven entrando en la valoración, que es donde
+                          se puede leer con calma. */}
                       <span
                         className={cn(
                           "text-xs",
-                          tresPreguntas
-                            ? "text-emerald-700"
-                            : "text-muted-foreground",
+                          apartados > 0 ? "text-emerald-700" : "text-muted-foreground",
                         )}
                       >
-                        {tresPreguntas ? "Sí" : "No"}
+                        {apartados > 0 ? "Sí" : "No"}
                       </span>
                     </td>
                     <td className="p-3 whitespace-nowrap">

@@ -13,7 +13,7 @@
  * detalle.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   AlertCircle,
@@ -197,7 +197,12 @@ export function ResenasView() {
     campo: "fecha",
     direccion: "desc",
   });
-  const { empresaActual } = useEmpresa();
+  // `empresaVisible` es la que el SERVIDOR confirma que está sirviendo, no la
+  // que el selector acaba de marcar. Con `empresaActual` había carrera: al
+  // cambiar de empresa, el efecto disparaba la carga ANTES de que la cookie
+  // llegara al servidor, así que la cabecera ya decía HABANA y la tabla traía
+  // las valoraciones de BACANAL.
+  const { empresaVisible } = useEmpresa();
 
   /**
    * Quién gestionó cada reseña, para poder poner su nombre en la tarjeta sin
@@ -210,29 +215,36 @@ export function ResenasView() {
     [gestores],
   );
 
+  // Segunda red: una petición lanzada antes del cambio puede contestar después.
+  // Si al volver ya no es la empresa que se está viendo, su respuesta se tira.
+  const empresaPedida = useRef<string | null>(null);
+
   const cargar = useCallback(async () => {
+    const pedida = empresaVisible.id;
+    empresaPedida.current = pedida;
     setLoading(true);
     const [data, place, empleados] = await Promise.all([
       listResenas(),
       getEmpresaPlaceInfo(),
       listEmpleadosGestores(),
     ]);
+    if (empresaPedida.current !== pedida) return;
     setResenas(data);
     setInfo(place);
     setGestores(empleados);
     setLoading(false);
-  }, []);
+  }, [empresaVisible.id]);
 
   useEffect(() => {
     cargar();
-  }, [cargar, empresaActual.id]);
+  }, [cargar]);
 
   // Sincronizacion en vivo: las resenas entran solas segun se sincronizan desde
   // Google, y varias personas responden a la vez. Se pausa con el detalle o los
   // agentes IA abiertos para no pisar una respuesta a medio redactar.
   useSincronizacionEnVivo({
     tablas: ["resenas"],
-    empresaId: empresaActual.id,
+    empresaId: empresaVisible.id,
     onCambio: () => void cargar(),
     pausado: agentesOpen || !!detalleResena,
   });
@@ -812,10 +824,16 @@ function ManualLinkPanel({
  * que es lo honesto: no se inventan tres notas repitiendo la misma.
  */
 function DesglosePreguntas({ resena }: { resena: Resena }) {
+  // Los seis apartados que puede preguntar una empresa. Se pintan solo los que
+  // el cliente puntuó: faltaban bebida, música y espectáculo, y BACANAL tiene
+  // la bebida activada desde el principio.
   const areas = [
     { label: "Comida", nota: resena.rating_comida },
+    { label: "Bebida", nota: resena.rating_bebida },
     { label: "Servicio", nota: resena.rating_servicio },
     { label: "Ambiente", nota: resena.rating_ambiente },
+    { label: "Música", nota: resena.rating_musica },
+    { label: "Espectáculo", nota: resena.rating_espectaculo },
   ].filter((a) => typeof a.nota === "number");
 
   if (areas.length === 0) return null;
