@@ -39,9 +39,12 @@ function horasDeTramosCliente(tramos: { inicio: string; fin: string }[]): number
 function DiaRow({ dia }: { dia: DiaHorario }) {
   const { horario, esHoy } = dia;
 
+  // "Libre" solo si ese día está cubierto por un patrón o un turno: es el
+  // patrón el que decide que un día sin turno es día libre. Un día sin nada
+  // asignado no es libre, es que aún no tiene horario.
   let icono = <CalendarOff className="h-4 w-4 text-muted-foreground/60" />;
-  let texto = "Libre";
-  let textoClase = "text-muted-foreground";
+  let texto = dia.asignado ? "Libre" : "Sin asignar";
+  let textoClase = dia.asignado ? "text-muted-foreground" : "text-muted-foreground/70";
   let horasDia: number | null = null;
 
   if (horario.tipo === "fijo" && horario.tramos.length > 0) {

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
+  getDiasConHorarioAsignado,
   getHorarioDia,
   horasDeTramos,
   semanaDeFecha,
@@ -28,6 +29,12 @@ export interface DiaHorario {
   diaNum: number; // día del mes (1–31)
   esHoy: boolean;
   horario: HorarioDia;
+  /**
+   * true si ese día está cubierto por un turno o un patrón. Solo entonces un
+   * día sin tramos significa que LIBRA; sin cobertura no hay horario que leer,
+   * que no es lo mismo.
+   */
+  asignado: boolean;
 }
 
 export interface HorarioSemana {
@@ -95,11 +102,27 @@ export async function getHorarioSemanaDeEmpleado(
     return { disponible: false, lunes, domingo, dias: diasVacios, totalHoras: 0 };
   }
 
+  // Días cubiertos por un turno o un patrón vigente. Sin ninguno no se pinta la
+  // semana: antes salían los siete días como "Libre" y un total de 0 h, que es
+  // exactamente lo contrario de la verdad — quien no tiene horario asignado no
+  // es que libre toda la semana, es que todavía no se le ha puesto.
+  const cubiertos = await getDiasConHorarioAsignado(
+    admin,
+    empresaId,
+    empleadoId,
+    lunes,
+    domingo,
+  );
+  if (cubiertos.size === 0) {
+    return { disponible: false, lunes, domingo, dias: diasVacios, totalHoras: 0 };
+  }
+
   const dias: DiaHorario[] = await Promise.all(
     diasVacios.map(async (d) => {
+      if (!cubiertos.has(d.fecha)) return d; // asignado: false
       try {
         const horario = await getHorarioDia(admin, empresaId, empleadoId, d.fecha);
-        return { ...d, horario };
+        return { ...d, horario, asignado: true };
       } catch {
         return d;
       }
@@ -119,6 +142,7 @@ function semanaVacia(lunes: string, hoy: string): DiaHorario[] {
       diaNum: Number(fecha.slice(8, 10)),
       esHoy: fecha === hoy,
       horario: { tipo: "ninguno" as const },
+      asignado: false,
     };
   });
 }

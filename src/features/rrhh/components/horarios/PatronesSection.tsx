@@ -736,11 +736,26 @@ function PatronEditor({
   };
 
   const guardar = async () => {
-    setGuardando(true);
     const semanas =
       borrador.tipo === "semanal"
         ? borrador.semanas.map((s, i) => ({ orden: i, dias: s.dias }))
         : [{ orden: 0, dias: borrador.diasLibres }];
+
+    // La semana hay que rellenarla: los días que se dejan sin turno son los
+    // días LIBRES, así que una semana entera vacía no es "todo libre", es un
+    // patrón sin horario. Guardarlo dejaba a quien lo tuviera asignado viendo
+    // siete días libres y cero horas.
+    const vacia = semanas.findIndex((s) => s.dias.every((d) => !d));
+    if (vacia >= 0) {
+      toast.error(
+        borrador.tipo === "semanal" && semanas.length > 1
+          ? `La semana ${vacia + 1} no tiene ningún turno. Pon al menos uno: los días que dejes vacíos son los días libres`
+          : "Pon al menos un turno en la semana: los días que dejes vacíos son los días libres",
+      );
+      return;
+    }
+
+    setGuardando(true);
 
     const vigente_desde = borrador.vigenteDesde || undefined;
     const vigente_hasta = borrador.vigenteHasta ? borrador.vigenteHasta : null;
@@ -1040,7 +1055,10 @@ function SemanalGrid({
                           )}
                         </div>
                       ) : (
-                        <span className="text-muted-foreground">Sin turno</span>
+                        // Un día sin turno dentro del patrón ES el día libre:
+                        // decirlo aquí evita que se confunda con "falta por
+                        // rellenar", que es lo que parecía con "Sin turno".
+                        <span className="text-muted-foreground">Libre</span>
                       )}
                     </div>
                   </div>
