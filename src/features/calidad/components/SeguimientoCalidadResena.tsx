@@ -66,9 +66,11 @@ export function SeguimientoCalidadResena({
   empleados,
 }: Props) {
   return (
-    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Seguimiento de calidad
+    /* Sin marco propio: lo pone la banda que lo contiene, igual que en la
+       ficha de reserva. Con los dos salía un recuadro dentro de otro. */
+    <div className="space-y-3">
+      <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">
+        Gestión de calidad
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

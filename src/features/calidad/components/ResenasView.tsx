@@ -1087,51 +1087,70 @@ function DetalleResenaDialog({
               podía estar puntuada con un 4 y clasificada a mano como Regular.
               Ahora manda lo que puntuó el cliente, y un área por debajo de 3
               impide el Excelente por alta que sea la media. */}
-          <div>
-            <Label className="text-muted-foreground">Veredicto</Label>
-            <div className="mt-1">
-              {veredicto ? (
-                <span
-                  className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${VEREDICTOS[veredicto].badge}`}
-                >
-                  {VEREDICTOS[veredicto].label}
-                </span>
-              ) : (
-                <span className="text-sm text-muted-foreground">
-                  Todavía sin valorar
-                </span>
-              )}
+          {/* ── Dos bandas enfrentadas, como en la ficha de reserva ───────
+              A la IZQUIERDA lo que dijo el CLIENTE —su veredicto, lo que puntuó
+              y lo que escribió—: es un hecho, no se negocia. A la DERECHA, en
+              azul, lo que rellena CALIDAD al ocuparse de ella. Son dos cosas
+              distintas y antes iban seguidas en una sola columna, así que no se
+              veía dónde acababa la opinión del cliente y empezaba el trabajo
+              del equipo. */}
+          <div className="grid items-start gap-3 md:grid-cols-2">
+            <div className="space-y-3 rounded-lg border bg-muted/25 p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                La valoración
+              </div>
+
+              <div>
+                <Label className="text-xs text-muted-foreground">Veredicto</Label>
+                <div className="mt-1">
+                  {veredicto ? (
+                    <span
+                      className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${VEREDICTOS[veredicto].badge}`}
+                    >
+                      {VEREDICTOS[veredicto].label}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">
+                      Todavía sin valorar
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">
+                  Comentario {esGoogle && "(de Google · no editable)"}
+                </Label>
+                <Textarea
+                  value={comentario}
+                  onChange={(e) => setComentario(e.target.value)}
+                  disabled={esGoogle}
+                  rows={5}
+                  placeholder="Sin comentario"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-3">
+              <SeguimientoCalidadResena
+                fechaRegistro={fechaRegistro}
+                onFechaRegistroChange={setFechaRegistro}
+                fechaSesion={fechaSesion}
+                onFechaSesionChange={setFechaSesion}
+                telefono={telefono}
+                onTelefonoChange={setTelefono}
+                cogeTelefono={cogeTelefono}
+                onCogeTelefonoChange={setCogeTelefono}
+                estadoGestion={estadoGestion}
+                onEstadoGestionChange={setEstadoGestion}
+                observaciones={observaciones}
+                onObservacionesChange={setObservaciones}
+                gestionadaPor={gestionadaPor}
+                onGestionadaPorChange={setGestionadaPor}
+                empleados={empleados}
+              />
             </div>
           </div>
-
-          <div>
-            <Label>Comentario {esGoogle && "(de Google · no editable)"}</Label>
-            <Textarea
-              value={comentario}
-              onChange={(e) => setComentario(e.target.value)}
-              disabled={esGoogle}
-              rows={4}
-              placeholder="Sin comentario"
-            />
-          </div>
-
-          <SeguimientoCalidadResena
-            fechaRegistro={fechaRegistro}
-            onFechaRegistroChange={setFechaRegistro}
-            fechaSesion={fechaSesion}
-            onFechaSesionChange={setFechaSesion}
-            telefono={telefono}
-            onTelefonoChange={setTelefono}
-            cogeTelefono={cogeTelefono}
-            onCogeTelefonoChange={setCogeTelefono}
-            estadoGestion={estadoGestion}
-            onEstadoGestionChange={setEstadoGestion}
-            observaciones={observaciones}
-            onObservacionesChange={setObservaciones}
-            gestionadaPor={gestionadaPor}
-            onGestionadaPorChange={setGestionadaPor}
-            empleados={empleados}
-          />
 
           <div>
             <div className="flex items-center justify-between mb-1">

@@ -235,39 +235,6 @@ export async function listResenas(): Promise<Resena[]> {
 
 // ─── Pipeline: write ────────────────────────────────────────────
 
-export interface CrearResenaInput {
-  nombre_comensal: string;
-  telefono?: string | null;
-  comentario?: string | null;
-  rating?: number | null;
-  origen?: OrigenResena;
-}
-
-export async function crearResena(input: CrearResenaInput) {
-  try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false as const, error: "No autenticado" };
-    const { data, error } = await supabase
-      .from("resenas")
-      .insert({
-        empresa_id: empresaId,
-        nombre_comensal: input.nombre_comensal,
-        telefono: input.telefono ?? null,
-        comentario: input.comentario ?? null,
-        rating: input.rating ?? null,
-        origen: input.origen ?? "manual",
-      })
-      .select("*")
-      .single();
-    if (error) throw error;
-    revalidatePath("/calidad/resenas");
-    return { ok: true as const, data: data as Resena };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    return { ok: false as const, error: msg };
-  }
-}
-
 export interface ActualizarResenaInput {
   nombre_comensal?: string;
   telefono?: string | null;

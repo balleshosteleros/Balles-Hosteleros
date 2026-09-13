@@ -7,7 +7,6 @@
  */
 
 export type OrigenResena =
-  | "manual"
   | "qr"
   | "carta"
   | "google"
@@ -353,7 +352,6 @@ export const ORIGEN_LABEL: Record<OrigenResena, string> = {
   qr: "QR en mesa",
   carta: "Carta digital",
   encuesta: "Encuesta",
-  manual: "Manual",
   otro: "Otro",
 };
 
