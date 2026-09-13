@@ -20,7 +20,7 @@ import { ahoraEnZona, formatFechaHoraEnZona } from "@/features/empresa/lib/zona-
 import { HORA_CORTE_DIA_NEGOCIO, diaNegocioDe, turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useBloqueoCambioEmpresa } from "@/shared/hooks/useBloqueoCambioEmpresa";
-import { Plus, Search, ChevronLeft, ChevronRight, Check, Move, Map as MapIcon, List as ListIcon, Lock, Table2, ArrowLeftRight, ArrowRight } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, Check, Move, Combine, Map as MapIcon, List as ListIcon, Lock, Table2, ArrowLeftRight, ArrowRight } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
   () =>
@@ -519,9 +519,13 @@ function StatusDot({ estado }: { estado: EstadoReserva }) {
 //
 // Reparto de la ventana, de arriba abajo:
 //   · Cabecera — mesa/zona y el CANDADO que saca la mesa del servicio.
-//   · Ficha de la reserva.
-//   · "Editar" + "Desplazar", los dos grandes y al mismo nivel: mover a
-//     alguien de mesa se hace tanto como abrir su ficha.
+//   · Ficha de la reserva. El NOMBRE del cliente abre su ficha completa: es
+//     donde todo el mundo pincha para "ver la reserva", asi que ya no hace
+//     falta un boton "Editar" que ocupaba media fila para lo mismo.
+//   · "Unir" + "Desplazar", los dos grandes y al mismo nivel: son las dos
+//     cosas que se hacen con las mesas en pleno servicio. "Unir" deja el plano
+//     esperando: se pulsan las mesas que se juntan, ahi mismo, sin abrir
+//     ninguna ventana encima que tape la sala.
 //   · Estados de servicio: Confirmada · Sentada · Terminada · Liberada.
 //   · No show y Cancelada, anchos y aparte: son los dos finales que cierran
 //     la reserva sin que el cliente se haya sentado.
@@ -535,12 +539,14 @@ function ReservaQuickPopover({
   onCambiarEstado,
   onBloquearMesa,
   onDesplazarReserva,
+  onUnirMesas,
   onWalkIn,
   desdeLista = false,
   sinCabecera = false,
 }: {
   mesa: Mesa | null;
   reserva: Reserva | null;
+  /** Abre la ficha completa. Se llega pinchando el NOMBRE del cliente. */
   onEditar: () => void;
   onCambiarEstado: (id: string, estado: EstadoReserva) => void;
   /**
@@ -557,6 +563,11 @@ function ReservaQuickPopover({
   onBloquearMesa: (m: Mesa | null, r: Reserva | null) => void;
   /** Abre el selector de mesa destino para mover la reserva. */
   onDesplazarReserva: (r: Reserva) => void;
+  /**
+   * Deja el plano en modo unir: la reserva queda "en la mano" y se pulsan en
+   * el propio plano las mesas que se le juntan o se le quitan.
+   */
+  onUnirMesas: (r: Reserva) => void;
   /**
    * Se ha abierto desde el LISTADO, no pulsando una mesa del plano. Aquí el
    * usuario no ha señalado ninguna mesa en concreto, así que el candado
@@ -634,7 +645,26 @@ function ReservaQuickPopover({
       {sinCabecera ? null : reserva ? (
         <div className="border rounded-md px-2 py-1.5 space-y-0.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-medium text-xs truncate">
+            {/* El NOMBRE es el enlace a la ficha completa. Antes hacia falta
+                un boton "Editar" para lo mismo, y el sitio donde todo el mundo
+                pinchaba —el nombre— no hacia nada. */}
+            <span
+              role="button"
+              tabIndex={0}
+              title="Abrir la ficha de la reserva"
+              className="min-w-0 truncate text-xs font-medium underline decoration-dotted underline-offset-2 hover:text-primary focus-visible:text-primary focus-visible:outline-none"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditar();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onEditar();
+                }
+              }}
+            >
               {reserva.cliente || "WALK IN"} {reserva.apellidos}
             </span>
             <Badge className={cn("text-[9px]", reservaColor[reserva.estado])} variant="outline">
@@ -662,11 +692,18 @@ function ReservaQuickPopover({
       )}
       {reserva && (
         <>
-          {/* Las dos acciones que se usan a diario, del mismo tamaño: mover
-              una reserva de mesa pesa tanto como abrir su ficha. */}
+          {/* Las dos cosas que se hacen con las mesas de una reserva, del
+              mismo tamaño: juntarle otra mesa pesa tanto como cambiarla de
+              sitio. Las dos se resuelven sobre el plano, sin ventanas encima. */}
           <div className="grid grid-cols-2 gap-1.5">
-            <Button size="sm" variant="outline" className="h-9 text-xs" onClick={onEditar}>
-              Editar
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 text-xs"
+              onClick={() => onUnirMesas(reserva)}
+            >
+              <Combine className="h-3.5 w-3.5 mr-1" />
+              Unir
             </Button>
             <Button
               size="sm"
@@ -725,6 +762,7 @@ function MesaReservasPopover({
   onCambiarEstado,
   onBloquearMesa,
   onDesplazarReserva,
+  onUnirMesas,
   onWalkIn,
 }: {
   mesa: Mesa | null;
@@ -733,6 +771,7 @@ function MesaReservasPopover({
   onCambiarEstado: (id: string, estado: EstadoReserva) => void;
   onBloquearMesa: (m: Mesa | null, r: Reserva | null) => void;
   onDesplazarReserva: (r: Reserva) => void;
+  onUnirMesas: (r: Reserva) => void;
   onWalkIn?: (m: Mesa) => void;
 }) {
   // Una sola reserva (o ninguna): el popover de siempre, sin nada alrededor.
@@ -745,6 +784,7 @@ function MesaReservasPopover({
         onCambiarEstado={onCambiarEstado}
         onBloquearMesa={onBloquearMesa}
         onDesplazarReserva={onDesplazarReserva}
+        onUnirMesas={onUnirMesas}
         onWalkIn={onWalkIn}
       />
     );
@@ -758,6 +798,7 @@ function MesaReservasPopover({
       onCambiarEstado={onCambiarEstado}
       onBloquearMesa={onBloquearMesa}
       onDesplazarReserva={onDesplazarReserva}
+      onUnirMesas={onUnirMesas}
     />
   );
 }
@@ -784,6 +825,7 @@ function MesaVariasReservas({
   onCambiarEstado,
   onBloquearMesa,
   onDesplazarReserva,
+  onUnirMesas,
 }: {
   mesa: Mesa | null;
   reservas: Reserva[];
@@ -791,6 +833,7 @@ function MesaVariasReservas({
   onCambiarEstado: (id: string, estado: EstadoReserva) => void;
   onBloquearMesa: (m: Mesa | null, r: Reserva | null) => void;
   onDesplazarReserva: (r: Reserva) => void;
+  onUnirMesas: (r: Reserva) => void;
 }) {
   const [abiertaId, setAbiertaId] = useState<string | null>(reservas[0]?.id ?? null);
   const abierta = reservas.find((r) => r.id === abiertaId) ?? null;
@@ -834,7 +877,26 @@ function MesaVariasReservas({
             <span className="shrink-0 text-xs font-semibold tabular-nums">
               {r.hora.slice(0, 5)}
             </span>
-            <span className="min-w-0 flex-1 truncate text-xs font-medium">
+            {/* Misma regla que en el resto de la pantalla: el NOMBRE abre la
+                ficha; pulsar cualquier otra parte de la fila solo elige a cuál
+                de las reservas de la mesa se refieren los botones de abajo. */}
+            <span
+              role="button"
+              tabIndex={0}
+              title="Abrir la ficha de la reserva"
+              className="min-w-0 flex-1 truncate text-xs font-medium underline decoration-dotted underline-offset-2 hover:text-primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditar(r);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onEditar(r);
+                }
+              }}
+            >
               {r.cliente || "WALK IN"} {r.apellidos}
             </span>
             <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
@@ -866,6 +928,7 @@ function MesaVariasReservas({
             onCambiarEstado={onCambiarEstado}
             onBloquearMesa={onBloquearMesa}
             onDesplazarReserva={onDesplazarReserva}
+            onUnirMesas={onUnirMesas}
           />
         </div>
       )}
@@ -2906,6 +2969,24 @@ function encuadreAutomatico(
   return { x, y, width, height };
 }
 
+/**
+ * Unión de mesas en curso SOBRE EL PLANO. La lleva la vista y el plano solo la
+ * pinta: nada de esto toca la base de datos hasta que se pulsa "Guardar", así
+ * que un clic de más se deshace pulsando otra vez la misma mesa.
+ */
+interface UnionEnPlano {
+  /** Reserva a la que se le están juntando (o quitando) mesas. */
+  reserva: Reserva;
+  /** Códigos elegidos ahora mismo, en mayúsculas. */
+  seleccion: string[];
+  /** Los que la reserva tenía grabados al empezar, para saber qué cambia. */
+  originales: string[];
+  /** La selección ya no es la de partida. */
+  hayCambios: boolean;
+  /** Guardando o preguntando al servidor: el plano no acepta más clics. */
+  ocupado: boolean;
+}
+
 function PlanoCanvas({
   mesas,
   posiciones,
@@ -2922,10 +3003,15 @@ function PlanoCanvas({
   onCambiarEstado,
   onBloquearMesa,
   onDesplazarReserva,
+  onUnirMesas,
   onQuitarBloqueoMesa,
   onWalkIn,
   reservaMoviendo,
   onElegirDestino,
+  union,
+  onToggleMesaUnion,
+  onGuardarUnion,
+  onCancelarUnion,
   esOscuro,
   encuadre,
 }: {
@@ -2954,6 +3040,7 @@ function PlanoCanvas({
   /** Candado del popover: mesa concreta del plano, o null desde la lista. */
   onBloquearMesa: (m: Mesa | null, r: Reserva | null) => void;
   onDesplazarReserva: (r: Reserva) => void;
+  onUnirMesas: (r: Reserva) => void;
   /** Si la mesa está BLOQUEADA y se pulsa, levanta el bloqueo solo para (fecha, turno). */
   onQuitarBloqueoMesa?: (m: Mesa) => void;
   /** Alta rápida de walk-in sobre una mesa libre del plano. */
@@ -2964,6 +3051,15 @@ function PlanoCanvas({
    */
   reservaMoviendo?: Reserva | null;
   onElegirDestino?: (m: Mesa) => void;
+  /**
+   * Reserva "en la mano" tras pulsar Unir. El plano deja de abrir fichas y
+   * cada clic suma o quita esa mesa de la selección, que solo se guarda al
+   * pulsar "Guardar" en la barra de arriba.
+   */
+  union?: UnionEnPlano | null;
+  onToggleMesaUnion?: (m: Mesa) => void;
+  onGuardarUnion?: () => void;
+  onCancelarUnion?: () => void;
   /** Tema activo de la vista: decide si los pasteles de zona se aclaran u oscurecen. */
   esOscuro: boolean;
   /**
@@ -2973,6 +3069,10 @@ function PlanoCanvas({
   encuadre?: PlanoEncuadre | null;
 }) {
   const moviendo = reservaMoviendo != null;
+  const uniendo = union != null;
+  // Ni moviendo ni uniendo se abren fichas: el plano está esperando un clic
+  // sobre una mesa y una ficha abierta encima tapa justo lo que hay que pulsar.
+  const planoOcupado = moviendo || uniendo;
   // Qué ficha de mesa está abierta (solo una a la vez, y ninguna en modo mover).
   const [mesaPopoverAbiertaId, setMesaPopoverAbiertaId] = useState<string | null>(null);
   // Mesas con posición x/y conocida.
@@ -3113,6 +3213,59 @@ function PlanoCanvas({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden py-3 min-h-0">
+      {/* UNIR: aquí sí hace falta barra, porque a diferencia de mover no hay un
+          clic que cierre la operación —se pueden pulsar varias mesas— y el
+          cambio no existe hasta que se guarda. Enseña cómo va quedando la
+          reserva y las dos únicas salidas: guardar o dejarlo como estaba. */}
+      {union && (
+        <div className="mx-2 mb-2 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs">
+          <Combine className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span className="min-w-0 truncate">
+            Uniendo mesas de{" "}
+            <span className="font-semibold">
+              {union.reserva.cliente || "WALK IN"} {union.reserva.apellidos}
+            </span>{" "}
+            · {union.reserva.hora.slice(0, 5)} · {union.reserva.comensales} per
+          </span>
+          <span className="min-w-0 truncate text-muted-foreground">
+            {union.originales.length > 0 ? union.originales.join(" + ") : "sin mesa"}
+            {union.hayCambios && (
+              <>
+                {" → "}
+                <span className="font-semibold text-foreground">
+                  {union.seleccion.length > 0
+                    ? [...union.seleccion]
+                        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+                        .join(" + ")
+                    : "sin mesa"}
+                </span>
+              </>
+            )}
+          </span>
+          <span className="text-muted-foreground">
+            — pulsa en el plano las mesas que juntas; púlsalas otra vez para quitarlas.
+          </span>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px]"
+              disabled={union.ocupado}
+              onClick={onCancelarUnion}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 text-[11px]"
+              disabled={union.ocupado || !union.hayCambios}
+              onClick={onGuardarUnion}
+            >
+              {union.ocupado ? "Guardando…" : "Guardar"}
+            </Button>
+          </div>
+        </div>
+      )}
       {/* En el modo mover el plano deja de abrir popovers y el siguiente clic
           elige la mesa destino. Sin barra de aviso: se ve en el propio plano, y
           Escape cancela. */}
@@ -3207,6 +3360,12 @@ function PlanoCanvas({
           // bloqueadas tampoco: se apagan para que se vea dónde SÍ se puede soltar.
           const esOrigenMover = moviendo && reservaMoviendo?.mesaId === m.id;
           const destinoInvalido = moviendo && (esOrigenMover || estado === "BLOQUEADA");
+          // En modo unir: las elegidas van con aro verde y las demás se
+          // ofrecen. Una mesa bloqueada no se puede sumar (salvo que ya
+          // estuviera dentro, y entonces el clic sirve para soltarla).
+          const codigoMesa = m.codigo.toUpperCase();
+          const enUnion = uniendo && (union?.seleccion ?? []).includes(codigoMesa);
+          const unionInvalida = uniendo && !enUnion && estado === "BLOQUEADA";
           return (
             // Popover CONTROLADO: al pulsar "Desplazar" la reserva queda en la
             // mano y el plano pasa a modo mover, pero la ficha de la mesa desde
@@ -3215,9 +3374,9 @@ function PlanoCanvas({
             // el trigger tampoco vuelve a abrirla (el clic es "soltar aquí").
             <Popover
               key={m.id}
-              open={moviendo ? false : mesaPopoverAbiertaId === m.id}
+              open={planoOcupado ? false : mesaPopoverAbiertaId === m.id}
               onOpenChange={(abierto) => {
-                if (moviendo) return;
+                if (planoOcupado) return;
                 setMesaPopoverAbiertaId(abierto ? m.id : null);
               }}
             >
@@ -3229,7 +3388,13 @@ function PlanoCanvas({
                         : estado === "BLOQUEADA"
                           ? "Mesa bloqueada en este turno"
                           : `Mover la reserva a la mesa ${m.codigo}`
-                      : undefined
+                      : uniendo
+                        ? enUnion
+                          ? `Quitar la mesa ${m.codigo} de la reserva`
+                          : unionInvalida
+                            ? "Mesa bloqueada en este turno"
+                            : `Unir la mesa ${m.codigo} a la reserva`
+                        : undefined
                   }>
                   <button
                     className={cn(
@@ -3249,6 +3414,12 @@ function PlanoCanvas({
                         "!border-red-500 !border-[6px] ring-[18px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
                       moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
                       destinoInvalido && "opacity-40 cursor-not-allowed",
+                      // Verde = va con la reserva. El aro grueso de las
+                      // elegidas se ve desde lejos, que es como se comprueba
+                      // una unión: mirando el bloque entero, no mesa a mesa.
+                      enUnion && "ring-4 ring-emerald-500 ring-offset-2 ring-offset-transparent z-10",
+                      uniendo && !enUnion && !unionInvalida && "cursor-copy ring-2 ring-emerald-500/50 hover:ring-4 hover:scale-105",
+                      unionInvalida && "opacity-40 cursor-not-allowed",
                     )}
                     onMouseEnter={() => onHoverMesa?.(m.id)}
                     onMouseLeave={() => onHoverMesa?.(null)}
@@ -3267,6 +3438,13 @@ function PlanoCanvas({
                         // popover ni cambiamos la selección de mesa.
                         e.preventDefault();
                         if (!destinoInvalido) onElegirDestino?.(m);
+                        return;
+                      }
+                      if (uniendo) {
+                        // En modo unir el clic suma o quita la mesa. Nada se
+                        // guarda hasta "Guardar", así que no se pregunta nada.
+                        e.preventDefault();
+                        if (!unionInvalida && !union?.ocupado) onToggleMesaUnion?.(m);
                         return;
                       }
                       onSelectMesa(m);
@@ -3430,6 +3608,7 @@ function PlanoCanvas({
                     onCambiarEstado={onCambiarEstado}
                     onBloquearMesa={onBloquearMesa}
                     onDesplazarReserva={onDesplazarReserva}
+                    onUnirMesas={onUnirMesas}
                     onWalkIn={(mesa) => {
                       setMesaPopoverAbiertaId(null);
                       onWalkIn?.(mesa);
@@ -3698,6 +3877,53 @@ export function ReservasView() {
     } | null
   >(null);
   const [guardandoDesplazar, setGuardandoDesplazar] = useState(false);
+
+  // ── UNIR MESAS SOBRE EL PLANO ──────────────────────────────────────────
+  // Se pulsa "Unir" en la ficha rápida y el plano se queda esperando: cada
+  // clic suma o quita una mesa y nada se graba hasta "Guardar". Es lo mismo
+  // que hacía la ventana de "Mesas de la reserva", pero sin ventana: en
+  // servicio, un plano tapado por un diálogo con OTRO plano dentro no vale.
+  /** Reserva a la que se le están juntando mesas, o `null` si no hay ninguna. */
+  const [reservaAUnir, setReservaAUnir] = useState<Reserva | null>(null);
+  /** Mesas elegidas ahora mismo (códigos en mayúsculas). Solo en pantalla. */
+  const [seleccionUnion, setSeleccionUnion] = useState<string[]>([]);
+  /** Las que la reserva tenía al empezar: la referencia de "lo que había". */
+  const [originalesUnion, setOriginalesUnion] = useState<string[]>([]);
+  const [guardandoUnion, setGuardandoUnion] = useState(false);
+  /**
+   * Mesa ocupada que se acaba de pulsar y espera decisión. Mientras no sea
+   * `null` la selección NO se ha tocado: nada se mueve hasta que se responde.
+   */
+  const [decisionUnion, setDecisionUnion] = useState<
+    {
+      /** Código de la mesa pulsada. */
+      codigo: string;
+      /** Reserva que la ocupa ahora mismo. */
+      otra: Reserva;
+      /** Solapes con TERCEROS que provocaría el cambio. Vacío si no hay. */
+      solapes: ChoqueReserva[];
+      /** Aviso de aforo de la mesa pulsada, ya redactado. */
+      avisoAforo: string | null;
+      /** Aviso de aforo para la otra reserva si se intercambian. */
+      avisoAforoOtra: string | null;
+      /** Cliente del intercambio ya pactado, si lo hay: impide pactar otro. */
+      bloqueadoPorIntercambio: string | null;
+    } | null
+  >(null);
+  /** Intercambio pactado en el diálogo, pendiente de "Guardar". */
+  const [intercambioUnion, setIntercambioUnion] = useState<
+    {
+      otraReservaId: string;
+      otraCliente: string;
+      /** Mesa que recibe la reserva movida: la que estaba ocupada. */
+      mesaRecibida: string;
+      /** Mesas que pasa a tener la otra reserva. */
+      mesaParaLaOtra: string;
+    } | null
+  >(null);
+  /** Choques con terceros al guardar: se avisa y el local decide. */
+  const [choquesUnion, setChoquesUnion] = useState<ChoqueReserva[] | null>(null);
+
   /** Fila del listado con la ficha rápida abierta (una sola, y ninguna en modo mover). */
   const [filaPopoverAbiertaId, setFilaPopoverAbiertaId] = useState<string | null>(null);
 
@@ -4982,8 +5208,12 @@ export function ReservasView() {
     return "RESERVADA";
   };
 
-  const getReservasMesa = (mesaId: string): Reserva[] =>
-    reservasActivasPorMesa.get(mesaId) ?? [];
+  // Estable mientras no cambien las reservas del turno: la usan callbacks del
+  // modo unir, y rehecha en cada render los rehacía a ellos también.
+  const getReservasMesa = useCallback(
+    (mesaId: string): Reserva[] => reservasActivasPorMesa.get(mesaId) ?? [],
+    [reservasActivasPorMesa],
+  );
 
   /**
    * Reservas DUPLICADAS: el mismo cliente tiene otra reserva a menos de 24
@@ -5339,7 +5569,7 @@ export function ReservasView() {
     id: string,
     codigoMesas: string,
     forzar: boolean,
-  ) => {
+  ): Promise<boolean> => {
     const res = await updateReserva(id, {
       mesa: codigoMesas,
       localId: localId || null,
@@ -5358,7 +5588,7 @@ export function ReservasView() {
             : () => void guardarMesasReserva(id, codigoMesas, true),
         });
       } else toast.error(msg);
-      return;
+      return false;
     }
     toast.success(
       codigoMesas
@@ -5375,6 +5605,7 @@ export function ReservasView() {
     // una mesa pareciera lento con clientes esperando en la puerta. El servidor
     // recalcula la zona y el plano se repinta en cuanto llegue.
     void loadReservas(fecha);
+    return true;
   };
 
   /**
@@ -5385,7 +5616,7 @@ export function ReservasView() {
   const intercambiarMesas = async (
     id: string,
     p: { otraReservaId: string; mesaDestino: string; mesaOrigen: string },
-  ) => {
+  ): Promise<boolean> => {
     const res = await intercambiarMesasReservas({
       reservaId: id,
       otraReservaId: p.otraReservaId,
@@ -5395,7 +5626,7 @@ export function ReservasView() {
     });
     if (!res.ok) {
       toast.error(res.error ?? "No se pudieron intercambiar las mesas.");
-      return;
+      return false;
     }
     toast.success(
       `Mesas intercambiadas: ${p.mesaDestino.split("+").join(" + ")}`,
@@ -5408,6 +5639,7 @@ export function ReservasView() {
     // Igual que al asignar mesa: el guardado ya está confirmado y no se espera
     // a que vuelva el listado entero para devolver el control a sala.
     void loadReservas(fecha);
+    return true;
   };
 
   const guardarDatosCliente = async (id: string) => {
@@ -5803,6 +6035,261 @@ export function ReservasView() {
       avisoAforoMesas,
       reservasActivasPorMesa,
     ],
+  );
+
+  // ── UNIR MESAS EN EL PROPIO PLANO ─────────────────────────────────────
+  //
+  // Es lo que hacía la ventana "Mesas de la reserva" en su modo Unir, pero sin
+  // ventana: en servicio, un diálogo con otro plano dentro tapa justo la sala
+  // que hay que mirar. Aquí se pulsa "Unir" en la ficha rápida y el plano de
+  // siempre se queda esperando, con las mesas de la reserva en verde.
+  //
+  // Mover NO está: para eso está "Desplazar", que ya lleva la reserva de una
+  // mesa a otra con un solo clic. Aquí pulsar una mesa SIEMPRE suma (y pulsarla
+  // otra vez la quita), que es lo único que no sabía hacer Desplazar.
+
+  /** Códigos elegidos, ordenados y con el formato que guarda la reserva. */
+  const codigoUnionCompuesto = useMemo(
+    () =>
+      [...seleccionUnion]
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        .join("+"),
+    [seleccionUnion],
+  );
+
+  const anadidasUnion = useMemo(
+    () => seleccionUnion.filter((c) => !originalesUnion.includes(c)),
+    [seleccionUnion, originalesUnion],
+  );
+
+  const hayCambiosUnion = useMemo(
+    () =>
+      [...originalesUnion].sort().join("+") !== [...seleccionUnion].sort().join("+"),
+    [originalesUnion, seleccionUnion],
+  );
+
+  /**
+   * "Unir" desde la ficha rápida. Igual que "Abrir salón", salta a la sala
+   * DONDE ESTÁ la mesa de la reserva: desde el listado, que mezcla salas, una
+   * reserva de la terraza se uniría sobre el plano del comedor y sus mesas no
+   * aparecerían por ningún lado.
+   */
+  const abrirUnirMesas = (r: Reserva) => {
+    const codigos = codigosDeMesa(r.mesaCodigo);
+    const primerCodigo = codigos[0];
+    const mesaId = primerCodigo ? mesaIdPorCodigo.get(primerCodigo) : r.mesaId;
+    const zonaId = mesaId ? mesasMeta.get(mesaId)?.zonaId : null;
+    const salaId = zonaId ? zonasReales.find((z) => z.id === zonaId)?.salaId : null;
+    if (salaId && salaId !== salaActualId) setSalaActualId(salaId);
+    // Sin plano a la vista no hay dónde pulsar: si estaba oculto, se enseña.
+    if (panelOculto === "mapa") setPanelOculto("ninguno");
+    setReservaAUnir(r);
+    setOriginalesUnion(codigos);
+    setSeleccionUnion(codigos);
+    setIntercambioUnion(null);
+    setDecisionUnion(null);
+    setChoquesUnion(null);
+    // La ficha desde la que se ha pulsado se cierra: tapaba el plano.
+    setFilaPopoverAbiertaId(null);
+    toast.info("Pulsa en el plano las mesas de esta reserva. Se guardan al pulsar Guardar.");
+  };
+
+  const cancelarUnion = useCallback(() => {
+    setReservaAUnir(null);
+    setSeleccionUnion([]);
+    setOriginalesUnion([]);
+    setIntercambioUnion(null);
+    setDecisionUnion(null);
+    setChoquesUnion(null);
+  }, []);
+
+  // Escape sale del modo unir sin guardar nada, como en el modo mover. Si hay
+  // un aviso abierto, Escape lo cierra a él primero.
+  useEffect(() => {
+    if (!reservaAUnir) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (decisionUnion || choquesUnion) return;
+      cancelarUnion();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reservaAUnir, decisionUnion, choquesUnion, cancelarUnion]);
+
+  /**
+   * Clic sobre una mesa en modo unir.
+   *
+   * Mesa ya elegida → se suelta (así se deshace un clic de más), y si era la
+   * del intercambio pactado el trato se cae con ella. Mesa libre → se suma, con
+   * el aviso de aforo si el grupo no encaja (aviso, no pregunta). Mesa OCUPADA
+   * → no se decide por el usuario: se para y se pregunta si se intercambian las
+   * dos reservas o si se unen igualmente, con los avisos delante.
+   */
+  const pulsarMesaUnion = useCallback(
+    async (m: Mesa) => {
+      const r = reservaAUnir;
+      if (!r) return;
+      const c = m.codigo.toUpperCase();
+
+      if (seleccionUnion.includes(c)) {
+        setSeleccionUnion((prev) => prev.filter((x) => x !== c));
+        setIntercambioUnion((prev) => (prev && prev.mesaRecibida === c ? null : prev));
+        return;
+      }
+
+      const otras = getReservasMesa(m.id).filter((x) => x.id !== r.id);
+      if (otras.length === 0) {
+        const nueva = [...seleccionUnion, c];
+        setSeleccionUnion(nueva);
+        const aviso = avisoAforoMesas(nueva, r.comensales);
+        if (aviso) toast.warning(aviso);
+        return;
+      }
+
+      setGuardandoUnion(true);
+      const res = await getChoquesMesa({
+        fecha: r.fecha,
+        hora: r.hora,
+        mesa: c,
+        duracionMin: r.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null,
+        ignoreReservaId: r.id,
+      });
+      setGuardandoUnion(false);
+
+      const otra = otras[0];
+      setDecisionUnion({
+        codigo: c,
+        otra,
+        // Un intercambio ya pactado bloquea el siguiente: el segundo dejaría a
+        // la primera reserva apuntada a una mesa que esta ya no libera.
+        bloqueadoPorIntercambio: intercambioUnion ? intercambioUnion.otraCliente : null,
+        // La reserva que ocupa la mesa no es un tercero: es con quien se está
+        // negociando, y sale con nombre y hora en la cabecera del aviso.
+        solapes: res.ok ? res.data.filter((x) => x.reservaId !== otra.id) : [],
+        avisoAforo: avisoAforoMesas([c], r.comensales),
+        avisoAforoOtra:
+          originalesUnion.length > 0
+            ? avisoAforoMesas(originalesUnion, otra.comensales)
+            : null,
+      });
+    },
+    [
+      reservaAUnir,
+      seleccionUnion,
+      originalesUnion,
+      intercambioUnion,
+      avisoAforoMesas,
+      cfgReservas,
+      getReservasMesa,
+    ],
+  );
+
+  /** Se unen: la mesa ocupada se suma a las que ya tenía la reserva. */
+  const aceptarUnionMesa = useCallback(() => {
+    if (!decisionUnion) return;
+    setSeleccionUnion((prev) => [...prev, decisionUnion.codigo]);
+    setIntercambioUnion(null);
+    setDecisionUnion(null);
+  }, [decisionUnion]);
+
+  /** Se intercambian: cada reserva se queda con las mesas de la otra. */
+  const aceptarIntercambioUnion = useCallback(() => {
+    if (!decisionUnion) return;
+    setSeleccionUnion([decisionUnion.codigo]);
+    setIntercambioUnion({
+      otraReservaId: decisionUnion.otra.id,
+      otraCliente: decisionUnion.otra.cliente || "WALK IN",
+      mesaRecibida: decisionUnion.codigo,
+      // La otra se queda con lo que esta reserva deja libre. Si no tenía mesa,
+      // se queda sin ella: no hay nada que darle.
+      mesaParaLaOtra: originalesUnion.join("+"),
+    });
+    setDecisionUnion(null);
+  }, [decisionUnion, originalesUnion]);
+
+  /** Guarda de verdad. `forzar` salta el bloqueo de solape ya aceptado. */
+  const aplicarUnion = useCallback(
+    async (forzar: boolean) => {
+      const r = reservaAUnir;
+      if (!r) return;
+      setGuardandoUnion(true);
+      const ok = intercambioUnion
+        ? await intercambiarMesas(r.id, {
+            otraReservaId: intercambioUnion.otraReservaId,
+            mesaDestino: codigoUnionCompuesto,
+            mesaOrigen: intercambioUnion.mesaParaLaOtra,
+          })
+        : await guardarMesasReserva(r.id, codigoUnionCompuesto, forzar);
+      setGuardandoUnion(false);
+      // Si el guardado falla, el modo unir SIGUE abierto con la selección
+      // puesta: cerrarlo obligaría a volver a marcar las mesas una por una
+      // justo cuando algo ha ido mal.
+      if (ok) cancelarUnion();
+    },
+    // `guardarMesasReserva` e `intercambiarMesas` se redefinen en cada render
+    // (no son callbacks) y meterlas aquí rehacía esta función sin parar; lo que
+    // hacen depende solo de la reserva y del código de mesas, que sí están.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [reservaAUnir, intercambioUnion, codigoUnionCompuesto, cancelarUnion],
+  );
+
+  /**
+   * "Guardar" de la barra: primero se mira si alguna de las mesas que ENTRAN
+   * pisa a otra reserva por horario. Las que ya tenía son suyas, y quitarlas
+   * nunca puede pisar a nadie.
+   */
+  const guardarUnion = useCallback(async () => {
+    const r = reservaAUnir;
+    if (!r) return;
+    if (!hayCambiosUnion) {
+      cancelarUnion();
+      return;
+    }
+    // En un intercambio los solapes ya se enseñaron al pactarlo, y la mesa que
+    // entra está ocupada a propósito por la reserva con la que se permuta.
+    if (intercambioUnion) {
+      await aplicarUnion(true);
+      return;
+    }
+    if (anadidasUnion.length > 0) {
+      setGuardandoUnion(true);
+      const res = await getChoquesMesa({
+        fecha: r.fecha,
+        hora: r.hora,
+        mesa: anadidasUnion.join("+"),
+        duracionMin: r.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null,
+        ignoreReservaId: r.id,
+      });
+      setGuardandoUnion(false);
+      if (res.ok && res.data.length > 0) {
+        setChoquesUnion(res.data);
+        return;
+      }
+    }
+    await aplicarUnion(false);
+  }, [
+    reservaAUnir,
+    hayCambiosUnion,
+    intercambioUnion,
+    anadidasUnion,
+    cfgReservas,
+    aplicarUnion,
+    cancelarUnion,
+  ]);
+
+  /** Lo que el plano necesita saber de la unión en curso. */
+  const unionEnPlano: UnionEnPlano | null = useMemo(
+    () =>
+      reservaAUnir
+        ? {
+            reserva: reservaAUnir,
+            seleccion: seleccionUnion,
+            originales: originalesUnion,
+            hayCambios: hayCambiosUnion,
+            ocupado: guardandoUnion,
+          }
+        : null,
+    [reservaAUnir, seleccionUnion, originalesUnion, hayCambiosUnion, guardandoUnion],
   );
 
   /**
@@ -6394,13 +6881,21 @@ export function ReservasView() {
                 // lista, esta ficha debe cerrarse para dejar ver el plano.
                 <Popover
                   key={r.id}
-                  open={reservaADesplazar ? false : filaPopoverAbiertaId === r.id}
+                  open={
+                    reservaADesplazar || reservaAUnir
+                      ? false
+                      : filaPopoverAbiertaId === r.id
+                  }
                   onOpenChange={(abierto) => {
-                    if (reservaADesplazar) return;
+                    if (reservaADesplazar || reservaAUnir) return;
                     setFilaPopoverAbiertaId(abierto ? r.id : null);
                   }}
                 >
                   <PopoverTrigger asChild>
+                    {/* Pinchar la fila abre SIEMPRE el panel rápido de botones.
+                        El único sitio que abre la ficha entera es el nombre del
+                        cliente, unas líneas más abajo: la misma regla que en el
+                        plano, para no tener que acordarse de dos. */}
                     <button
                       onClick={() => setSelectedReserva(r)}
                       onMouseEnter={() => setReservaHoverId(r.id)}
@@ -6474,9 +6969,24 @@ export function ReservasView() {
                               </TooltipContent>
                             </Tooltip>
                           )}
-                          <ToolTooltip label={`${r.cliente || "WALK IN"} ${r.apellidos ?? ""}`.trim()}>
+                          <ToolTooltip label={`Abrir la ficha de ${`${r.cliente || "WALK IN"} ${r.apellidos ?? ""}`.trim()}`}>
                             <span
-                              className="truncate font-medium"
+                              role="button"
+                              tabIndex={0}
+                              className="truncate font-medium underline decoration-dotted underline-offset-2 hover:text-primary focus-visible:text-primary focus-visible:outline-none"
+                              onClick={(e) => {
+                                // Sin esto el clic sube a la fila y abre el
+                                // panel rápido encima de la ficha.
+                                e.stopPropagation();
+                                abrirDetalleReserva(r);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  abrirDetalleReserva(r);
+                                }
+                              }}
                             >
                               {r.cliente || "WALK IN"} {r.apellidos}
                             </span>
@@ -6562,6 +7072,7 @@ export function ReservasView() {
                       onCambiarEstado={cambiarEstadoReserva}
                       onBloquearMesa={pedirBloqueoMesa}
                       onDesplazarReserva={abrirDesplazar}
+                      onUnirMesas={abrirUnirMesas}
                     />
                   </PopoverContent>
                 </Popover>
@@ -6693,14 +7204,67 @@ export function ReservasView() {
               onCambiarEstado={cambiarEstadoReserva}
               onBloquearMesa={pedirBloqueoMesa}
               onDesplazarReserva={abrirDesplazar}
+              onUnirMesas={abrirUnirMesas}
               onQuitarBloqueoMesa={handleQuitarBloqueoMesa}
               onWalkIn={abrirWalkInEnMesa}
               reservaMoviendo={reservaADesplazar}
               onElegirDestino={elegirMesaDestino}
+              union={unionEnPlano}
+              onToggleMesaUnion={pulsarMesaUnion}
+              onGuardarUnion={guardarUnion}
+              onCancelarUnion={cancelarUnion}
               esOscuro={esOscuro}
             />
           ) : (
             <div className="flex-1 overflow-auto p-4 space-y-4">
+              {/* Misma barra de unir que en el plano: esta vista es el mismo
+                  salón puesto en rejilla, así que se une igual. */}
+              {unionEnPlano && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs">
+                  <Combine className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <span className="min-w-0 truncate">
+                    Uniendo mesas de{" "}
+                    <span className="font-semibold">
+                      {unionEnPlano.reserva.cliente || "WALK IN"} {unionEnPlano.reserva.apellidos}
+                    </span>{" "}
+                    · {unionEnPlano.reserva.hora.slice(0, 5)} · {unionEnPlano.reserva.comensales} per
+                  </span>
+                  <span className="min-w-0 truncate text-muted-foreground">
+                    {unionEnPlano.originales.length > 0
+                      ? unionEnPlano.originales.join(" + ")
+                      : "sin mesa"}
+                    {unionEnPlano.hayCambios && (
+                      <>
+                        {" → "}
+                        <span className="font-semibold text-foreground">
+                          {unionEnPlano.seleccion.length > 0
+                            ? codigoUnionCompuesto.split("+").join(" + ")
+                            : "sin mesa"}
+                        </span>
+                      </>
+                    )}
+                  </span>
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px]"
+                      disabled={unionEnPlano.ocupado}
+                      onClick={cancelarUnion}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-7 text-[11px]"
+                      disabled={unionEnPlano.ocupado || !unionEnPlano.hayCambios}
+                      onClick={guardarUnion}
+                    >
+                      {unionEnPlano.ocupado ? "Guardando…" : "Guardar"}
+                    </Button>
+                  </div>
+                </div>
+              )}
               {/* Misma barra del modo mover que en el plano. */}
               {reservaADesplazar && (
                 <div className="rounded-md border border-sky-500/50 bg-sky-500/10 px-3 py-2 flex items-center gap-2 text-xs">
@@ -6768,6 +7332,14 @@ export function ReservasView() {
                             const destinoInvalido =
                               moviendoAqui &&
                               (reservaADesplazar?.mesaId === m.id || estado === "BLOQUEADA");
+                            // Mismo modo unir que en el plano: el clic suma o
+                            // quita la mesa y nada se graba hasta "Guardar".
+                            const uniendoAqui = unionEnPlano != null;
+                            const enUnionAqui =
+                              uniendoAqui &&
+                              unionEnPlano.seleccion.includes(m.codigo.toUpperCase());
+                            const unionInvalidaAqui =
+                              uniendoAqui && !enUnionAqui && estado === "BLOQUEADA";
                             return (
                               <Popover key={m.id}>
                                 <PopoverTrigger asChild>
@@ -6791,12 +7363,22 @@ export function ReservasView() {
                                         "!border-red-500 !border-[6px] ring-[18px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
                                       moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
                                       destinoInvalido && "opacity-40 cursor-not-allowed",
+                                      enUnionAqui && "ring-4 ring-emerald-500 ring-offset-2 z-10",
+                                      uniendoAqui && !enUnionAqui && !unionInvalidaAqui && "cursor-copy ring-2 ring-emerald-500/50 hover:ring-4 hover:scale-105",
+                                      unionInvalidaAqui && "opacity-40 cursor-not-allowed",
                                     )}
                                     style={isLibre ? { backgroundImage: fondoMesaLibre(m.id, esOscuro) } : undefined}
                                     onClick={(e) => {
                                       if (moviendoAqui) {
                                         e.preventDefault();
                                         if (!destinoInvalido) elegirMesaDestino(m);
+                                        return;
+                                      }
+                                      if (uniendoAqui) {
+                                        e.preventDefault();
+                                        if (!unionInvalidaAqui && !unionEnPlano.ocupado) {
+                                          void pulsarMesaUnion(m);
+                                        }
                                         return;
                                       }
                                       handleSelectMesa(m);
@@ -6890,6 +7472,7 @@ export function ReservasView() {
                                     onCambiarEstado={cambiarEstadoReserva}
                                     onBloquearMesa={pedirBloqueoMesa}
                                     onDesplazarReserva={abrirDesplazar}
+                                    onUnirMesas={abrirUnirMesas}
                                   />
                                 </PopoverContent>
                               </Popover>
@@ -7732,12 +8315,12 @@ export function ReservasView() {
           decoraciones={decoracionesSalaActual}
           esOscuro={esOscuro}
           getReservasMesa={getReservasMesa}
-          onValidar={(codigo, forzar) =>
-            guardarMesasReserva(selectedReserva.id, codigo, forzar)
-          }
-          onIntercambiar={(p) =>
-            intercambiarMesas(selectedReserva.id, p)
-          }
+          onValidar={async (codigo, forzar) => {
+            await guardarMesasReserva(selectedReserva.id, codigo, forzar);
+          }}
+          onIntercambiar={async (p) => {
+            await intercambiarMesas(selectedReserva.id, p);
+          }}
         />
       )}
 
@@ -7974,6 +8557,196 @@ export function ReservasView() {
         </DialogContent>
       </Dialog>
 
+
+      {/* UNIR — la mesa pulsada ya tiene reserva. Aquí no se decide por el
+          usuario: se para y se pregunta, con los avisos delante. Las tres
+          salidas son las de la sala: dejarlo estar, cambiar a la gente de
+          sitio, o juntar las mesas igualmente. */}
+      <Dialog
+        open={decisionUnion !== null}
+        onOpenChange={(v) => { if (!v) setDecisionUnion(null); }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <ArrowLeftRight className="h-4 w-4" />
+              La mesa {decisionUnion?.codigo} ya tiene reserva
+            </DialogTitle>
+          </DialogHeader>
+          {decisionUnion && reservaAUnir && (
+            <div className="space-y-3 text-xs">
+              {/* Quién está en cada lado, para no tener que recordarlo. */}
+              <div className="rounded-md border divide-y">
+                <div className="flex items-center justify-between gap-2 px-3 py-2">
+                  <span className="truncate">
+                    <span className="font-medium">
+                      {reservaAUnir.cliente || "WALK IN"} {reservaAUnir.apellidos}
+                    </span>{" "}
+                    <span className="text-muted-foreground">
+                      · {reservaAUnir.hora.slice(0, 5)} · {reservaAUnir.comensales} per
+                    </span>
+                  </span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {originalesUnion.length > 0 ? originalesUnion.join(" + ") : "sin mesa"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 px-3 py-2">
+                  <span className="truncate">
+                    <span className="font-medium">
+                      {decisionUnion.otra.cliente || "WALK IN"} {decisionUnion.otra.apellidos}
+                    </span>{" "}
+                    <span className="text-muted-foreground">
+                      · {decisionUnion.otra.hora.slice(0, 5)} · {decisionUnion.otra.comensales} per
+                    </span>
+                  </span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {decisionUnion.codigo}
+                  </span>
+                </div>
+              </div>
+
+              {/* Avisos. Ninguno bloquea: se dicen para que la decisión se tome
+                  sabiendo con qué se va a encontrar sala al montar. */}
+              {(decisionUnion.solapes.length > 0 ||
+                decisionUnion.avisoAforo ||
+                decisionUnion.avisoAforoOtra) && (
+                <div className="space-y-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
+                  {decisionUnion.avisoAforo && (
+                    <p className="flex gap-1.5 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                      <span>{decisionUnion.avisoAforo}</span>
+                    </p>
+                  )}
+                  {decisionUnion.avisoAforoOtra && (
+                    <p className="flex gap-1.5 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                      <span>
+                        Si se intercambian:{" "}
+                        {decisionUnion.avisoAforoOtra.charAt(0).toLowerCase()}
+                        {decisionUnion.avisoAforoOtra.slice(1)}
+                      </span>
+                    </p>
+                  )}
+                  {decisionUnion.solapes.map((c) => (
+                    <p
+                      key={c.reservaId}
+                      className="flex gap-1.5 text-amber-700 dark:text-amber-300"
+                    >
+                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                      <span>
+                        Se pisa con {c.cliente || "WALK IN"} en {c.mesa}, que la
+                        tiene ocupada hasta las {c.horaFin}.
+                      </span>
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {decisionUnion.bloqueadoPorIntercambio && (
+                <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-amber-700 dark:text-amber-300">
+                  Ya hay un intercambio pendiente con{" "}
+                  {decisionUnion.bloqueadoPorIntercambio}. Guarda ese cambio
+                  antes de hacer otro; aquí solo puedes unir la mesa.
+                </p>
+              )}
+
+              {/* Qué hace cada botón, en una línea: se lee antes de pulsar. */}
+              <p className="text-muted-foreground">
+                <span className="font-medium text-foreground">Intercambiar</span>{" "}
+                cambia a las dos de sitio
+                {originalesUnion.length > 0
+                  ? ` — ${decisionUnion.otra.cliente || "WALK IN"} pasa a ${originalesUnion.join(" + ")}.`
+                  : ` — ${decisionUnion.otra.cliente || "WALK IN"} se queda sin mesa, porque esta reserva no tiene ninguna que darle.`}{" "}
+                <span className="font-medium text-foreground">Unir</span> deja a
+                las dos reservas sobre {decisionUnion.codigo}.
+              </p>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setDecisionUnion(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button size="sm" variant="outline" onClick={aceptarUnionMesa}>
+                  Unir
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={decisionUnion.bloqueadoPorIntercambio !== null}
+                  onClick={aceptarIntercambioUnion}
+                >
+                  Intercambiar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* UNIR — al guardar, alguna de las mesas que entran pisa a otra reserva
+          por horario. Se avisa de con quién y hasta qué hora, pero la decisión
+          es del local: nunca se bloquea el cambio. */}
+      <Dialog
+        open={choquesUnion !== null}
+        onOpenChange={(v) => { if (!v) setChoquesUnion(null); }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4" />
+              Esa mesa ya está asignada a otra reserva
+            </DialogTitle>
+          </DialogHeader>
+          {choquesUnion && (
+            <div className="space-y-3 text-xs">
+              <p className="text-muted-foreground">
+                {anadidasUnion.length === 1
+                  ? `La mesa ${anadidasUnion[0]} que quieres añadir`
+                  : `Las mesas ${anadidasUnion.join(", ")} que quieres añadir`}{" "}
+                {choquesUnion.length === 1
+                  ? "está en conflicto de horario con esta reserva:"
+                  : "están en conflicto de horario con estas reservas:"}
+              </p>
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 divide-y divide-amber-500/20">
+                {choquesUnion.map((c) => (
+                  <div
+                    key={c.reservaId}
+                    className="flex items-center justify-between gap-2 px-3 py-2"
+                  >
+                    <span className="truncate font-medium">
+                      {c.cliente || "WALK IN"}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {c.mesa} · ocupada hasta las {c.horaFin} · {c.personas} per
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-muted-foreground">
+                Si continúas, las dos reservas quedarán sobre la misma mesa a la
+                vez y habrá que recolocar a alguien.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={() => setChoquesUnion(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={guardandoUnion}
+                  onClick={() => {
+                    setChoquesUnion(null);
+                    void aplicarUnion(true);
+                  }}
+                >
+                  Continuar igualmente
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Mesa ya ocupada: al reactivar una reserva anulada (o al ampliar su
           tiempo) puede chocar con otra que haya entrado mientras tanto. Mismo

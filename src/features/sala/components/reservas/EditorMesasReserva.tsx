@@ -18,10 +18,12 @@
  *    cambio solo existe al pulsar "Validar". Sin eso, un clic de más sobre el
  *    plano ya movía a un cliente de mesa.
  *
- * 2b. Mover es lo que se hace a diario; unir es la excepción. Por eso pulsar
- *    otra mesa SUSTITUYE la selección (la reserva se muda) y solo en modo
- *    "Unir" se suma a las que ya había. Cuando pulsar sumaba siempre, cambiar
- *    de mesa dejaba a la reserva ocupando las dos.
+ * 2b. Aquí solo se UNE: pulsar una mesa la suma a las que la reserva ya tiene
+ *    y volver a pulsarla la quita. Mover de mesa no vive aquí —lo hace
+ *    "Desplazar" desde la ficha rápida, con un solo clic sobre el plano—, y
+ *    tener las dos cosas obligaba a mirar en qué modo estaba el plano antes de
+ *    cada clic: con el modo equivocado, un clic de más mudaba a un cliente
+ *    entero de sitio en vez de juntarle la mesa de al lado.
  *
  * 2c. Si la mesa que se pulsa YA tiene otra reserva, no se decide por el
  *    usuario: se para y se pregunta en medio de la pantalla si se intercambian
@@ -159,12 +161,6 @@ export function EditorMesasReserva({
    * anterior no puede sobrevivir a un "Cancelar".
    */
   const [seleccion, setSeleccion] = useState<string[]>(codigosOriginales);
-  /**
-   * Qué hace pulsar una mesa: mudar la reserva ("mover") o sumarla a las que
-   * ya tiene ("unir"). Arranca siempre en mover —es lo habitual en servicio— y
-   * el modo no sobrevive al cierre del diálogo, igual que la selección.
-   */
-  const [modo, setModo] = useState<"mover" | "unir">("mover");
   const [guardando, setGuardando] = useState(false);
   const [comprobando, setComprobando] = useState(false);
   /** Choques pendientes de que el usuario decida si sigue adelante. */
@@ -244,16 +240,14 @@ export function EditorMesasReserva({
   };
 
   /**
-   * Pulsar una mesa del plano.
-   *
-   * En "mover", una mesa nueva se lleva la reserva entera: sustituye a todas
-   * las anteriores. En "unir" se suma. En los dos casos, pulsar una que ya
+   * Pulsar una mesa del plano: se suma a las de la reserva. Pulsar una que ya
    * está elegida la quita, que es como se deshace un clic de más.
    *
-   * Ctrl/⌘ suma sin salir de "mover": el atajo de siempre para quien va con
-   * ratón, sin obligar a cambiar de modo para juntar dos mesas.
+   * El segundo argumento (`sumar`, el Ctrl/⌘ del plano) ya no cambia nada:
+   * aquí siempre se suma. Se mantiene en la firma porque es la que espera
+   * `PlanoSeleccionMesas`.
    */
-  const pulsarMesa = async (codigo: string, sumar: boolean) => {
+  const pulsarMesa = async (codigo: string, _sumar: boolean) => {
     const c = codigo.toUpperCase();
 
     // Quitar una mesa ya elegida nunca pregunta: es deshacer, no ocupar nada.
@@ -275,12 +269,8 @@ export function EditorMesasReserva({
     // aviso de aforo si el grupo no encaja, que es un dato para montar la mesa,
     // no una pregunta: nadie tiene que responder nada para seguir.
     if (otras.length === 0) {
-      const une = sumar || modo === "unir";
-      const nueva = une ? [...seleccion, c] : [c];
+      const nueva = [...seleccion, c];
       setSeleccion(nueva);
-      // Cambiar de mesa sin intercambio deshace el trato pactado; sumar una
-      // mesa libre encima de un intercambio, no: el trato sigue en pie.
-      if (!une) setIntercambio(null);
       const aviso = avisoAforoDeMesas(nueva, reserva.comensales);
       if (aviso) toast.warning(aviso);
       return;
@@ -468,33 +458,11 @@ export function EditorMesasReserva({
                   </span>
                 </span>
               )}
-              {/* El modo va aquí, junto al resumen: se ve qué va a pasar al
-                  pulsar ANTES de pulsar. Con el texto de ayuda de antes había
-                  que descubrirlo moviendo a un cliente por error. */}
-              <div className="ml-auto flex items-center gap-1">
-                <div className="flex items-center rounded-md border p-0.5">
-                  {(["mover", "unir"] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setModo(m)}
-                      className={cn(
-                        "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
-                        modo === m
-                          ? "bg-foreground text-background"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {m === "mover" ? "Mover" : "Unir"}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-muted-foreground">
-                  {modo === "mover"
-                    ? "Pulsa una mesa para llevar la reserva ahí."
-                    : "Pulsa las mesas que quieres juntar."}
-                </span>
-              </div>
+              {/* Ya no hay modos que elegir: aquí solo se juntan mesas. Para
+                  cambiar la reserva de sitio está "Desplazar". */}
+              <span className="ml-auto text-muted-foreground">
+                Pulsa las mesas que quieres juntar; púlsalas otra vez para quitarlas.
+              </span>
             </div>
 
             {mesasConPos.length === 0 ? (

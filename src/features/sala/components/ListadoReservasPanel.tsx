@@ -204,7 +204,9 @@ const COLUMNAS: ColumnaDef[] = [
   },
   {
     campo: "estado",
-    label: "Estado",
+    // "Estado" a secas se confundía con las otras dos columnas de estado
+    // (garantía y cancelación), que son dinero y no mesa.
+    label: "Estado reserva",
     filtro: "lista",
     opciones: ESTADOS_RESERVA as unknown as string[],
     valor: (f) => f.estado,

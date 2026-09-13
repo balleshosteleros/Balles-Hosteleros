@@ -60,11 +60,17 @@ function horaEnZona(iso: string, tz: string): string {
  * ese dinero nunca entró.
  */
 const ESTADO_COMPRA_TEXTO: Record<string, string> = {
-  pagada: "Pagada",
-  pendiente: "Pago sin terminar",
-  caducada: "Pago caducado",
-  fallida: "Pago fallido",
-  cancelada: "Pago cancelado",
+  // Todos dicen "sin reserva" porque ninguna de estas filas tiene mesa: la
+  // columna Fecha enseña el día del REGISTRO, y sin este aviso la fila se lee
+  // como una reserva del calendario que no es.
+  pagada: "Pagada, sin reserva",
+  // Sigue dentro de los 30 minutos: aún puede terminar de pagar.
+  pendiente: "Pagando, sin terminar",
+  // Se le pasó el plazo sin teclear la tarjeta. Es el caso normal del que
+  // entra, deja sus datos y se va.
+  caducada: "No puso tarjeta, sin reserva",
+  fallida: "Tarjeta rechazada, sin reserva",
+  cancelada: "Pago cancelado, sin reserva",
 };
 
 /** Qué es cada fila del listado. Una compra sin canjear no es una reserva. */
