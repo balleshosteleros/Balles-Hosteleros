@@ -4,7 +4,11 @@ description: SQL pendiente de ejecutar en Supabase — fix empresa_id TEXT→UUI
 type: project
 ---
 
-## Migración pendiente: pedidos empresa_id TEXT → UUID
+> ✅ **YA APLICADA.** Comprobado en producción el 2026-09-12: `pedidos.empresa_id`
+> es `uuid`. **No hay que ejecutar nada.** Se deja el SQL abajo como histórico de
+> qué se hizo, no como tarea pendiente.
+
+## Migración pedidos empresa_id TEXT → UUID (histórico)
 
 Esta migración aún NO se ha ejecutado en Supabase. Ejecutarla antes de probar el módulo de logística/pedidos.
 

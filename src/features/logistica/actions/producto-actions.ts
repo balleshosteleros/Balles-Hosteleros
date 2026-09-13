@@ -38,6 +38,11 @@ const productoInputSchema = z.object({
   coste: z.string().nullable().optional(),
   iva: z.string().nullable().optional(),
   medida: z.string().default("Unidades"),
+  // Identificador del producto en Ágora. Se acepta AQUÍ y no en un segundo paso para
+  // que dar de alta un producto detectado en el TPV sea una sola operación: si el alta
+  // y el enlace van sueltos, un fallo en medio deja el producto creado y sin enlazar,
+  // y sus ventas siguen sin reconocerse (PRP-080 Fase 5).
+  agoraId: z.string().nullish(),
   formato: z.string().nullable().optional(),
   envase: z.string().nullable().optional(),
   observaciones: z.string().nullable().optional(),
@@ -296,6 +301,7 @@ export async function createProducto(
         estado: parsed.data.estado,
         proveedor: parsed.data.proveedor,
         nombre_proveedor: parsed.data.nombreProveedor ?? null,
+        agora_id: parsed.data.agoraId?.trim() || null,
         precio_compra: parsed.data.precioCompra,
         precio_venta: parsed.data.precioVenta,
         coste: parsed.data.coste,
@@ -322,7 +328,17 @@ export async function createProducto(
       .select("*")
       .single();
 
-    if (error) return { error: error.message };
+    if (error) {
+      // El identificador de Ágora es único por empresa y tipo: si ya lo lleva otra
+      // ficha, el alta no puede seguir — pero hay que decir qué hacer en su lugar.
+      if (error.code === "23505" && /agora_id/i.test(error.message)) {
+        return {
+          error:
+            "Ya hay un producto de este tipo con ese ID de Ágora. En vez de crear otro, enlaza las ventas a la ficha que ya existe.",
+        };
+      }
+      return { error: error.message };
+    }
 
     // Productos de venta: cada uno debe tener su escandallo asociado (1:1 por nombre).
     // Lo creamos en borrador para que aparezca como PENDIENTE hasta que se rellenen

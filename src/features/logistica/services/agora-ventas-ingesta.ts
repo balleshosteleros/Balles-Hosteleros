@@ -50,6 +50,12 @@ export type IngestaResultado = {
   addins: number;
   /** De esos, los que no casan con ningún producto de Balles (hay que darlos de alta). */
   addinsSinProducto: number;
+  /**
+   * Líneas que Ágora manda sin identificador de producto. No se guardan —sin ese número
+   * no se puede saber nunca a qué producto se referían— pero se cuentan para que no
+   * desaparezcan sin dejar rastro.
+   */
+  lineasSinId: number;
 };
 
 /**
@@ -72,7 +78,7 @@ export async function ingerirVentasAgoraDia(
     Invoices?: AgoraInvoice[];
   };
   const propias = (payload.Invoices ?? []).filter((f) => f.Workplace?.Id === workplaceId);
-  if (propias.length === 0) return { facturas: 0, lineas: 0, sinProducto: 0, addins: 0, addinsSinProducto: 0 };
+  if (propias.length === 0) return { facturas: 0, lineas: 0, sinProducto: 0, addins: 0, addinsSinProducto: 0, lineasSinId: 0 };
 
   // Tickets
   const ticketRows = propias.map((f) => {
@@ -134,11 +140,33 @@ export async function ingerirVentasAgoraDia(
       const k = p.agora_id as string;
       if (p.tipo === "venta" || !prodMap.has(k)) prodMap.set(k, p.id as string);
     }
+
+    // Segundo intento para los que no ha casado ninguna ficha: la tabla de alias
+    // (PRP-080 Fase 5). En Ágora el mismo artículo puede estar dado de alta dos veces
+    // —como producto y como complemento— con identificadores distintos, y
+    // `productos.agora_id` solo guarda uno. Sin esto, el sabor de shisha que alguien
+    // acaba de enlazar a mano volvería a quedar sin reconocer mañana por la noche.
+    const sinCasar = Array.from(productIds).filter((k) => !prodMap.has(k));
+    if (sinCasar.length > 0) {
+      const { data: alias } = await supabase
+        .from("producto_agora_alias")
+        .select("agora_product_id, producto_id")
+        .eq("empresa_id", empresaId)
+        .in("agora_product_id", sinCasar.map(Number).filter(Number.isFinite));
+      for (const a of alias ?? []) {
+        prodMap.set(String(a.agora_product_id), a.producto_id as string);
+      }
+    }
   }
 
   // Insertar líneas
   let sinProducto = 0;
   let addinsSinProducto = 0;
+  // Líneas que Ágora manda SIN identificador de producto. No se guardan: sin ese
+  // número no hay forma de saber nunca a qué producto se referían (la lección de las
+  // 288 líneas que se perdieron en agosto). Se cuentan para que al menos se sepa
+  // cuántas son en vez de desaparecer sin dejar rastro.
+  let lineasSinId = 0;
   const lineaRows: Record<string, unknown>[] = [];
   const addinRows: Record<string, unknown>[] = [];
   for (const f of propias) {
@@ -146,7 +174,10 @@ export async function ingerirVentasAgoraDia(
     if (!ticketId) continue;
     for (const it of f.InvoiceItems ?? []) {
       for (const ln of it.Lines ?? []) {
-        if (ln.ProductId == null) continue;
+        if (ln.ProductId == null) {
+          lineasSinId++;
+          continue;
+        }
         const pid = prodMap.get(String(ln.ProductId)) ?? null;
         if (!pid) sinProducto++;
         // El id se genera aquí para poder colgar los complementos de su línea en la
@@ -211,6 +242,7 @@ export async function ingerirVentasAgoraDia(
     sinProducto,
     addins: addinRows.length,
     addinsSinProducto,
+    lineasSinId,
   };
 }
 

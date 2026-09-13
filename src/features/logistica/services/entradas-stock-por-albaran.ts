@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { registrarMovimiento, revertirMovimientosPorDocumento } from "./kardex";
+import { revertirMovimientosPorDocumento } from "./kardex";
 import { esErrorAlmacenCerrado } from "./cierre-almacen";
 
 /**

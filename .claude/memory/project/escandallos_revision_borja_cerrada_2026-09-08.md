@@ -4,6 +4,32 @@ description: Nota para Fernando — las fichas técnicas de Bacanal quedaron con
 type: project
 ---
 
+> ### ⚠️ ALCANCE REAL DE ESTA NOTA (comprobado en producción el 2026-09-12)
+>
+> Lo de abajo es cierto **para los platos que Borja revisó**, pero la frase «no hace falta
+> volver a preguntar por cantidades» se ha quedado corta y frena preguntas que sí hay que
+> hacerle. Dos matices:
+>
+> **1. La mitad de sus correcciones no están llegando a los números**, y no es culpa suya:
+> dictó bien, pero el producto está dado de alta en la unidad equivocada.
+> · Cola de rape: dijo 120 g → el sistema entiende **120 colas de rape**.
+> · Vieira media: dijo 2 ud → el producto está en kilos, entiende **2 kg**.
+> · Salsa de curry rojo: 200 g → **200 unidades**. La torrija entera, igual.
+> Se arregla cambiando la unidad de esos productos a kilos, no volviendo a preguntarle.
+> Es el asunto de los 27 productos «por unidades» de `docs/LOGISTICA_LO_QUE_QUEDA_PENDIENTE.md`.
+>
+> **2. Quedan 49 cantidades en blanco que esta revisión NO tocó**, en dos grupos:
+> · **9 platos de venta** con la receta sin tocar desde el 10-07-2026 — Tartar de Salmón
+>   (los 6 ingredientes en blanco), las dos hamburguesas, vieiras con kimchi, entraña,
+>   croquetas, ceviche thai, arroz negro, jamón ibérico. Nunca entraron en la revisión.
+> · **8 elaboraciones creadas el 08-09-2026**, el mismo día de esta nota, con los
+>   ingredientes puestos y sin cantidades: ensaladilla, pico de gallo, ragout de setas,
+>   barbacoa asiática, guacamole, salsa de curry mango, espuma de tiramisú, emulsión de
+>   ají amarillo. Bloquean el módulo de elaboraciones.
+>
+> **Conclusión: sí hay que volver a Borja, pero por cosas DISTINTAS a las que ya cerró.**
+> No es repetirle trabajo.
+
 **Para Fernando:** la revisión de escandallos y alérgenos de Bacanal con Borja (cocinero) terminó hoy 08/09/2026. No hace falta retomarla ni volver a preguntar por cantidades o alérgenos de las fichas de cocina — está cerrada del todo.
 
 **Qué se aplicó (todo vía migraciones sobre `producto_composicion`/`productos`, no solo en un documento aparte):**

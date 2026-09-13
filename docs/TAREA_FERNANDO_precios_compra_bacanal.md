@@ -5,6 +5,119 @@
 
 ---
 
+## 🔎 12-SEP — POR QUÉ TU CLAUDE NO COMPRUEBA COSAS (y cómo se arregla)
+
+Me dices que tu Claude no recuerda entre sesiones y que no mira cosas por su cuenta como
+hago yo. He mirado el repositorio y **no es cosa suya, le faltan tres piezas**. Lo tienes
+detallado aquí:
+
+> ### 👉 **`docs/COMO_COMPROBAR_LAS_COSAS.md`**
+
+El resumen:
+
+1. **No sabe que puede mirar la base de datos de verdad.** Es el hueco grande. Tu
+   `CLAUDE.md` no lo menciona, así que solo puede leer el código y deducir — que es otra
+   forma de decir suponer. **El permiso ya lo tienes** (está en tu `.env.local` de
+   siempre); solo faltaba la herramienta, y te la he dejado hecha:
+   `bash scripts/sql-produccion.sh -c "select ..."`.
+   Con eso se pasa de «creo que hay unos cuantos» a «hay 49, en 17 productos, y son estos».
+2. **Tampoco sabe comprobar si un despliegue ha fallado.** Una línea y lo ve.
+3. **Se le cuelan fichas de memoria.** El sistema está bien montado, pero **8 fichas no
+   están nombradas en el índice**, y una ficha que el índice no nombra no la abre nadie.
+   Una de ellas es la del cierre de la revisión con Borja, del 8 de septiembre, titulada
+   «Nota para Fernando» — **ni tu Claude ni el mío la abriríamos jamás**; yo la encontré de
+   casualidad leyendo los commits.
+
+Y un apunte: tu `CLAUDE.md` **lleva sin tocarse desde el 14 de abril**. El software ha
+cambiado enormemente desde entonces. Un manual desactualizado no es neutral: manda a
+Claude en la dirección equivocada con toda la confianza del mundo.
+
+---
+
+## 🗂️ 12-SEP — TODO LO PENDIENTE, EN UN SOLO SITIO
+
+Este fichero se ha hecho largo y las cosas pendientes están repartidas por él. Las he
+recogido todas en un documento aparte, escrito en cristiano y con las cifras medidas hoy:
+
+> ### 👉 **`docs/LOGISTICA_LO_QUE_QUEDA_PENDIENTE.md`**
+
+Está separado en dos partes: **lo que depende de vosotros** (las recetas a medio escribir,
+las 49 cantidades en blanco de Borja, los 27 productos declarados por unidades, el precio
+de la base de arroz, las 21 altas de Ágora, las 5 decisiones del cierre y los 2 avisos de
+seguridad) y **lo que depende de nosotros** (que se reduce a una sola pieza: la venta por
+formato).
+
+Termina con el orden en el que hay que hacer las cosas para poder **encender el descuento
+automático de stock**, que es a donde va todo esto.
+
+Las notas de más abajo siguen valiendo como detalle de cada asunto; el documento nuevo es
+el resumen por el que empezar.
+
+---
+
+## 📦 12-SEP — YA NO HAY QUE DAR DE ALTA NADA A MANO: HAY UNA PANTALLA
+
+> **Esto sustituye la lista que te mandamos el 4 de septiembre.** En vez de pedirte por
+> escrito que crees 16 productos de cachimba, ahora los tienes en una pantalla con el
+> botón puesto. **Logística → Altas de Ágora.**
+
+### El problema, en una frase
+
+El TPV está vendiendo **21 cosas que Balles no conoce**, algunas desde junio, y por eso
+lo que gastan no sale del almacén. Son cuatro cócteles de HABANA (Boom-Boom, Danza
+Macabra, Desliz de cobra, Fiesta del Caribe), el MENÚ BACANAL, los sabores de shisha y
+los «Ud. Extra…» de BACANAL.
+
+**Ninguna de esas ventas se ha perdido.** Estaban guardadas esperando a que alguien
+dijera a qué producto corresponden. Al resolver cada línea, **se recuperan todas de
+golpe**: los 140 consumos de Love 66 desde el 18 de junio, por ejemplo.
+
+### Lo que verás
+
+Una lista con lo que vende Ágora, cuántas veces y desde cuándo. Y en cada línea, **la
+propuesta ya hecha**:
+
+- **«Enlazar a Big Boy»** — cuando el producto **ya existe** en Balles. Es el caso más
+  frecuente: en Ágora el mismo tabaco está dado de alta **dos veces**, como producto y
+  como complemento, con números distintos. No hay que crear nada, solo decir que son el
+  mismo. Un clic.
+- **«Crear»** — cuando de verdad no existe. Pide lo mínimo (nombre, qué es, categoría) y
+  el resto se rellena luego en su ficha.
+
+**No hay botón de descartar**, y es a propósito: tú dijiste que esto avisa y obliga, no
+que sugiere.
+
+### También te avisa solo
+
+Cada noche, cuando entran las ventas, si aparece algo sin reconocer **salta un aviso en
+la campana** — pero solo a quien tenga Logística con permiso de edición. A un camarero no
+le llega: no puede arreglarlo, y llenarle la campana de avisos que no puede resolver solo
+enseña a la gente a ignorarlos. Y sale **una vez por producto**, no cada noche.
+
+En el escritorio de Logística, el panel de Ágora lleva ahora el contador de pendientes.
+
+### 🙏 Lo que necesitamos: que lo uses y nos digas
+
+No podemos entrar a producción. ¿Puedes hacer esto?
+
+1. Entrar en **Logística → Altas de Ágora**. ¿Salen las 21 líneas?
+2. Pulsar **«Enlazar a Love 66»** en el sabor de shisha. Debería decirte que ha enlazado
+   ~140 ventas y desaparecer de la lista.
+3. Mirar la ficha de ese producto: en «Conexión con Ágora» debería aparecer su ID.
+4. Con **SEXY GREEN** ojo: es el cóctel que alguien picó como sabor de shisha. Ahí lo
+   correcto es enlazarlo al cóctel, no crear nada.
+5. **Chao Bella** ya no tiene a qué enlazarse: borrasteis el producto el sábado y tiene 23
+   consumos sueltos. O lo creáis de nuevo, o se queda sin resolver.
+6. ¿Te llega el aviso a la campana? ¿Y a alguien de sala **no** le llega?
+
+### Sigue pendiente lo de antes
+
+Las 49 cantidades en blanco de Borja, los 27 productos declarados «por unidades» con
+recetas en gramos, el rendimiento de las elaboraciones, y las 5 decisiones del cierre de
+almacén. Nada de eso avanza sin vosotros.
+
+---
+
 ## 🔒 10-SEP — YA SE PUEDE CERRAR EL ALMACÉN · 5 decisiones que hemos tomado por vosotros
 
 > **Está hecho y funcionando.** Es lo que pediste el 27-ago: *"almacén abierto se edita
