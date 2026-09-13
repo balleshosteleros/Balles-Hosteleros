@@ -100,10 +100,41 @@ const PORTALES = [
   { ruta: 'baja', campo: 'slug', ficha: true },
 ] as const
 
+/**
+ * Un despliegue de verdad (Vercel), no el arranque en el Mac.
+ *
+ * Manda la diferencia entre "no puedo leer los dominios, mejor no publico" y
+ * "estoy en local sin claves, sigue adelante".
+ */
+const EN_DESPLIEGUE = !!process.env.VERCEL
+
+/**
+ * Corta el despliegue cuando los dominios no se pueden leer.
+ *
+ * POR QUÉ EXISTE: esta función se quedaba callada. Si la consulta fallaba,
+ * devolvía cero reglas, el despliegue salía "correcto" y los tres portales
+ * —reservar, carta y empleo— daban 404 en el dominio de CADA restaurante: el
+ * cliente no podía reservar mesa, el QR de la mesa no abría la carta y el
+ * candidato no veía las vacantes. Nadie se enteraba hasta que alguien lo
+ * probaba a mano (12-09-26).
+ *
+ * Publicar sin estas reglas es peor que no publicar: un despliegue parado se ve
+ * al momento, un restaurante sin reservas tarda horas en notarse. Cero reglas
+ * leídas de la base de datos NO significa "este grupo no tiene portales".
+ */
+function cortarDespliegue(motivo: string, err?: unknown): void {
+  const mensaje = `[next.config] portalesSinSlug: ${motivo}. Los portales (reservar, carta y empleo) quedarían en 404 en el dominio de cada restaurante, así que el despliegue se detiene.`
+  if (EN_DESPLIEGUE) throw new Error(mensaje, err ? { cause: err } : undefined)
+  console.warn(`${mensaje} (en local se sigue adelante)`, err ?? '')
+}
+
 async function portalesSinSlug() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return []
+  if (!url || !key) {
+    cortarDespliegue('faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY')
+    return []
+  }
 
   try {
     const { createClient } = await import('@supabase/supabase-js')
@@ -111,25 +142,38 @@ async function portalesSinSlug() {
       auth: { persistSession: false, autoRefreshToken: false },
     })
 
-    const { data: doms } = await db
+    // Las tres consultas miran su `error`: sin esto, una caída de red devolvía
+    // `data` vacío y se confundía con "no hay nada configurado".
+    const { data: doms, error: errDoms } = await db
       .from('paginas_web_dominios')
       .select('hostname, pagina_id')
       .eq('estado', 'VERIFICADO')
+    if (errDoms) cortarDespliegue('no se pudieron leer los dominios verificados', errDoms)
     if (!doms?.length) return []
 
-    const { data: pags } = await db
+    const { data: pags, error: errPags } = await db
       .from('paginas_web')
       .select('id, empresa_id')
       .in('id', [...new Set(doms.map((d) => d.pagina_id))])
-    if (!pags?.length) return []
+    if (errPags) cortarDespliegue('no se pudieron leer las páginas web', errPags)
+    // Hay dominios verificados, así que TIENE que haber página y empresa detrás.
+    // Vacío aquí es un dato que no se pudo leer, no una configuración legítima.
+    if (!pags?.length) {
+      cortarDespliegue('hay dominios verificados pero ninguna página web detrás')
+      return []
+    }
 
     const empresaDePagina = new Map(pags.map((p) => [p.id, p.empresa_id]))
 
-    const { data: emps } = await db
+    const { data: emps, error: errEmps } = await db
       .from('empresas')
       .select('id, carta_slug, empleo_slug, slug')
       .in('id', [...new Set(pags.map((p) => p.empresa_id))])
-    if (!emps?.length) return []
+    if (errEmps) cortarDespliegue('no se pudieron leer las empresas', errEmps)
+    if (!emps?.length) {
+      cortarDespliegue('hay páginas web pero ninguna empresa detrás')
+      return []
+    }
 
     const empresaPorId = new Map(emps.map((e) => [e.id, e]))
 
@@ -184,9 +228,18 @@ async function portalesSinSlug() {
       }
     }
 
+    // Sin una sola regla no hay portales en ningún dominio de cliente: eso no
+    // es un despliegue bueno, es la avería del 12-09-26 repetida.
+    if (!reglas.length) {
+      cortarDespliegue('la lectura no produjo ninguna regla de portal')
+    }
+
     return reglas
   } catch (err) {
     console.error('[next.config] portalesSinSlug:', err)
+    // En un despliegue el fallo sube y detiene la publicación. Tragárselo aquí
+    // era lo que dejaba los portales en 404 sin avisar a nadie.
+    if (EN_DESPLIEGUE) throw err
     return []
   }
 }
