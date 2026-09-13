@@ -1251,7 +1251,18 @@ export function ListadoReservasPanel({
           porque allí la pregunta es de dónde vienen las reservas, no cuánto
           dinero hay retenido. */}
       {enfoque === "cobros" && (
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+          {/* La cifra que busca contabilidad: lo COBRADO DE VERDAD en el
+              periodo, sumando las tres modalidades y restando lo devuelto.
+              Va primera y separada porque es un total, no una categoría más. */}
+          <TarjetaImporte
+            titulo="Total cobrado"
+            importe={
+              resumen.garantiaCobrada + resumen.cancelacionCobrada + resumen.ticketCobrado
+            }
+            detalle="Garantías + cancelaciones + tickets, menos devoluciones"
+            tono="bien"
+          />
           {/* Lo primero, porque es lo único que reclama que alguien decida. */}
           <TarjetaImporte
             titulo="Pendiente de decidir"

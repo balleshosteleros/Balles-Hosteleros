@@ -31,7 +31,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { getCredencialesRevolut } from "@/features/ajustes/actions/revolut-config-actions";
-import { devolverOrden } from "@/lib/revolut/merchant";
+import { devolverOrden, obtenerOrden } from "@/lib/revolut/merchant";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ConceptoDevolucion = "garantia" | "cancelacion" | "ticket";
@@ -302,16 +302,56 @@ export async function devolverCobroAction(input: DevolverInput): Promise<Result>
     return { ok: false, error: `Revolut rechazó la devolución: ${res.error}` };
   }
 
+  // ── El resultado DE VERDAD, no el "en curso" ──────────────────────
+  //
+  // Revolut contesta al instante con `processing`: eso NO es que el dinero
+  // haya llegado. El banco del cliente puede rechazarlo un segundo después, y
+  // entonces el importe sale de la cuenta del comercio y vuelve. Dar por buena
+  // esa primera respuesta es exactamente lo que dejó una devolución cantada
+  // como hecha cuando la clienta nunca vio su dinero (12 y 13-09-2026).
+  //
+  // Se le pregunta hasta tres veces, un segundo entre medias. Si sigue sin
+  // resolverse, el apunte queda en `lanzado` —"se pidió y no sabemos cómo
+  // acabó"—, que es la verdad, y lo resuelve el cuadre contra Revolut.
+  let estadoFinal = String(res.orden.state ?? "").toLowerCase();
+  for (let intento = 0; intento < 3 && estadoFinal === "processing"; intento++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const comprobada = await obtenerOrden(cred.secretKey, cred.entorno, res.orden.id);
+    if (comprobada.ok) estadoFinal = String(comprobada.orden.state ?? "").toLowerCase();
+  }
+
+  const rechazada = estadoFinal === "failed" || estadoFinal === "cancelled";
+  const confirmada = estadoFinal === "completed";
+
   await admin
     .from("reserva_cobros")
     .update({
-      estado: "devuelto",
-      revolut_estado: String(res.orden.state ?? ""),
-      comprobado_at: new Date().toISOString(),
+      estado: confirmada ? "devuelto" : rechazada ? "fallido" : "lanzado",
+      revolut_estado: estadoFinal,
+      error: rechazada
+        ? `${motivo} — el banco del cliente RECHAZÓ la devolución: el dinero volvió a la cuenta`
+        : motivo,
+      comprobado_at: confirmada || rechazada ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", apunte.id);
 
   revalidatePath("/sala/reservas");
+
+  if (rechazada) {
+    return {
+      ok: false,
+      error:
+        "El banco del cliente ha rechazado la devolución. El dinero ha vuelto a la cuenta: no le ha llegado. Habrá que devolvérselo por otra vía.",
+    };
+  }
+  if (!confirmada) {
+    return {
+      ok: false,
+      error:
+        "La devolución se ha pedido pero el banco aún no ha contestado. Queda apuntada como pendiente de comprobar: no des por hecho que ha llegado.",
+    };
+  }
+
   return { ok: true, devuelto: input.importe };
 }

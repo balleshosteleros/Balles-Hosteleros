@@ -410,10 +410,12 @@ export function BotonDevolver({
 
   return (
     <>
+      {/* En rojo: es la única acción de esta pantalla que SACA dinero de la
+          cuenta, y tiene que distinguirse de un enlace cualquiera. */}
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className="mt-1 text-[11px] underline text-muted-foreground hover:text-foreground"
+        className="mt-1 w-fit rounded-md border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive transition-colors hover:bg-destructive/20"
       >
         Devolver
       </button>
