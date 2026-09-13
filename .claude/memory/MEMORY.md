@@ -62,3 +62,4 @@
 - [Modelos AEAT (Gestoría)](project/modelos_aeat.md) — `/gestoria/modelos` genera los 6 modelos oficiales desde las facturas ya registradas, con categorización por IA. Sustituye una asesoría externa de 1.500-3.000 €/año
 - [Pedidos: empresa_id pasó a UUID](project/pedidos_migracion_uuid.md) — ✅ **ya aplicada** (comprobado en producción el 12-09-2026). La ficha decía que estaba pendiente y no lo está: no ejecutar nada
 - [Vincular reservas: solo se pregunta si puede ser OTRA persona](project/reservas_vinculacion_solo_duda_identidad.md) — no preguntar por rutina, solo cuando de verdad haya duda de identidad
+- [Los pagos de Iván van en complemento, nunca en nómina](project/pagos_ivan_complemento_no_nomina.md) — 1.250 €/mes en HABANA + 1.250 € en BACANAL; la columna `nomina` alimenta la base del modelo 111, así que meterlo ahí lo declara como trabajador en nómina. Un mes que aún no ha cobrado se deja en blanco, no se marca pagado
