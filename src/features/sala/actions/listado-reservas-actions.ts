@@ -114,6 +114,10 @@ export interface ListadoReservaRow {
   tipoCategoria: string;
   tarjetaIntroducida: boolean;
   importePagado: number | null;
+  /** Día en que se registró (AAAA-MM-DD, zona del restaurante). */
+  fechaRegistro: string;
+  /** Hora en que se registró (HH:MM, zona del restaurante). */
+  horaRegistro: string;
   /** Devuelto al cliente (positivo). 0 = no se le ha devuelto nada. */
   importeDevuelto: number;
   /** Se intentó devolver y el banco lo rechazó: el cliente NO tiene su dinero. */
@@ -250,6 +254,8 @@ function filaBase(): ListadoReservaRow {
     tipoCategoria: "",
     tarjetaIntroducida: false,
     importePagado: null,
+    fechaRegistro: "",
+    horaRegistro: "",
     importeDevuelto: 0,
     devolucionFallida: false,
     pagoPendiente: false,
@@ -580,6 +586,8 @@ export async function getListadoReservas(params: {
         importeDevuelto: devueltoPorReserva.get(s(r.id)) ?? 0,
         ticketPagadoAt: pagadoPorReserva.get(s(r.id)) ?? "",
         devolucionFallida: falloPorReserva.has(s(r.id)),
+        fechaRegistro: fechaEnZona(s(r.created_at), tz),
+        horaRegistro: horaEnZona(s(r.created_at), tz),
         pagoPendiente: Boolean(r.pago_pendiente),
 
         tieneGarantia: Boolean(r.tiene_garantia),
@@ -692,14 +700,14 @@ export async function getListadoReservas(params: {
           telefono: s(c.comprador_telefono),
           email: s(c.comprador_email),
 
-          // Una compra sin canjear no tiene día RESERVADO —ése es justo el
-          // dato que falta—, así que estas dos columnas enseñan cuándo se
-          // registró la compra. Vacías no decían nada y la fila parecía rota.
-          // Van en la zona del restaurante: quien mira desde fuera de España
-          // vería otro día.
-          fecha: fechaEnZona(s(c.created_at), tz),
-          hora: horaEnZona(s(c.created_at), tz),
+          // Sin día RESERVADO: ése es justo el dato que le falta a una compra
+          // sin canjear. El cuándo se registró tiene su propia columna, para
+          // no mezclar dos fechas que significan cosas distintas.
+          fecha: "",
+          hora: "",
           turno: "",
+          fechaRegistro: fechaEnZona(s(c.created_at), tz),
+          horaRegistro: horaEnZona(s(c.created_at), tz),
 
           // Para cuánta gente pagó. Es el mismo dato que los comensales de una
           // reserva: se guarda al comprar, para poder sentarlos después.

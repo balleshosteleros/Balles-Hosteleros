@@ -78,14 +78,14 @@ interface Props {
 export function CobrosReservasView({ onBack }: Props) {
   const [periodo, setPeriodo] = useState<Periodo>("anio");
   /**
-   * Contra qué fecha se recorta el periodo.
+   * Contra qué fecha se recorta el periodo: el día en que come el cliente.
    *
-   * Por día reservado responde a "qué se cobra de la gente que viene"; por
-   * fecha de cobro (el día en que se creó la reserva y se pidió la tarjeta)
-   * responde a "cuánto dinero entró". Son dos preguntas distintas y el usuario
-   * elige cuál está haciendo.
+   * Antes había dos botones para elegir entre este y el día de cobro. Sobran:
+   * la tabla ya trae las tres fechas en columnas propias —día reservado, día
+   * de registro y día de pago— y cada una filtra por su lado, con más precisión
+   * que un botón que cambiaba el significado de todo el periodo sin avisar.
    */
-  const [campoFecha, setCampoFecha] = useState<"fecha" | "created_at">("fecha");
+  const campoFecha = "fecha" as const;
 
   const rango = useMemo(() => rangoDe(periodo), [periodo]);
 
@@ -115,26 +115,6 @@ export function CobrosReservasView({ onBack }: Props) {
             ))}
           </div>
 
-          <div className="flex items-center gap-1 border-l pl-1.5">
-            <Button
-              variant={campoFecha === "fecha" ? "default" : "outline"}
-              size="sm"
-              className="h-8 text-xs"
-              onClick={() => setCampoFecha("fecha")}
-              title="Recortar el periodo por el día en que come el cliente"
-            >
-              Por día reservado
-            </Button>
-            <Button
-              variant={campoFecha === "created_at" ? "default" : "outline"}
-              size="sm"
-              className="h-8 text-xs"
-              onClick={() => setCampoFecha("created_at")}
-              title="Recortar el periodo por el día en que se hizo la reserva y se cobró"
-            >
-              Por día de cobro
-            </Button>
-          </div>
         </div>
       </div>
 
@@ -146,7 +126,7 @@ export function CobrosReservasView({ onBack }: Props) {
           campoFecha={campoFecha}
           enfoque="cobros"
           comprasTicketPorDefecto
-          periodoLabel={`${rango.label} · ${campoFecha === "fecha" ? "por día reservado" : "por día de cobro"}`}
+          periodoLabel={rango.label}
         />
       </div>
     </div>

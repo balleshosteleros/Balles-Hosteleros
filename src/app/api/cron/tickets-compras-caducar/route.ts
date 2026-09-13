@@ -63,6 +63,35 @@ export async function GET(request: Request) {
   }
 
   const compras = data ?? [];
+
+  // ── Rematar las PAGADAS que se quedaron sin código ────────────────
+  //
+  // El cobro se apunta siempre, aunque el código falle: el dinero ya entró y
+  // una venta cobrada no se tira. Pero el cliente se queda esperando un correo
+  // que no llega, así que aquí se le da su código y se le manda.
+  let rematadas = 0;
+  const { data: sinCodigo } = await supabase
+    .from("reserva_ticket_compras")
+    .select("id, empresa_id")
+    .eq("estado", "pagada")
+    .is("codigo", null);
+
+  for (const c of sinCodigo ?? []) {
+    const gen = await supabase.rpc("generar_codigo_ticket", {
+      p_empresa_id: c.empresa_id,
+    });
+    if (gen.error || !gen.data) continue;
+    const { error } = await supabase
+      .from("reserva_ticket_compras")
+      .update({ codigo: gen.data as string, updated_at: new Date().toISOString() })
+      .eq("id", c.id)
+      .is("codigo", null);
+    if (error) continue;
+    await enviarEmailCompraTicket(c.id as string).catch((e) =>
+      console.error("[cron tickets-caducar] email rematado:", e),
+    );
+    rematadas += 1;
+  }
   let caducadas = 0;
   let rescatadas = 0;
   const incidencias: string[] = [];
@@ -166,6 +195,7 @@ export async function GET(request: Request) {
     revisadas: compras.length,
     caducadas,
     rescatadas,
+    rematadas,
     incidencias,
   });
 }

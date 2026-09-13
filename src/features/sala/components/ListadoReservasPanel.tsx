@@ -217,10 +217,13 @@ const COLUMNAS: ColumnaDef[] = [
       // —sin tarjeta, o pagada pero sin elegir día—. Va en gris para que no
       // compita con los estados de mesa, que son los que hay que vigilar.
       if (f.esCompraTicket) {
+        // Mismo chip que los estados de reserva —relleno y letra blanca, se
+        // leen igual en los dos temas— pero en gris: no son estados de mesa y
+        // no deben competir con los que hay que vigilar en pleno servicio.
         return (
           <Badge
             variant="outline"
-            className="font-normal border-muted-foreground/30 bg-muted text-muted-foreground"
+            className="font-normal bg-zinc-400 text-white border-zinc-500"
           >
             {f.estado}
           </Badge>
@@ -301,6 +304,24 @@ const COLUMNAS: ColumnaDef[] = [
     celda: (f) => fechaCorta(f.fecha),
   },
   { campo: "hora", label: "Hora", filtro: "texto", ordenable: true, valor: (f) => f.hora },
+  {
+    // Cuándo entró la petición, que no es lo mismo que el día que viene a
+    // comer. Una compra de ticket solo tiene esta: la otra es justo lo que le
+    // falta. Cada una filtra por su lado desde su propia columna.
+    campo: "fechaRegistro",
+    label: "Registrado",
+    filtro: "fecha",
+    ordenable: true,
+    valor: (f) => f.fechaRegistro,
+    celda: (f) => fechaCorta(f.fechaRegistro),
+  },
+  {
+    campo: "horaRegistro",
+    label: "Hora registro",
+    filtro: "texto",
+    ordenable: true,
+    valor: (f) => f.horaRegistro,
+  },
   {
     campo: "turno",
     label: "Turno",
@@ -880,6 +901,7 @@ const VISIBLES_COBROS = [
   "cliente",
   "fecha",
   "hora",
+  "fechaRegistro",
   "comensales",
   "estado",
   // Lo que hay que decidir, pegado al estado de la reserva.

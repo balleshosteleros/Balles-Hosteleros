@@ -129,26 +129,24 @@ export async function POST(req: Request) {
       // reservaba antes de pagar y se lo llevaba puesto todo el que dejaba sus
       // datos y se iba, quemando códigos para nada.
       let codigo = (compra.codigo as string | null) ?? null;
-      if (!codigo) {
+      for (let intento = 0; !codigo && intento < 3; intento++) {
         const gen = await admin.rpc("generar_codigo_ticket", {
           p_empresa_id: compra.empresa_id,
         });
-        if (gen.error || !gen.data) {
-          // Sin código no se puede canjear, así que NO se marca pagada: se
-          // deja pendiente y lo recoge el barrido, que vuelve a intentarlo.
-          // Mejor un cobro pendiente de rematar que uno dado por bueno sin
-          // nada que enviarle al cliente.
-          console.error("[revolut][webhook] codigo:", gen.error);
-          return NextResponse.json({ ok: false }, { status: 500 });
-        }
-        codigo = gen.data as string;
+        if (gen.data) codigo = gen.data as string;
+        else console.error("[revolut][webhook] codigo:", gen.error);
       }
 
+      // El cobro se apunta SIEMPRE, con código o sin él. El dinero ya ha
+      // entrado: dejar la compra como "pendiente" porque falló un código
+      // sería tirar una venta cobrada, y encima el cliente pagó de verdad.
+      // Si el código no salió, la compra queda pagada y sin él, y el barrido
+      // —cada 10 minutos— se lo pone y le manda su correo.
       await admin
         .from("reserva_ticket_compras")
         .update({
           estado: "pagada",
-          codigo,
+          ...(codigo ? { codigo } : {}),
           revolut_estado: estadoRevolut,
           revolut_order_id: orderId,
           pagado_at: new Date().toISOString(),
