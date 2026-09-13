@@ -1,5 +1,6 @@
 "use client";
 
+import { PILDORA_CABECERA } from "@/features/layout/data/cabecera";
 import { EmpresaSwitcherMobile } from "./EmpresaSwitcherMobile";
 import { EmpleadoMenuMobile } from "./EmpleadoMenuMobile";
 import type { InicioEmpresa } from "../lib/mobile-identidad-data";
@@ -23,7 +24,9 @@ interface Props {
 export function PerfilPill({ nombre, avatarUrl, empresaActual, empresas }: Props) {
   return (
     <div className="relative shrink-0">
-      <div className="flex items-center gap-0.5 rounded-full border bg-muted/40 px-1.5 py-1">
+      <div
+        className={`flex items-center gap-0.5 rounded-full border bg-muted/40 px-1.5 py-1 ${PILDORA_CABECERA}`}
+      >
         {/* Logo de empresa → cambiar de empresa */}
         <EmpresaSwitcherMobile empresaActual={empresaActual} empresas={empresas} />
 

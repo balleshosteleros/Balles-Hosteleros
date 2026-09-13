@@ -50,6 +50,7 @@ import {
 import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { PILDORA_CABECERA } from "@/features/layout/data/cabecera";
 
 /** «2:35 h» de lo que lleva dentro, o del total si ya salió. */
 function horasVivas(f: MiFichajeHoy | null): string {
@@ -195,7 +196,8 @@ export function FichajePill() {
       <div
         aria-hidden={!abierto}
         className={cn(
-          "flex h-10 items-center overflow-hidden whitespace-nowrap rounded-full border bg-muted/40 transition-all duration-200",
+          "flex items-center overflow-hidden whitespace-nowrap rounded-full border bg-muted/40 transition-all duration-200",
+          PILDORA_CABECERA,
           abierto
             ? "mr-1 max-w-[340px] gap-2 pl-3 pr-1 opacity-100"
             : "max-w-0 border-transparent px-0 opacity-0",
@@ -252,19 +254,24 @@ export function FichajePill() {
         )}
       </div>
 
-      {/* El círculo se monta IGUAL que la píldora de herramientas: mismo borde,
-          mismo fondo y el mismo `py-1` alrededor de un icono de 32 px. Es lo
-          que hace que empiece y termine a la misma altura que la barra de al
-          lado; con el borde puesto directamente sobre el icono quedaba más bajo
-          y se veía descolgado. */}
-      <span className="flex shrink-0 items-center rounded-full border bg-muted/40 p-1">
+      {/* El círculo se monta IGUAL que las demás pastillas de la cabecera:
+          mismo borde, mismo fondo y el mismo alto (`PILDORA_CABECERA`) con 4px
+          de aire alrededor de una pieza de 36. Es lo que hace que empiece y
+          termine a la misma altura que la barra de al lado; con el borde puesto
+          directamente sobre el icono quedaba más bajo y se veía descolgado. */}
+      <span
+        className={cn(
+          "flex w-[46px] shrink-0 items-center justify-center rounded-full border bg-muted/40",
+          PILDORA_CABECERA,
+        )}
+      >
         <ToolTooltip label={`${ROTULO[estado]} · ${horasVivas(fichaje)}`}>
           <button
             type="button"
             onClick={() => setFijado((v) => !v)}
             aria-expanded={abierto}
             aria-label={`${ROTULO[estado]} · ${horasVivas(fichaje)}`}
-            className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {enviando ? (
               <Loader2 className={`h-4 w-4 animate-spin ${color}`} />

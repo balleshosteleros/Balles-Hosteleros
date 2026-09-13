@@ -19,6 +19,7 @@ import { Play, Pause, SkipBack, SkipForward, X, Music2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useMusicaOpcional } from "@/features/sala/musica/contexts/musica-context";
+import { PILDORA_CABECERA } from "@/features/layout/data/cabecera";
 
 export function MiniReproductor({ className }: { className?: string }) {
   const musica = useMusicaOpcional();
@@ -34,6 +35,7 @@ export function MiniReproductor({ className }: { className?: string }) {
     <div
       className={cn(
         "hidden lg:flex items-center gap-0.5 rounded-full border bg-muted/40 py-1 pl-1.5 pr-1 max-w-[320px] shrink-0",
+        PILDORA_CABECERA,
         className,
       )}
     >

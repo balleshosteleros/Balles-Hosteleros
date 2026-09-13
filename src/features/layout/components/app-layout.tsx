@@ -54,6 +54,7 @@ import { NotificacionBell } from "@/features/notificaciones/components/Notificac
 import { FichajePill } from "@/features/mi-panel/components/FichajePill";
 import { TablasConsultaMovil } from "@/shared/components/TablasConsultaMovil";
 import { PointsPill } from "@/features/toques/components/PointsPill";
+import { PILDORA_CABECERA } from "@/features/layout/data/cabecera";
 import type { PointsResumen } from "@/features/toques/lib/points-resumen";
 import { PushEscritorioAviso } from "@/features/notificaciones/components/PushEscritorioAviso";
 import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
@@ -356,7 +357,10 @@ function AppLayoutInterno({
                       retardo de aparición es común y, al pasar de un icono al de al
                       lado, la etiqueta salta al momento en vez de reaparecer. */}
                   <TooltipProvider delayDuration={300}>
-                    <div className="hidden md:flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5">
+                    <div className={cn(
+                      "hidden md:flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5",
+                      PILDORA_CABECERA,
+                    )}>
                       {/* Notificaciones — joya de la corona, la primera de la barra */}
                       <NotificacionBell variant="toolbar" />
 
@@ -544,7 +548,10 @@ function AppLayoutInterno({
                   />
 
                   {/* Bloque final: empresa + nombre + ajustes + avatar — todo en un pill */}
-                  <div className="flex items-center gap-0.5 rounded-full border bg-muted/40 py-1 px-1.5">
+                  <div className={cn(
+                    "flex items-center gap-0.5 rounded-full border bg-muted/40 py-1 px-1.5",
+                    PILDORA_CABECERA,
+                  )}>
                     {/* Logo empresa. SIEMPRE visible, también en móvil.
                         Estaba `hidden md:block` porque se dio por hecho que a
                         las vistas de ordenador solo se llegaba de rebote desde

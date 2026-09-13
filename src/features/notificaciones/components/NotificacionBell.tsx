@@ -34,6 +34,7 @@ import { getIconoTipo } from "@/features/notificaciones/lib/catalogo-iconos";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { cn } from "@/lib/utils";
 
 function fmtFecha(iso: string, tz: string): string {
   return formatFechaEnZona(iso, tz, { day: "2-digit", month: "short", year: undefined });
@@ -181,7 +182,10 @@ export function NotificacionBell({
           ) : (
             <button
               type="button"
-              className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full border bg-background text-foreground/80 ${className ?? ""}`}
+              className={cn(
+                "relative inline-flex h-9 w-9 items-center justify-center rounded-full border bg-background text-foreground/80",
+                className,
+              )}
               aria-label="Notificaciones"
             >
               <Bell className="h-5 w-5" strokeWidth={1.75} />

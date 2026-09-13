@@ -1,6 +1,7 @@
 import { PerfilPill } from "./PerfilPill";
 import { PointsPill } from "@/features/toques/components/PointsPill";
 import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
+import { PILDORA_CABECERA } from "@/features/layout/data/cabecera";
 import type { MobileInicioData } from "../lib/mobile-inicio-data";
 
 export function InicioHeader({ data }: { data: MobileInicioData }) {
@@ -32,7 +33,9 @@ export function InicioHeader({ data }: { data: MobileInicioData }) {
           único sitio desde el que se entra a Points (Iván, 12-sep). */}
       <div className="relative flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <NotificacionBell />
+          {/* Misma altura que las pastillas de su fila: la campana venía 10px
+              más baja y la fila se veía escalonada (Iván, 13-sep). */}
+          <NotificacionBell className={`w-[46px] ${PILDORA_CABECERA}`} />
           <PointsPill inicial={points} href="/m/points" />
         </div>
         <PerfilPill
