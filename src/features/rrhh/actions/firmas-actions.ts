@@ -13,6 +13,7 @@ import {
   huecoFirmaPorDefecto,
   contarPaginas,
 } from "@/features/rrhh/services/firmas/detectar-hueco-firma";
+import { getSiteUrl } from "@/lib/site-url";
 import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
@@ -160,8 +161,7 @@ async function notificarFirmaPendiente(args: {
   token: string;
 }): Promise<void> {
   try {
-    const base = (process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com").replace(/\/$/, "");
-    const url = `${base}/firmar/${encodeURIComponent(args.token)}`;
+    const url = `${getSiteUrl()}/firmar/${encodeURIComponent(args.token)}`;
     await emitirNotificacion({
       empresaId: args.empresaId,
       tipo: "firma_pendiente",

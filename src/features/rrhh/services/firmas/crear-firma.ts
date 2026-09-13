@@ -7,6 +7,11 @@
  *
  * Replica el flujo del server action `crearFirma` (firmas-actions.ts) pero
  * acepta los datos como parámetros tipados en vez de FormData.
+ *
+ * Además del correo, deja el aviso dentro de la app. Aquí y no en cada llamador:
+ * por esta puerta pasa TODO lo que se manda a firmar desde el servidor, así que
+ * es el único sitio donde el aviso no se puede olvidar. El `dedupeKey` por
+ * documento evita duplicarlo si el llamador también avisa.
  */
 
 import "server-only";
@@ -15,6 +20,7 @@ import { sha256, generarToken, hashToken } from "@/features/rrhh/services/firmas
 import { registrarEvento } from "@/features/rrhh/services/firmas/audit";
 import { enviarInvitacionFirma } from "@/features/rrhh/services/firmas/email";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
+import { getSiteUrl } from "@/lib/site-url";
 
 const BUCKET = "firmas";
 const MAX_PDF_BYTES = MAX_DOCUMENTO_BYTES; // 50 MB (tope unificado de documentos)
@@ -251,6 +257,34 @@ export async function crearFirmaInterno(
         emailError: !sendResult.ok && "error" in sendResult ? sendResult.error : null,
       },
     });
+
+    // Aviso in-app, con botón que abre el mismo enlace de firma del correo.
+    // El correo se puede perder entre cien; el aviso salta al entrar en la app.
+    // Best-effort: si falla, el documento ya salió por correo igualmente.
+    try {
+      const { emitirNotificacion } = await import(
+        "@/features/notificaciones/actions/notificaciones-actions"
+      );
+      // `getSiteUrl()` es la fuente única y revienta en producción si cayera a
+      // localhost. Un enlace de firma con localhost es un enlace muerto en manos
+      // de una persona real.
+      const base = getSiteUrl();
+      await emitirNotificacion({
+        empresaId,
+        tipo: "firma_pendiente",
+        titulo: "Tienes un documento para firmar",
+        mensaje: `«${titulo}» está pendiente de tu firma.`,
+        segmento: { tipo: "empleados", empleadoIds: [empleadoId] },
+        accionLabel: "Firmar",
+        accionUrl: `${base}/firmar/${encodeURIComponent(token)}`,
+        refTabla: "firmas_documentos",
+        refId: documentoId,
+        dedupeKey: `firma-${documentoId}`,
+        system: true,
+      });
+    } catch (e) {
+      console.error("[firmas] aviso in-app de firma pendiente:", e);
+    }
 
     return { ok: true, documentoId, emailEnviado: sendResult.ok };
   } catch (err) {

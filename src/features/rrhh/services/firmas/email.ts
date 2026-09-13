@@ -2,8 +2,7 @@ import { sendEmail, type SendEmailResult } from "@/lib/email/send";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
-
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com";
+import { getSiteUrl } from "@/lib/site-url";
 
 /** Zona horaria de la empresa para fechar correos de firma (PRP-069). */
 async function zonaDeEmpresa(empresaId: string): Promise<string> {
@@ -74,7 +73,12 @@ export type InvitacionFirmaInput = {
 };
 
 export async function enviarInvitacionFirma(input: InvitacionFirmaInput): Promise<SendEmailResult> {
-  const url = `${APP_URL}/firmar/${encodeURIComponent(input.token)}`;
+  // Se resuelve AL ENVIAR, no al cargar el módulo: una constante de módulo
+  // congela el dominio en el arranque y deja fuera cualquier corrección
+  // posterior. Y `getSiteUrl()` es la fuente única, que revienta en producción
+  // si cayera a localhost — un enlace de firma con localhost es un enlace muerto
+  // en el buzón de una persona real.
+  const url = `${getSiteUrl()}/firmar/${encodeURIComponent(input.token)}`;
   const tz = await zonaDeEmpresa(input.empresaId);
   const expira = formatFechaHoraEnZona(input.expiraEn.toISOString(), tz);
 
