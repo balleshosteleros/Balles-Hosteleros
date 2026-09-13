@@ -72,8 +72,13 @@ export function ComunicadoRecetaDialog({ open, onOpenChange, receta }: Props) {
   }
 
   async function enviar() {
+    // Ni título ni mensaje a medias: un comunicado se manda entero.
     if (!titulo.trim()) {
-      toast.error("Falta título");
+      toast.error("Falta el título");
+      return;
+    }
+    if (!contenido.trim()) {
+      toast.error("Falta el mensaje");
       return;
     }
     setSaving(true);

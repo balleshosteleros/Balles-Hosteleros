@@ -346,6 +346,36 @@ function normalizarEnlace(raw: string | undefined): string | null {
   }
 }
 
+/**
+ * NADA SE GUARDA A MEDIAS, ni siquiera un borrador (Iván, 13-09-2026).
+ *
+ * La pantalla ya lo pide antes de mandar nada, pero la comprobación tiene que
+ * estar también aquí: un comunicado se crea desde más de un sitio —Cocina
+ * manda el suyo— y sin título, sin mensaje o sin nadie a quien mandárselo no
+ * es un comunicado, es una línea muerta en la lista.
+ */
+function loQueFalta(input: ComunicadoInput): string[] {
+  const falta: string[] = [];
+  if (!(input.titulo ?? "").trim()) falta.push("el título");
+  if (!(input.cuerpo ?? "").trim()) falta.push("el mensaje");
+  const aAlguien =
+    (input.todaEmpresa ?? true) ||
+    (input.rolesDestinatarios ?? []).length > 0 ||
+    (input.departamentosDestinatarios ?? []).length > 0 ||
+    (input.empleadosDestinatarios ?? []).length > 0;
+  if (!aAlguien) falta.push("los destinatarios");
+  return falta;
+}
+
+/** El aviso de lo que falta, ya escrito para enseñarlo tal cual. */
+function errorIncompleto(falta: string[]): string {
+  const lista =
+    falta.length === 1
+      ? falta[0]
+      : `${falta.slice(0, -1).join(", ")} y ${falta[falta.length - 1]}`;
+  return `No se guarda a medias: falta ${lista}`;
+}
+
 function toRow(input: ComunicadoInput) {
   return {
     titulo: input.titulo,
@@ -421,6 +451,8 @@ export async function createComunicado(
   try {
     const { supabase, user, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+    const falta = loQueFalta(input);
+    if (falta.length > 0) return { ok: false, error: errorIncompleto(falta) };
 
     const { data, error } = await supabase
       .from("comunicados")
@@ -596,6 +628,8 @@ export async function updateComunicado(
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+    const falta = loQueFalta(input);
+    if (falta.length > 0) return { ok: false, error: errorIncompleto(falta) };
     const { data: anterior } = await supabase
       .from("comunicados")
       .select("estado, email_enviado_at")

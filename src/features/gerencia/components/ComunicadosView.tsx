@@ -144,6 +144,13 @@ import { SelectorHora } from "@/components/ui/selector-hora";
 const ITEM_MENU = "cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold tracking-tight";
 const ICONO_MENU = "h-4 w-4";
 
+/** «el Título», «el Título y el Mensaje», «el Título, el Mensaje y los Destinatarios». */
+function listaEnTexto(campos: string[]): string {
+  const partes = campos.map(c => `«${c}»`);
+  if (partes.length === 1) return `Falta ${partes[0]}`;
+  return `Faltan ${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
+}
+
 function EstadoBadge({ estado }: { estado: EstadoComunicado }) {
   const colors: Record<EstadoComunicado, string> = {
     borrador: "bg-muted text-muted-foreground",
@@ -378,13 +385,15 @@ function firmaForm(f: EditorForm): string {
 }
 
 function ComunicadoEditor({
-  comunicado, onBack, onSave, onEmitirSancion, empleadosReales, departamentosReales,
+  comunicado, onBack, onSave, onEmitirSancion, faltantesDe, empleadosReales, departamentosReales,
   empresaNombre, empresaColor, empresaIsotipo, empresaSancion, puedeSancionar, tz,
 }: {
   comunicado: Comunicado | null;
   onBack: () => void;
   /** `publicar` lo manda a la plantilla; `borrador` solo lo deja guardado. */
   onSave: (form: EditorForm, intencion: IntencionGuardado) => void | Promise<void>;
+  /** Qué le falta para poder guardarse. Vacío = está entero. */
+  faltantesDe: (form: EditorForm) => string[];
   /** La sanción no se publica: se emite, genera su documento y se firma. */
   onEmitirSancion: (form: EditorForm) => Promise<boolean>;
   empleadosReales: EmpleadoSelector[];
@@ -404,6 +413,8 @@ function ComunicadoEditor({
 }) {
   const isEdit = !!comunicado;
   const { user, profile } = useAuth();
+  /** Para avisar de que se sale sin guardar. Nunca los avisos del navegador. */
+  const { confirm, dialog: dialogoSalir } = useConfirmDelete();
   const formInicial = useMemo(
     () => (comunicado ? formFromComunicado(comunicado, tz) : emptyForm),
     [comunicado, tz],
@@ -573,8 +584,26 @@ function ComunicadoEditor({
       onBack();
       return;
     }
-    if (isEdit || tieneContenido) await guardar("borrador");
-    else onBack();
+    if (!isEdit && !tieneContenido) {
+      onBack();
+      return;
+    }
+    /**
+     * A MEDIAS NO SE GUARDA NADA, tampoco un borrador (Iván, 13-09-2026). Si
+     * falta algo, se dice qué es y se elige: volver a la ficha y terminarlo, o
+     * salir sabiendo que lo escrito no se guarda.
+     */
+    const faltan = faltantesDe(form);
+    if (faltan.length > 0) {
+      const ok = await confirm({
+        title: "Falta por rellenar",
+        description: `${listaEnTexto(faltan)}. Un comunicado no se guarda a medias: si sales ahora, lo escrito no se guarda.`,
+        confirmLabel: "Salir sin guardar",
+      });
+      if (ok) onBack();
+      return;
+    }
+    await guardar("borrador");
   };
 
   /** Con fecha de envío puesta, el botón programa; si no, publica ya. */
@@ -1213,6 +1242,7 @@ function ComunicadoEditor({
           </div>
         </ScrollArea>
       </div>
+      {dialogoSalir}
     </div>
   );
 }
@@ -1608,6 +1638,36 @@ export function ComunicadosView() {
   const [publicandoBusy, setPublicandoBusy] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const { validar: validarComunicado } = useReglasSubmodulo("gerencia", "comunicados");
+
+  /**
+   * LO QUE LE FALTA A UN COMUNICADO PARA PODER GUARDARSE.
+   *
+   * Vale igual para publicarlo que para dejarlo guardado: aquí no se guarda
+   * nada a medias, tampoco un borrador (Iván, 13-09-2026). Borrador solo quiere
+   * decir «escrito y todavía sin mandar», no «a medio escribir».
+   *
+   * Los campos salen de Ajustes → Comunicados, así que si mañana se exige uno
+   * más, esto lo pide solo. La fecha se añade aparte porque solo hace falta
+   * cuando se ha pedido dejarlo programado.
+   */
+  const faltantesDelComunicado = useCallback((form: EditorForm): string[] => {
+    const destinatarios = form.todaEmpresa
+      ? ["toda la empresa"]
+      : [...form.departamentosDestinatarios, ...form.empleadosDestinatarios];
+    const { labelsFaltantes } = validarComunicado({
+      titulo: form.titulo,
+      cuerpo: form.cuerpo,
+      tipo: form.tipo,
+      estado: form.estado,
+      destinatarios,
+      envioFecha: form.envioFecha,
+    });
+    const faltan = [...labelsFaltantes];
+    if (form.programado && !form.envioFecha && !faltan.includes("Fecha de envío")) {
+      faltan.push("Fecha de envío");
+    }
+    return faltan;
+  }, [validarComunicado]);
 
   /**
    * TODO lo que hay en esta pantalla, en una sola lista: los comunicados y las
@@ -2009,20 +2069,13 @@ export function ComunicadosView() {
           ? "borrador"
           : form.estado;
 
-    // Los campos obligatorios se exigen al publicar. Un borrador a medias es
-    // justo lo que se guarda al salir, así que ahí no se valida nada.
-    if (intencion === "publicar") {
-      const { labelsFaltantes } = validarComunicado({
-        titulo: form.titulo,
-        cuerpo: form.cuerpo,
-        tipo: form.tipo,
-        estado: estadoFinal,
-        envioFecha: form.envioFecha,
-      });
-      if (labelsFaltantes.length > 0) {
-        setFaltantesComunicado(labelsFaltantes);
-        return;
-      }
+    // NADA SE GUARDA A MEDIAS, ni siquiera un borrador: si falta algo, no se
+    // guarda y se dice qué falta (Iván, 13-09-2026). La ficha se queda abierta
+    // con lo escrito, que es lo que hace falta para completarlo.
+    const faltan = faltantesDelComunicado({ ...form, estado: estadoFinal });
+    if (faltan.length > 0) {
+      setFaltantesComunicado(faltan);
+      return;
     }
     // Con fecha puesta, `envio` es cuándo TIENE que salir. Al publicar ahora se
     // apunta el momento del envío, que es lo que se lee en la columna «Envío»:
@@ -2164,6 +2217,7 @@ export function ComunicadosView() {
           onBack={closeEditor}
           onSave={saveEditor}
           onEmitirSancion={emitirSancion}
+          faltantesDe={faltantesDelComunicado}
           empleadosReales={empleadosReales}
           departamentosReales={departamentosReales}
           empresaNombre={empresaResuelta ? empresaActual?.nombre ?? "" : ""}

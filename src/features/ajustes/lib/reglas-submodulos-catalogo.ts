@@ -184,6 +184,7 @@ const CAMPOS_NUEVAS_RECETAS: CampoSubmodulo[] = [
 const CAMPOS_COMUNICADOS: CampoSubmodulo[] = [
   { key: "titulo", label: "Título" },
   { key: "cuerpo", label: "Mensaje" },
+  { key: "destinatarios", label: "Destinatarios" },
   { key: "tipo", label: "Tipo" },
   { key: "estado", label: "Estado" },
   { key: "envioFecha", label: "Fecha de envío" },
@@ -322,7 +323,9 @@ export const CATALOGO: ModuloDef[] = [
         key: "comunicados",
         label: "Comunicados",
         campos: CAMPOS_COMUNICADOS,
-        obligatorios: ["titulo", "cuerpo"],
+        // Un comunicado sin destinatarios no se lo encuentra nadie: se guardaba
+        // igual y salía al vacío (Iván, 13-09-2026).
+        obligatorios: ["titulo", "cuerpo", "destinatarios"],
       },
     ],
   },
