@@ -1,7 +1,10 @@
 "use server";
 
 import { createClient, getUsuarioActual } from "@/lib/supabase/server";
-import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import {
+  getEmpresaActivaForUser,
+  getZonaHorariaEmpresa,
+} from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
@@ -21,6 +24,33 @@ import { friendlyError } from "@/shared/lib/friendly-errors";
  * marcadas con `esCompraTicket` para que la vista las distinga y para que nunca
  * entren en los totales de reservas.
  */
+
+/** Instante ISO → "AAAA-MM-DD" en la zona del restaurante. */
+function fechaEnZona(iso: string, tz: string): string {
+  if (!iso) return "";
+  try {
+    // `en-CA` da directamente AAAA-MM-DD, que es el formato con el que
+    // trabajan el resto de fechas del listado (ordenar y filtrar dependen de
+    // ello). Lo que se ve por pantalla se formatea después.
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return "";
+  }
+}
+
+/** Instante ISO → "HH:MM" en la zona del restaurante. */
+function horaEnZona(iso: string, tz: string): string {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat("es-ES", {
+      timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(new Date(iso));
+  } catch {
+    return "";
+  }
+}
 
 /**
  * Cómo se lee cada estado de compra en la columna Estado.
@@ -331,6 +361,13 @@ export async function getListadoReservas(params: {
 
     const filas = (data ?? []) as Record<string, unknown>[];
 
+    // Las horas se fechan en la zona del RESTAURANTE, no en la del navegador:
+    // quien mira los cobros desde fuera de España vería otro día.
+    const tz = await getZonaHorariaEmpresa(
+      supabase as unknown as SupabaseClient,
+      empresaId,
+    );
+
     // Compras de ticket pagadas y sin reserva: son las que el usuario puede
     // querer ver junto al listado. Se piden siempre por fecha de compra.
     const comprasPromise = params.incluirComprasTicket
@@ -364,6 +401,7 @@ export async function getListadoReservas(params: {
       etiqClienteRes,
       catalogoRes,
       comprasRes,
+      comprasCanjeadasRes,
       devolucionesRes,
     ] = await Promise.all([
       clienteIds.length
@@ -394,6 +432,15 @@ export async function getListadoReservas(params: {
         : Promise.resolve({ data: [] as Record<string, unknown>[] }),
       supabase.from("sala_etiquetas").select("id, nombre").eq("empresa_id", empresaId),
       comprasPromise,
+      // Cuándo se pagó el ticket de una reserva YA canjeada. El dato vive en
+      // la compra, no en la reserva: sin esto la columna "Pagado el" salía
+      // vacía justo en las reservas que sí tienen dinero detrás.
+      reservaIds.length
+        ? supabase
+            .from("reserva_ticket_compras")
+            .select("reserva_id, pagado_at, unidades")
+            .in("reserva_id", reservaIds)
+        : Promise.resolve({ data: [] as Record<string, unknown>[] }),
       // Devoluciones: sin esto la pantalla enseña como cobrado un dinero que
       // ya volvió a la tarjeta del cliente, y el total no cuadra con el banco.
       supabase
@@ -411,6 +458,12 @@ export async function getListadoReservas(params: {
     // comercial: "EXPERIENCIA" identifica de un vistazo lo que una frase de
     // ocho palabras hacía ilegible. El nombre completo sigue disponible para
     // quien abra la ficha.
+    const pagadoPorReserva = new Map<string, string>();
+    for (const c of (comprasCanjeadasRes.data ?? []) as Record<string, unknown>[]) {
+      const rid = s(c.reserva_id);
+      if (rid && c.pagado_at) pagadoPorReserva.set(rid, s(c.pagado_at));
+    }
+
     // Lo devuelto por reserva y por compra. Los importes se guardan en
     // negativo (salieron), aquí se suman en positivo para poder restarlos.
     const devueltoPorReserva = new Map<string, number>();
@@ -500,6 +553,7 @@ export async function getListadoReservas(params: {
         // cliente hubiera pagado. Se cae al importe del ticket.
         importePagado: num(r.importe_pagado) || num(r.ticket_importe),
         importeDevuelto: devueltoPorReserva.get(s(r.id)) ?? 0,
+        ticketPagadoAt: pagadoPorReserva.get(s(r.id)) ?? "",
         pagoPendiente: Boolean(r.pago_pendiente),
 
         tieneGarantia: Boolean(r.tiene_garantia),
@@ -612,16 +666,22 @@ export async function getListadoReservas(params: {
           telefono: s(c.comprador_telefono),
           email: s(c.comprador_email),
 
-          // Una compra sin canjear no tiene día ni hora reservados: ése es
-          // justo el dato que falta. Se deja en blanco a propósito para que
-          // nadie la confunda con una reserva puesta en el calendario.
-          fecha: "",
-          hora: "",
+          // Una compra sin canjear no tiene día RESERVADO —ése es justo el
+          // dato que falta—, así que estas dos columnas enseñan cuándo se
+          // registró la compra. Vacías no decían nada y la fila parecía rota.
+          // Van en la zona del restaurante: quien mira desde fuera de España
+          // vería otro día.
+          fecha: fechaEnZona(s(c.created_at), tz),
+          hora: horaEnZona(s(c.created_at), tz),
           turno: "",
 
-          // Todavía no hay día reservado, pero sí se sabe para cuánta gente
-          // pagó: la columna Comensales salía vacía sin motivo.
-          personas: num(c.unidades),
+          // Para cuánta gente pagó. Es el mismo dato que los comensales de una
+          // reserva: se guarda al comprar, para poder sentarlos después.
+          comensales: num(c.unidades),
+
+          // Qué clase de fila es. Sin esto la columna "Tipo de reserva" salía
+          // vacía en las compras y parecía que faltaba un dato.
+          tipoCategoria: "Compra de ticket",
 
           // El estado de la compra se enseña tal cual: quien mira la lista
           // tiene que distinguir de un vistazo lo cobrado de lo que se quedó
