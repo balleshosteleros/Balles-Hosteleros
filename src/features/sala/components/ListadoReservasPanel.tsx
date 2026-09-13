@@ -890,11 +890,14 @@ function visiblesIniciales(enfoque: ListadoEnfoque): ToolbarColumnaVisible {
 function TarjetaImporte({
   titulo,
   importe,
+  texto,
   detalle,
   tono = "neutro",
 }: {
   titulo: string;
   importe: number;
+  /** Cifra que no es dinero (un recuento). Si viene, sustituye al importe. */
+  texto?: string;
   detalle?: string;
   tono?: "neutro" | "bien" | "espera" | "mal";
 }) {
@@ -908,7 +911,7 @@ function TarjetaImporte({
     <Card className="p-3">
       <p className="text-xs text-muted-foreground">{titulo}</p>
       <p className={cn("mt-0.5 text-lg font-semibold tabular-nums", tonos[tono])}>
-        {formatEur(importe)}
+        {texto ?? formatEur(importe)}
       </p>
       {detalle && <p className="mt-0.5 text-xs text-muted-foreground">{detalle}</p>}
     </Card>
@@ -1078,8 +1081,10 @@ export function ListadoReservasPanel({
     // Cuántos TICKETS se han vendido, no cuánto dinero: el dinero ya es la
     // cifra grande de la tarjeta, y debajo lo que falta saber es cuántos son.
     let ticketUnidadesN = 0;
-    // Compras que se quedaron a medias: gente que dejó sus datos y no pagó.
+    // Abandonos: personas que dejaron sus datos y no llegaron a pagar. Se
+    // cuentan PERSONAS, no plazas: cada una es un telefono al que llamar.
     let ticketSinPagarN = 0;
+    let ticketSinPagarEur = 0;
     // Dinero que se PUEDE cobrar y que nadie ha cobrado ni perdonado.
     let sinDecidir = 0;
     let sinDecidirN = 0;
@@ -1123,6 +1128,7 @@ export function ListadoReservasPanel({
           if (f.esCompraTicket) ticketSinCanjearN += f.ticketUnidades ?? 1;
         } else {
           ticketSinPagarN += 1;
+          ticketSinPagarEur += f.ticketImporte ?? 0;
         }
       }
 
@@ -1151,6 +1157,7 @@ export function ListadoReservasPanel({
       ticketCobrado,
       ticketSinCanjearN,
       ticketSinPagarN,
+      ticketSinPagarEur,
       ticketUnidadesN,
       sinDecidir,
       sinDecidirN,
@@ -1257,16 +1264,26 @@ export function ListadoReservasPanel({
                 resumen.ticketSinCanjearN > 0
                   ? `${formatNumero(resumen.ticketSinCanjearN)} sin canjear`
                   : null,
-                // Se dice en la tarjeta, no solo en la tabla: son ventas casi
-                // hechas y nadie las mira si hay que buscarlas.
-                resumen.ticketSinPagarN > 0
-                  ? `${formatNumero(resumen.ticketSinPagarN)} sin pagar`
-                  : null,
               ]
                 .filter(Boolean)
                 .join(" · ")
             }
             tono="bien"
+          />
+          {/* Gente que dejó nombre, correo y teléfono y no llegó a pagar. No
+              es dinero pendiente: son ventas a medias y, sobre todo, contactos
+              a los que se puede llamar. Por eso la cifra grande es el número
+              de personas y el dinero va debajo. */}
+          <TarjetaImporte
+            titulo="Abandonos de tickets"
+            importe={0}
+            texto={formatNumero(resumen.ticketSinPagarN)}
+            detalle={
+              resumen.ticketSinPagarN === 0
+                ? "Nadie se quedó a medias"
+                : `${formatEur(resumen.ticketSinPagarEur)} que no llegaron a pagar`
+            }
+            tono={resumen.ticketSinPagarN > 0 ? "espera" : "neutro"}
           />
         </div>
       )}
