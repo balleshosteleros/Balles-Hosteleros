@@ -5,6 +5,63 @@
 
 ---
 
+## 📏 13-SEP — LAS «27 UNIDADES EN GRAMOS», MEDIDAS: SON 14, Y HAY UNA PEOR QUE EL CACHOPO
+
+He ido a producción a contarlas antes de pasárselas a Iván, y el número no cuadra con el
+que dejasteis. **No son 27 productos: son 14, en 17 líneas de receta.** Puede que se
+arreglaran algunos desde el 12, o que ahí se contara de otra forma — lo dejo medido para
+que los dos partamos de lo mismo.
+
+Y el cachopo no es el caso más caro. **El pan brioche se lleva 1.863,50 €.**
+
+### Los 7 que YA están inflando platos (tienen precio puesto)
+
+| Producto | La receta pide | Está de alta como | Lo que cuenta el sistema |
+|---|---|---|---|
+| Pan briocht | 50 g | Unidades a 37,27 € | **1.863,50 €** |
+| Paleta cebo ibérico 50% loncheada | 50 g | Unidades a 31,65 € | **1.582,50 €** |
+| Fingers de pollo | 120 g | Unidades a 8,67 € | **1.040,40 €** |
+| Salsa barbacoa | 70 g | Unidades a 5,32 € | **372,40 €** |
+| Jamón de cebo ibérico 50% loncheado | 30 g | Unidades a 6,88 € | **206,40 €** |
+| Rúcula | 60 g | Unidades a 1,50 € | **90,00 €** |
+| Canónigos | 60 g | Unidades a 1,50 € | **90,00 €** |
+
+El cachopo entero sale así: 206,40 € de jamón + 7,00 € de cachopo (0,350 kg × 20 €) +
+0,29 € de queso + las patatas, que hoy valen 0 € porque no tienen precio. **213,69 €**
+para un plato de 27,20 €.
+
+### Los 7 que todavía no molestan, pero lo harán
+
+Patatas fritas, Salsa mayo kimchi, Salsa brava, Salsa mayonesa de trufa, Tinta de calamar,
+Maíz frito y Puré de patatas. Están igual de mal —alta en unidades, receta en gramos— pero
+**no tienen precio de compra**, así que hoy suman 0 €. **El día que alguien les ponga
+precio, el plato se dispara solo.** No es una lista de deberes futuros: es una trampa
+puesta.
+
+### La decisión es de Iván, y no es automática
+
+Vuestra propuesta (pasarlos a kilos y las recetas cuadran solas) es la buena para la
+mayoría, pero **no vale a ciegas para todos**, y por eso no lo he tocado:
+
+> **Pan briocht, 37,27 €.** Un pan de brioche no cuesta 37 €, así que ese número es una
+> caja. Si le cambiamos la unidad a kilos estaremos diciendo que el kilo de pan vale
+> 37,27 €, y seguiremos mintiendo, solo que menos. Ahí lo que está mal **no es la unidad:
+> es el precio**. Y la receta pide «50 g» de un pan que probablemente se cuenta en panes.
+
+O sea: a unos hay que cambiarles la unidad, y a otros el precio o la receta. Se lo paso a
+Iván así, producto por producto, no como un «adelante» en bloque.
+
+### De propina: los precios están guardados como TEXTO
+
+`productos.precio_compra`, `productos.coste` y `productos.precio_venta` son `text`, no
+`numeric`. Hoy no hay daño —los 283 productos con precio llevan coma decimal y todos se
+convierten bien, lo he comprobado— pero mientras sea texto la base de datos no puede
+sumar, comparar ni ordenar por precio sin convertir a mano en cada consulta, y nada impide
+que mañana entre ahí un «12,50 €» o un «aprox 4». Lo dejo dicho, no lo toco: es vuestro
+módulo y es un cambio de esquema.
+
+---
+
 ## 🔎 12-SEP — POR QUÉ TU CLAUDE NO COMPRUEBA COSAS (y cómo se arregla)
 
 Me dices que tu Claude no recuerda entre sesiones y que no mira cosas por su cuenta como
