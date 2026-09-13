@@ -25,6 +25,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { MOTIVO_MIN_CARACTERES } from "@/features/mi-panel/types";
 import { CheckCircle2, XCircle, Loader2, Inbox, Lock, Check, History } from "lucide-react";
 import { ComunicacionesSolicitud } from "./ComunicacionesSolicitud";
@@ -87,8 +93,9 @@ type SolicitudConFlag = SolicitudPersonal & { puedoValidar?: boolean };
 
 export function SolicitudesView() {
   const { empresaActual } = useEmpresa();
+  /** "10/09/26, 12:55" — el año largo no aporta y ensanchaba dos columnas. */
   const formatFechaHora = (s: string): string =>
-    formatFechaHoraEnZona(s, empresaActual.zonaHoraria) || s;
+    formatFechaHoraEnZona(s, empresaActual.zonaHoraria, { year: "2-digit" }) || s;
   const [tab, setTab] = useTabQuery(["pendientes", "todas"] as const, "pendientes");
   const [items, setItems] = useState<SolicitudConFlag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,7 +255,11 @@ export function SolicitudesView() {
   const columnDefs: Record<string, { th: ReactNode; td: (s: SolicitudPersonal) => ReactNode }> = {
     empleado: {
       th: <TableHead key="empleado">Empleado</TableHead>,
-      td: (s) => <TableCell key="empleado" className="font-medium">{s.empleadoNombre}</TableCell>,
+      td: (s) => (
+        <TableCell key="empleado" className="min-w-[8.5rem] font-medium">
+          {s.empleadoNombre}
+        </TableCell>
+      ),
     },
     tipo: {
       th: <TableHead key="tipo">Tipo</TableHead>,
@@ -322,7 +333,7 @@ export function SolicitudesView() {
     // Vacía = no hay horario contra el que comparar (horas extras, jornada
     // flexible o días sin cuadrante): ahí no se afirma nada.
     coincide: {
-      th: <TableHead key="coincide" className="text-center">Coincide</TableHead>,
+      th: <TableHead key="coincide" className="w-[70px] text-center">Coincide</TableHead>,
       td: (s) => {
         const c = s.horarioPrevistoDia?.coincide ?? null;
         return (
@@ -347,7 +358,7 @@ export function SolicitudesView() {
     motivo: {
       th: <TableHead key="motivo">Motivo</TableHead>,
       td: (s) => (
-        <TableCell key="motivo" className="max-w-[260px]">
+        <TableCell key="motivo" className="max-w-[190px]">
           {/* En una solicitud de material lo primero es QUÉ pide: sin eso, RRHH
               no puede decidir si la aprueba. */}
           {s.tipo === "entrega" && s.entregaTipoNombre && (
@@ -365,8 +376,16 @@ export function SolicitudesView() {
     enviada: {
       th: <TableHead key="enviada">Enviada</TableHead>,
       td: (s) => (
-        <TableCell key="enviada" className="text-xs text-muted-foreground">
-          {formatFechaHora(s.createdAt)}
+        <TableCell key="enviada" className="whitespace-nowrap text-xs text-muted-foreground">
+          {(() => {
+            const [dia, hora] = formatFechaHora(s.createdAt).split(", ");
+            return (
+              <>
+                <span className="block">{dia}</span>
+                {hora && <span className="block">{hora}</span>}
+              </>
+            );
+          })()}
         </TableCell>
       ),
     },
@@ -406,7 +425,8 @@ export function SolicitudesView() {
   );
 
   return (
-    <div className="p-6 space-y-6">
+    <TooltipProvider delayDuration={150}>
+      <div className="p-6 space-y-6">
       {/* Tabs + buscador */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList>
@@ -443,11 +463,16 @@ export function SolicitudesView() {
                   : "No hay solicitudes que mostrar."}
               </div>
             ) : (
-              <Table data-tabla-consulta>
+              /* Compacta a propósito: con todas las columnas visibles la
+                 tabla se salía por el lado y había que arrastrarla. */
+              <Table
+                data-tabla-consulta
+                className="text-[13px] [&_td]:px-3 [&_td]:py-2.5 [&_th]:h-10 [&_th]:px-3"
+              >
                 <TableHeader>
                   <TableRow>
                     {columnasRender.map((c) => columnDefs[c.campo]?.th)}
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead className="w-[190px] text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -461,7 +486,7 @@ export function SolicitudesView() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-rose-600 hover:bg-rose-50"
+                                className="h-8 px-2 text-rose-600 hover:bg-rose-50"
                                 onClick={() => abrirRevision(s, "rechazar")}
                               >
                                 <XCircle className="h-4 w-4 mr-1" />
@@ -469,7 +494,7 @@ export function SolicitudesView() {
                               </Button>
                               <Button
                                 size="sm"
-                                className="bg-emerald-600 hover:bg-emerald-700"
+                                className="h-8 px-2 bg-emerald-600 hover:bg-emerald-700"
                                 onClick={() => abrirRevision(s, "aprobar")}
                               >
                                 <CheckCircle2 className="h-4 w-4 mr-1" />
@@ -477,23 +502,37 @@ export function SolicitudesView() {
                               </Button>
                             </div>
                           ) : (
-                            <div className="flex items-center justify-end gap-1.5 text-xs text-muted-foreground">
-                              <Lock className="h-3.5 w-3.5" />
-                              <span>Solo su validador</span>
+                            // El candado solo, con su explicación al pasar por
+                            // encima: el texto entero ensanchaba la columna.
+                            <div className="flex justify-end">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex h-8 w-8 items-center justify-center text-muted-foreground">
+                                    <Lock className="h-4 w-4" />
+                                    <span className="sr-only">Solo su validador</span>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Solo su validador</TooltipContent>
+                              </Tooltip>
                             </div>
                           )
                         ) : (
                           // Ya resuelta: lo que queda por mirar es qué se mandó.
                           <div className="flex justify-end">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-muted-foreground"
-                              onClick={() => setHistorialDe(s)}
-                            >
-                              <History className="mr-1 h-4 w-4" />
-                              Comunicaciones
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 text-muted-foreground"
+                                  onClick={() => setHistorialDe(s)}
+                                >
+                                  <History className="h-4 w-4" />
+                                  <span className="sr-only">Comunicaciones</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Comunicaciones</TooltipContent>
+                            </Tooltip>
                           </div>
                         )}
                       </TableCell>
@@ -669,6 +708,7 @@ export function SolicitudesView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

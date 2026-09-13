@@ -126,18 +126,27 @@ export function MisAusenciasView() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 p-4 md:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">Solicitudes</h1>
+      {/* El mismo botón del móvil: la pantalla ya lleva su título en la
+          cabecera de la app, así que aquí solo va la acción. */}
+      <div className="flex justify-end">
         {bajaAbierta ? (
-          <Button variant="primary" size="lg" onClick={() => setAltaOpen(true)}>
-            <HeartPulse className="mr-2 h-4 w-4" />
+          <button
+            type="button"
+            onClick={() => setAltaOpen(true)}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-rose-500 px-6 py-3 text-base font-semibold text-white shadow-md transition-colors hover:bg-rose-600"
+          >
+            <HeartPulse className="h-5 w-5" />
             Comunicar mi alta médica
-          </Button>
+          </button>
         ) : (
-          <Button variant="primary" size="lg" onClick={() => setOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-6 py-3 text-base font-semibold text-white shadow-md transition-colors hover:bg-emerald-600"
+          >
+            <Plus className="h-5 w-5" />
             Nueva solicitud
-          </Button>
+          </button>
         )}
       </div>
 
