@@ -340,6 +340,12 @@ function sancionDelComunicado(c: Comunicado): DatosSancion {
   };
 }
 
+/** «el trabajador, los hechos y la fecha»: una lista dicha como se habla. */
+function enumerar(partes: string[]): string {
+  if (partes.length <= 1) return partes[0] ?? "";
+  return `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
+}
+
 /**
  * Foto de lo que hay escrito en la ficha, para saber si se ha tocado algo.
  *
@@ -420,6 +426,45 @@ function ComunicadoEditor({
   );
   const uSancion = (patch: Partial<DatosSancion>) =>
     setForm(f => ({ ...f, sancion: { ...f.sancion, ...patch } }));
+
+  /**
+   * CAMBIAR EL TIPO NO EMPIEZA UN COMUNICADO NUEVO.
+   *
+   * La sanción es un tipo más: lo escrito —el mensaje, los documentos, el
+   * enlace, las notas— se queda donde estaba y solo se adapta lo que de verdad
+   * cambia. Lo único que viaja de un sitio a otro es A QUIÉN va, porque una
+   * sanción se dirige a UNA sola persona y un comunicado a quien se elija:
+   *
+   *   · Al pasar a sanción, si había un único empleado elegido, ese es el
+   *     sancionado: no hay que volver a buscarlo en la lista.
+   *   · Al dejar de ser sanción, el sancionado se queda como destinatario, que
+   *     es a quien se le estaba escribiendo.
+   *
+   * Antes el trabajador se perdía en el cambio y el comunicado se quedaba sin
+   * nadie a quien mandarlo (Iván, 13-09-2026).
+   */
+  const cambiarTipo = (nuevo: TipoComunicado) => {
+    setForm(f => {
+      if (nuevo === f.tipo) return f;
+      if (nuevo === "sancion") {
+        const unico = f.empleadosDestinatarios.length === 1 ? f.empleadosDestinatarios[0] : "";
+        return { ...f, tipo: nuevo, sancion: { ...f.sancion, empleadoId: f.sancion.empleadoId || unico } };
+      }
+      if (f.tipo === "sancion") {
+        const sancionado = f.sancion.empleadoId;
+        if (!sancionado) return { ...f, tipo: nuevo };
+        return {
+          ...f,
+          tipo: nuevo,
+          todaEmpresa: false,
+          empleadosDestinatarios: f.empleadosDestinatarios.includes(sancionado)
+            ? f.empleadosDestinatarios
+            : [...f.empleadosDestinatarios, sancionado],
+        };
+      }
+      return { ...f, tipo: nuevo };
+    });
+  };
   const prescripcion = useMemo(
     () => avisoPrescripcion(form.sancion.fechaHechos, form.sancion.gravedad),
     [form.sancion.fechaHechos, form.sancion.gravedad],
@@ -488,12 +533,16 @@ function ComunicadoEditor({
     }
   };
 
-  /** Hasta que no esté todo, el botón de enviar se queda apagado. */
-  const sancionCompleta =
-    !!form.sancion.empleadoId &&
-    !!form.cuerpo.trim() &&
-    !!form.sancion.fechaHechos &&
-    (!form.programado || !!form.envioFecha);
+  /**
+   * Hasta que no esté todo, el botón de enviar se queda apagado. Y se dice QUÉ
+   * falta: un botón gris sin explicación parece roto.
+   */
+  const faltaEnLaSancion: string[] = [];
+  if (!form.sancion.empleadoId) faltaEnLaSancion.push("el trabajador");
+  if (!form.cuerpo.trim()) faltaEnLaSancion.push("los hechos");
+  if (!form.sancion.fechaHechos) faltaEnLaSancion.push("la fecha de los hechos");
+  if (form.programado && !form.envioFecha) faltaEnLaSancion.push("el día en que sale");
+  const sancionCompleta = faltaEnLaSancion.length === 0;
 
 
   /** ¿Hay algo escrito? Salir de una ficha en blanco no debe dejar borradores vacíos. */
@@ -785,14 +834,16 @@ function ComunicadoEditor({
         <ScrollArea className="w-80 xl:w-96 border-l bg-muted/20 shrink-0">
           <div className="p-4 space-y-3">
             {/* EL TIPO MANDA. Pinta el recuadro del comunicado y, si se elige
-                «Sanción», cambia la ficha entera: deja de ser un aviso y pasa a
-                ser el documento disciplinario que firma el trabajador. Solo se
-                ofrece sancionar a quien puede editar Recursos Humanos, que es
-                el permiso que exige el servidor al emitirla.
+                «Sanción», la ficha se adapta: sigue siendo el mismo comunicado
+                —el mensaje, los documentos, lo escrito— pero va a una sola
+                persona y sale con el documento que el trabajador firma. Cambiar
+                el tipo otra vez lo devuelve todo a su sitio, sin perder nada.
+                Solo se ofrece sancionar a quien puede editar Recursos Humanos,
+                que es el permiso que exige el servidor al emitirla.
                 El creador NO se elige: es quien lo escribe, y solo se deja ver. */}
             <div className="flex items-center justify-between gap-2">
               <Label className="text-sm font-normal">Tipo</Label>
-              <Select value={form.tipo} onValueChange={v => u({ tipo: v as TipoComunicado })}>
+              <Select value={form.tipo} onValueChange={v => cambiarTipo(v as TipoComunicado)}>
                 <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TIPOS_COMUNICADO_ELEGIBLES.map((t) => (
@@ -806,6 +857,15 @@ function ComunicadoEditor({
                 </SelectContent>
               </Select>
             </div>
+
+            {esSancion && (
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Sigue siendo un comunicado y lo escrito se queda. Por ser sanción
+                va a una sola persona y sale con su documento para firmar, así
+                que no lleva enlace, ni documentos aparte, ni correo suelto.
+                Cambia el tipo y vuelve todo.
+              </p>
+            )}
 
             <Separator />
 
@@ -913,6 +973,12 @@ function ComunicadoEditor({
                     <p className="text-[11px] text-muted-foreground">Sale en cuanto pulses «Enviar».</p>
                   )}
                 </div>
+
+                {faltaEnLaSancion.length > 0 && (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                    Para poder enviarla falta {enumerar(faltaEnLaSancion)}.
+                  </p>
+                )}
 
               </>
             ) : (
