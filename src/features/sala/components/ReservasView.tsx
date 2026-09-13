@@ -1977,6 +1977,13 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               value={form.hora}
               aviso={horaConflictiva}
               disabled={turnoCerrado.cerrado}
+              // La caja de la hora nace EN LÍNEA y baja (h-7), porque suelta se
+              // usa dentro de una frase en Configuración. Aquí ocupa su columna
+              // entera y con la misma altura que Fecha, Turno o Duración: si no,
+              // el día que el turno está cerrado —que es cuando se cae a este
+              // selector— la hora salía pegada a su rótulo y más pequeña, y la
+              // fila entera se veía torcida.
+              className="flex h-8 w-full"
               onChange={(h) => setForm((p) => ({ ...p, hora: h }))}
             />
           )}
@@ -2038,10 +2045,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           </Select>
         </div>
         <div>
-          <Label className="text-xs">
-            Duración
-            {config && <span className="align-super">*</span>}
-          </Label>
+          {/* El asterisco va separado, como en Fecha, Hora, Turno y Comensales:
+              pegado a la palabra ("Duración*") era el único rótulo distinto de
+              la fila. */}
+          <Label className="text-xs">Duración{config ? " *" : ""}</Label>
           <Select
             value={form.duracionMinutos}
             onValueChange={(v) =>
@@ -7278,17 +7285,11 @@ export function ReservasView() {
                     <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Mesa
                     </Label>
-                    {/* Misma fila en LOS DOS casos —mesa suelta o unión—: a la
-                        izquierda qué mesa es y a la derecha el recuadro para
-                        ir al salón. La unión llevaba el botón a lo ancho
-                        debajo, así que la ficha se veía distinta según la
-                        reserva que abrieras. */}
-                    {/* El boton del salon NO resta ancho: va superpuesto al
-                        borde derecho de la celda. Antes se llevaba su parte de
-                        la fila y el desplegable de la mesa quedaba mas estrecho
-                        que los de arriba, asi que la columna no cuadraba. */}
-                    <div className="relative">
-                      <div className="min-w-0 pr-9">
+                    {/* Igual en LOS DOS casos —mesa suelta o unión—: arriba qué
+                        mesa tiene, debajo el botón que abre el plano. La ficha
+                        no cambia de forma según la reserva que abras. */}
+                    <div className="space-y-1">
+                      <div className="min-w-0">
                         {esReservaUnion ? (
                           <p className="flex h-8 items-center gap-1.5 text-sm font-medium">
                             <span className="truncate">
@@ -7321,24 +7322,27 @@ export function ReservasView() {
                           />
                         )}
                       </div>
-                      {/* Reasignar mesas a mano: abre el salón con las de la
-                          reserva ya marcadas en rojo y deja añadir o quitar
-                          las que haga falta cuando el grupo crece o mengua.
+                      {/* Abre el PLANO de la sala con las mesas de la reserva
+                          ya marcadas en rojo, para añadir o quitar las que
+                          haga falta cuando el grupo crece o mengua. Es la
+                          única forma de unir dos mesas: el desplegable de
+                          arriba da una sola.
 
-                          Cuadrado y solo con el icono de la mesa: el rótulo
-                          "Unir mesas" se comía el ancho del desplegable de al
-                          lado y además se quedaba corto —desde aquí también se
-                          cambia de mesa o se suelta una, no solo unir—. Lleva
-                          `title` y `aria-label` para que se sepa qué hace. */}
+                          Va DEBAJO y con su palabra, a lo ancho de la celda.
+                          Estuvo un tiempo como un cuadradito con solo el icono
+                          de una mesa, superpuesto al borde del desplegable,
+                          para no restarle ancho: nadie lo encontraba y el
+                          plano parecía haber desaparecido del software. Un
+                          botón que no se lee es un botón que no está. */}
                       <Button
                         size="sm"
                         variant="outline"
-                        className="absolute right-0 top-0 size-8 shrink-0 p-0"
-                        title="Modificar las mesas de la reserva"
-                        aria-label="Modificar las mesas de la reserva"
+                        className="h-7 w-full gap-1.5 px-2 text-[11px]"
+                        title="Unir, cambiar o soltar las mesas de esta reserva sobre el plano de la sala"
                         onClick={() => abrirEditorMesas(selectedReserva)}
                       >
                         <Table2 className="size-3.5" />
+                        Unir mesas
                       </Button>
                     </div>
                   </div>

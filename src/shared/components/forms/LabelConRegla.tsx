@@ -41,7 +41,12 @@ export function LabelConRegla({
     <Label
       htmlFor={htmlFor}
       data-required={requerido || undefined}
-      className={cn("flex items-center gap-1", className)}
+      // `inline-flex`, no `flex`: un `Label` normal es texto en línea y ocupa
+      // el alto de una línea entera; en bloque este ocupaba solo el de la letra
+      // (`leading-none`) y quedaba ~8 px más alto que sus vecinos. En el alta de
+      // reserva se veía claro: "Teléfono" y "Email" empezaban por encima de
+      // "Nombre" y "Fecha", y sus casillas salían descuadradas en la misma fila.
+      className={cn("inline-flex items-center gap-1", className)}
     >
       <span>{children}</span>
       {requerido && (
