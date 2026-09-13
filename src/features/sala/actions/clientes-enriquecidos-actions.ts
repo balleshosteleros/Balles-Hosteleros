@@ -21,7 +21,6 @@ import {
 } from "@/features/empresa/lib/empresa-server";
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { leerTodas } from "@/shared/lib/supabase-paginado";
-import { FILTRO_ESTADOS_SIN_VALORACION } from "@/features/calidad/types/resenas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   normalizarUmbrales,
@@ -245,10 +244,10 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
           )
           .eq("empresa_id", empresaId)
           .not("cliente_id", "is", null)
-          // Fuera las que NO son una opinión: "No contesta" y "Nuevo comensal".
-          // Pintan en el tablero de Calidad, que es donde sirven, pero en la
-          // ficha del cliente saldrían como si hubiera opinado en blanco.
-          .not("estado", "in", FILTRO_ESTADOS_SIN_VALORACION)
+          // Solo las que TIENEN nota. Quien vino y aún no ha valorado sale en
+          // Calidad, que es donde sirve —es la cola de trabajo—, pero en la
+          // ficha del cliente aparecería como si hubiera opinado en blanco.
+          .not("rating", "is", null)
           .order("fecha_reseña", { ascending: false, nullsFirst: false }),
       ),
       supabase

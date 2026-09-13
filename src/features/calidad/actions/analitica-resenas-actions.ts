@@ -22,7 +22,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { leerTodas } from "@/shared/lib/supabase-paginado";
 import { notaValoracion } from "@/features/sala/lib/clasificacion-cliente";
-import { FILTRO_ESTADOS_SIN_VALORACION } from "@/features/calidad/types/resenas";
 
 /** Un mes de la serie. `mes` va como "AAAA-MM" para poder ordenar y filtrar. */
 export interface MesValoraciones {
@@ -97,10 +96,9 @@ export async function getAnaliticaResenas(
           'rating, rating_comida, rating_bebida, rating_servicio, rating_ambiente, rating_musica, rating_espectaculo, comentario, created_at, fecha:"fecha_reseña"',
         )
         .eq("empresa_id", empresaId)
-        // Solo lo que es una opinión. "No contesta" y "Nuevo comensal" no
-        // valoran nada: contarlas hincharía el volumen mensual con silencios
-        // (11.894 de las que vinieron de Go High Level son de esas dos).
-        .not("estado", "in", FILTRO_ESTADOS_SIN_VALORACION),
+        // Solo lo que es una opinión: sin nota no hay nada que promediar, y
+        // contarlas hincharía el volumen mensual con silencios.
+        .not("rating", "is", null),
     );
 
     // Un mapa por clave "AAAA-MM" y luego se rellenan los meses sin datos: sin

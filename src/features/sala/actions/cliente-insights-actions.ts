@@ -2,7 +2,6 @@
 
 import { createClient, getUsuarioActual } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
-import { FILTRO_ESTADOS_SIN_VALORACION } from "@/features/calidad/types/resenas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   CLIENTE_INSIGHT_DETALLE_MAX,
@@ -155,9 +154,9 @@ export async function getClienteInsights(input: {
           // ni el email de quien reseña, asi que no se pueden atribuir a
           // nadie. Cuentan en la nota del local, no en la ficha del cliente.
           .neq("origen", "google")
-          // "No contesta" y "Nuevo comensal" no son opiniones: no se le pudo
-          // preguntar, o aún no se le ha preguntado.
-          .not("estado", "in", FILTRO_ESTADOS_SIN_VALORACION)
+          // Solo las que tienen nota: a quien aún no se le ha preguntado no
+          // se le puede contar una opinión.
+          .not("rating", "is", null)
           .or(orParts.join(","))
           .limit(1000);
         const filas = (data ?? []) as Array<{

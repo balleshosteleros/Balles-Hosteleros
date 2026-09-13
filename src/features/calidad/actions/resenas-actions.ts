@@ -14,9 +14,7 @@ import type { SyncGoogleResult } from "@/features/calidad/services/resenas-googl
 import type {
   CogeTelefono,
   EstadoGestionResena,
-  EstadoResena,
   OrigenResena,
-  PlataformaResena,
   Resena,
 } from "@/features/calidad/types/resenas";
 
@@ -242,14 +240,13 @@ export interface CrearResenaInput {
   telefono?: string | null;
   email?: string | null;
   comentario?: string | null;
-  estado?: EstadoResena;
   rating?: number | null;
   origen?: OrigenResena;
 }
 
 export async function crearResena(input: CrearResenaInput) {
   try {
-    const { supabase, user, empresaId } = await getContext();
+    const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false as const, error: "No autenticado" };
     const { data, error } = await supabase
       .from("resenas")
@@ -259,10 +256,8 @@ export async function crearResena(input: CrearResenaInput) {
         telefono: input.telefono ?? null,
         email: input.email ?? null,
         comentario: input.comentario ?? null,
-        estado: input.estado ?? "nuevo_comensal",
         rating: input.rating ?? null,
         origen: input.origen ?? "manual",
-        creado_por: user?.id ?? null,
       })
       .select("*")
       .single();
@@ -280,12 +275,10 @@ export interface ActualizarResenaInput {
   telefono?: string | null;
   email?: string | null;
   comentario?: string | null;
-  estado?: EstadoResena;
   rating?: number | null;
   respuesta_propietario?: string | null;
   respondida?: boolean;
   // Seguimiento de calidad
-  plataforma?: PlataformaResena | null;
   fecha_registro?: string | null;
   fecha_sesion?: string | null;
   coge_telefono?: CogeTelefono | null;
@@ -311,10 +304,6 @@ export async function actualizarResena(
     const msg = err instanceof Error ? err.message : "Error desconocido";
     return { ok: false as const, error: msg };
   }
-}
-
-export async function moverResena(id: string, estado: EstadoResena) {
-  return actualizarResena(id, { estado });
 }
 
 // ─── Empleados para "Gestionada por" ────────────────────────────

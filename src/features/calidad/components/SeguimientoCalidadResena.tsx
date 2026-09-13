@@ -14,10 +14,8 @@ import type { EmpleadoGestor } from "@/features/calidad/actions/resenas-actions"
 import {
   COGE_TELEFONO_OPCIONES,
   ESTADOS_GESTION,
-  PLATAFORMA_OPCIONES,
   type CogeTelefono,
   type EstadoGestionResena,
-  type PlataformaResena,
 } from "@/features/calidad/types/resenas";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
 
@@ -28,8 +26,6 @@ import { SelectorFecha } from "@/components/ui/selector-fecha";
 const SIN_DATO = "__sin_dato__";
 
 interface Props {
-  plataforma: PlataformaResena | "";
-  onPlataformaChange: (v: PlataformaResena | "") => void;
   fechaRegistro: string;
   onFechaRegistroChange: (v: string) => void;
   fechaSesion: string;
@@ -53,8 +49,6 @@ interface Props {
  * reseña recién traída de Google entra con estos campos en blanco.
  */
 export function SeguimientoCalidadResena({
-  plataforma,
-  onPlataformaChange,
   fechaRegistro,
   onFechaRegistroChange,
   fechaSesion,
@@ -78,28 +72,6 @@ export function SeguimientoCalidadResena({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Plataforma</Label>
-          <Select
-            value={plataforma || SIN_DATO}
-            onValueChange={(v) =>
-              onPlataformaChange(v === SIN_DATO ? "" : (v as PlataformaResena))
-            }
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Sin informar" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SIN_DATO}>Sin informar</SelectItem>
-              {PLATAFORMA_OPCIONES.map((p) => (
-                <SelectItem key={p.key} value={p.key}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         <div className="space-y-1">
           <Label className="text-xs">Teléfono</Label>
           <Input

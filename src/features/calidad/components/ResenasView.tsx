@@ -44,13 +44,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -88,15 +81,13 @@ import {
   marcarComoPublicada,
 } from "@/features/calidad/actions/agentes-ia-actions";
 import {
-  ESTADOS_RESENA,
   ORIGEN_LABEL,
   type CogeTelefono,
   type EstadoGestionResena,
-  type EstadoResena,
-  type PlataformaResena,
   type Resena,
 } from "@/features/calidad/types/resenas";
 import { AgentesIAView } from "./AgentesIAView";
+import { veredictoDe, VEREDICTOS } from "@/features/calidad/lib/veredicto";
 import { SeguimientoCalidadResena } from "./SeguimientoCalidadResena";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -262,7 +253,6 @@ export function ResenasView() {
         const match =
           r.nombre_comensal.toLowerCase().includes(q) ||
           (r.comentario ?? "").toLowerCase().includes(q) ||
-          (r.email ?? "").toLowerCase().includes(q) ||
           (r.telefono ?? "").toLowerCase().includes(q);
         if (!match) return false;
       }
@@ -881,10 +871,10 @@ function DetalleResenaDialog({
 }) {
   const [comentario, setComentario] = useState("");
   const [respuesta, setRespuesta] = useState("");
-  const [estado, setEstado] = useState<EstadoResena>("nuevo_comensal");
   // Seguimiento de calidad. "" = sin informar (el desplegable usa el
   // centinela SIN_DATO porque Radix no admite value="").
-  const [plataforma, setPlataforma] = useState<PlataformaResena | "">("");
+  /** Lo que dice la nota. Se recalcula solo en cuanto cambia el desglose. */
+  const veredicto = resena ? veredictoDe(resena) : null;
   const [fechaRegistro, setFechaRegistro] = useState("");
   const [fechaSesion, setFechaSesion] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -905,8 +895,6 @@ function DetalleResenaDialog({
     if (resena) {
       setComentario(resena.comentario ?? "");
       setRespuesta(resena.respuesta_propietario ?? "");
-      setEstado(resena.estado);
-      setPlataforma(resena.plataforma ?? "");
       setFechaRegistro(resena.fecha_registro ?? "");
       setFechaSesion(resena.fecha_sesion ?? "");
       setTelefono(resena.telefono ?? "");
@@ -928,10 +916,8 @@ function DetalleResenaDialog({
     const res = await actualizarResena(resena.id, {
       comentario: esGoogle ? undefined : comentario,
       respuesta_propietario: respuesta || null,
-      estado,
       // Vacío se guarda como null: "sin informar" es un dato válido y hay que
       // poder volver atrás si te equivocaste al marcar.
-      plataforma: plataforma || null,
       fecha_registro: fechaRegistro || null,
       fecha_sesion: fechaSesion || null,
       telefono: telefono.trim() || null,
@@ -1045,19 +1031,12 @@ function DetalleResenaDialog({
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-start gap-3">
-            {resena.autor_avatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={resena.autor_avatar}
-                alt={resena.nombre_comensal}
-                className="h-10 w-10 rounded-full"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold">
-                {resena.nombre_comensal.slice(0, 1).toUpperCase()}
-              </div>
-            )}
+            {/* La inicial, como en el resto del programa. La foto de Google
+                que había antes solo la traían 53 de 8.422 y el círculo con la
+                letra se lee igual de bien. */}
+            <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold">
+              {resena.nombre_comensal.slice(0, 1).toUpperCase()}
+            </div>
             <div className="flex-1">
               <DialogTitle className="flex items-center gap-2">
                 {resena.nombre_comensal}
@@ -1103,23 +1082,26 @@ function DetalleResenaDialog({
         <div className="space-y-3 py-2">
           <DesglosePreguntas resena={resena} />
 
+          {/* El veredicto NO se elige: sale de la nota. Antes era un
+              desplegable y convivía con las estrellas, así que una valoración
+              podía estar puntuada con un 4 y clasificada a mano como Regular.
+              Ahora manda lo que puntuó el cliente, y un área por debajo de 3
+              impide el Excelente por alta que sea la media. */}
           <div>
-            <Label>Estado</Label>
-            <Select
-              value={estado}
-              onValueChange={(v) => setEstado(v as EstadoResena)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ESTADOS_RESENA.map((e) => (
-                  <SelectItem key={e.key} value={e.key}>
-                    {e.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-muted-foreground">Veredicto</Label>
+            <div className="mt-1">
+              {veredicto ? (
+                <span
+                  className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${VEREDICTOS[veredicto].badge}`}
+                >
+                  {VEREDICTOS[veredicto].label}
+                </span>
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  Todavía sin valorar
+                </span>
+              )}
+            </div>
           </div>
 
           <div>
@@ -1134,8 +1116,6 @@ function DetalleResenaDialog({
           </div>
 
           <SeguimientoCalidadResena
-            plataforma={plataforma}
-            onPlataformaChange={setPlataforma}
             fechaRegistro={fechaRegistro}
             onFechaRegistroChange={setFechaRegistro}
             fechaSesion={fechaSesion}

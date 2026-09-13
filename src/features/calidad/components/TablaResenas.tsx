@@ -19,12 +19,11 @@ import { cn } from "@/lib/utils";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { notaValoracion } from "@/features/sala/lib/clasificacion-cliente";
 import {
-  ESTADO_LABEL,
-  ESTADOS_RESENA,
   ORIGEN_LABEL,
   ORIGENES_RESENA,
   type Resena,
 } from "@/features/calidad/types/resenas";
+import { veredictoDe, VEREDICTOS } from "@/features/calidad/lib/veredicto";
 import {
   aplicarOrdenToolbar,
   type ToolbarFiltroActivo,
@@ -98,13 +97,6 @@ function desgloseContestado(r: Resena): number {
   ).length;
 }
 
-const COLOR_ESTADO: Record<string, string> = {
-  excelente: "text-emerald-700",
-  regular: "text-amber-700",
-  malo: "text-rose-700",
-  nuevo_comensal: "text-sky-700",
-};
-
 /**
  * Cómo se lee cada columna para filtrarla y ordenarla: lo que se compara es lo
  * que se VE, no el dato crudo —por origen se busca "Google", no "google", y por
@@ -121,7 +113,10 @@ export function crearAccesoResena(
     if (campo === "cliente") return r.nombre_comensal;
     if (campo === "nota") return notaDe(r) ?? 0;
     if (campo === "origen") return ORIGEN_LABEL[r.origen] ?? r.origen;
-    if (campo === "estado") return ESTADO_LABEL[r.estado] ?? r.estado;
+    if (campo === "estado") {
+      const v = veredictoDe(r);
+      return v ? VEREDICTOS[v].label : "Sin valorar";
+    }
     if (campo === "preguntas") return desgloseContestado(r) > 0 ? "Sí" : "No";
     // Cuándo se puso la reseña. `fecha_registro` es la del informe de Cover;
     // `fecha_reseña` la de Google y la de las nuestras.
@@ -197,12 +192,10 @@ export function TablaResenas({
                 "lista",
                 ORIGENES_RESENA.map((o) => o.label),
               )}
-              {cabecera(
-                "estado",
-                "Estado",
-                "lista",
-                ESTADOS_RESENA.map((e) => e.label),
-              )}
+              {cabecera("estado", "Veredicto", "lista", [
+                ...Object.values(VEREDICTOS).map((v) => v.label),
+                "Sin valorar",
+              ])}
               {cabecera("fecha", "Fecha de la reseña", "fecha")}
               {cabecera("comentario", "Comentario", "texto")}
               {cabecera("gestionada", "Gestionada por", "texto")}
@@ -226,6 +219,7 @@ export function TablaResenas({
             {visibles.map((r) => {
               const nota = notaDe(r);
               const apartados = desgloseContestado(r);
+              const veredicto = veredictoDe(r);
               return (
                 <ToolTooltip key={r.id} label="Ver la valoración completa">
                   <tr
@@ -265,8 +259,15 @@ export function TablaResenas({
                       {ORIGEN_LABEL[r.origen] ?? r.origen}
                     </td>
                     <td className="p-3 whitespace-nowrap">
-                      <span className={cn("text-xs font-medium", COLOR_ESTADO[r.estado])}>
-                        {ESTADO_LABEL[r.estado] ?? r.estado}
+                      <span
+                        className={cn(
+                          "text-xs font-medium",
+                          veredicto
+                            ? VEREDICTOS[veredicto].color
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {veredicto ? VEREDICTOS[veredicto].label : "Sin valorar"}
                       </span>
                     </td>
                     <td className="p-3 whitespace-nowrap text-muted-foreground">

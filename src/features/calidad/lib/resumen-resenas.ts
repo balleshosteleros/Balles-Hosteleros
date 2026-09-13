@@ -15,9 +15,10 @@
  * fila de al lado.
  */
 
+import { haValorado } from "@/features/calidad/lib/veredicto";
 import { notaValoracion } from "@/features/sala/lib/clasificacion-cliente";
 import {
-  ESTADOS_SIN_VALORACION,
+  
   type OrigenResena,
   type Resena,
 } from "@/features/calidad/types/resenas";
@@ -72,8 +73,9 @@ export function esResenaPublica(r: Resena): boolean {
 
 /** Ya tiene respuesta, la haya escrito una persona o la haya publicado la IA. */
 function estaRespondida(r: Resena): boolean {
+  // `respondida` era un tercer campo para lo mismo y estaba a cero en las
+  // 8.422: manda la fecha de publicación o que haya texto escrito.
   return (
-    r.respondida ||
     !!r.respuesta_publicada_at ||
     !!(r.respuesta_propietario && r.respuesta_propietario.trim())
   );
@@ -91,9 +93,9 @@ export function calcularResumenResenas(resenas: Resena[]): ResumenResenas {
   let conFechaRespuesta = 0;
 
   for (const r of resenas) {
-    // "Nuevo comensal" es la cola de trabajo de calidad, no una opinión: no
-    // puntúa nada y hundiría el reparto con filas en blanco.
-    const esValoracion = !ESTADOS_SIN_VALORACION.includes(r.estado);
+    // Quien todavía no ha valorado es la cola de trabajo de calidad, no una
+    // opinión: no puntúa nada y hundiría el reparto con filas en blanco.
+    const esValoracion = haValorado(r);
     const nota = esValoracion
       ? notaValoracion({
           rating: r.rating,

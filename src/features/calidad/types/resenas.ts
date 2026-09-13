@@ -1,18 +1,10 @@
 /**
- * Las columnas del tablero de Calidad.
- *
- * "No contesta" existió mientras esto vivía en Go High Level y se quitó el
- * 07-09-2026: quien no respondía al WhatsApp no había valorado nada, igual que
- * un cliente que reservó por Cover y no contestó a la encuesta no tiene ninguna
- * ficha que diga "no valoró". Eran 11.458 tarjetas vacías. Si hace falta saber
- * a quién se le preguntó y no contestó, eso son los ENVÍOS de petición de
- * valoración, no una valoración.
+ * El VEREDICTO —Excelente, Regular, Malo— ya no vive aquí ni en la tabla: se
+ * calcula de la nota en `lib/veredicto.ts`. Era una columna que convivía con las
+ * estrellas y las dos podían decir cosas distintas: en 22 de 8.422 la columna
+ * estaba equivocada, y eran justo las que tenían un área suspendida escondida
+ * detrás de una media alta.
  */
-export type EstadoResena =
-  | "nuevo_comensal"
-  | "excelente"
-  | "regular"
-  | "malo";
 
 export type OrigenResena =
   | "manual"
@@ -64,9 +56,7 @@ export interface Resena {
   numero_secuencial: number | null;
   nombre_comensal: string;
   telefono: string | null;
-  email: string | null;
   comentario: string | null;
-  estado: EstadoResena;
   /**
    * Nota GLOBAL, la que el cliente puso de una sola vez. Para pintar y para
    * comparar manda la media de las tres preguntas cuando las contestó
@@ -85,16 +75,12 @@ export interface Resena {
   rating_musica: number | null;
   rating_espectaculo: number | null;
   origen: OrigenResena;
-  posicion: number;
-  creado_por: string | null;
   created_at: string;
   updated_at: string;
   // Ingesta externa (Google / QR / etc.)
   external_id: string | null;
-  autor_avatar: string | null;
   autor_url: string | null;
   respuesta_propietario: string | null;
-  respondida: boolean;
   fecha_reseña: string | null;
   synced_at: string | null;
   // Flujo IA
@@ -102,7 +88,6 @@ export interface Resena {
   respuesta_publicada_at: string | null;
   agente_id: string | null;
   // Seguimiento de calidad (null = todavía sin gestionar)
-  plataforma: PlataformaResena | null;
   fecha_registro: string | null;
   fecha_sesion: string | null;
   coge_telefono: CogeTelefono | null;
@@ -238,63 +223,6 @@ export function agenteAplicaAResena(
   if (!opt) return false;
   return opt.ratings.includes(resena.rating);
 }
-
-export interface EstadoConfig {
-  key: EstadoResena;
-  label: string;
-  accent: string;
-  badge: string;
-}
-
-export const ESTADOS_RESENA: EstadoConfig[] = [
-  {
-    key: "nuevo_comensal",
-    label: "Nuevo comensal",
-    accent: "border-t-sky-400",
-    badge: "bg-sky-100 text-sky-700",
-  },
-  {
-    key: "excelente",
-    label: "Excelente",
-    accent: "border-t-emerald-400",
-    badge: "bg-emerald-100 text-emerald-700",
-  },
-  {
-    key: "regular",
-    label: "Regular",
-    accent: "border-t-amber-400",
-    badge: "bg-amber-100 text-amber-700",
-  },
-  {
-    key: "malo",
-    label: "Malo",
-    accent: "border-t-rose-400",
-    badge: "bg-rose-100 text-rose-700",
-  },
-];
-
-export const ESTADOS_RESENA_ORDER: EstadoResena[] = ESTADOS_RESENA.map(
-  (e) => e.key,
-);
-
-export const ESTADO_LABEL: Record<EstadoResena, string> = Object.fromEntries(
-  ESTADOS_RESENA.map((e) => [e.key, e.label]),
-) as Record<EstadoResena, string>;
-
-/**
- * La columna del tablero que NO es una opinión.
- *
- * "Nuevo comensal" es el que acaba de venir y a quien todavía no se le ha
- * preguntado. En el tablero tiene todo el sentido —es la cola de trabajo de
- * calidad—, pero no es una valoración: no cuenta en la nota del local, ni en el
- * volumen de opiniones, ni sale en la ficha del cliente.
- */
-export const ESTADOS_SIN_VALORACION: EstadoResena[] = ["nuevo_comensal"];
-
-
-
-/** Para el `.not("estado", "in", …)` de PostgREST: `(nuevo_comensal)`. */
-export const FILTRO_ESTADOS_SIN_VALORACION = `(${ESTADOS_SIN_VALORACION.join(",")})`;
 
 // ─── Catálogos de seguimiento de calidad ──────────────────────
 
