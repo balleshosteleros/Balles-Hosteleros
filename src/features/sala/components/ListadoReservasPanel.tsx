@@ -6,8 +6,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BotonDevolver } from "@/features/sala/components/reservas/CobroPoliticaBloque";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -208,7 +206,10 @@ const COLUMNAS: ColumnaDef[] = [
     // (garantía y cancelación), que son dinero y no mesa.
     label: "Estado reserva",
     filtro: "lista",
-    opciones: ESTADOS_RESERVA as unknown as string[],
+    // Los estados de RESERVA más los de las compras: sin ellos, filtrar por
+    // "Sin tarjeta" o "Sin reserva" no encontraba nada aunque estuvieran a la
+    // vista en la tabla.
+    opciones: [...(ESTADOS_RESERVA as unknown as string[]), "Sin reserva", "Sin tarjeta"],
     valor: (f) => f.estado,
     celda: (f) => {
       if (!f.estado) return <span className="text-muted-foreground">—</span>;
@@ -361,19 +362,6 @@ const COLUMNAS: ColumnaDef[] = [
             {f.ticketUnidades && f.ticketUnidades > 1 ? `${f.ticketUnidades} × ` : ""}
             {formatEur(f.ticketImporte)}
           </span>
-          {f.esCompraTicket && f.motivoSinReserva && (
-            <Badge
-              variant="outline"
-              className={cn(
-                "w-fit font-normal",
-                f.ticketEstadoCompra === "pagada"
-                  ? "border-amber-600/40 bg-amber-600/20 text-amber-700 dark:text-amber-400"
-                  : "border-muted-foreground/30 bg-muted text-muted-foreground",
-              )}
-            >
-              {f.motivoSinReserva}
-            </Badge>
-          )}
           {/* Devolver, esté o no canjeado el ticket. Antes solo salía en las
               compras sin reserva —porque son las que no tienen ficha donde
               pulsarlo— y quedaba la duda de por qué una fila dejaba devolver y
@@ -1009,7 +997,7 @@ export function ListadoReservasPanel({
    * por defecto: son compras, no reservas, y mezclarlas sin pedirlo falsearía la
    * lectura del listado.
    */
-  const [verComprasTicket, setVerComprasTicket] = useState(comprasTicketPorDefecto);
+  const [verComprasTicket] = useState(comprasTicketPorDefecto);
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
@@ -1258,27 +1246,12 @@ export function ListadoReservasPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">
-            {enfoque === "cobros" ? "Cobros, garantías y tickets" : "Listado de reservas"}
-          </h2>
-          {/* Sin subtítulo: el periodo ya está marcado en los botones de
-              arriba y el recuento se ve en la propia tabla. Repetirlo aquí
-              solo separaba el título de las cifras, que es lo que se viene a
-              mirar. */}
-        </div>
+      {/* Sin título ni subtítulo: la cabecera de la vista ya dice dónde está
+          uno, el periodo se ve en los botones de arriba y el recuento, en la
+          tabla. Repetirlo solo alejaba las cifras, que es lo que se viene a
+          mirar. */}
+      <div className="flex flex-wrap items-end justify-end gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="ver-compras-ticket"
-              checked={verComprasTicket}
-              onCheckedChange={(v) => setVerComprasTicket(v === true)}
-            />
-            <Label htmlFor="ver-compras-ticket" className="cursor-pointer text-xs font-normal">
-              Ver compras de ticket sin canjear
-            </Label>
-          </div>
           <Button
             size="sm"
             variant="ghost"

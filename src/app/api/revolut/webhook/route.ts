@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   // referencia externa (que es el id de la compra).
   const { data: compra } = await admin
     .from("reserva_ticket_compras")
-    .select("id, empresa_id, estado, producto_id, unidades")
+    .select("id, empresa_id, estado, producto_id, unidades, codigo")
     .or(
       `revolut_order_id.eq.${orderId}` +
         (evento.merchant_order_ext_ref ? `,id.eq.${evento.merchant_order_ext_ref}` : ""),
@@ -124,10 +124,31 @@ export async function POST(req: Request) {
 
     // Solo se marca pagada si seguía pendiente: evita reprocesar reenvíos.
     if (compra.estado === "pendiente") {
+      // El CÓDIGO se genera AQUÍ, no al abrir la pasarela: hasta que Revolut
+      // no confirma el cobro, el cliente no tiene derecho a ninguno. Antes se
+      // reservaba antes de pagar y se lo llevaba puesto todo el que dejaba sus
+      // datos y se iba, quemando códigos para nada.
+      let codigo = (compra.codigo as string | null) ?? null;
+      if (!codigo) {
+        const gen = await admin.rpc("generar_codigo_ticket", {
+          p_empresa_id: compra.empresa_id,
+        });
+        if (gen.error || !gen.data) {
+          // Sin código no se puede canjear, así que NO se marca pagada: se
+          // deja pendiente y lo recoge el barrido, que vuelve a intentarlo.
+          // Mejor un cobro pendiente de rematar que uno dado por bueno sin
+          // nada que enviarle al cliente.
+          console.error("[revolut][webhook] codigo:", gen.error);
+          return NextResponse.json({ ok: false }, { status: 500 });
+        }
+        codigo = gen.data as string;
+      }
+
       await admin
         .from("reserva_ticket_compras")
         .update({
           estado: "pagada",
+          codigo,
           revolut_estado: estadoRevolut,
           revolut_order_id: orderId,
           pagado_at: new Date().toISOString(),

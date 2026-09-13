@@ -96,10 +96,25 @@ export async function GET(request: Request) {
 
       // Se pagó y el aviso se perdió por el camino: se rescata.
       if (estaPagada(orden.orden.state)) {
+        // Su código, si el webhook no llegó a dárselo: se genera al confirmar
+        // el cobro, nunca antes.
+        let codigo = (compra.codigo as string | null) ?? null;
+        if (!codigo) {
+          const gen = await supabase.rpc("generar_codigo_ticket", {
+            p_empresa_id: empresaId,
+          });
+          if (gen.error || !gen.data) {
+            incidencias.push(`${compra.id}: pagada pero sin código`);
+            continue;
+          }
+          codigo = gen.data as string;
+        }
+
         const { error: errRescate } = await supabase
           .from("reserva_ticket_compras")
           .update({
             estado: "pagada",
+            codigo,
             revolut_estado: orden.orden.state,
             pagado_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),

@@ -77,15 +77,6 @@ const ESTADO_COMPRA_TEXTO: Record<string, string> = {
   cancelada: "Sin tarjeta",
 };
 
-/** Por qué esa compra no tiene reserva. Va bajo el importe, en la columna Ticket. */
-const MOTIVO_COMPRA_TEXTO: Record<string, string> = {
-  pagada: "Sin canjear",
-  pendiente: "Pagando, sin terminar",
-  caducada: "No puso tarjeta",
-  fallida: "Tarjeta rechazada",
-  cancelada: "Pago cancelado",
-};
-
 /** Qué es cada fila del listado. Una compra sin canjear no es una reserva. */
 export type ListadoTipoFila = "RESERVA" | "COMPRA_TICKET";
 
@@ -174,8 +165,6 @@ export interface ListadoReservaRow {
   ticketImporte: number | null;
   ticketIva: number | null;
   ticketCodigo: string;
-  /** Por qué una compra no tiene reserva. Vacío en las reservas. */
-  motivoSinReserva: string;
   /** Solo compras: "pagada" (pendiente de canjear), "canjeada", … */
   ticketEstadoCompra: string;
   /** Solo compras: último día para canjear el código. */
@@ -293,7 +282,6 @@ function filaBase(): ListadoReservaRow {
     ticketImporte: null,
     ticketIva: null,
     ticketCodigo: "",
-    motivoSinReserva: "",
     ticketEstadoCompra: "",
     ticketCanjeHasta: "",
     ticketPagadoAt: "",
@@ -728,7 +716,6 @@ export async function getListadoReservas(params: {
           // tiene que distinguir de un vistazo lo cobrado de lo que se quedó
           // a medias.
           estado: ESTADO_COMPRA_TEXTO[estadoCompra] ?? estadoCompra,
-          motivoSinReserva: MOTIVO_COMPRA_TEXTO[estadoCompra] ?? "",
           origen: "Compra ticket",
 
           esTicket: true,

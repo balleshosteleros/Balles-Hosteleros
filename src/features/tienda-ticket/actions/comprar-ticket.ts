@@ -140,13 +140,21 @@ export async function comprarTicketAction(
   };
 
   // ── 7. Código único ───────────────────────────────────────────────
-  const gen = await admin.rpc("generar_codigo_ticket", { p_empresa_id: empresaId });
-  if (gen.error || !gen.data) {
-    await liberarStock();
-    console.error("[comprar-ticket] codigo:", gen.error);
-    return { ok: false, error: "No se pudo generar el código." };
+  //
+  // Solo si el producto es GRATIS. En los de pago el código se genera cuando
+  // Revolut confirma el cobro (webhook), no ahora: reservarlo antes se lo
+  // llevaba puesto todo el que dejaba sus datos y se iba sin pagar, quemando
+  // códigos y dejando un identificador vivo de alguien que no ha pagado nada.
+  let codigo: string | null = null;
+  if (esGratis) {
+    const gen = await admin.rpc("generar_codigo_ticket", { p_empresa_id: empresaId });
+    if (gen.error || !gen.data) {
+      await liberarStock();
+      console.error("[comprar-ticket] codigo:", gen.error);
+      return { ok: false, error: "No se pudo generar el código." };
+    }
+    codigo = gen.data as string;
   }
-  const codigo = gen.data as string;
 
   // ── 8. Crear la compra ────────────────────────────────────────────
   const compra = await admin
@@ -182,7 +190,7 @@ export async function comprarTicketAction(
     await enviarEmailCompraTicket(compraId).catch((e) =>
       console.error("[comprar-ticket] email:", e),
     );
-    return { ok: true, modo: "gratis", codigo, compraId };
+    return { ok: true, modo: "gratis", codigo: codigo ?? "", compraId };
   }
 
   // ── 9b. Producto de pago: se crea el pedido en Revolut ────────────
