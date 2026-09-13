@@ -374,16 +374,23 @@ const COLUMNAS: ColumnaDef[] = [
               {f.motivoSinReserva}
             </Badge>
           )}
+          {/* Devolver, esté o no canjeado el ticket. Antes solo salía en las
+              compras sin reserva —porque son las que no tienen ficha donde
+              pulsarlo— y quedaba la duda de por qué una fila dejaba devolver y
+              la de al lado no. Si hay dinero cobrado, hay botón. */}
           {f.esCompraTicket && f.ticketEstadoCompra === "pagada" && (
-            <>
-              {/* Dinero cobrado que no cuelga de ninguna mesa: si hay que
-                  devolverlo, este es el único sitio donde aparece. */}
-              <BotonDevolver
-                compraId={f.id}
-                concepto="ticket"
-                cliente={f.cliente || "el cliente"}
-              />
-            </>
+            <BotonDevolver
+              compraId={f.id}
+              concepto="ticket"
+              cliente={f.cliente || "el cliente"}
+            />
+          )}
+          {!f.esCompraTicket && f.esTicket && f.ticketPagadoAt && (
+            <BotonDevolver
+              reservaId={f.id}
+              concepto="ticket"
+              cliente={f.cliente || "el cliente"}
+            />
           )}
         </span>
       );
@@ -1082,6 +1089,9 @@ export function ListadoReservasPanel({
     setPagina(1);
   }, [busqueda, filtros, verComprasTicket]);
 
+  // Cuántas reservas hay en lo que se está mirando. Las compras no cuentan:
+  // no son reservas, y mezclarlas falsearía el "N de M".
+  const totalReservas = filtradas.filter((f) => !f.esCompraTicket).length;
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const paginaActual = Math.min(pagina, totalPaginas);
   const visibles = filtradas.slice(
@@ -1282,11 +1292,9 @@ export function ListadoReservasPanel({
           <TarjetaImporte
             titulo="Pendiente de decidir"
             importe={resumen.sinDecidir}
-            detalle={
-              resumen.sinDecidirN > 0
-                ? `${formatNumero(resumen.sinDecidirN)} ${resumen.sinDecidirN === 1 ? "reserva" : "reservas"} sin cobrar ni perdonar`
-                : "Nada pendiente"
-            }
+            // Siempre con el total delante: "0 de 12" dice que se ha mirado y
+            // no hay nada; "Nada pendiente" a secas no decía sobre cuántas.
+            detalle={`${formatNumero(resumen.sinDecidirN)} de ${formatNumero(totalReservas)} ${totalReservas === 1 ? "reserva" : "reservas"}`}
             tono={resumen.sinDecidirN > 0 ? "mal" : "neutro"}
           />
           <TarjetaImporte
