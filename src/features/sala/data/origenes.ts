@@ -85,6 +85,10 @@ const ALIAS: Record<string, string> = {
 
 /** Etiquetas de los orígenes conocidos. El resto se rotula desde su propia clave. */
 const LABELS: Record<string, string> = {
+  // La mesa que llega canjeando un ticket no viene "de la web": viene de una
+  // experiencia que alguien compró. Mezclarla con el motor web escondía el
+  // canal que de verdad la trajo.
+  TICKET: "Compra ticket",
   WEB: "Web",
   GOOGLE: "Google",
   TELEFONO: "Teléfono",
@@ -116,6 +120,7 @@ const LABELS: Record<string, string> = {
  * teal motor web propio, colores de marca en redes, gris para el dato que falta.
  */
 const COLORS: Record<string, string> = {
+  TICKET: "#7c3aed",    // violet-600 — experiencia comprada por adelantado
   WEB: "#0d9488",       // teal-600 — motor web propio
   GOOGLE: "#22c55e",    // green-500 — Reserve with Google
   TELEFONO: "#f59e0b",  // amber-500 — llamada que apunta el personal

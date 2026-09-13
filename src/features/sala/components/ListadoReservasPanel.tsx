@@ -1077,6 +1077,9 @@ export function ListadoReservasPanel({
     let cancelacionPendienteN = 0;
     let ticketCobrado = 0;
     let ticketSinCanjearN = 0;
+    // Cuántos TICKETS se han vendido, no cuánto dinero: el dinero ya es la
+    // cifra grande de la tarjeta, y debajo lo que falta saber es cuántos son.
+    let ticketUnidadesN = 0;
     // Compras que se quedaron a medias: gente que dejó sus datos y no pagó.
     let ticketSinPagarN = 0;
     let pagado = 0;
@@ -1119,7 +1122,8 @@ export function ListadoReservasPanel({
         if (cobrada) {
           // Neto: lo cobrado menos lo que ya volvió a la tarjeta del cliente.
           ticketCobrado += (f.ticketImporte ?? 0) - (f.importeDevuelto ?? 0);
-          if (f.esCompraTicket) ticketSinCanjearN += 1;
+          ticketUnidadesN += f.ticketUnidades ?? 1;
+          if (f.esCompraTicket) ticketSinCanjearN += f.ticketUnidades ?? 1;
         } else {
           ticketSinPagarN += 1;
         }
@@ -1155,6 +1159,7 @@ export function ListadoReservasPanel({
       ticketCobrado,
       ticketSinCanjearN,
       ticketSinPagarN,
+      ticketUnidadesN,
       pagado,
       sinDecidir,
       sinDecidirN,
@@ -1189,23 +1194,10 @@ export function ListadoReservasPanel({
           <h2 className="text-lg font-semibold">
             {enfoque === "cobros" ? "Cobros, garantías y tickets" : "Listado de reservas"}
           </h2>
-          <p className="text-xs text-muted-foreground">
-            {periodoLabel} ·{" "}
-            <span className="font-medium text-foreground">
-              {formatNumero(totalReservas)}{" "}
-              {totalReservas === 1 ? "reserva" : "reservas"}
-              {/* En cobros el listado ya viene recortado: se dice, para que
-                  nadie lea el número como el total de reservas del periodo. */}
-              {enfoque === "cobros" && " con dinero"}
-            </span>
-            {verComprasTicket && totalCompras > 0 && (
-              <>
-                {" "}
-                · {formatNumero(totalCompras)}{" "}
-                {totalCompras === 1 ? "compra de ticket sin canjear" : "compras de ticket sin canjear"}
-              </>
-            )}
-          </p>
+          {/* Sin subtítulo: el periodo ya está marcado en los botones de
+              arriba y el recuento se ve en la propia tabla. Repetirlo aquí
+              solo separaba el título de las cifras, que es lo que se viene a
+              mirar. */}
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -1270,6 +1262,7 @@ export function ListadoReservasPanel({
             importe={resumen.ticketCobrado}
             detalle={
               [
+                `${formatNumero(resumen.ticketUnidadesN)} ${resumen.ticketUnidadesN === 1 ? "ticket" : "tickets"}`,
                 resumen.ticketSinCanjearN > 0
                   ? `${formatNumero(resumen.ticketSinCanjearN)} sin canjear`
                   : null,
@@ -1280,7 +1273,7 @@ export function ListadoReservasPanel({
                   : null,
               ]
                 .filter(Boolean)
-                .join(" · ") || "Todos canjeados"
+                .join(" · ")
             }
             tono="bien"
           />

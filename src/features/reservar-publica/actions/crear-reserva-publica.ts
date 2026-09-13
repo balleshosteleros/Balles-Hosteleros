@@ -740,7 +740,12 @@ export async function crearReservaPublicaAction(
     // clave de un enlace de campaña, su origen es la web y así debe constar.
     // Con `null` el listado la daba por "Manual", que es justo lo contrario:
     // parecía que la había metido alguien del restaurante a mano.
-    origen: data.origen ?? "RESERVA_WEB",
+    //
+    // Excepción: si trae un TICKET, el canal que de verdad trajo la mesa es la
+    // experiencia que alguien compró, no "la web". El enlace del correo del
+    // ticket no lleva palabra clave, así que sin esto todas esas mesas caían
+    // en el saco de la web y el canal desaparecía de la analítica.
+    origen: data.origen ?? (ticketCompraId ? "TICKET" : "RESERVA_WEB"),
     campana_id: campanaId,
     estado: "CONFIRMADA",
     turno,
