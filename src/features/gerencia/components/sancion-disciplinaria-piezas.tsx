@@ -153,7 +153,10 @@ export function AvisoAcuseRecibo() {
 /** Prototipo visual de la sanción — refleja el PDF que firmará el trabajador. */
 export function PrototipoSancion({ datos, hechos, empleado, empresa }: {
   datos: DatosSancion;
-  /** Los hechos se escriben en el cuerpo del comunicado, como el mensaje. */
+  /**
+   * Lo que escribe la empresa en el cuerpo del comunicado: los hechos Y la
+   * sanción que impone, todo junto y con sus palabras.
+   */
   hechos: string;
   empleado: EmpleadoSelector | null;
   empresa: EmpresaSancion | null;
@@ -182,7 +185,7 @@ export function PrototipoSancion({ datos, hechos, empleado, empresa }: {
         <Campo label="Departamento" value={empleado?.departamento || "—"} />
         <Campo label="Calificación de la falta" value={gravLabel} />
         <Campo label="Fecha de los hechos" value={fmtFechaCorta(datos.fechaHechos || null)} />
-        <CampoParrafo label="Hechos que motivan la sanción" value={hechos} />
+        <CampoParrafo label="Hechos y sanción que se impone" value={hechos} />
         <Separator />
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Mediante la firma de este documento, el trabajador/a declara haber sido <strong>informado/a</strong> y

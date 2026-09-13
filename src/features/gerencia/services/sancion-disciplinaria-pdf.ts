@@ -225,7 +225,14 @@ export async function generarSancionPdf(
   drawField("Calificación de la falta", GRAVEDAD_LABEL[datos.gravedad]);
   drawField("Fecha de los hechos", fmtFecha(datos.fechaHechos));
 
-  drawParrafo("Hechos que motivan la sanción", datos.hechos);
+  // TODO va en un solo bloque, escrito por la empresa: los hechos y la sanción
+  // que se impone (amonestación, días de suspensión y cuándo). No se pide en
+  // casillas aparte, ni se cita ningún convenio por su cuenta: cada negocio lo
+  // redacta a su manera y, si quiere nombrar el convenio o un artículo, lo
+  // escribe ahí mismo (Iván, 13-09-2026). El título del bloque dice que ahí
+  // dentro está también la decisión, para que el documento no titule «hechos»
+  // algo que además la contiene.
+  drawParrafo("Hechos y sanción que se impone", datos.hechos);
 
   // Cláusula de acuse de recibo (leído, no conforme).
   nuevaPaginaSiHaceFalta(120);

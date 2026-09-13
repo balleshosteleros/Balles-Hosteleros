@@ -762,13 +762,13 @@ function ComunicadoEditor({
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">
-                    {esSancion ? "Hechos que motivan la sanción" : "Mensaje"}
+                    {esSancion ? "Hechos y sanción que se impone" : "Mensaje"}
                   </Label>
                   <Textarea
                     value={form.cuerpo}
                     onChange={e => u({ cuerpo: e.target.value })}
                     placeholder={esSancion
-                      ? "Describe con detalle los hechos, fechas y circunstancias que motivan la sanción…"
+                      ? "Escribe los hechos con sus fechas y la sanción que impones: los días y cuándo…"
                       : "Escribe aquí lo que quieres contarle al equipo…"}
                     className="border-0 px-0 focus-visible:ring-0 shadow-none min-h-[200px] resize-y text-base leading-7 placeholder:text-muted-foreground/40"
                   />
