@@ -16,7 +16,6 @@ import {
 } from "@/features/logistica/services/agora-ventas-ingesta";
 import { getAgoraCredenciales } from "@/features/logistica/services/agora-credenciales";
 import { descontarDiaSiCorte } from "@/features/logistica/services/agora-descuento-dia";
-import { avisarDeAltasPendientes } from "@/features/logistica/services/avisar-altas-agora";
 import { recalcularVentasDiaPromedio } from "@/features/logistica/services/ventas-dia-promedio";
 
 export const dynamic = "force-dynamic";
@@ -89,18 +88,26 @@ export async function GET(request: Request) {
         console.error(`[cron/agora-sync] ventas_dia_promedio empresa ${empresaId}:`, msg);
         ventasDia = { error: msg };
       }
-      // Avisar a quien pueda darlos de alta. Va DESPUÉS de la ingesta y aislado: un
-      // fallo del aviso no puede tumbar la entrada de ventas, que es lo que importa.
-      let avisos: Record<string, unknown> = {};
-      if (r.sinProducto > 0 || r.addinsSinProducto > 0) {
-        try {
-          avisos = { ...(await avisarDeAltasPendientes(empresaId)) };
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          console.error(`[cron/agora-sync] avisos de altas empresa ${empresaId}:`, msg);
-          avisos = { error: msg };
-        }
-      }
+      // ⛔ AVISO DESACTIVADO (13-09-2026, a petición de Iván).
+      //
+      // POR QUÉ: la pantalla de avisos (`NotificacionesGate`) saca en un diálogo MODAL
+      // **todas** las notificaciones sin ver, una detrás de otra, sin mirar de qué tipo
+      // son. Con 21 productos pendientes eso le salía a la gente como 21 ventanas que
+      // hay que ir cerrando antes de poder trabajar. Un aviso que impide trabajar deja
+      // de ser un aviso.
+      //
+      // El error fue mío: di por hecho que una notificación normal iba a la campana y
+      // que solo bloqueaban algunos tipos. No es así: la cola es incondicional.
+      //
+      // QUÉ HACER PARA REACTIVARLO: que el aviso llegue a la campana **sin** entrar en
+      // esa cola modal (o que la cola filtre por tipo). Mientras tanto, lo pendiente se
+      // ve igual y sin molestar a nadie en dos sitios: el contador del panel de Ágora en
+      // el escritorio de Logística, y la propia pantalla Logística → Altas de Ágora.
+      //
+      // Además está apagado por el interruptor de Ajustes → Herramientas →
+      // Notificaciones en las tres empresas, así que hacen falta las dos cosas para que
+      // vuelva: quitar este comentario Y encenderlo ahí.
+      const avisos: Record<string, unknown> = { desactivado: "bloqueaba la pantalla" };
 
       await supabase.from("agora_sync_log").insert({
         empresa_id: empresaId,
