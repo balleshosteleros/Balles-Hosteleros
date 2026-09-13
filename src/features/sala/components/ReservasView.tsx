@@ -531,19 +531,21 @@ function IconoUnirMesas({ className }: { className?: string }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
+      strokeWidth={1.75}
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
       aria-hidden="true"
     >
-      {/* Las dos mesas, una a cada lado. */}
-      <rect x="1.5" y="7.5" width="5.5" height="9" rx="1.5" />
-      <rect x="17" y="7.5" width="5.5" height="9" rx="1.5" />
-      {/* La flecha de doble punta: se juntan la una con la otra. */}
-      <line x1="8.5" y1="12" x2="15.5" y2="12" />
-      <polyline points="10.5 10 8.5 12 10.5 14" />
-      <polyline points="13.5 10 15.5 12 13.5 14" />
+      {/* Las dos mesas, una a cada lado. Anchas y bajas, como se ven en el
+          plano: altas y estrechas parecían dos puertas. */}
+      <rect x="0.5" y="8.5" width="6.5" height="7" rx="1.5" />
+      <rect x="17" y="8.5" width="6.5" height="7" rx="1.5" />
+      {/* La flecha de doble punta. Las mesas se han encogido para dejarle
+          hueco: con menos, las dos puntas se juntaban en un borrón. */}
+      <line x1="8" y1="12" x2="16" y2="12" />
+      <polyline points="9.8 10.4 8 12 9.8 13.6" />
+      <polyline points="14.2 10.4 16 12 14.2 13.6" />
     </svg>
   );
 }
@@ -685,7 +687,7 @@ function ReservaQuickPopover({
               role="button"
               tabIndex={0}
               title="Abrir la ficha de la reserva"
-              className="min-w-0 truncate text-xs font-medium underline decoration-dotted underline-offset-2 hover:text-primary focus-visible:text-primary focus-visible:outline-none"
+              className="min-w-0 truncate text-xs font-medium hover:text-primary focus-visible:text-primary focus-visible:outline-none"
               onClick={(e) => {
                 e.stopPropagation();
                 onEditar();
@@ -917,7 +919,7 @@ function MesaVariasReservas({
               role="button"
               tabIndex={0}
               title="Abrir la ficha de la reserva"
-              className="min-w-0 flex-1 truncate text-xs font-medium underline decoration-dotted underline-offset-2 hover:text-primary"
+              className="min-w-0 flex-1 truncate text-xs font-medium hover:text-primary"
               onClick={(e) => {
                 e.stopPropagation();
                 onEditar(r);
@@ -7006,7 +7008,7 @@ export function ReservasView() {
                             <span
                               role="button"
                               tabIndex={0}
-                              className="truncate font-medium underline decoration-dotted underline-offset-2 hover:text-primary focus-visible:text-primary focus-visible:outline-none"
+                              className="truncate font-medium hover:text-primary focus-visible:text-primary focus-visible:outline-none"
                               onClick={(e) => {
                                 // Sin esto el clic sube a la fila y abre el
                                 // panel rápido encima de la ficha.
