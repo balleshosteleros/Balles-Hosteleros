@@ -227,11 +227,17 @@ export function PaginaPublicaShell({
   // El botón de reservar de la barra: baja a la ventana de reservas de la propia
   // web si la sección está puesta, y solo lleva al portal a pantalla completa
   // cuando esa sección no existe.
-  const hrefReservar = visibleEn(bloquesLimpios, "reservas")
-    ? "#reservas"
-    : contexto?.empresaSlug && contexto?.reservasActivas !== false
-      ? `/reservar`
-      : null;
+  // El botón de la barra es la acción de ESTA página, no siempre "Reservar":
+  // en la experiencia lo que se hace es comprar, y mandar al portal de reservar
+  // mesa sacaba al visitante a un sitio que no tenía nada que ver con lo que
+  // estaba mirando. Manda la tienda si la página vende; si no, las reservas.
+  const accion: { href: string; label: string } | null = visibleEn(bloquesLimpios, "tickets")
+    ? { href: "#tickets", label: "Comprar" }
+    : visibleEn(bloquesLimpios, "reservas")
+      ? { href: "#reservas", label: "Reservar" }
+      : contexto?.empresaSlug && contexto?.reservasActivas !== false
+        ? { href: "/reservar", label: "Reservar" }
+        : null;
   const nav: Array<{ href: string; label: string }> = [];
   // La carta es un portal aparte (/carta/slug); el bloque de la web solo es la
   // llamada. Sin ese bloque, el cliente no quiere enseñar carta.
@@ -274,7 +280,7 @@ export function PaginaPublicaShell({
         logo={logo}
         marcas={branding?.marcas ?? null}
         titulo={tituloNav}
-        hrefReservar={hrefReservar}
+        accion={accion}
         enlaces={nav}
       />
       <main>
@@ -423,15 +429,15 @@ function NavPublica({
   logo,
   marcas,
   titulo,
-  hrefReservar,
+  accion,
   enlaces,
 }: {
   logo: string | null;
   /** Las dos casas que firman la página, cuando la web es de más de una. */
   marcas: BrandingSnapshot["marcas"] | null;
   titulo: string;
-  /** Portal de reservas de esta empresa, o null si aún no tiene slug. */
-  hrefReservar: string | null;
+  /** Lo que se viene a hacer en esta página: comprar o reservar. */
+  accion: { href: string; label: string } | null;
   /** Enlaces ya filtrados: solo los que tienen sección detrás. */
   enlaces: Array<{ href: string; label: string }>;
 }) {
@@ -532,13 +538,13 @@ function NavPublica({
             </a>
           ))}
         </nav>
-        {hrefReservar ? (
+        {accion ? (
           <a
-            href={hrefReservar}
+            href={accion.href}
             className="ml-auto rounded-full px-5 py-2 text-sm font-bold uppercase tracking-wider text-black transition-transform hover:scale-105 md:ml-7"
             style={{ backgroundColor: "var(--pw-primario)" }}
           >
-            Reservar
+            {accion.label}
           </a>
         ) : null}
         {enlaces.length > 0 ? (
