@@ -90,6 +90,8 @@ import {
   Trash2, Users, ArrowLeft, Send, Upload, X, Bell, Mail, Paperclip,
   ChevronLeft, ChevronRight, ChevronDown, Settings, ShieldAlert, Link as LinkIcon, Copy,
   Table2, Download, RefreshCw, Ban, AlertTriangle,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -159,6 +161,68 @@ function EstadoBadge({ estado }: { estado: EstadoComunicado }) {
     archivado: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
   };
   return <Badge className={`${colors[estado]} border-0 font-medium`}>{ESTADO_COMUNICADO_LABELS[estado]}</Badge>;
+}
+
+/**
+ * Los pulgares del comunicado y, al ponerse delante, QUIÉN votó cada cosa.
+ *
+ * Es un termómetro, nada más: la empresa lo mira para saber si lo que cuenta
+ * llega bien. No abre conversación con nadie ni exige respuesta.
+ */
+function ValoracionResumen({
+  valoraciones,
+}: {
+  valoraciones: { arriba: string[]; abajo: string[] };
+}) {
+  const { arriba, abajo } = valoraciones;
+  const total = arriba.length + abajo.length;
+
+  const cifras = (
+    <div className="flex items-center gap-3 text-sm tabular-nums">
+      <span
+        className={`flex items-center gap-1 ${arriba.length > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
+      >
+        <ThumbsUp className="h-4 w-4" />
+        {arriba.length}
+      </span>
+      <span
+        className={`flex items-center gap-1 ${abajo.length > 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}`}
+      >
+        <ThumbsDown className="h-4 w-4" />
+        {abajo.length}
+      </span>
+    </div>
+  );
+
+  // Sin un solo voto no hay nada que enseñar al ponerse delante.
+  if (total === 0) return cifras;
+
+  return (
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <div className="cursor-default">{cifras}</div>
+      </HoverCardTrigger>
+      <HoverCardContent align="start" className="w-72 p-0">
+        <div className="border-b px-3 py-2 text-xs font-semibold">
+          {total === 1 ? "Lo ha valorado 1 persona" : `Lo han valorado ${total} personas`}
+        </div>
+        <div className="max-h-64 overflow-y-auto py-1">
+          {arriba.map((nombre, i) => (
+            <div key={`a-${i}`} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+              <ThumbsUp className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <span className="truncate">{nombre}</span>
+            </div>
+          ))}
+          {abajo.map((nombre, i) => (
+            <div key={`b-${i}`} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+              <ThumbsDown className="h-3.5 w-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
+              <span className="truncate">{nombre}</span>
+            </div>
+          ))}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
 }
 
 /**
@@ -1450,6 +1514,10 @@ function filaAComunicado(fila: Record<string, unknown>): Comunicado {
     recurrencia: (texto(fila.recurrencia) || "sin_repeticion") as Recurrencia,
     alcancePct: Number(fila.alcance_pct ?? 0) || 0,
     lecturas: Array.isArray(fila.lecturas) ? (fila.lecturas as LecturaComunicado[]) : [],
+    valoraciones: {
+      arriba: lista((fila.valoraciones as { arriba?: unknown })?.arriba),
+      abajo: lista((fila.valoraciones as { abajo?: unknown })?.abajo),
+    },
     rolesDestinatarios: lista(fila.roles_destinatarios),
     todaEmpresa,
     departamentosDestinatarios: departamentos,
@@ -1517,6 +1585,8 @@ function sancionAFila(s: SancionResumen): FilaComunicado {
     // salen de lo mismo: si consta que la abrió y cuándo.
     alcancePct: s.vistoEl ? 100 : 0,
     lecturas: [{ nombre: s.empleadoNombre, vistaAt: s.vistoEl }],
+    // Una sanción no se vota: no es un comunicado que guste o no guste.
+    valoraciones: { arriba: [], abajo: [] },
     rolesDestinatarios: [],
     todaEmpresa: false,
     departamentosDestinatarios: s.departamento && s.departamento !== "—" ? [s.departamento] : [],
@@ -2245,6 +2315,7 @@ export function ComunicadosView() {
     { campo: "envio", label: "Envío" },
     { campo: "recurrencia", label: "Recurrencia" },
     { campo: "alcance", label: "Alcance" },
+    { campo: "valoracion", label: "Valoración" },
     { campo: "destinatarios", label: "Destinatarios" },
   ];
 
@@ -2336,6 +2407,14 @@ export function ComunicadosView() {
             tz={tz}
             publicado={c.estado === "publicado"}
           />
+        </TableCell>
+      ),
+    },
+    valoracion: {
+      th: <TableHead key="valoracion">Valoración</TableHead>,
+      td: (c) => (
+        <TableCell key="valoracion">
+          <ValoracionResumen valoraciones={c.valoraciones} />
         </TableCell>
       ),
     },

@@ -127,6 +127,72 @@ async function alcanceDeComunicados(
   return salida;
 }
 
+/** Quién ha puesto el pulgar arriba y quién abajo, por comunicado. */
+export interface ValoracionesComunicado {
+  arriba: string[];
+  abajo: string[];
+}
+
+/**
+ * Los pulgares de cada comunicado, con el nombre de quien los puso.
+ *
+ * Es SOLO para mirar: la empresa ve si lo que cuenta está llegando bien, y ahí
+ * se acaba. No dispara avisos ni respuestas.
+ *
+ * Va con la clave de servicio porque cada voto es de su dueño: con la sesión de
+ * quien mira el listado solo se contaría el suyo.
+ */
+async function valoracionesDeComunicados(
+  ids: string[],
+): Promise<Map<string, ValoracionesComunicado>> {
+  const salida = new Map<string, ValoracionesComunicado>();
+  if (ids.length === 0) return salida;
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+
+    const { data, error } = await admin
+      .from("comunicado_valoraciones")
+      .select("comunicado_id, usuario_id, me_gusta")
+      .in("comunicado_id", ids);
+    if (error) throw error;
+    const votos = (data ?? []) as Array<{
+      comunicado_id: string;
+      usuario_id: string;
+      me_gusta: boolean;
+    }>;
+    if (votos.length === 0) return salida;
+
+    const { data: perfiles } = await admin
+      .from("usuarios")
+      .select("id, nombre, apellidos")
+      .in("id", Array.from(new Set(votos.map((v) => v.usuario_id))));
+    const nombreDe = new Map<string, string>();
+    for (const p of (perfiles ?? []) as Array<{
+      id: string;
+      nombre: string | null;
+      apellidos: string | null;
+    }>) {
+      nombreDe.set(p.id, `${p.nombre ?? ""} ${p.apellidos ?? ""}`.trim());
+    }
+
+    for (const v of votos) {
+      const actual = salida.get(v.comunicado_id) ?? { arriba: [], abajo: [] };
+      const nombre = nombreDe.get(v.usuario_id) || "Sin nombre";
+      if (v.me_gusta) actual.arriba.push(nombre);
+      else actual.abajo.push(nombre);
+      salida.set(v.comunicado_id, actual);
+    }
+    for (const v of salida.values()) {
+      v.arriba.sort((a, b) => a.localeCompare(b, "es"));
+      v.abajo.sort((a, b) => a.localeCompare(b, "es"));
+    }
+  } catch (e) {
+    console.error("[comunicados] valoraciones:", e);
+  }
+  return salida;
+}
+
 export async function listComunicados() {
   try {
     const { supabase, empresaId } = await getContext();
@@ -141,15 +207,22 @@ export async function listComunicados() {
     if (error) throw error;
 
     const filas = data ?? [];
-    const alcance = await alcanceDeComunicados(
-      empresaId,
-      filas.map((c) => c.id as string),
-    );
+    const ids = filas.map((c) => c.id as string);
+    const [alcance, valoraciones] = await Promise.all([
+      alcanceDeComunicados(empresaId, ids),
+      valoracionesDeComunicados(ids),
+    ]);
     return {
       ok: true,
       data: filas.map((c) => {
         const a = alcance.get(c.id as string);
-        return { ...c, alcance_pct: a?.pct ?? 0, lecturas: a?.lecturas ?? [] };
+        const v = valoraciones.get(c.id as string);
+        return {
+          ...c,
+          alcance_pct: a?.pct ?? 0,
+          lecturas: a?.lecturas ?? [],
+          valoraciones: v ?? { arriba: [], abajo: [] },
+        };
       }),
     };
   } catch (err) {

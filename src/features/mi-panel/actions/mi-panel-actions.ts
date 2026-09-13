@@ -1828,6 +1828,11 @@ export interface ComunicadoVisible {
   vistoEl: string | null;
   /** De qué empresa es. Quien trabaja en dos las ve juntas y tiene que distinguirlas. */
   empresaNombre: string;
+  /**
+   * Su pulgar: `true` arriba, `false` abajo, `null` si todavía no ha votado.
+   * Se puede cambiar y retirar en cualquier momento.
+   */
+  miValoracion: boolean | null;
 }
 
 /** El JSONB `adjuntos` puede venir de cualquier forma: solo pasan los completos. */
@@ -1957,6 +1962,22 @@ export async function listarComunicadosVisibles(): Promise<{
       }
     }
 
+    // Su propio pulgar en cada comunicado. La tabla solo deja ver el voto de
+    // uno mismo, así que esta consulta ya viene filtrada por quien mira.
+    const miVoto = new Map<string, boolean>();
+    {
+      const { data: votos } = await supabase
+        .from("comunicado_valoraciones")
+        .select("comunicado_id, me_gusta")
+        .in(
+          "comunicado_id",
+          visibles.map((c: Record<string, unknown>) => c.id as string),
+        );
+      for (const v of (votos ?? []) as Array<{ comunicado_id: string; me_gusta: boolean }>) {
+        miVoto.set(v.comunicado_id, v.me_gusta);
+      }
+    }
+
     return {
       ok: true,
       data: visibles.map((c: Record<string, unknown>) => {
@@ -1974,6 +1995,7 @@ export async function listarComunicadosVisibles(): Promise<{
         enlaceTexto: (c.enlace_texto as string | null) ?? null,
         vistoEl: vistoPorId.get(c.id as string) ?? null,
         empresaNombre: suya?.nombre ?? "",
+        miValoracion: miVoto.get(c.id as string) ?? null,
         };
       }),
     };

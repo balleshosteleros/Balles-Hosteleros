@@ -14,6 +14,7 @@ import {
   hace,
 } from "@/features/mi-panel/lib/comunicados-tiempo";
 import { cn } from "@/shared/lib/utils";
+import { ValoracionComunicado } from "@/features/mi-panel/components/ValoracionComunicado";
 import { TextoConEnlaces } from "@/shared/components/TextoConEnlaces";
 import {
   TIPO_COMUNICADO_LABEL,
@@ -273,6 +274,14 @@ function ComunicadoDetalle({
             Visto el {formatFull(comunicado.vistoEl, comunicado.zonaHoraria)}
           </p>
         )}
+        {/* Los dos pulgares, al final del todo: se vota cuando ya se ha leído. */}
+        <div className="mt-8 border-t border-border/60 pt-4">
+          <ValoracionComunicado
+            comunicadoId={comunicado.id}
+            valorInicial={comunicado.miValoracion}
+          />
+        </div>
+
         {comunicado.adjuntos.length > 0 && (
           <div className="mt-6 space-y-2 border-t border-border/60 pt-4">
             <p className="text-xs font-medium text-muted-foreground">

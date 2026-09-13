@@ -14,6 +14,7 @@ import {
   hace,
 } from "@/features/mi-panel/lib/comunicados-tiempo";
 import { tipoComunicado } from "@/features/rrhh/data/comunicados";
+import { ValoracionComunicado } from "./ValoracionComunicado";
 import { ComunicadoTarjeta } from "@/features/gerencia/components/ComunicadoTarjeta";
 
 /**
@@ -54,14 +55,17 @@ function TarjetaComunicado({
         nuevo: !c.vistoEl,
       }}
       pie={
-        c.vistoEl ? (
-          <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            <Check className="h-3.5 w-3.5" />
-            Visto el {formatFechaHoraEnZona(c.vistoEl, c.zonaHoraria, { month: "long" })}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">Sin leer</p>
-        )
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          {c.vistoEl ? (
+            <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <Check className="h-3.5 w-3.5" />
+              Visto el {formatFechaHoraEnZona(c.vistoEl, c.zonaHoraria, { month: "long" })}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Sin leer</p>
+          )}
+          <ValoracionComunicado comunicadoId={c.id} valorInicial={c.miValoracion} />
+        </div>
       }
     />
   );

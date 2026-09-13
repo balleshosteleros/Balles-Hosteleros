@@ -36,6 +36,11 @@ export interface Comunicado {
   alcancePct: number;
   /** Quién recibió el aviso y cuándo lo abrió. Vacío = sin avisos registrados. */
   lecturas: { nombre: string; vistaAt: string | null }[];
+  /**
+   * Quién puso el pulgar arriba y quién abajo. Solo para mirar: dice si lo que
+   * se cuenta está llegando bien, y no dispara nada.
+   */
+  valoraciones: { arriba: string[]; abajo: string[] };
   rolesDestinatarios: string[];
   todaEmpresa: boolean;
   /** Departamentos elegidos, por nombre. Vacío si va a toda la empresa. */
