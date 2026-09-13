@@ -212,6 +212,19 @@ const COLUMNAS: ColumnaDef[] = [
     valor: (f) => f.estado,
     celda: (f) => {
       if (!f.estado) return <span className="text-muted-foreground">—</span>;
+      // Una compra no tiene estado de RESERVA: dice en qué paso se quedó
+      // —sin tarjeta, o pagada pero sin elegir día—. Va en gris para que no
+      // compita con los estados de mesa, que son los que hay que vigilar.
+      if (f.esCompraTicket) {
+        return (
+          <Badge
+            variant="outline"
+            className="font-normal border-muted-foreground/30 bg-muted text-muted-foreground"
+          >
+            {f.estado}
+          </Badge>
+        );
+      }
       const e = f.estado as EstadoReserva;
       return (
         <Badge variant="outline" className={cn("font-normal", ESTADO_BADGE_CLASS[e])}>

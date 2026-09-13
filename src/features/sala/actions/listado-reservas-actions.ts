@@ -67,11 +67,14 @@ const ESTADO_COMPRA_TEXTO: Record<string, string> = {
   // El matiz de por qué no la tiene (pagó y no ha elegido día, no puso
   // tarjeta, se la rechazaron) va en la columna Ticket, que es donde está el
   // dinero y hay espacio para decirlo.
+  // Sin tarjeta NO puede haber reserva: es el paso de antes. Quien no llegó a
+  // pagar se queda en "Sin tarjeta"; quien pagó y aún no ha elegido día, en
+  // "Sin reserva". Así el estado dice en qué escalón se paró cada uno.
   pagada: "Sin reserva",
-  pendiente: "Sin reserva",
-  caducada: "Sin reserva",
-  fallida: "Sin reserva",
-  cancelada: "Sin reserva",
+  pendiente: "Sin tarjeta",
+  caducada: "Sin tarjeta",
+  fallida: "Sin tarjeta",
+  cancelada: "Sin tarjeta",
 };
 
 /** Por qué esa compra no tiene reserva. Va bajo el importe, en la columna Ticket. */
