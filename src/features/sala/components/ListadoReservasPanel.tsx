@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition, type ReactNode } from "rea
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { BotonDevolver } from "@/features/sala/components/reservas/CobroPoliticaBloque";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -345,13 +346,22 @@ const COLUMNAS: ColumnaDef[] = [
             {f.ticketUnidades && f.ticketUnidades > 1 ? `${f.ticketUnidades} × ` : ""}
             {formatEur(f.ticketImporte)}
           </span>
-          {f.esCompraTicket && (
-            <Badge
-              variant="outline"
-              className="w-fit border-amber-600/40 bg-amber-600/20 font-normal text-amber-700 dark:text-amber-400"
-            >
-              Sin canjear
-            </Badge>
+          {f.esCompraTicket && f.ticketEstadoCompra === "pagada" && (
+            <>
+              <Badge
+                variant="outline"
+                className="w-fit border-amber-600/40 bg-amber-600/20 font-normal text-amber-700 dark:text-amber-400"
+              >
+                Sin canjear
+              </Badge>
+              {/* Dinero cobrado que no cuelga de ninguna mesa: si hay que
+                  devolverlo, este es el único sitio donde aparece. */}
+              <BotonDevolver
+                compraId={f.id}
+                concepto="ticket"
+                cliente={f.cliente || "el cliente"}
+              />
+            </>
           )}
         </span>
       );

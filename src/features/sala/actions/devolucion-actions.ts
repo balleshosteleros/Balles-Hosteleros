@@ -37,7 +37,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type ConceptoDevolucion = "garantia" | "cancelacion" | "ticket";
 
 export interface DevolverInput {
-  reservaId: string;
+  /** Reserva del cobro. Vacío si el dinero es de una compra sin canjear. */
+  reservaId?: string | null;
+  /** Compra de ticket pagada y sin canjear: dinero cobrado sin reserva. */
+  compraId?: string | null;
   concepto: ConceptoDevolucion;
   /** Importe en euros. Puede ser menos de lo cobrado: devolución parcial. */
   importe: number;
@@ -50,15 +53,25 @@ type Result = { ok: true; devuelto: number } | { ok: false; error: string };
 
 /** Lo cobrado y lo ya devuelto de un concepto, en euros. */
 export async function getResumenDevolucion(
-  reservaId: string,
+  origen: { reservaId?: string | null; compraId?: string | null },
   concepto: ConceptoDevolucion,
 ): Promise<{ cobrado: number; devuelto: number; disponible: number }> {
   const admin = createAdminClient();
+  const reservaId = origen.reservaId ?? null;
+  const compraIdSuelta = origen.compraId ?? null;
 
   // Un ticket se pagó ANTES de existir la reserva: lo cobrado está en la
   // compra, no en las columnas de cobro de la reserva.
   let cobradoBase = 0;
-  if (concepto === "ticket") {
+  if (concepto === "ticket" && compraIdSuelta) {
+    // Compra sin canjear: lo cobrado está en la propia compra.
+    const { data: compra } = await admin
+      .from("reserva_ticket_compras")
+      .select("importe_total, pagado_at")
+      .eq("id", compraIdSuelta)
+      .maybeSingle();
+    if (compra?.pagado_at) cobradoBase = Number(compra.importe_total ?? 0);
+  } else if (concepto === "ticket" && reservaId) {
     const { data: reserva } = await admin
       .from("reservas")
       .select("ticket_compra_id")
@@ -74,11 +87,13 @@ export async function getResumenDevolucion(
     }
   }
 
-  const { data } = await admin
+  const query = admin
     .from("reserva_cobros")
     .select("importe, estado")
-    .eq("reserva_id", reservaId)
     .eq("concepto", concepto);
+  const { data } = await (compraIdSuelta
+    ? query.eq("compra_id", compraIdSuelta)
+    : query.eq("reserva_id", reservaId ?? ""));
 
   let cobrado = cobradoBase;
   let devuelto = 0;
@@ -177,28 +192,45 @@ export async function devolverCobroAction(input: DevolverInput): Promise<Result>
 
   const admin = createAdminClient();
 
-  const { data: reserva } = await admin
-    .from("reservas")
-    .select(
-      "id, empresa_id, cliente_nombre, garantia_revolut_order_id, cancelacion_revolut_order_id, ticket_compra_id",
-    )
-    .eq("id", input.reservaId)
-    .eq("empresa_id", empresaId)
-    .maybeSingle();
-  if (!reserva) return { ok: false, error: "Reserva no encontrada." };
-
+  // Dos orígenes posibles: una reserva, o una compra de ticket pagada que
+  // todavía no se ha canjeado (dinero cobrado que no cuelga de ninguna mesa).
   let orderId: string | null = null;
-  if (input.concepto === "garantia") {
-    orderId = reserva.garantia_revolut_order_id as string | null;
-  } else if (input.concepto === "cancelacion") {
-    orderId = reserva.cancelacion_revolut_order_id as string | null;
-  } else if (reserva.ticket_compra_id) {
+  let compraSuelta: string | null = null;
+
+  if (input.compraId) {
     const { data: compra } = await admin
       .from("reserva_ticket_compras")
-      .select("revolut_order_id")
-      .eq("id", reserva.ticket_compra_id as string)
+      .select("id, revolut_order_id, pagado_at")
+      .eq("id", input.compraId)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
-    orderId = (compra?.revolut_order_id as string | null) ?? null;
+    if (!compra) return { ok: false, error: "Compra no encontrada." };
+    if (!compra.pagado_at) return { ok: false, error: "Esta compra no llegó a pagarse." };
+    orderId = (compra.revolut_order_id as string | null) ?? null;
+    compraSuelta = compra.id as string;
+  } else {
+    const { data: reserva } = await admin
+      .from("reservas")
+      .select(
+        "id, empresa_id, cliente_nombre, garantia_revolut_order_id, cancelacion_revolut_order_id, ticket_compra_id",
+      )
+      .eq("id", input.reservaId ?? "")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!reserva) return { ok: false, error: "Reserva no encontrada." };
+
+    if (input.concepto === "garantia") {
+      orderId = reserva.garantia_revolut_order_id as string | null;
+    } else if (input.concepto === "cancelacion") {
+      orderId = reserva.cancelacion_revolut_order_id as string | null;
+    } else if (reserva.ticket_compra_id) {
+      const { data: compra } = await admin
+        .from("reserva_ticket_compras")
+        .select("revolut_order_id")
+        .eq("id", reserva.ticket_compra_id as string)
+        .maybeSingle();
+      orderId = (compra?.revolut_order_id as string | null) ?? null;
+    }
   }
   if (!orderId) {
     return { ok: false, error: "Este cobro no tiene un pago en la pasarela." };
@@ -206,7 +238,10 @@ export async function devolverCobroAction(input: DevolverInput): Promise<Result>
 
   // No se puede devolver más de lo que queda por devolver: Revolut lo
   // rechazaría, pero el aviso tiene que llegar antes y en cristiano.
-  const resumen = await getResumenDevolucion(input.reservaId, input.concepto);
+  const resumen = await getResumenDevolucion(
+    { reservaId: input.reservaId, compraId: input.compraId },
+    input.concepto,
+  );
   if (resumen.disponible <= 0) {
     return { ok: false, error: "Este cobro ya está devuelto por completo." };
   }
@@ -229,12 +264,13 @@ export async function devolverCobroAction(input: DevolverInput): Promise<Result>
   // El apunte se escribe ANTES de llamar a Revolut, igual que un cobro: si el
   // proceso muere a mitad, queda constancia de que se pidió la devolución en
   // lugar de desaparecer sin rastro.
-  const referencia = `dev-${input.reservaId.slice(0, 8)}-${Date.now()}`;
+  const referencia = `dev-${(input.compraId ?? input.reservaId ?? "").slice(0, 8)}-${Date.now()}`;
   const { data: apunte, error: errApunte } = await admin
     .from("reserva_cobros")
     .insert({
       empresa_id: empresaId,
-      reserva_id: input.reservaId,
+      reserva_id: compraSuelta ? null : input.reservaId,
+      compra_id: compraSuelta,
       concepto: input.concepto,
       importe: -Math.abs(input.importe),
       estado: "lanzado",

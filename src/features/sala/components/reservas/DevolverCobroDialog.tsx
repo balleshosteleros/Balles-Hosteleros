@@ -35,7 +35,9 @@ import {
 interface Props {
   abierto: boolean;
   onCerrar: () => void;
-  reservaId: string;
+  /** Reserva del cobro, o la compra suelta si el ticket no se ha canjeado. */
+  reservaId?: string | null;
+  compraId?: string | null;
   concepto: ConceptoDevolucion;
   cliente: string;
   onHecho?: () => void;
@@ -49,6 +51,7 @@ export function DevolverCobroDialog({
   abierto,
   onCerrar,
   reservaId,
+  compraId,
   concepto,
   cliente,
   onHecho,
@@ -64,7 +67,7 @@ export function DevolverCobroDialog({
   // se abre, así que los campos ya nacen vacíos y aquí solo hay que preguntar.
   useEffect(() => {
     let vivo = true;
-    getResumenDevolucion(reservaId, concepto).then((r) => {
+    getResumenDevolucion({ reservaId, compraId }, concepto).then((r) => {
       if (!vivo) return;
       setDisponible(r.disponible);
       setImporte(r.disponible > 0 ? String(r.disponible) : "");
@@ -72,7 +75,7 @@ export function DevolverCobroDialog({
     return () => {
       vivo = false;
     };
-  }, [reservaId, concepto]);
+  }, [reservaId, compraId, concepto]);
 
   const importeNum = Number(importe.replace(",", "."));
   const valido =
@@ -87,6 +90,7 @@ export function DevolverCobroDialog({
     setEnviando(true);
     const res = await devolverCobroAction({
       reservaId,
+      compraId,
       concepto,
       importe: importeNum,
       motivo: motivo.trim(),

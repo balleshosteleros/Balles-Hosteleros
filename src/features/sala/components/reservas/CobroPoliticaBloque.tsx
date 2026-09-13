@@ -383,11 +383,14 @@ function Boton({
  */
 export function BotonDevolver({
   reservaId,
+  compraId,
   concepto,
   cliente,
   onHecho,
 }: {
-  reservaId: string;
+  reservaId?: string | null;
+  /** Compra de ticket pagada y sin canjear: dinero cobrado sin reserva. */
+  compraId?: string | null;
   concepto: "garantia" | "cancelacion" | "ticket";
   cliente: string;
   onHecho?: () => void;
@@ -421,6 +424,7 @@ export function BotonDevolver({
         abierto
         onCerrar={() => setAbierto(false)}
         reservaId={reservaId}
+        compraId={compraId}
         concepto={concepto}
         cliente={cliente}
         onHecho={onHecho}
