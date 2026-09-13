@@ -125,6 +125,8 @@ export interface ListadoReservaRow {
   importePagado: number | null;
   /** Devuelto al cliente (positivo). 0 = no se le ha devuelto nada. */
   importeDevuelto: number;
+  /** Se intentó devolver y el banco lo rechazó: el cliente NO tiene su dinero. */
+  devolucionFallida: boolean;
   pagoPendiente: boolean;
 
   // --- Garantía (dinero retenido en la tarjeta antes de venir) ---
@@ -260,6 +262,7 @@ function filaBase(): ListadoReservaRow {
     tarjetaIntroducida: false,
     importePagado: null,
     importeDevuelto: 0,
+    devolucionFallida: false,
     pagoPendiente: false,
     tieneGarantia: false,
     garantiaImporte: null,
@@ -467,9 +470,12 @@ export async function getListadoReservas(params: {
       // ya volvió a la tarjeta del cliente, y el total no cuadra con el banco.
       supabase
         .from("reserva_cobros")
-        .select("reserva_id, compra_id, importe")
+        .select("reserva_id, compra_id, importe, estado")
         .eq("empresa_id", empresaId)
-        .eq("estado", "devuelto"),
+        // También los rechazados: una devolución que el banco tumba deja al
+        // cliente sin su dinero y a nadie avisado. Tiene que verse.
+        .in("estado", ["devuelto", "fallido", "lanzado"])
+        .lt("importe", 0),
     ]);
 
     const clientesMap = new Map<string, Record<string, unknown>>();
@@ -490,12 +496,21 @@ export async function getListadoReservas(params: {
     // negativo (salieron), aquí se suman en positivo para poder restarlos.
     const devueltoPorReserva = new Map<string, number>();
     const devueltoPorCompra = new Map<string, number>();
+    // Devoluciones que el banco RECHAZÓ o que siguen sin respuesta: el cliente
+    // no tiene su dinero y hay que hacer algo.
+    const falloPorReserva = new Set<string>();
+    const falloPorCompra = new Set<string>();
     for (const d of (devolucionesRes.data ?? []) as Record<string, unknown>[]) {
       const importe = Math.abs(Number(d.importe ?? 0));
       const rid = s(d.reserva_id);
       const cid = s(d.compra_id);
-      if (rid) devueltoPorReserva.set(rid, (devueltoPorReserva.get(rid) ?? 0) + importe);
-      if (cid) devueltoPorCompra.set(cid, (devueltoPorCompra.get(cid) ?? 0) + importe);
+      if (s(d.estado) === "devuelto") {
+        if (rid) devueltoPorReserva.set(rid, (devueltoPorReserva.get(rid) ?? 0) + importe);
+        if (cid) devueltoPorCompra.set(cid, (devueltoPorCompra.get(cid) ?? 0) + importe);
+      } else {
+        if (rid) falloPorReserva.add(rid);
+        if (cid) falloPorCompra.add(cid);
+      }
     }
 
     const ticketsMap = new Map<string, string>();
@@ -576,6 +591,7 @@ export async function getListadoReservas(params: {
         importePagado: num(r.importe_pagado) || num(r.ticket_importe),
         importeDevuelto: devueltoPorReserva.get(s(r.id)) ?? 0,
         ticketPagadoAt: pagadoPorReserva.get(s(r.id)) ?? "",
+        devolucionFallida: falloPorReserva.has(s(r.id)),
         pagoPendiente: Boolean(r.pago_pendiente),
 
         tieneGarantia: Boolean(r.tiene_garantia),
@@ -701,9 +717,12 @@ export async function getListadoReservas(params: {
           // reserva: se guarda al comprar, para poder sentarlos después.
           comensales: num(c.unidades),
 
-          // Qué clase de fila es. Sin esto la columna "Tipo de reserva" salía
-          // vacía en las compras y parecía que faltaba un dato.
-          tipoCategoria: "Compra de ticket",
+          // El TIPO es el mismo que el de una reserva canjeada —las dos son
+          // de ticket—, así que se rotula igual. Lo que las diferencia es el
+          // estado (con mesa o sin ella), no la clase de producto. Poner aquí
+          // "Compra de ticket" creaba dos nombres para lo mismo, y encima
+          // repetía lo que ya dice la columna Origen.
+          tipoCategoria: "Ticket",
 
           // El estado de la compra se enseña tal cual: quien mira la lista
           // tiene que distinguir de un vistazo lo cobrado de lo que se quedó
@@ -727,6 +746,7 @@ export async function getListadoReservas(params: {
           // comprar, pero aquí un 0: nunca entró en caja.
           importePagado: pagada ? num(c.importe_total) : 0,
           importeDevuelto: devueltoPorCompra.get(s(c.id)) ?? 0,
+          devolucionFallida: falloPorCompra.has(s(c.id)),
 
           clienteId: ficha ? s(ficha.id) : null,
           clienteClasificacion: s(ficha?.clasificacion),

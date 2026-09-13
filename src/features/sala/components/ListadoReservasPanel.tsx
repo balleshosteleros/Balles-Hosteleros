@@ -463,14 +463,29 @@ const COLUMNAS: ColumnaDef[] = [
     valor: (f) => f.importeDevuelto,
     // Se pinta solo cuando hay algo devuelto: una columna llena de "0,00 €"
     // no dice nada y esconde las pocas filas que sí importan.
-    celda: (f) =>
-      f.importeDevuelto > 0 ? (
-        <span className="font-medium text-destructive">
-          −{formatEur(f.importeDevuelto)}
-        </span>
-      ) : (
-        ""
-      ),
+    celda: (f) => {
+      if (f.importeDevuelto > 0) {
+        return (
+          <span className="font-medium text-destructive">
+            −{formatEur(f.importeDevuelto)}
+          </span>
+        );
+      }
+      // Se intentó devolver y no llegó. Callarlo deja al cliente sin su dinero
+      // y a nadie enterado: pasó con una devolución de 4 € que el banco
+      // rechazó tres veces sin que la pantalla dijera nada.
+      if (f.devolucionFallida) {
+        return (
+          <Badge
+            variant="outline"
+            className="w-fit border-destructive/40 bg-destructive/10 font-normal text-destructive"
+          >
+            Devolución rechazada
+          </Badge>
+        );
+      }
+      return "";
+    },
   },
   {
     campo: "tarjetaIntroducida",
