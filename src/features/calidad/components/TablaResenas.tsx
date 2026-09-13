@@ -116,6 +116,8 @@ export function crearAccesoResena(
     if (campo === "origen") return ORIGEN_LABEL[r.origen] ?? r.origen;
     if (campo === "estado") return ESTADO_LABEL[r.estado] ?? r.estado;
     if (campo === "preguntas") return preguntasContestadas(r) === 3 ? "Sí" : "No";
+    // Cuándo se puso la reseña. `fecha_registro` es la del informe de Cover;
+    // `fecha_reseña` la de Google y la de las nuestras.
     if (campo === "fecha") return r.fecha_registro ?? r.fecha_reseña ?? "";
     if (campo === "comentario") return r.comentario ?? "";
     if (campo === "gestionada") return nombreGestor(r.gestionada_por) ?? "";
@@ -194,7 +196,7 @@ export function TablaResenas({
                 "lista",
                 ESTADOS_RESENA.map((e) => e.label),
               )}
-              {cabecera("fecha", "Fecha de la visita", "fecha")}
+              {cabecera("fecha", "Fecha de la reseña", "fecha")}
               {cabecera("comentario", "Comentario", "texto")}
               {cabecera("gestionada", "Gestionada por", "texto")}
             </tr>

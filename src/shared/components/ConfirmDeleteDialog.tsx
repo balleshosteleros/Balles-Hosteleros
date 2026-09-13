@@ -25,6 +25,13 @@ type ConfirmOptions = {
    * "Borrar" en rojo no significa nada y confunde con "Cancelar".
    */
   tono?: "destructiva" | "normal";
+  /**
+   * Un aviso que solo hay que leer: se queda con el botón de aceptar y sin
+   * "Cancelar". Cancelar solo tiene sentido cuando hay algo que cancelar; en un
+   * aviso de algo que YA ha pasado, el segundo botón hace dudar de si al
+   * aceptar se está autorizando algo.
+   */
+  soloAceptar?: boolean;
 };
 
 type PendingState = ConfirmOptions & {
@@ -74,9 +81,11 @@ export function useConfirmDelete() {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => close(false)}>
-            {pending?.cancelLabel ?? "Cancelar"}
-          </AlertDialogCancel>
+          {!pending?.soloAceptar && (
+            <AlertDialogCancel onClick={() => close(false)}>
+              {pending?.cancelLabel ?? "Cancelar"}
+            </AlertDialogCancel>
+          )}
           <AlertDialogAction
             onClick={() => close(true)}
             className={

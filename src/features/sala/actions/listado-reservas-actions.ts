@@ -74,6 +74,8 @@ export interface ListadoReservaRow {
   tipoCategoria: string;
   tarjetaIntroducida: boolean;
   importePagado: number | null;
+  /** Devuelto al cliente (positivo). 0 = no se le ha devuelto nada. */
+  importeDevuelto: number;
   pagoPendiente: boolean;
 
   // --- Garantía (dinero retenido en la tarjeta antes de venir) ---
@@ -206,6 +208,7 @@ function filaBase(): ListadoReservaRow {
     tipoCategoria: "",
     tarjetaIntroducida: false,
     importePagado: null,
+    importeDevuelto: 0,
     pagoPendiente: false,
     tieneGarantia: false,
     garantiaImporte: null,
@@ -361,6 +364,7 @@ export async function getListadoReservas(params: {
       etiqClienteRes,
       catalogoRes,
       comprasRes,
+      devolucionesRes,
     ] = await Promise.all([
       clienteIds.length
         ? supabase
@@ -390,6 +394,13 @@ export async function getListadoReservas(params: {
         : Promise.resolve({ data: [] as Record<string, unknown>[] }),
       supabase.from("sala_etiquetas").select("id, nombre").eq("empresa_id", empresaId),
       comprasPromise,
+      // Devoluciones: sin esto la pantalla enseña como cobrado un dinero que
+      // ya volvió a la tarjeta del cliente, y el total no cuadra con el banco.
+      supabase
+        .from("reserva_cobros")
+        .select("reserva_id, compra_id, importe")
+        .eq("empresa_id", empresaId)
+        .eq("estado", "devuelto"),
     ]);
 
     const clientesMap = new Map<string, Record<string, unknown>>();
@@ -400,6 +411,18 @@ export async function getListadoReservas(params: {
     // comercial: "EXPERIENCIA" identifica de un vistazo lo que una frase de
     // ocho palabras hacía ilegible. El nombre completo sigue disponible para
     // quien abra la ficha.
+    // Lo devuelto por reserva y por compra. Los importes se guardan en
+    // negativo (salieron), aquí se suman en positivo para poder restarlos.
+    const devueltoPorReserva = new Map<string, number>();
+    const devueltoPorCompra = new Map<string, number>();
+    for (const d of (devolucionesRes.data ?? []) as Record<string, unknown>[]) {
+      const importe = Math.abs(Number(d.importe ?? 0));
+      const rid = s(d.reserva_id);
+      const cid = s(d.compra_id);
+      if (rid) devueltoPorReserva.set(rid, (devueltoPorReserva.get(rid) ?? 0) + importe);
+      if (cid) devueltoPorCompra.set(cid, (devueltoPorCompra.get(cid) ?? 0) + importe);
+    }
+
     const ticketsMap = new Map<string, string>();
     for (const t of (ticketsRes.data ?? []) as Record<string, unknown>[]) {
       ticketsMap.set(s(t.id), s(t.clave) || s(t.nombre));
@@ -476,6 +499,7 @@ export async function getListadoReservas(params: {
         // `importe_pagado` viene vacío y la columna salía en blanco aunque el
         // cliente hubiera pagado. Se cae al importe del ticket.
         importePagado: num(r.importe_pagado) || num(r.ticket_importe),
+        importeDevuelto: devueltoPorReserva.get(s(r.id)) ?? 0,
         pagoPendiente: Boolean(r.pago_pendiente),
 
         tieneGarantia: Boolean(r.tiene_garantia),
@@ -619,6 +643,7 @@ export async function getListadoReservas(params: {
           // medias lleva su importe en `ticketImporte` para saber qué iba a
           // comprar, pero aquí un 0: nunca entró en caja.
           importePagado: pagada ? num(c.importe_total) : 0,
+          importeDevuelto: devueltoPorCompra.get(s(c.id)) ?? 0,
 
           clienteId: ficha ? s(ficha.id) : null,
           clienteClasificacion: s(ficha?.clasificacion),

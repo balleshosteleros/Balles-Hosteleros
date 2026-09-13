@@ -202,7 +202,16 @@ export async function GET(request: Request) {
         const { emitirNotifComunicado } = await import(
           "@/features/notificaciones/actions/emisores-actions"
         );
-        await emitirNotifComunicado(idSalida);
+        // Un comunicado que sale solo y no le llega a NADIE tiene que constar:
+        // aquí no hay nadie delante de la pantalla a quien avisar, y sin esta
+        // línea se publicaba en silencio un comunicado que no existía para la
+        // plantilla.
+        const avisados = await emitirNotifComunicado(idSalida);
+        if (avisados === 0) {
+          errores.push(
+            `${c.titulo}: publicado, pero no le ha llegado a nadie; revisa sus destinatarios`,
+          );
+        }
       } catch (e) {
         console.error("[cron comunicados] notif:", e);
       }

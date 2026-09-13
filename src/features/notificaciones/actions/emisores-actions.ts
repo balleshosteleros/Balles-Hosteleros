@@ -16,11 +16,18 @@ function recortar(texto: string | null | undefined, max = 140): string {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
-/** Comunicado publicado → notificación a su audiencia. Idempotente por comunicado. */
-export async function emitirNotifComunicado(comunicadoId: string): Promise<void> {
+/**
+ * Comunicado publicado → notificación a su audiencia. Idempotente por comunicado.
+ *
+ * Devuelve A CUÁNTA GENTE ha avisado. Quien publica necesita ese número: un
+ * comunicado dirigido a un departamento que no casa con nadie se publicaba en
+ * silencio, sin avisar a una sola persona, y en la lista solo se veía un 0 % de
+ * alcance que parecía "todavía no lo ha abierto nadie".
+ */
+export async function emitirNotifComunicado(comunicadoId: string): Promise<number> {
   try {
     const audiencia = await resolverAudienciaComunicado(comunicadoId);
-    if (!audiencia.empresaId || audiencia.userIds.length === 0) return;
+    if (!audiencia.empresaId || audiencia.userIds.length === 0) return 0;
 
     // Un comunicado avisa SIEMPRE: no va detrás de ningún interruptor. Es el
     // canal por el que la empresa comunica lo importante, y silenciarlo deja al
@@ -71,7 +78,9 @@ export async function emitirNotifComunicado(comunicadoId: string): Promise<void>
       // El comunicado ya dispara su propio push (comunicado_nuevo); evitamos duplicarlo.
       push: false,
     });
+    return audiencia.userIds.length;
   } catch (e) {
     console.error("[emisores] emitirNotifComunicado:", e);
+    return 0;
   }
 }

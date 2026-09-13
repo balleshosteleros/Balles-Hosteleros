@@ -292,6 +292,12 @@ export interface ResultadoGuardarComunicado {
   ok: boolean;
   error?: string;
   data?: Record<string, unknown> | null;
+  /**
+   * A cuánta gente le ha llegado el aviso al publicar. `0` significa que el
+   * comunicado no le ha llegado a NADIE, y eso hay que decirlo en la cara.
+   * Queda sin valor cuando la acción no publica nada (guardar un borrador).
+   */
+  avisados?: number;
   /** Cuántos correos salieron de verdad. 0 si no se pidió mandarlo por correo. */
   emailEnviados?: number;
   /** Por qué no salió el correo, si se pidió y falló. */
@@ -371,7 +377,8 @@ function toRow(input: ComunicadoInput) {
 async function avisarComunicadoPublicado(
   comunicadoId: string,
   enviarEmail: boolean,
-): Promise<{ emailEnviados: number; emailError?: string }> {
+): Promise<{ avisados: number; emailEnviados: number; emailError?: string }> {
+  let avisados = 0;
   try {
     const { notificarComunicadoNuevo } = await import(
       "@/features/mi-panel/mobile/lib/push-comunicado"
@@ -385,22 +392,26 @@ async function avisarComunicadoPublicado(
     const { emitirNotifComunicado } = await import(
       "@/features/notificaciones/actions/emisores-actions"
     );
-    await emitirNotifComunicado(comunicadoId);
+    avisados = await emitirNotifComunicado(comunicadoId);
   } catch (e) {
     console.error("[comunicados] notif:", e);
   }
 
-  if (!enviarEmail) return { emailEnviados: 0 };
+  if (!enviarEmail) return { avisados, emailEnviados: 0 };
   try {
     const { enviarComunicadoPorEmail } = await import(
       "@/features/gerencia/services/comunicado-email"
     );
     const res = await enviarComunicadoPorEmail(comunicadoId);
-    return { emailEnviados: res.enviados, emailError: res.ok ? undefined : res.error };
+    return {
+      avisados,
+      emailEnviados: res.enviados,
+      emailError: res.ok ? undefined : res.error,
+    };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error desconocido";
     console.error("[comunicados] email:", msg);
-    return { emailEnviados: 0, emailError: msg };
+    return { avisados, emailEnviados: 0, emailError: msg };
   }
 }
 

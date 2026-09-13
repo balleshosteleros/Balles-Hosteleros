@@ -89,7 +89,7 @@ import {
   CalendarDays, MoreHorizontal, Eye, Clock, Archive,
   Trash2, Users, ArrowLeft, Send, Upload, X, Bell, Mail, Paperclip,
   ChevronLeft, ChevronRight, ChevronDown, Settings, ShieldAlert, Link as LinkIcon, Copy,
-  Table2, Download, RefreshCw, Ban,
+  Table2, Download, RefreshCw, Ban, AlertTriangle,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -166,11 +166,29 @@ function AlcanceCircle({
   pct,
   lecturas,
   tz,
+  publicado,
 }: {
   pct: number;
   lecturas: LecturaComunicado[];
   tz: string;
+  /** Solo lo ya publicado puede haber llegado —o no— a alguien. */
+  publicado: boolean;
 }) {
+  /**
+   * PUBLICADO Y SIN UN SOLO AVISO no es "nadie lo ha abierto todavía": es que
+   * no le ha llegado a nadie. Un 0 % se lee como lo primero y se deja pasar; lo
+   * segundo hay que verlo de un vistazo, porque significa que el comunicado no
+   * ha existido para la plantilla.
+   */
+  if (publicado && lecturas.length === 0) {
+    return (
+      <Badge variant="destructive" className="gap-1 rounded-full text-[11px]">
+        <AlertTriangle className="h-3 w-3" />
+        No ha llegado a nadie
+      </Badge>
+    );
+  }
+
   const r = 16, c = 2 * Math.PI * r;
   const color = pct >= 80 ? "text-emerald-500" : pct >= 40 ? "text-amber-500" : "text-muted-foreground";
   const rueda = (
@@ -1674,6 +1692,28 @@ export function ComunicadosView() {
     setPublicarConEmail(c.enviarEmail);
   };
 
+  /**
+   * UN COMUNICADO QUE NO LE LLEGA A NADIE TIENE QUE DECIRLO.
+   *
+   * Pasó de verdad: uno dirigido a SALA, COCINA y GERENCIA se publicó sin
+   * avisar a una sola persona porque los departamentos guardados no casaban con
+   * los de la plantilla. En la lista solo se veía un 0 % de alcance, que se lee
+   * como "todavía no lo ha abierto nadie", y así estuvo un día entero.
+   */
+  const avisarSiNoLlegoANadie = async (res: { avisados?: number }) => {
+    if (res.avisados !== 0) return;
+    await confirm({
+      title: "Publicado, pero no le ha llegado a nadie",
+      description:
+        "Ninguno de los destinatarios elegidos coincide con alguien de la plantilla activa, " +
+        "así que no ha salido ni un aviso. Revisa los departamentos y las personas del " +
+        "comunicado y vuelve a publicarlo.",
+      confirmLabel: "Entendido",
+      tono: "normal",
+      soloAceptar: true,
+    });
+  };
+
   /** Avisa de cómo fue el correo. Un correo que no sale tiene que decirse. */
   const contarCorreo = (res: { emailEnviados?: number; emailError?: string }) => {
     const enviados = res.emailEnviados ?? 0;
@@ -1696,6 +1736,7 @@ export function ComunicadosView() {
     setPublicando(null);
     toast.success("Comunicado publicado");
     if (publicarConEmail) contarCorreo(res);
+    await avisarSiNoLlegoANadie(res);
     await loadComunicados();
   };
 
@@ -2008,7 +2049,7 @@ export function ComunicadosView() {
     if (res.ok) {
       // Uno que se repite se manda por su camino: deja la salida de hoy y la
       // plantilla se queda esperando la próxima vez.
-      let avisos: { emailEnviados?: number; emailError?: string } = res;
+      let avisos: { avisados?: number; emailEnviados?: number; emailError?: string } = res;
       if (publicarRepetido && editingComunicado) {
         const salida = await cambiarEstadoComunicado(
           editingComunicado.id,
@@ -2038,6 +2079,9 @@ export function ComunicadosView() {
         toast.success(`Correo enviado a ${enviados} ${enviados === 1 ? "persona" : "personas"}`);
       } else if (errorEmail) {
         toast.error(`El comunicado se publicó, pero el correo no salió: ${errorEmail}`);
+      }
+      if (estadoFinal === "publicado" || publicarRepetido) {
+        await avisarSiNoLlegoANadie(avisos);
       }
     } else {
       toast.error(res.error || "Error al guardar comunicado");
@@ -2166,7 +2210,12 @@ export function ComunicadosView() {
         <TableCell key="alcance">
           {/* TODO lo que sale de aquí se persigue igual, aunque vaya a una sola
               persona: sanciones incluidas (Iván, 12-09-2026). */}
-          <AlcanceCircle pct={c.alcancePct} lecturas={c.lecturas} tz={tz} />
+          <AlcanceCircle
+            pct={c.alcancePct}
+            lecturas={c.lecturas}
+            tz={tz}
+            publicado={c.estado === "publicado"}
+          />
         </TableCell>
       ),
     },

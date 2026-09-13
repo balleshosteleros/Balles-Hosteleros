@@ -435,6 +435,22 @@ const COLUMNAS: ColumnaDef[] = [
     celda: (f) => formatEur(f.importePagado),
   },
   {
+    campo: "importeDevuelto",
+    label: "Devuelto",
+    filtro: "numero",
+    valor: (f) => f.importeDevuelto,
+    // Se pinta solo cuando hay algo devuelto: una columna llena de "0,00 €"
+    // no dice nada y esconde las pocas filas que sí importan.
+    celda: (f) =>
+      f.importeDevuelto > 0 ? (
+        <span className="font-medium text-destructive">
+          −{formatEur(f.importeDevuelto)}
+        </span>
+      ) : (
+        ""
+      ),
+  },
+  {
     campo: "tarjetaIntroducida",
     label: "Tarjeta",
     filtro: "booleano",
@@ -844,7 +860,12 @@ const VISIBLES_COBROS = [
   "cancelacionCobradaAt",
   "garantiaCobradaAt",
   "ticket",
+  // Cuándo entró el dinero del ticket. Garantía y cancelación ya enseñaban su
+  // fecha de cobro; sin esta, el ticket era la única de las tres que no decía
+  // de cuándo es el dinero.
+  "ticketPagadoAt",
   "importePagado",
+  "importeDevuelto",
   "origen",
 ];
 
@@ -1069,7 +1090,7 @@ export function ListadoReservasPanel({
         garantiaRetenidaN += 1;
       }
       if (f.garantiaEstado === "cobrada") {
-        garantiaCobrada += f.garantiaImporte ?? 0;
+        garantiaCobrada += (f.garantiaImporte ?? 0) - (f.importeDevuelto ?? 0);
         garantiaCobradaN += 1;
       }
       if (f.garantiaEstado === "pendiente" || f.garantiaEstado === "solicitada") {
@@ -1077,7 +1098,7 @@ export function ListadoReservasPanel({
       }
 
       if (f.cancelacionEstado === "cobrada") {
-        cancelacionCobrada += f.cancelacionImporte ?? 0;
+        cancelacionCobrada += (f.cancelacionImporte ?? 0) - (f.importeDevuelto ?? 0);
         cancelacionCobradaN += 1;
       }
       if (f.cancelacionEstado === "fallida" || f.cancelacionEstado === "error") {
@@ -1096,7 +1117,8 @@ export function ListadoReservasPanel({
           f.ticketEstadoCompra === "pagada" ||
           f.ticketEstadoCompra === "canjeada";
         if (cobrada) {
-          ticketCobrado += f.ticketImporte ?? 0;
+          // Neto: lo cobrado menos lo que ya volvió a la tarjeta del cliente.
+          ticketCobrado += (f.ticketImporte ?? 0) - (f.importeDevuelto ?? 0);
           if (f.esCompraTicket) ticketSinCanjearN += 1;
         } else {
           ticketSinPagarN += 1;
