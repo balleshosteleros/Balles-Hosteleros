@@ -5,6 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import { useMobileIdentidad } from "./MobileIdentidadProvider";
 import { EmpresaSwitcherMobile } from "./EmpresaSwitcherMobile";
 import { EmpleadoMenuMobile } from "./EmpleadoMenuMobile";
+import { PILDORA_CABECERA } from "@/features/layout/data/cabecera";
 
 interface Props {
   title: string;
@@ -46,15 +47,18 @@ export function MobilePageHeader({ title, subtitle, backHref = "/m" }: Props) {
         ni puesto: en el móvil ocupan demasiado y aquí manda el título de la
         pantalla (Iván, 28-ago). El fondo gris del pill es además lo que hace
         visible un isotipo de trazo fino, que sobre blanco se pierde.
+
+        Y del MISMO grosor que en todas partes (`PILDORA_CABECERA`): aquí iba en
+        versión reducida —38px, con piezas de 28— y la misma pastilla se veía de
+        un tamaño en el Inicio y de otro al entrar en cualquier pantalla
+        (Iván, 13-sep).
       */}
-      <div className="flex shrink-0 items-center gap-0.5 rounded-full border bg-muted/40 px-1.5 py-1">
-        <EmpresaSwitcherMobile
-          empresaActual={empresaActual}
-          empresas={empresas}
-          size="sm"
-        />
+      <div
+        className={`flex shrink-0 items-center gap-0.5 rounded-full border bg-muted/40 px-1.5 py-1 ${PILDORA_CABECERA}`}
+      >
+        <EmpresaSwitcherMobile empresaActual={empresaActual} empresas={empresas} />
         <span className="mx-1 h-5 w-px shrink-0 bg-border" />
-        <EmpleadoMenuMobile nombre={nombre} avatarUrl={avatarUrl} size="sm" />
+        <EmpleadoMenuMobile nombre={nombre} avatarUrl={avatarUrl} />
       </div>
     </header>
   );
