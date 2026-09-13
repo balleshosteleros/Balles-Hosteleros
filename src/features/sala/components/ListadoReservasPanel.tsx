@@ -938,14 +938,11 @@ function visiblesIniciales(enfoque: ListadoEnfoque): ToolbarColumnaVisible {
 function TarjetaImporte({
   titulo,
   importe,
-  texto,
   detalle,
   tono = "neutro",
 }: {
   titulo: string;
   importe: number;
-  /** Cifra que no es dinero (un recuento). Si viene, sustituye al importe. */
-  texto?: string;
   detalle?: string;
   tono?: "neutro" | "bien" | "espera" | "mal";
 }) {
@@ -959,7 +956,7 @@ function TarjetaImporte({
     <Card className="p-3">
       <p className="text-xs text-muted-foreground">{titulo}</p>
       <p className={cn("mt-0.5 text-lg font-semibold tabular-nums", tonos[tono])}>
-        {texto ?? formatEur(importe)}
+        {formatEur(importe)}
       </p>
       {detalle && <p className="mt-0.5 text-xs text-muted-foreground">{detalle}</p>}
     </Card>
@@ -1330,20 +1327,19 @@ export function ListadoReservasPanel({
             }
             tono="bien"
           />
-          {/* Gente que dejó nombre, correo y teléfono y no llegó a pagar. No
-              es dinero pendiente: son ventas a medias y, sobre todo, contactos
-              a los que se puede llamar. Por eso la cifra grande es el número
-              de personas y el dinero va debajo. */}
+          {/* Gente que dejó nombre, correo y teléfono y no llegó a pagar: son
+              ventas a medias y, sobre todo, contactos a los que se puede
+              llamar. Mismo patrón que el resto: el dinero arriba y el recuento
+              debajo, para poder leer la fila entera de un vistazo. */}
           <TarjetaImporte
             titulo="Abandonos de tickets"
-            importe={0}
-            texto={formatNumero(resumen.ticketSinPagarN)}
-            detalle={
-              resumen.ticketSinPagarN === 0
-                ? "Nadie se quedó a medias"
-                : `${formatEur(resumen.ticketSinPagarEur)} que no llegaron a pagar`
-            }
-            tono={resumen.ticketSinPagarN > 0 ? "espera" : "neutro"}
+            importe={resumen.ticketSinPagarEur}
+            detalle={`${formatNumero(resumen.ticketSinPagarN)} ${
+              resumen.ticketSinPagarN === 1 ? "abandono" : "abandonos"
+            }`}
+            // En rojo: es dinero que se ha perdido por el camino, no algo
+            // que esté esperando. Si hay abandonos, se ven.
+            tono={resumen.ticketSinPagarN > 0 ? "mal" : "neutro"}
           />
         </div>
       )}
