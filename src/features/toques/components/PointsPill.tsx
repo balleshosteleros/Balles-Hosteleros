@@ -196,9 +196,14 @@ export function PointsPill({ inicial = null, href = "/m/points", className }: Pr
       onClick={abrir}
       aria-label={`Points: ${datos.saldo}, nivel ${datos.nivelNombre}`}
       className={cn(
-        // Mismo alto y mismo aire que la píldora de al lado (empresa + foto):
-        // las tres tienen que leerse como una sola fila de pastillas.
-        "relative flex h-10 shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 py-1 pl-1 pr-3 transition-transform active:scale-95",
+        // Mismo alto y mismo aire que las píldoras de al lado (la barra de
+        // herramientas y la de empresa + foto): borde, 4px de aire y dentro
+        // piezas de 32px. Las tres tienen que leerse como una sola fila de
+        // pastillas. NO lleva alto fijo: lo marca el contenido, igual que las
+        // otras dos. Con `h-10` (40px) la insignia se comía el aire y el
+        // círculo salía pegado al borde, como metido a presión, y encima la
+        // píldora quedaba 2px más baja que sus vecinas (Iván, 13-sep).
+        "relative flex shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 py-1 pl-1 pr-3 transition-transform active:scale-95",
         className,
       )}
     >
@@ -280,15 +285,14 @@ function Insignia({
   const Dibujo = iconoDeNivel(icono);
   const { claro, hondo } = tonosDeInsignia(color);
   return (
-    // La chapa de color mide 32px, EXACTAMENTE lo mismo que el isotipo de la
-    // empresa de al lado (`h-8 w-8`), en el teléfono y en el ordenador: las dos
-    // van en la misma fila y una más pequeña que la otra se veía descolgada
-    // (Iván, 12-sep). El aro de progreso va POR FUERA (2px a cada lado, 36px en
-    // total), que es lo único que puede crecer sin pasarse del alto de la
-    // píldora (40px).
+    // La insignia ENTERA mide 32px —aro de progreso incluido—, exactamente lo
+    // mismo que el isotipo de la empresa, el avatar y los iconos de la barra de
+    // herramientas: todas las píldoras de la cabecera llevan 4px de aire
+    // alrededor de una pieza de 32, y así ninguna se sale de la suya. La chapa
+    // de color va dentro (28px) y el aro de 2px la rodea.
     <span
       className={cn(
-        "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+        "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
         destello && "points-nivel-nuevo",
       )}
       style={{
@@ -296,13 +300,13 @@ function Insignia({
       }}
     >
       <span
-        className="flex h-8 w-8 items-center justify-center rounded-full ring-1 ring-background"
+        className="flex h-7 w-7 items-center justify-center rounded-full ring-1 ring-background"
         style={{
           background: `linear-gradient(145deg, ${claro} 0%, ${hondo} 100%)`,
           boxShadow: `0 1px 4px -1px ${hondo}`,
         }}
       >
-        <Dibujo className="h-5 w-5 text-white" strokeWidth={2.4} />
+        <Dibujo className="h-[18px] w-[18px] text-white" strokeWidth={2.4} />
       </span>
     </span>
   );
