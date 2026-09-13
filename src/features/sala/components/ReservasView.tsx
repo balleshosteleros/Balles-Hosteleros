@@ -20,7 +20,7 @@ import { ahoraEnZona, formatFechaHoraEnZona } from "@/features/empresa/lib/zona-
 import { HORA_CORTE_DIA_NEGOCIO, diaNegocioDe, turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useBloqueoCambioEmpresa } from "@/shared/hooks/useBloqueoCambioEmpresa";
-import { Plus, Search, ChevronLeft, ChevronRight, Check, Move, Combine, Map as MapIcon, List as ListIcon, Lock, Table2, ArrowLeftRight, ArrowRight } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, Check, Move, Map as MapIcon, List as ListIcon, Lock, Table2, ArrowLeftRight, ArrowRight } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
   () =>
@@ -515,6 +515,39 @@ function StatusDot({ estado }: { estado: EstadoReserva }) {
   );
 }
 
+/**
+ * Icono de "unir mesas": dos mesas y, entre ellas, una flecha de doble punta.
+ *
+ * Va dibujado a mano y no sale de la librería de iconos porque ninguno de los
+ * suyos cuenta lo que pasa aquí. Se lee lo que hace el botón sin tener que
+ * leer la palabra, que es de lo que sirve un icono en pleno servicio.
+ *
+ * Mismo trazo y mismo lienzo (24×24) que el resto de iconos de la pantalla,
+ * así que encaja al lado de ellos sin desentonar de tamaño ni de grosor.
+ */
+function IconoUnirMesas({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      {/* Las dos mesas, una a cada lado. */}
+      <rect x="1.5" y="7.5" width="5.5" height="9" rx="1.5" />
+      <rect x="17" y="7.5" width="5.5" height="9" rx="1.5" />
+      {/* La flecha de doble punta: se juntan la una con la otra. */}
+      <line x1="8.5" y1="12" x2="15.5" y2="12" />
+      <polyline points="10.5 10 8.5 12 10.5 14" />
+      <polyline points="13.5 10 15.5 12 13.5 14" />
+    </svg>
+  );
+}
+
 // Selector rápido compartido entre la fila de lista y la mesa del plano.
 //
 // Reparto de la ventana, de arriba abajo:
@@ -702,7 +735,7 @@ function ReservaQuickPopover({
               className="h-9 text-xs"
               onClick={() => onUnirMesas(reserva)}
             >
-              <Combine className="h-3.5 w-3.5 mr-1" />
+              <IconoUnirMesas className="h-3.5 w-3.5 mr-1" />
               Unir
             </Button>
             <Button
@@ -3219,7 +3252,7 @@ function PlanoCanvas({
           reserva y las dos únicas salidas: guardar o dejarlo como estaba. */}
       {union && (
         <div className="mx-2 mb-2 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs">
-          <Combine className="h-4 w-4 shrink-0 text-emerald-600" />
+          <IconoUnirMesas className="h-4 w-4 shrink-0 text-emerald-600" />
           <span className="min-w-0 truncate">
             Uniendo mesas de{" "}
             <span className="font-semibold">
@@ -7221,7 +7254,7 @@ export function ReservasView() {
                   salón puesto en rejilla, así que se une igual. */}
               {unionEnPlano && (
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs">
-                  <Combine className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <IconoUnirMesas className="h-4 w-4 shrink-0 text-emerald-600" />
                   <span className="min-w-0 truncate">
                     Uniendo mesas de{" "}
                     <span className="font-semibold">

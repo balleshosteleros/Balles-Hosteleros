@@ -1,9 +1,12 @@
 /**
- * Favicon REDONDO de cualquier empresa.
+ * Icono de marca de cualquier empresa, generado al vuelo desde su isotipo.
  *
- * El navegador dibuja el favicon tal cual, así que el recorte circular hay que
- * hacerlo aquí: esta ruta coge el isotipo de la empresa y devuelve el PNG ya
- * redondo (ver `icono-circular.ts` para el porqué y los dos casos que trata).
+ * Por defecto devuelve el favicon REDONDO de la pestaña: el navegador dibuja el
+ * favicon tal cual, así que el recorte circular hay que hacerlo aquí. Con
+ * `&forma=cuadrado` devuelve el icono de APP —el mismo dibujo de borde a borde,
+ * sin recortar—, que es lo que pide la pantalla de inicio del móvil: ahí la
+ * máscara la pone el sistema, y un icono redondo llega como un disco flotando
+ * en un cuadro blanco (ver `icono-circular.ts` para el porqué y los casos).
  *
  * Se hace al vuelo en vez de guardar una copia recortada en el storage para que
  * valga para toda empresa presente y futura sin ningún paso manual: quien sube
@@ -11,7 +14,7 @@
  * que nadie regenere nada.
  */
 import { NextResponse } from "next/server";
-import { iconoCircular } from "@/shared/lib/icono-circular";
+import { iconoCircular, iconoCuadrado } from "@/shared/lib/icono-circular";
 
 export const runtime = "nodejs";
 
@@ -51,7 +54,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "imagen no válida" }, { status: 400 });
   }
 
-  const png = await iconoCircular(url.toString(), params.get("c"));
+  // `forma=cuadrado` = icono de app (pantalla de inicio); cualquier otra cosa,
+  // el favicon redondo de siempre.
+  const generar = params.get("forma") === "cuadrado" ? iconoCuadrado : iconoCircular;
+  const png = await generar(url.toString(), params.get("c"));
 
   // Si no se ha podido recortar, la pestaña se queda con el icono de siempre en
   // vez de con un hueco: un fallo del recorte no puede dejar la web sin favicon.

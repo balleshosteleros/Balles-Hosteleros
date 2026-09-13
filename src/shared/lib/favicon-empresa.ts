@@ -41,14 +41,33 @@ function serviceClient() {
  * devuelve redondo. NORMA: todo favicon del software y de las webs sale redondo.
  */
 export function faviconRedondo(url: string, color?: string | null): string {
+  return iconoDeMarca(url, color, "redondo");
+}
+
+/**
+ * Dirección del icono de APP: el mismo dibujo CUADRADO y de borde a borde.
+ *
+ * Va en el `apple-touch-icon`. El isotipo a pelo no sirve cuando viene sobre
+ * transparente —que es lo normal— porque iOS rellena de blanco lo que no está
+ * pintado: la calavera dorada de BACANAL salía en la pantalla de inicio sobre
+ * un cuadro BLANCO, en vez del negro de su favicon. Pasando por aquí lleva su
+ * fondo puesto y llena el cuadro entero.
+ */
+export function iconoAppCuadrado(url: string, color?: string | null): string {
+  return iconoDeMarca(url, color, "cuadrado");
+}
+
+function iconoDeMarca(url: string, color: string | null | undefined, forma: "redondo" | "cuadrado"): string {
   const q = new URLSearchParams({ u: url });
   if (color) q.set("c", color);
+  if (forma === "cuadrado") q.set("forma", "cuadrado");
   // `v=` no lo usa la ruta: está para que al cambiar el aspecto del icono
   // cambie la dirección. El navegador guarda los favicons en su propio archivo
   // y no vuelve a pedirlos; sin esto, quien ya hubiera entrado en la web seguía
   // viendo el icono viejo aunque el nuevo estuviera servido. SUBIR EL NÚMERO al
   // cambiar el dibujo. v3 = 08-09-2026, disco negro; se respeta el color del archivo si ya contrasta.
-  q.set("v", "3");
+  // v4 = 13-09-2026, nace el icono de app cuadrado.
+  q.set("v", "4");
   return `/api/favicon?${q.toString()}`;
 }
 
@@ -114,11 +133,12 @@ export function iconsDeUrl(
   return {
     icon: faviconRedondo(url, colorMarca),
     shortcut: faviconRedondo(url, colorMarca),
-    // iOS va con el CUADRADO de siempre a propósito: la pantalla de inicio del
-    // iPhone recorta ella el icono y pinta de NEGRO lo transparente, así que un
-    // círculo llegaría como un disco dentro de un cuadrado negro. Ver la norma
-    // del icono de app (cuadrado, isotipo, con margen).
-    apple: url,
+    // iOS va con el CUADRADO a propósito: la pantalla de inicio del iPhone
+    // recorta ella el icono. Pero no vale el isotipo a pelo: lo transparente
+    // iOS lo rellena de BLANCO, y la calavera dorada de BACANAL salía sobre un
+    // cuadro blanco en vez del negro de su favicon. Se sirve generado, con su
+    // fondo puesto y llenando el cuadro de borde a borde.
+    apple: iconoAppCuadrado(url, colorMarca),
   };
 }
 

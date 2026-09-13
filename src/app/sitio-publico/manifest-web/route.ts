@@ -14,6 +14,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { resolverHostname } from "@/features/marketing/pagina-web/services/hostname-resolver";
+import { iconoAppCuadrado } from "@/shared/lib/favicon-empresa";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +28,12 @@ export async function GET() {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  // Icono de la PWA: el isotipo (ver comentario en la página).
-  const logo = match.isotipo_url;
+  // Icono de la PWA: el isotipo (ver comentario en la página), servido en
+  // CUADRADO y con su fondo puesto. El isotipo a pelo no vale: el de BACANAL y
+  // el de HABANA vienen sobre transparente, y el móvil rellena eso de blanco.
+  const logo = match.isotipo_url
+    ? iconoAppCuadrado(match.isotipo_url, match.branding?.color_primario)
+    : null;
 
   const nombre = match.nombre_empresa;
 

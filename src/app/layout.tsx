@@ -35,10 +35,21 @@ export const metadata: Metadata = {
   // con el cuadrado guardado seguía saliendo en pico — el archivo de favicons
   // del navegador no se vuelve a pedir si la dirección es la misma. Subir el
   // número es lo único que le obliga a bajarlo otra vez.
+  //
+  // SON DOS ARCHIVOS DISTINTOS Y ES A PROPÓSITO. `icon.png` es el REDONDO de la
+  // pestaña; `apple-icon.png` es el CUADRADO azul de borde a borde.
+  //
+  // Por eso el icono se ve redondo en el ordenador y cuadrado en el iPhone: el
+  // Safari del iPhone enseña el `apple-touch-icon` también en la lista de
+  // pestañas, no el favicon. NO ES UN FALLO y no se arregla poniendo el redondo
+  // en los dos sitios: ese mismo archivo es el que acaba en la PANTALLA DE
+  // INICIO, donde iOS rellena de blanco lo transparente y el círculo quedaría
+  // flotando dentro de un cuadro blanco. Decidido con Iván el 13-09-2026: en el
+  // iPhone manda el cuadrado, para que el icono llene el cuadro como el de
+  // HABANA y el de BACANAL.
   icons: {
     icon: "/icon.png?v=4",
     shortcut: "/icon.png?v=4",
-    // iOS sigue con el cuadrado: la pantalla de inicio lo recorta ella.
     apple: "/apple-icon.png?v=4",
   },
 };
