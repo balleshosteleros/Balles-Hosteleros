@@ -1051,8 +1051,6 @@ export function ListadoReservasPanel({
    * Una compra de ticket sin canjear NO es una reserva: mientras el código no se
    * canjee, no puede sumar en el total de reservas ni en ninguna estadística.
    */
-  const totalReservas = filtradas.filter((f) => !f.esCompraTicket).length;
-  const totalCompras = filtradas.filter((f) => f.esCompraTicket).length;
 
   /**
    * Resumen de dinero de lo que hay AHORA en pantalla (después de filtrar).
@@ -1082,7 +1080,6 @@ export function ListadoReservasPanel({
     let ticketUnidadesN = 0;
     // Compras que se quedaron a medias: gente que dejó sus datos y no pagó.
     let ticketSinPagarN = 0;
-    let pagado = 0;
     // Dinero que se PUEDE cobrar y que nadie ha cobrado ni perdonado.
     let sinDecidir = 0;
     let sinDecidirN = 0;
@@ -1139,11 +1136,6 @@ export function ListadoReservasPanel({
         sinDecidirN += 1;
       }
 
-      // El dinero de un ticket ya está en "Tickets vendidos" —tanto el de una
-      // compra sin canjear como el de una reserva canjeada—: sumarlo aquí
-      // enseñaría el mismo cobro dos veces y el total no cuadraría con el
-      // banco. En la fila sí se ve, que es donde hace falta.
-      if (!f.esCompraTicket && !f.esTicket) pagado += f.importePagado ?? 0;
     }
 
     return {
@@ -1160,7 +1152,6 @@ export function ListadoReservasPanel({
       ticketSinCanjearN,
       ticketSinPagarN,
       ticketUnidadesN,
-      pagado,
       sinDecidir,
       sinDecidirN,
     };
@@ -1276,11 +1267,6 @@ export function ListadoReservasPanel({
                 .join(" · ")
             }
             tono="bien"
-          />
-          <TarjetaImporte
-            titulo="Pagado en reservas"
-            importe={resumen.pagado}
-            detalle={`${formatNumero(totalReservas)} ${totalReservas === 1 ? "reserva" : "reservas"}`}
           />
         </div>
       )}
