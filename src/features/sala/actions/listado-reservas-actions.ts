@@ -60,17 +60,27 @@ function horaEnZona(iso: string, tz: string): string {
  * ese dinero nunca entró.
  */
 const ESTADO_COMPRA_TEXTO: Record<string, string> = {
-  // Todos dicen "sin reserva" porque ninguna de estas filas tiene mesa: la
-  // columna Fecha enseña el día del REGISTRO, y sin este aviso la fila se lee
-  // como una reserva del calendario que no es.
-  pagada: "Pagada, sin reserva",
-  // Sigue dentro de los 30 minutos: aún puede terminar de pagar.
+  // Ninguna de estas filas tiene mesa, y la columna Fecha enseña el día del
+  // REGISTRO: sin decirlo, la fila se lee como una reserva del calendario que
+  // no existe. El estado lo desmiente de una vez, corto y en su sitio.
+  //
+  // El matiz de por qué no la tiene (pagó y no ha elegido día, no puso
+  // tarjeta, se la rechazaron) va en la columna Ticket, que es donde está el
+  // dinero y hay espacio para decirlo.
+  pagada: "Sin reserva",
+  pendiente: "Sin reserva",
+  caducada: "Sin reserva",
+  fallida: "Sin reserva",
+  cancelada: "Sin reserva",
+};
+
+/** Por qué esa compra no tiene reserva. Va bajo el importe, en la columna Ticket. */
+const MOTIVO_COMPRA_TEXTO: Record<string, string> = {
+  pagada: "Sin canjear",
   pendiente: "Pagando, sin terminar",
-  // Se le pasó el plazo sin teclear la tarjeta. Es el caso normal del que
-  // entra, deja sus datos y se va.
-  caducada: "No puso tarjeta, sin reserva",
-  fallida: "Tarjeta rechazada, sin reserva",
-  cancelada: "Pago cancelado, sin reserva",
+  caducada: "No puso tarjeta",
+  fallida: "Tarjeta rechazada",
+  cancelada: "Pago cancelado",
 };
 
 /** Qué es cada fila del listado. Una compra sin canjear no es una reserva. */
@@ -159,6 +169,8 @@ export interface ListadoReservaRow {
   ticketImporte: number | null;
   ticketIva: number | null;
   ticketCodigo: string;
+  /** Por qué una compra no tiene reserva. Vacío en las reservas. */
+  motivoSinReserva: string;
   /** Solo compras: "pagada" (pendiente de canjear), "canjeada", … */
   ticketEstadoCompra: string;
   /** Solo compras: último día para canjear el código. */
@@ -275,6 +287,7 @@ function filaBase(): ListadoReservaRow {
     ticketImporte: null,
     ticketIva: null,
     ticketCodigo: "",
+    motivoSinReserva: "",
     ticketEstadoCompra: "",
     ticketCanjeHasta: "",
     ticketPagadoAt: "",
@@ -693,6 +706,7 @@ export async function getListadoReservas(params: {
           // tiene que distinguir de un vistazo lo cobrado de lo que se quedó
           // a medias.
           estado: ESTADO_COMPRA_TEXTO[estadoCompra] ?? estadoCompra,
+          motivoSinReserva: MOTIVO_COMPRA_TEXTO[estadoCompra] ?? "",
           origen: "Compra ticket",
 
           esTicket: true,

@@ -348,14 +348,21 @@ const COLUMNAS: ColumnaDef[] = [
             {f.ticketUnidades && f.ticketUnidades > 1 ? `${f.ticketUnidades} × ` : ""}
             {formatEur(f.ticketImporte)}
           </span>
+          {f.esCompraTicket && f.motivoSinReserva && (
+            <Badge
+              variant="outline"
+              className={cn(
+                "w-fit font-normal",
+                f.ticketEstadoCompra === "pagada"
+                  ? "border-amber-600/40 bg-amber-600/20 text-amber-700 dark:text-amber-400"
+                  : "border-muted-foreground/30 bg-muted text-muted-foreground",
+              )}
+            >
+              {f.motivoSinReserva}
+            </Badge>
+          )}
           {f.esCompraTicket && f.ticketEstadoCompra === "pagada" && (
             <>
-              <Badge
-                variant="outline"
-                className="w-fit border-amber-600/40 bg-amber-600/20 font-normal text-amber-700 dark:text-amber-400"
-              >
-                Sin canjear
-              </Badge>
               {/* Dinero cobrado que no cuelga de ninguna mesa: si hay que
                   devolverlo, este es el único sitio donde aparece. */}
               <BotonDevolver
@@ -862,6 +869,10 @@ const VISIBLES_COBROS = [
   "cancelacionCobradaAt",
   "garantiaCobradaAt",
   "ticket",
+  // El código es lo que el cliente enseña al llegar y lo único que identifica
+  // una compra sin reserva. Solo lo llevan los tickets: una garantía o una
+  // política de cancelación no tienen código, son un cobro a una tarjeta.
+  "ticketCodigo",
   // Cuándo entró el dinero del ticket. Garantía y cancelación ya enseñaban su
   // fecha de cobro; sin esta, el ticket era la única de las tres que no decía
   // de cuándo es el dinero.
