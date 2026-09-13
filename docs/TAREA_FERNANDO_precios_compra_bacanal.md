@@ -5,6 +5,56 @@
 
 ---
 
+## 🔕 13-SEP — QUITADO EL AVISO QUE OS BLOQUEABA LA PANTALLA (culpa mía)
+
+**Ya no sale.** Si alguien sigue viéndolo, que cierre sesión y vuelva a entrar.
+
+### Qué pasó
+
+El aviso de «producto de Ágora sin dar de alta» que puse anteayer **os salía como una
+ventana que hay que cerrar**, y encima una por cada producto pendiente. Con 21 pendientes,
+eso son 21 ventanas antes de poder trabajar. En un móvil había 16 sin ver.
+
+**Fue un error mío.** Lo diseñé para que llegara a la campana y no molestara, y di por
+hecho que la pantalla de avisos solo interrumpe con ciertas cosas. No es así: **saca en
+ventana todas las notificaciones sin ver, una detrás de otra, sean del tipo que sean.**
+
+### Qué he hecho
+
+1. Las 32 ya enviadas, **marcadas como vistas**. No se han borrado (queda el registro),
+   pero dejan de aparecer. Esto paró los avisos al momento.
+2. **Apagado el aviso en las tres empresas**, con el interruptor que ya existía en
+   Ajustes → Herramientas → Notificaciones.
+3. Y desactivado también por dentro, para que no vuelva solo en una actualización.
+
+### Lo pendiente se sigue viendo, sin molestar
+
+No se pierde nada. Los 21 productos siguen ahí, en dos sitios que no interrumpen:
+
+- El **contador en el panel de Ágora** del escritorio de Logística.
+- La pantalla **Logística → Altas de Ágora**, con el botón puesto en cada uno.
+
+---
+
+### ⚠️ Una cosa que conviene que sepas, y que no es de mi aviso
+
+El problema de fondo es que **cualquier notificación bloquea la pantalla entera**. El mío
+solo lo hizo evidente porque creaba 21 de golpe.
+
+Ahora mismo hay **36 avisos pendientes de otros tipos** (comunicados, liquidaciones…) en
+esa misma cola. Esos son legítimos y no los he tocado. Pero el día que alguien mande un
+comunicado a toda la plantilla, o se generen varias liquidaciones a la vez, va a pasar lo
+mismo.
+
+> **Sugerencia:** que la ventana que interrumpe se reserve a lo que de verdad exige parar
+> —firmar algo, una liquidación— y que el resto vaya a la campana, que para eso está. Es
+> vuestra zona, así que lo dejo dicho y decidís vosotros.
+
+Mi aviso volverá a activarse solo cuando eso esté resuelto. La condición exacta está
+escrita en el propio código para que no se olvide.
+
+---
+
 ## 📏 13-SEP — LAS «27 UNIDADES EN GRAMOS», MEDIDAS: SON 14, Y HAY UNA PEOR QUE EL CACHOPO
 
 He ido a producción a contarlas antes de pasárselas a Iván, y el número no cuadra con el
