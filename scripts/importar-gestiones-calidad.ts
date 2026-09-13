@@ -20,8 +20,20 @@
  * posición: hay tres formatos distintos —2024 con 17 columnas, 2025 y 2026 con
  * 18, y HABANA 2024 con solo 7— y todos llaman igual a lo que importa.
  *
- * El enganche es por TELÉFONO. No hay identificador común entre la hoja y la
- * base: el "ID lead" de la hoja es de Go High Level y no se guardó.
+ * El enganche es por TELÉFONO y, si no hay, por NOMBRE. No existe identificador
+ * común entre la hoja y la base: el "ID lead" es de Go High Level y no se
+ * guardó.
+ *
+ * Los dos criterios hacen falta porque cada plataforma trae una cosa:
+ *   · Go High Level da el teléfono —era WhatsApp—, y engancha por ahí: 201.
+ *   · CoverManager casi nunca lo trae (9 de 2.620 valoraciones) pero sí el
+ *     nombre completo de quien reservó: 87 enganchan por nombre y solo 33 por
+ *     teléfono.
+ *   · Google no da ni teléfono ni correo, solo el nombre del autor.
+ *
+ * Un nombre que aparece en DOS valoraciones distintas no se engancha: no se
+ * puede saber a cuál de las dos se refería la gestión, y colgarla de la que no
+ * es sería peor que dejarla fuera. Se cuentan aparte para poder revisarlas.
  */
 
 import { readFileSync } from "node:fs";
@@ -61,6 +73,20 @@ function estadoGestion(valor: string): string | null {
   return null;
 }
 
+/**
+ * Nombre reducido a lo comparable: sin tildes, sin signos y en minúsculas.
+ * "MARÍA JOSÉ PÉREZ" y "Maria Jose Perez" son la misma persona.
+ */
+function claveNombre(valor: string): string {
+  return valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Teléfono en solo dígitos y sin el 34, igual que `bh_normalize_telefono`. */
 function normalizarTelefono(valor: string): string | null {
   const d = valor.replace(/\D/g, "");
@@ -87,6 +113,7 @@ interface Gestion {
   empresa: string;
   anio: string;
   telefono: string | null;
+  nombre: string | null;
   coge: string | null;
   estado: string | null;
   observaciones: string | null;
@@ -124,12 +151,13 @@ function leerHoja(ruta: string): Gestion[] {
         empresa,
         anio,
         telefono: normalizarTelefono(buscar("telefono")),
+        nombre: buscar("nombre") || null,
         coge: cogeTelefono(buscar("coge")),
         estado: estadoGestion(buscar("estado")),
         observaciones: buscar("observaciones") || null,
       };
     })
-    .filter((g) => g.telefono || g.observaciones);
+    .filter((g) => g.telefono || g.nombre);
 }
 
 async function main() {
@@ -167,50 +195,88 @@ async function main() {
 
   // Las valoraciones de cada empresa, indexadas por teléfono. Se leen de una
   // vez: hacer una consulta por gestión serían 573 idas y vueltas.
-  const porEmpresa = new Map<string, Map<string, { id: string; fecha: string | null; gestionada: boolean }[]>>();
+  type Fila = { id: string; fecha: string | null; gestionada: boolean };
+  const porEmpresa = new Map<
+    string,
+    { porTelefono: Map<string, Fila[]>; porNombre: Map<string, Fila[]> }
+  >();
   for (const [nombre, id] of idDe) {
-    const indice = new Map<string, { id: string; fecha: string | null; gestionada: boolean }[]>();
+    const porTelefono = new Map<string, Fila[]>();
+    const porNombre = new Map<string, Fila[]>();
     for (let desde = 0; ; desde += 1000) {
       const { data, error } = await supabase
         .from("resenas")
-        .select("id, telefono, fecha_registro, estado_gestion")
+        .select("id, telefono, nombre_comensal, fecha_registro, estado_gestion")
         .eq("empresa_id", id)
-        .not("telefono", "is", null)
         .range(desde, desde + 999);
       if (error) throw error;
       for (const r of data ?? []) {
-        const tel = normalizarTelefono((r.telefono as string) ?? "");
-        if (!tel) continue;
-        if (!indice.has(tel)) indice.set(tel, []);
-        indice.get(tel)!.push({
+        const fila: Fila = {
           id: r.id as string,
           fecha: (r.fecha_registro as string | null) ?? null,
           gestionada: !!r.estado_gestion,
-        });
+        };
+        const tel = normalizarTelefono((r.telefono as string) ?? "");
+        if (tel) {
+          if (!porTelefono.has(tel)) porTelefono.set(tel, []);
+          porTelefono.get(tel)!.push(fila);
+        }
+        // Nombres de menos de cinco letras fuera: "Ana" o "J M" casarían con
+        // media base y engancharían la gestión a quien no toca.
+        const clave = claveNombre((r.nombre_comensal as string) ?? "");
+        if (clave.length > 4) {
+          if (!porNombre.has(clave)) porNombre.set(clave, []);
+          porNombre.get(clave)!.push(fila);
+        }
       }
       if (!data || data.length < 1000) break;
     }
-    porEmpresa.set(nombre, indice);
+    porEmpresa.set(nombre, { porTelefono, porNombre });
   }
 
   const gestiones = rutas.flatMap(leerHoja);
   console.log(`${gestiones.length} gestiones en ${rutas.length} hojas`);
   if (!aplicar) console.log("SIMULACIÓN (sin --aplicar no se escribe nada)\n");
 
-  const cuenta = { enganchadas: 0, sinTelefono: 0, sinValoracion: 0, yaTenian: 0 };
+  const cuenta = {
+    enganchadas: 0,
+    porNombre: 0,
+    desempatadasPorAnio: 0,
+    ambiguas: 0,
+    sinValoracion: 0,
+    yaTenian: 0,
+  };
 
   for (const g of gestiones) {
-    if (!g.telefono) {
-      cuenta.sinTelefono++;
-      continue;
-    }
-    const empresaId = idDe.get(g.empresa);
-    if (!empresaId) continue;
+    const indice = porEmpresa.get(g.empresa);
+    if (!indice) continue;
 
     // La valoración de esa persona en esa empresa. Si tiene varias se coge la
     // del año de la hoja: una gestión de 2025 es de la visita de 2025, no de
     // la de 2024.
-    const lista = porEmpresa.get(g.empresa)?.get(g.telefono) ?? [];
+    let lista = g.telefono ? (indice.porTelefono.get(g.telefono) ?? []) : [];
+    let via: "telefono" | "nombre" = "telefono";
+    if (lista.length === 0 && g.nombre) {
+      const clave = claveNombre(g.nombre);
+      const porNombre = clave.length > 4 ? (indice.porNombre.get(clave) ?? []) : [];
+      // Varias valoraciones con el mismo nombre: no es que la persona no esté,
+      // es que está dos veces —volvió otro año— y hay que decidir a cuál iba la
+      // gestión. El AÑO de la hoja lo resuelve casi siempre: una gestión de la
+      // hoja de 2025 es de la visita de 2025. Solo cuando ni el año desempata
+      // se deja fuera, porque colgarla de la que no es sería peor que dejarla.
+      if (porNombre.length > 1) {
+        const delAnio = porNombre.filter((r) => r.fecha?.startsWith(g.anio));
+        if (delAnio.length !== 1) {
+          cuenta.ambiguas++;
+          continue;
+        }
+        lista = delAnio;
+        cuenta.desempatadasPorAnio++;
+      } else {
+        lista = porNombre;
+      }
+      via = "nombre";
+    }
     if (lista.length === 0) {
       cuenta.sinValoracion++;
       continue;
@@ -222,6 +288,7 @@ async function main() {
     }
     elegida.gestionada = true;
     cuenta.enganchadas++;
+    if (via === "nombre") cuenta.porNombre++;
     if (!aplicar) continue;
 
     const { error } = await supabase
@@ -236,8 +303,13 @@ async function main() {
     if (error) throw error;
   }
 
-  console.log(`${aplicar ? "escritas" : "engancharían"}: ${cuenta.enganchadas}`);
-  console.log(`sin teléfono en la hoja: ${cuenta.sinTelefono}`);
+  console.log(
+    `${aplicar ? "escritas" : "engancharían"}: ${cuenta.enganchadas} (${cuenta.porNombre} por nombre)`,
+  );
+  console.log(
+    `nombre repetido resuelto por el año: ${cuenta.desempatadasPorAnio}`,
+  );
+  console.log(`nombre repetido sin poder decidir: ${cuenta.ambiguas}`);
   console.log(`sin valoración a la que colgarse: ${cuenta.sinValoracion}`);
   console.log(`ya tenían gestión: ${cuenta.yaTenian}`);
 }
