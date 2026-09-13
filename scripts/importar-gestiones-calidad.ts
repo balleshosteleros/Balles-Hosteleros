@@ -44,6 +44,7 @@ import * as XLSX from "xlsx";
 /** Cómo se llama cada dato en las hojas. Se compara en minúsculas y por prefijo. */
 const COLUMNAS: Record<string, string[]> = {
   nombre: ["nombre", "cliente"],
+  registro: ["fecha del registro", "fecha registro"],
   telefono: ["teléfono", "telefono"],
   sesion: ["fecha de la sesión", "fecha de la sesion"],
   coge: ["coge el telefono", "coge el teléfono"],
@@ -87,6 +88,35 @@ function claveNombre(valor: string): string {
     .trim();
 }
 
+/**
+ * La fecha de la hoja a "AAAA-MM-DD". Excel las devuelve como Date o como
+ * texto según la columna, y algunas filas traen basura ("16/0").
+ */
+function fechaIso(valor: string): string | null {
+  // Excel guarda las fechas como número de días desde el 30-12-1899, y así
+  // llegan: "45662" es el 04-01-2025. Sin esto no había fecha con la que
+  // desempatar y las visitas repetidas se quedaban todas fuera.
+  if (/^\d{5}$/.test(valor)) {
+    const ms = (Number(valor) - 25569) * 86400000;
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(valor);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const es = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(valor);
+  if (es) {
+    return `${es[3]}-${es[2].padStart(2, "0")}-${es[1].padStart(2, "0")}`;
+  }
+  return null;
+}
+
+/** Días entre dos fechas "AAAA-MM-DD". */
+function diasEntre(a: string, b: string): number {
+  return Math.abs(
+    (new Date(a + "T12:00:00").getTime() - new Date(b + "T12:00:00").getTime()) /
+      86400000,
+  );
+}
+
 /** Teléfono en solo dígitos y sin el 34, igual que `bh_normalize_telefono`. */
 function normalizarTelefono(valor: string): string | null {
   const d = valor.replace(/\D/g, "");
@@ -114,6 +144,8 @@ interface Gestion {
   anio: string;
   telefono: string | null;
   nombre: string | null;
+  /** Día de la visita según la hoja, "AAAA-MM-DD". Desempata los nombres repetidos. */
+  fecha: string | null;
   coge: string | null;
   estado: string | null;
   observaciones: string | null;
@@ -152,6 +184,7 @@ function leerHoja(ruta: string): Gestion[] {
         anio,
         telefono: normalizarTelefono(buscar("telefono")),
         nombre: buscar("nombre") || null,
+        fecha: fechaIso(buscar("registro")) ?? fechaIso(buscar("sesion")),
         coge: cogeTelefono(buscar("coge")),
         estado: estadoGestion(buscar("estado")),
         observaciones: buscar("observaciones") || null,
@@ -242,6 +275,7 @@ async function main() {
     enganchadas: 0,
     porNombre: 0,
     desempatadasPorAnio: 0,
+    desempatadasPorFecha: 0,
     ambiguas: 0,
     sinValoracion: 0,
     yaTenian: 0,
@@ -266,12 +300,28 @@ async function main() {
       // se deja fuera, porque colgarla de la que no es sería peor que dejarla.
       if (porNombre.length > 1) {
         const delAnio = porNombre.filter((r) => r.fecha?.startsWith(g.anio));
-        if (delAnio.length !== 1) {
+        if (delAnio.length === 1) {
+          lista = delAnio;
+          cuenta.desempatadasPorAnio++;
+        } else if (delAnio.length > 1 && g.fecha) {
+          // Varias visitas el mismo año: manda la MÁS CERCANA al día que
+          // apuntó calidad. Se exige que esté a menos de un mes; más lejos ya
+          // no es "esa visita" sino otra distinta, y se prefiere no adivinar.
+          const conDistancia = delAnio
+            .filter((r) => r.fecha)
+            .map((r) => ({ fila: r, dias: diasEntre(r.fecha as string, g.fecha as string) }))
+            .sort((a, b) => a.dias - b.dias);
+          if (conDistancia.length > 0 && conDistancia[0].dias <= 31) {
+            lista = [conDistancia[0].fila];
+            cuenta.desempatadasPorFecha++;
+          } else {
+            cuenta.ambiguas++;
+            continue;
+          }
+        } else {
           cuenta.ambiguas++;
           continue;
         }
-        lista = delAnio;
-        cuenta.desempatadasPorAnio++;
       } else {
         lista = porNombre;
       }
@@ -308,6 +358,9 @@ async function main() {
   );
   console.log(
     `nombre repetido resuelto por el año: ${cuenta.desempatadasPorAnio}`,
+  );
+  console.log(
+    `nombre repetido resuelto por la fecha más cercana: ${cuenta.desempatadasPorFecha}`,
   );
   console.log(`nombre repetido sin poder decidir: ${cuenta.ambiguas}`);
   console.log(`sin valoración a la que colgarse: ${cuenta.sinValoracion}`);
