@@ -1086,9 +1086,18 @@ export function ListadoReservasPanel({
     setPagina(1);
   }, [busqueda, filtros, verComprasTicket]);
 
-  // Cuántas reservas hay en lo que se está mirando. Las compras no cuentan:
-  // no son reservas, y mezclarlas falsearía el "N de M".
-  const totalReservas = filtradas.filter((f) => !f.esCompraTicket).length;
+  // Cuántas reservas hay en lo que se está mirando.
+  //
+  // Quien pagó su ticket cuenta como reserva aunque todavía no haya elegido
+  // día: ya tiene su código, así que la mesa está comprometida y solo falta
+  // ponerle fecha. Lo que NO cuenta es el que se quedó sin pagar —ése no tiene
+  // nada reservado y ya se cuenta aparte, en Abandonos.
+  const totalReservas = filtradas.filter(
+    (f) =>
+      !f.esCompraTicket ||
+      f.ticketEstadoCompra === "pagada" ||
+      f.ticketEstadoCompra === "canjeada",
+  ).length;
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const paginaActual = Math.min(pagina, totalPaginas);
   const visibles = filtradas.slice(
@@ -1129,6 +1138,10 @@ export function ListadoReservasPanel({
     // Cuántos TICKETS se han vendido, no cuánto dinero: el dinero ya es la
     // cifra grande de la tarjeta, y debajo lo que falta saber es cuántos son.
     let ticketUnidadesN = 0;
+    // Cuántas filas componen el total cobrado. Se cuenta la FILA, no cada
+    // concepto: una reserva con garantía y política cobradas es un cobro, no
+    // dos, y sumarla dos veces haría que el recuento no cuadrase con la lista.
+    let cobrosN = 0;
     // Abandonos: personas que dejaron sus datos y no llegaron a pagar. Se
     // cuentan PERSONAS, no plazas: cada una es un telefono al que llamar.
     let ticketSinPagarN = 0;
@@ -1160,6 +1173,15 @@ export function ListadoReservasPanel({
       if (f.cancelacionEstado === "pendiente" || f.cancelacionEstado === "guardada") {
         cancelacionPendienteN += 1;
       }
+
+      const aportaDinero =
+        f.garantiaEstado === "cobrada" ||
+        f.cancelacionEstado === "cobrada" ||
+        (f.esTicket &&
+          (!f.esCompraTicket ||
+            f.ticketEstadoCompra === "pagada" ||
+            f.ticketEstadoCompra === "canjeada"));
+      if (aportaDinero) cobrosN += 1;
 
       if (f.esTicket) {
         // Una compra a medias enseña su importe en la tabla para saber qué
@@ -1207,6 +1229,7 @@ export function ListadoReservasPanel({
       ticketSinPagarN,
       ticketSinPagarEur,
       ticketUnidadesN,
+      cobrosN,
       sinDecidir,
       sinDecidirN,
     };
@@ -1282,7 +1305,7 @@ export function ListadoReservasPanel({
             importe={
               resumen.garantiaCobrada + resumen.cancelacionCobrada + resumen.ticketCobrado
             }
-            detalle="Garantías + cancelaciones + tickets, menos devoluciones"
+            detalle={`${formatNumero(resumen.cobrosN)} ${resumen.cobrosN === 1 ? "cobro" : "cobros"} de ${formatNumero(totalReservas)} ${totalReservas === 1 ? "reserva" : "reservas"}`}
             tono="bien"
           />
           {/* Lo primero, porque es lo único que reclama que alguien decida. */}
