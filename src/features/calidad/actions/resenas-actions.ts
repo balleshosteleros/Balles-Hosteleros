@@ -238,7 +238,6 @@ export async function listResenas(): Promise<Resena[]> {
 export interface CrearResenaInput {
   nombre_comensal: string;
   telefono?: string | null;
-  email?: string | null;
   comentario?: string | null;
   rating?: number | null;
   origen?: OrigenResena;
@@ -254,7 +253,6 @@ export async function crearResena(input: CrearResenaInput) {
         empresa_id: empresaId,
         nombre_comensal: input.nombre_comensal,
         telefono: input.telefono ?? null,
-        email: input.email ?? null,
         comentario: input.comentario ?? null,
         rating: input.rating ?? null,
         origen: input.origen ?? "manual",
@@ -273,7 +271,6 @@ export async function crearResena(input: CrearResenaInput) {
 export interface ActualizarResenaInput {
   nombre_comensal?: string;
   telefono?: string | null;
-  email?: string | null;
   comentario?: string | null;
   rating?: number | null;
   respuesta_propietario?: string | null;

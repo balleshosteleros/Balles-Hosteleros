@@ -244,7 +244,6 @@ export async function marcarComoPublicada(resenaId: string) {
       .from("resenas")
       .update({
         respuesta_publicada_at: new Date().toISOString(),
-        respondida: true,
       })
       .eq("id", resenaId);
     if (error) throw error;

@@ -2,7 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getPlaceDetails,
   getGoogleMapsApiKey,
-  estadoDesdeRating,
 } from "@/lib/google/places";
 
 export interface SyncGoogleResult {
@@ -97,7 +96,6 @@ export async function syncResenasGoogleForEmpresa(
       const { error: errUpd } = await supabase
         .from("resenas")
         .update({
-          autor_avatar: rev.authorAvatar,
           autor_url: rev.authorUrl,
           comentario: rev.text || null,
           rating: rev.rating,
@@ -112,11 +110,9 @@ export async function syncResenasGoogleForEmpresa(
         nombre_comensal: rev.authorName,
         comentario: rev.text || null,
         rating: rev.rating,
-        estado: estadoDesdeRating(rev.rating),
         origen: "google",
         external_id: rev.externalId,
         autor_url: rev.authorUrl,
-        autor_avatar: rev.authorAvatar,
         fecha_reseña: rev.time,
         synced_at: nowIso,
       });
@@ -158,7 +154,6 @@ async function guardarMetricaDiaria(
       {
         empresa_id: empresaId,
         fecha: hoy,
-        plataforma: "google",
         total_resenas: details.totalRatings,
         nota_media: details.rating,
         updated_at: new Date().toISOString(),

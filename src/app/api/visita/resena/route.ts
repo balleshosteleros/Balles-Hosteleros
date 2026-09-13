@@ -43,12 +43,6 @@ function service() {
   );
 }
 
-function ratingAEstado(rating: number): string {
-  if (rating >= 4) return "excelente";
-  if (rating === 3) return "regular";
-  return "malo";
-}
-
 export async function POST(req: Request) {
   let json: unknown;
   try {
@@ -156,7 +150,6 @@ export async function POST(req: Request) {
     const { error: errIns } = await supabase.from("resenas").insert({
       empresa_id: lead.empresa_id,
       nombre_comensal: lead.nombre ?? "Comensal",
-      email: lead.email ?? null,
       telefono: lead.telefono ?? null,
       comentario: comentario || null,
       rating,
@@ -166,10 +159,8 @@ export async function POST(req: Request) {
       rating_comida: ratingComida ?? null,
       rating_servicio: ratingServicio ?? null,
       rating_ambiente: ratingAmbiente ?? null,
-      estado: ratingAEstado(rating),
       origen: lead.origen,
       cliente_id: lead.cliente_id,
-      reserva_id: lead.reserva_id,
       external_id: token,
       fecha_reseña: new Date().toISOString(),
     });
