@@ -359,6 +359,55 @@ export async function crearEntrega(input: {
  * y firmable, así que el trabajador podía acabar firmando dos veces la misma
  * entrega y la ficha solo guardaba la última: la otra quedaba huérfana.
  */
+/**
+ * Recuerda su firma a todo el que tenga entregas esperando.
+ *
+ * POR QUÉ ESTO VIVE EN LA APP Y NO EN UN SCRIPT
+ *   Un envío disparado desde un portátil compone los enlaces con la dirección
+ *   local, y el correo sale «bien» con un enlace que solo funciona en esa
+ *   máquina. Pasó con las 32 primeras actas: nadie podía firmar. Desde la app el
+ *   enlace lo resuelve el servidor de producción, así que no puede nacer roto.
+ *
+ * Un correo por pieza y por persona, nunca uno con todos en copia: cada acta es
+ * un documento distinto con su propia firma.
+ *
+ * Renueva el enlace de cada una, así que el anterior deja de valer. Es lo
+ * correcto: el trabajador debe tener un solo enlace vivo, el último que recibió.
+ */
+export async function recordarEntregasPendientesDeFirma() {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
+    const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
+
+    const { data: pendientes, error } = await db
+      .from("entregas_material")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "pendiente_firma")
+      .order("fecha", { ascending: true });
+    if (error) throw error;
+
+    const ids = ((pendientes ?? []) as { id: string }[]).map((f) => f.id);
+    if (ids.length === 0) {
+      return { ok: true as const, enviados: 0, fallidos: 0 };
+    }
+
+    let enviados = 0;
+    const fallidos: string[] = [];
+    for (const id of ids) {
+      const res = await reenviarEntregaAFirma(id);
+      if (res.ok) enviados += 1;
+      else fallidos.push(res.error);
+    }
+
+    revalidatePath("/rrhh/entregas");
+    return { ok: true as const, enviados, fallidos: fallidos.length };
+  } catch (err) {
+    return { ok: false as const, error: mensajeError(err) };
+  }
+}
+
 export async function reenviarEntregaAFirma(entregaId: string) {
   try {
     const { supabase, empresaId, userId } = await getAppContext();

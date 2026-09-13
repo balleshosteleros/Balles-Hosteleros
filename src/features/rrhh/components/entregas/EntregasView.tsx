@@ -29,6 +29,7 @@ import {
   pedirDevolucion,
   cancelarDevolucion,
   reenviarEntregaAFirma,
+  recordarEntregasPendientesDeFirma,
 } from "@/features/rrhh/actions/entregas-actions";
 import {
   ESTADO_LABEL,
@@ -88,6 +89,8 @@ export function EntregasView() {
   /** Entrega que se está dando de baja por deterioro. Null = diálogo cerrado. */
   const [mermaDe, setMermaDe] = useState<Entrega | null>(null);
   const [noDevueltaDe, setNoDevueltaDe] = useState<Entrega | null>(null);
+  /** True mientras se recuerdan las firmas pendientes a todo el mundo. */
+  const [recordando, setRecordando] = useState(false);
   /** Entrega cuyo historial se está mirando. Null = diálogo cerrado. */
   const [historialDe, setHistorialDe] = useState<Entrega | null>(null);
   const { confirm, dialog } = useConfirmDelete();
@@ -189,6 +192,33 @@ export function EntregasView() {
     void cargar();
   }
 
+  /**
+   * Le recuerda su firma a todo el que tenga entregas esperando. Un correo por
+   * pieza, con el enlace renovado: el anterior deja de valer.
+   */
+  async function recordarATodos() {
+    setRecordando(true);
+    const res = await recordarEntregasPendientesDeFirma();
+    setRecordando(false);
+    if (!res.ok) { toast.error(res.error); return; }
+    if (res.enviados === 0 && res.fallidos === 0) {
+      toast.info("No hay ninguna entrega esperando firma");
+      return;
+    }
+    if (res.fallidos > 0) {
+      toast.warning(
+        `${res.enviados} recordatorio(s) enviados. ${res.fallidos} no salieron; puedes reintentarlos uno a uno desde la lista.`,
+      );
+    } else {
+      toast.success(
+        res.enviados === 1
+          ? "Recordatorio enviado"
+          : `${res.enviados} recordatorios enviados`,
+      );
+    }
+    void cargar();
+  }
+
   /** Vuelve a mandar el acta de entrega cuando el correo no salió o caducó. */
   async function reenviarFirmaEntrega(e: Entrega) {
     setAccionando(e.id);
@@ -232,6 +262,26 @@ export function EntregasView() {
         orden={orden}
         onOrdenChange={setOrden}
         extraDerecha={
+          <>
+            {/* Recordar la firma a quien la tenga pendiente. Solo aparece si hay
+                a quién recordársela: un botón que no hace nada estorba. */}
+            {stats.pendientesFirma > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9"
+                disabled={recordando}
+                onClick={() => void recordarATodos()}
+                title="Enviar de nuevo el acta a quien no ha firmado"
+              >
+                {recordando ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4 mr-1" />
+                )}
+                Recordar ({stats.pendientesFirma})
+              </Button>
+            )}
           <Button
             size="icon"
             variant="outline"
@@ -242,6 +292,7 @@ export function EntregasView() {
           >
             <Settings className="h-4 w-4" strokeWidth={1.75} />
           </Button>
+          </>
         }
       />
 
