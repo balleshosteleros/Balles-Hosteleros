@@ -46,8 +46,10 @@ export function ValoracionComunicado({
 
   return (
     <div className={cn("flex items-center justify-end gap-2", className)}>
-      <span className="mr-1 text-xs text-muted-foreground">¿Te ha parecido útil?</span>
-
+      {/* Sin rótulo: dos pulgares no necesitan que nadie explique para qué son,
+          y la pregunta escrita solo añadía ruido (Iván, 13-09-2026). Lo que
+          hace cada botón sigue dicho en su `aria-label`, para quien lo lea con
+          un lector de pantalla. */}
       <button
         type="button"
         onClick={() => void votar(true)}
