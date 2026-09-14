@@ -35,7 +35,6 @@ import Link from "next/link";
 import { CalendarDays, ChevronDown, Settings, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  ESTADOS_RESERVA,
   ESTADO_DOT_CLASS,
   ESTADO_RESERVA_LABELS,
   origenLabel,
@@ -1218,13 +1217,10 @@ export function ClientesView() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="cli-telefono" className="flex items-center gap-1.5">
-                    Teléfono
-                    {/* Solo la bandera, sin el nombre del país: el prefijo va
-                        justo debajo en su selector y decía lo mismo dos
-                        veces. */}
-                    <BanderaTelefono telefono={borrador.telefono} />
-                  </Label>
+                    {/* Sin bandera en el rótulo: el selector de prefijo que va
+                        justo debajo ya la lleva, y verla dos veces seguidas no
+                        añadía nada. */}
+                    <Label htmlFor="cli-telefono">Teléfono</Label>
                     {/* Prefijo pegado al número y elegido de una lista: antes era
                         un campo suelto y a mano, así que la mitad de las fichas
                         se quedaban sin él o con un valor inventado. */}
@@ -1377,103 +1373,6 @@ export function ClientesView() {
                       {clasifFicha}
                     </Badge>
                   </div>
-                </div>
-
-                {/*
-                  Visitas y última visita son datos CALCULADOS de las reservas,
-                  no campos que se guarden: por eso se muestran, no se editan.
-                */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/*
-                    Reservas: TODAS las que ha hecho, sea cual sea su estado
-                    (futuras, canceladas, no-show incluidas). Es el dato que
-                    responde "¿cuántas veces ha reservado?", distinto de las
-                    visitas, que solo cuentan las que acabó cumpliendo. Sin él,
-                    una ficha recién creada con dos reservas para esta noche
-                    salía con un 0 que parecía un fallo.
-                  */}
-                  <div>
-                    <Label className="text-muted-foreground">Reservas</Label>
-                    <p>{fichaExtra.historico.length}</p>
-                  </div>
-                  <div>
-                    {/*
-                      "Ya vino": las reservas PASADAS a las que asistió. El
-                      recuadro de estados cuenta todas, incluidas las futuras, así
-                      que 5 confirmadas pueden ser 4 visitas + 1 por venir. Sin
-                      esta aclaración en el título, la diferencia parece un fallo.
-                    */}
-                    <Label className="text-muted-foreground">
-                      Visitas (ya vino)
-                    </Label>
-                    <p>{fichaExtra.visitas}</p>
-                  </div>
-                  <div>
-                    <Label className="text-muted-foreground">Última visita</Label>
-                    <p>
-                      {fichaExtra.ultimaVisita
-                        ? fechaLarga(fichaExtra.ultimaVisita)
-                        : "—"}
-                    </p>
-                  </div>
-                  {/*
-                    La nota que nos ha puesto, resumida. El detalle de cada
-                    valoración vive en su pestaña: aquí solo se ve cómo nos
-                    valora y se entra a leerlo.
-                  */}
-                  <div>
-                    <Label className="text-muted-foreground">Nota media</Label>
-                    {fichaExtra.ratingMedio === null ? (
-                      <p className="text-muted-foreground">Sin valoraciones</p>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setTabFicha("valoraciones")}
-                        className="flex items-center gap-1.5 text-left hover:underline"
-                      >
-                        <Estrellas nota={fichaExtra.ratingMedio} size={13} />
-                        <span className="font-medium">
-                          {formatNota(fichaExtra.ratingMedio)}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          ({fichaExtra.resenas.length})
-                        </span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/*
-                  Resumen de comportamiento: de sus N reservas, cuántas en cada
-                  estado. Es la lectura rápida de si un cliente cancela mucho o
-                  no se presenta, sin tener que contar la lista a mano.
-                */}
-                <div className="pt-2 border-t space-y-1.5">
-                  <Label className="text-muted-foreground">
-                    Reservas por estado (todas, también las futuras)
-                  </Label>
-                  {fichaExtra.historico.length === 0 ? (
-                    <p className="text-muted-foreground">Sin reservas todavía.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {ESTADOS_RESERVA.filter(
-                        (e) => (fichaExtra.porEstado[e] ?? 0) > 0,
-                      ).map((e) => (
-                        <span
-                          key={e}
-                          className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
-                        >
-                          <span className={cn("h-2 w-2 rounded-full", ESTADO_DOT_CLASS[e])} />
-                          <span className="text-muted-foreground">
-                            {ESTADO_RESERVA_LABELS[e]}
-                          </span>
-                          <span className="font-medium">
-                            {fichaExtra.porEstado[e]}
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
                 <div className="space-y-1.5">
