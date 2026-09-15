@@ -123,6 +123,14 @@ export function PointsPill({ inicial = null, href = "/m/points", className }: Pr
   // de que el servidor ya haya resuelto la suya— se vuelve a pedir. Si no, se
   // quedaba el saldo de una empresa debajo del logo de otra (Iván, 12-sep).
   const empresaDeLosDatos = datos?.empresaId ?? null;
+  // El rótulo de la ventana solo dice la empresa cuando el saldo que se enseña
+  // YA es el suyo. Mientras se está recargando (al cambiar de empresa) el saldo
+  // todavía es el de la anterior, y ponerle el nombre nuevo encima sería decir
+  // una mentira: se queda en «Points» a secas hasta que cuadren.
+  const nombreEmpresaDeLosDatos =
+    empresaDeLosDatos && empresaDeLosDatos === empresaDbId
+      ? (empresaVisible?.nombre ?? null)
+      : null;
   useEffect(() => {
     if (!empresaDbId) return;
     if (empresaDeLosDatos === empresaDbId) return;
