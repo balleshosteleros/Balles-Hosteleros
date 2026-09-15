@@ -5,7 +5,6 @@ import { getAppContext } from "@/lib/supabase/get-context";
 // es "use server" y ahí solo pueden salir funciones async.
 import type { SubtipoAusencia } from "@/features/rrhh/lib/subtipos-ausencia";
 
-
 async function resolveEmpresaUuid(
   supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
   idOrSlug: string,
@@ -83,19 +82,6 @@ export type TipoFichajeInput = {
   requiere_solicitud?: boolean;
   activo?: boolean;
 };
-
-// ─── Helpers ───────────────────────────────────────────────────────────
-async function nextOrden(table: "tipos_ausencia" | "tipos_fichaje", empresaId: string) {
-  const { supabase } = await getAppContext();
-  const { data } = await supabase
-    .from(table)
-    .select("orden")
-    .eq("empresa_id", empresaId)
-    .order("orden", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return ((data?.orden as number | undefined) ?? 0) + 1;
-}
 
 // ─── TIPOS AUSENCIA ────────────────────────────────────────────────────
 export async function listTiposAusencia(empresaIdOrSlug?: string) {
@@ -209,73 +195,6 @@ export async function listTiposFichaje(empresaIdOrSlug?: string) {
   }
 }
 
-export async function createTipoFichaje(
-  input: TipoFichajeInput,
-  replicarEn?: string[],
-) {
-  try {
-    const { supabase, empresaId: empresaIdProfile, userId } = await getAppContext();
-    const targetSlugs =
-      replicarEn && replicarEn.length > 0 ? replicarEn : [empresaIdProfile ?? ""];
-    if (targetSlugs.length === 0 || !targetSlugs[0])
-      return { ok: false, error: "No autenticado" };
-
-    let primera: TipoFichajeRow | null = null;
-    for (const idOrSlug of targetSlugs) {
-      const empresaId = await resolveEmpresaUuid(supabase, idOrSlug);
-      if (!empresaId) continue;
-      const row = await insertTipoFichaje(supabase, empresaId, userId, input);
-      if (row && !primera) primera = row;
-    }
-    if (!primera) return { ok: false, error: "No se pudo crear" };
-    return { ok: true, data: primera };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[horarios-config] createTipoFichaje:", msg);
-    return { ok: false, error: msg };
-  }
-}
-
-async function insertTipoFichaje(
-  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
-  empresaId: string,
-  userId: string | null,
-  input: TipoFichajeInput,
-): Promise<TipoFichajeRow | null> {
-  try {
-    const nombre = input.nombre.trim();
-    const codigo = input.codigo.trim().toUpperCase();
-    if (!nombre || !codigo) return null;
-
-    const orden = await nextOrden("tipos_fichaje", empresaId);
-    const { data, error } = await supabase
-      .from("tipos_fichaje")
-      .insert({
-        empresa_id: empresaId,
-        nombre,
-        codigo,
-        descripcion: input.descripcion?.toString().trim() || null,
-        computa_tiempo: input.computa_tiempo ?? true,
-        color: input.color ?? "slate",
-        requiere_solicitud: input.requiere_solicitud ?? false,
-        activo: input.activo ?? true,
-        orden,
-        created_by: userId,
-      })
-      .select()
-      .single();
-    if (error) {
-      console.error("[horarios-config] insertTipoFichaje:", error.message);
-      return null;
-    }
-    return data as TipoFichajeRow;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[horarios-config] insertTipoFichaje:", msg);
-    return null;
-  }
-}
-
 export async function updateTipoFichaje(id: string, input: Partial<TipoFichajeInput> & { orden?: number }) {
   try {
     const { supabase } = await getAppContext();
@@ -307,15 +226,3 @@ export async function updateTipoFichaje(id: string, input: Partial<TipoFichajeIn
   }
 }
 
-export async function deleteTipoFichaje(id: string) {
-  try {
-    const { supabase } = await getAppContext();
-    const { error } = await supabase.from("tipos_fichaje").delete().eq("id", id);
-    if (error) throw error;
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[horarios-config] deleteTipoFichaje:", msg);
-    return { ok: false, error: msg };
-  }
-}

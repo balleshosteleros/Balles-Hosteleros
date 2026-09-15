@@ -23,7 +23,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -33,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle, CalendarDays, Loader2, Sparkles, UserMinus } from "lucide-react";
+import { Building2, CalendarDays, Loader2, Sparkles, UserMinus, UserRound } from "lucide-react";
 import {
   etiquetaTipoBajaEmpresa,
   TIPOS_BAJA_EMPRESA,
@@ -196,12 +195,14 @@ export function BajaContratoEmpresaDialog({
         </DialogHeader>
 
         {/* Aviso: esta baja la causa la EMPRESA, no el trabajador. */}
-        <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <p>
-            Esto es para causar la baja <strong>por parte de la empresa</strong> (despido, fin de
-            contrato, etc.). Si es el trabajador quien quiere irse, debe solicitarlo él mismo desde{" "}
-            <strong>Mis Paneles → Solicitudes</strong>.
+        <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <p className="flex gap-2">
+            <Building2 className="h-4 w-4 shrink-0 mt-0.5" />
+            <span><strong>La baja la causa la empresa</strong> (despido, fin de contrato): se tramita aquí.</span>
+          </p>
+          <p className="flex gap-2">
+            <UserRound className="h-4 w-4 shrink-0 mt-0.5" />
+            <span><strong>Se quiere ir el trabajador</strong>: la pide él, con su preaviso, desde Mis paneles → Solicitudes.</span>
           </p>
         </div>
 
@@ -239,7 +240,7 @@ export function BajaContratoEmpresaDialog({
             </p>
           </div>
 
-          {/* Hechos: van en la CARTA que firma el trabajador. */}
+          {/* Hechos: van en la CARTA que firma el trabajador Y en el aviso a la gestoría. */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2">
               <Label htmlFor="hechosBaja">
@@ -281,11 +282,7 @@ export function BajaContratoEmpresaDialog({
               rows={6}
             />
             <p className="text-xs text-muted-foreground">
-              Obligatorio. Es la descripción de la situación que aparece en la carta que recibe el
-              trabajador, y lo primero que se mira si esta baja acaba discutiéndose. Escribe lo que
-              haga falta: si ocupa dos hojas, la carta las tendrá. La IA solo reescribe lo que
-              pongas: si falta un dato lo deja marcado{" "}
-              <span className="font-mono">[entre corchetes]</span> para que lo completes.
+              Van en la carta que recibe el trabajador y, tal cual, en el aviso a la gestoría: los dos leen lo mismo.
             </p>
           </div>
 
@@ -296,7 +293,7 @@ export function BajaContratoEmpresaDialog({
               id="motivoBaja"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Detalle interno de la baja (se incluye en el aviso a la gestoría, no en la carta)."
+              placeholder="Lo que la gestoría necesite saber aparte de los hechos. No va en la carta."
               rows={2}
             />
           </div>

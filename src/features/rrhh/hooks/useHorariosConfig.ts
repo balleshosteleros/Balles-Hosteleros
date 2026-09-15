@@ -6,9 +6,7 @@ import {
   listTiposAusencia,
   updateTipoAusencia,
   listTiposFichaje,
-  createTipoFichaje,
   updateTipoFichaje,
-  deleteTipoFichaje,
   type TipoAusenciaRow,
   type TipoAusenciaInput,
   type TipoFichajeRow,
@@ -74,20 +72,6 @@ export function useTiposFichaje(empresaId?: string) {
     reload();
   }, [reload]);
 
-  const create = useCallback(
-    async (input: TipoFichajeInput, replicarEn?: string[]) => {
-      const res = await createTipoFichaje(input, replicarEn);
-      if (res.ok && res.data) {
-        setItems((prev) => [...prev, res.data!]);
-        toast.success("Tipo de fichaje creado");
-        return true;
-      }
-      toast.error(res.error ?? "No se pudo crear");
-      return false;
-    },
-    [],
-  );
-
   const update = useCallback(
     async (id: string, input: Partial<TipoFichajeInput> & { orden?: number }) => {
       const res = await updateTipoFichaje(id, input);
@@ -101,21 +85,5 @@ export function useTiposFichaje(empresaId?: string) {
     [],
   );
 
-  const remove = useCallback(
-    async (id: string) => {
-      const prev = items;
-      setItems((curr) => curr.filter((it) => it.id !== id));
-      const res = await deleteTipoFichaje(id);
-      if (!res.ok) {
-        setItems(prev);
-        toast.error(res.error ?? "No se pudo eliminar");
-        return false;
-      }
-      toast.success("Eliminado");
-      return true;
-    },
-    [items],
-  );
-
-  return { items, loading, reload, create, update, remove };
+  return { items, loading, reload, update };
 }
