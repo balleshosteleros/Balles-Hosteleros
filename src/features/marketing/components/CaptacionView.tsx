@@ -179,7 +179,9 @@ export function CaptacionView() {
       <p className="border-t pt-4 text-xs leading-relaxed text-muted-foreground">
         Los años anteriores a que se pusiera en marcha el software salen del histórico que
         se trajo de CoverManager, con su canal traducido al de aquí; de ahí en adelante son
-        las reservas de este sistema. Quedan fuera de estas cuentas{" "}
+        las reservas de este sistema. En aquel histórico el canal fino no viajó: lo que
+        entró por un portal de fuera consta como &quot;portal externo&quot; y no como
+        Google, Instagram o Facebook, porque de esos años no se sabe cuál de los tres era. Quedan fuera de estas cuentas{" "}
         {formatNumero(datos.sinOrigen.reservas)} reservas y{" "}
         {formatNumero(datos.sinOrigen.clientes)} fichas de cliente sin canal anotado: de
         esas no se sabe por dónde entraron.

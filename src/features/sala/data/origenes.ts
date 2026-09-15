@@ -62,13 +62,18 @@ const ALIAS: Record<string, string> = {
   FB: "FACEBOOK",
   GOOGLE_RWG: "GOOGLE",
   "RESERVE WITH GOOGLE": "GOOGLE",
-  // Canales heredados de CoverManager (migración 2022-2026). Cover rotulaba
-  // "terceros" a lo que entraba por portales externos: en nuestro caso solo
-  // estaba conectado Google, así que se leen como GOOGLE y no como un canal
-  // aparte. `SALA` es la que apuntó el personal desde el propio programa:
-  // en los informes del grupo eso siempre se ha llamado TELÉFONO, que es como
-  // entra (alguien llama y el personal la escribe).
-  TERCEROS: "GOOGLE",
+  // Canales heredados de CoverManager (migración 2022-2026). `SALA` es la que
+  // apuntó el personal desde el propio programa: en los informes del grupo eso
+  // siempre se ha llamado TELÉFONO, que es como entra (alguien llama y el
+  // personal la escribe).
+  //
+  // "TERCEROS" NO se traduce a Google, aunque durante un tiempo se hiciera: era
+  // el cajón de Cover para todo lo que entraba por un portal de fuera, y al
+  // reconstruir los canales con el prescriptor se vio que dentro había 276
+  // reservas de Instagram y 34 de Facebook además de las de Google. Donde se
+  // conserva el prescriptor, el canal real ya está puesto; donde no (el
+  // histórico de 2021 y 2022, que llegó sin él), esto es todo lo que se sabe y
+  // se rotula como lo que es: un portal externo sin identificar.
   // La app movil de Cover era otra forma de reservar por internet: se lee
   // como WEB, igual que el navegador. Ese canal muere con Cover.
   APP: "WEB",
@@ -99,6 +104,8 @@ const LABELS: Record<string, string> = {
   EMAIL: "Email",
   AGORA: "Ágora",
   LISTA_ESPERA: "Lista de espera",
+  // Cajón de CoverManager: entró por un portal de fuera, pero no consta cuál.
+  TERCEROS: "Portal externo",
   // Canales que traia el prescriptor de CoverManager (2022-2026). Google e
   // Instagram van separados en pago y organico a proposito: es lo que permite
   // ver que trae la publicidad frente a lo que llega solo.
@@ -131,6 +138,8 @@ const COLORS: Record<string, string> = {
   EMAIL: "#0ea5e9",     // sky-500
   AGORA: "#a855f7",     // purple-500
   LISTA_ESPERA: "#7c3aed", // violet-600 — entró desde la lista de espera
+  // Gris cálido a propósito: no es un canal identificado, es un "no consta".
+  TERCEROS: "#78716c",      // stone-500
   // Mismo tono de familia que su canal de pago, un paso mas claro, para que
   // "Google" y "Google organico" se lean juntos de un vistazo en la grafica.
   GOOGLE_ORGANICO: "#86efac",   // green-300

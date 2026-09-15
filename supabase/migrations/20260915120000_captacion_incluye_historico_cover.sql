@@ -28,7 +28,12 @@ AS $$
     WHEN 'web'         THEN 'WEB'
     WHEN 'appmovil'    THEN 'WEB'
     WHEN 'app-movil'   THEN 'WEB'
-    WHEN 'terceros'    THEN 'GOOGLE'
+    -- OJO: 'terceros' NO es Google. Era el cajón de Cover para todo lo que
+    -- entraba por un portal de fuera; al reconstruir los canales con el
+    -- prescriptor se vio que dentro había Instagram (276) y Facebook (34)
+    -- además de Google. Este histórico llegó SIN prescriptor, así que se queda
+    -- en lo único que se sabe con certeza: un portal externo sin identificar.
+    WHEN 'terceros'    THEN 'TERCEROS'
     WHEN 'software'    THEN 'TELEFONO'
     WHEN 'sala'        THEN 'TELEFONO'
     WHEN 'waitinglist' THEN 'LISTA_ESPERA'
