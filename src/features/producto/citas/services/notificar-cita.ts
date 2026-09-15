@@ -15,103 +15,40 @@ import "server-only";
  *
  * Nunca lanza: un fallo de correo no puede tumbar una cita ya reservada.
  */
-import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, direccionRemitente } from "@/lib/email/send";
 import { citaConfirmacionEmail } from "@/lib/email/citas/confirmacion";
 import { construirIcs } from "@/lib/email/citas/ics";
-import { zonaHorariaDeConfig } from "@/features/empresa/lib/empresa-server";
-import { formatFechaEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
-
-/** "Europe/Madrid" → "Madrid". Lo que se le enseña a quien reserva. */
-function ciudadDeZona(tz: string): string {
-  const trozo = tz.split("/").pop() ?? tz;
-  return trozo.replace(/_/g, " ");
-}
+import { getSiteUrl } from "@/lib/site-url";
+import { datosCitaParaCorreo, ciudadDeZona } from "./datos-cita";
 
 export async function notificarCitaConfirmada(
   citaId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const admin = createAdminClient();
+    const datos = await datosCitaParaCorreo(citaId);
+    if (!datos) return { ok: false, error: "Cita no encontrada." };
 
-    const { data: filaCita } = await admin
-      .from("citas")
-      .select(
-        `id, empresa_id, inicio, fin, google_meet_url,
-         citas_calendarios(nombre, duracion_min),
-         clientes_sala(nombre, apellidos, email),
-         empleados(nombre, apellidos)`,
-      )
-      .eq("id", citaId)
-      .maybeSingle();
-
-    if (!filaCita) return { ok: false, error: "Cita no encontrada." };
-    const cita = filaCita as Record<string, unknown>;
-
-    const cliente = cita.clientes_sala as
-      | { nombre?: string | null; apellidos?: string | null; email?: string | null }
-      | null;
-    const destino = cliente?.email?.trim();
     // Sin correo no hay a quién escribir, y no es un error: una cita puede
     // haberse apuntado desde dentro sin dirección.
-    if (!destino) return { ok: true };
+    if (!datos.emailCliente) return { ok: true };
 
-    const empresaId = cita.empresa_id as string;
-    const { data: empresa } = await admin
-      .from("empresas")
-      .select(
-        "nombre, logo_url, isotipo_url, logo_alt_url, color, color_secundario, datos_generales, config_operativa",
-      )
-      .eq("id", empresaId)
-      .maybeSingle();
-
-    const zona = zonaHorariaDeConfig(
-      (empresa as { config_operativa?: unknown } | null)?.config_operativa,
-    );
-
-    const generales = (empresa as { datos_generales?: Record<string, unknown> } | null)
-      ?.datos_generales;
-    const telefono =
-      typeof generales?.telefonoPrincipal === "string" ? generales.telefonoPrincipal : null;
-
-    const cal = cita.citas_calendarios as
-      | { nombre?: string | null; duracion_min?: number | null }
-      | null;
-    const empleado = cita.empleados as
-      | { nombre?: string | null; apellidos?: string | null }
-      | null;
-
-    const inicioISO = cita.inicio as string;
-    const finISO = cita.fin as string;
-    const nombreCalendario = cal?.nombre?.trim() || "Cita";
-    const nombreEmpresa = ((empresa as { nombre?: string | null } | null)?.nombre ?? "").trim();
+    // Enlace propio de esta cita: es por donde la persona puede anularla sin
+    // tener que escribir a nadie (el buzón que firma no se lee).
+    const urlGestion = datos.tokenGestion
+      ? `${getSiteUrl()}/cita/${datos.tokenGestion}`
+      : null;
 
     const { subject, html, text } = citaConfirmacionEmail({
-      empresa: {
-        nombre: nombreEmpresa,
-        logo_url: (empresa as { logo_url?: string | null } | null)?.logo_url ?? null,
-        isotipo_url: (empresa as { isotipo_url?: string | null } | null)?.isotipo_url ?? null,
-        logo_alt_url: (empresa as { logo_alt_url?: string | null } | null)?.logo_alt_url ?? null,
-        color: (empresa as { color?: string | null } | null)?.color ?? null,
-        color_secundario:
-          (empresa as { color_secundario?: string | null } | null)?.color_secundario ?? null,
-        telefono,
-      },
-      calendario: nombreCalendario,
-      clienteNombre: [cliente?.nombre, cliente?.apellidos].filter(Boolean).join(" ").trim(),
-      fechaLarga: formatFechaEnZona(inicioISO, zona, {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      }),
-      hora: formatHoraEnZona(inicioISO, zona),
-      duracionMin:
-        cal?.duracion_min ??
-        Math.round((new Date(finISO).getTime() - new Date(inicioISO).getTime()) / 60_000),
-      ciudadZona: ciudadDeZona(zona),
-      conQuien: [empleado?.nombre, empleado?.apellidos].filter(Boolean).join(" ").trim() || null,
-      meetUrl: (cita.google_meet_url as string | null) ?? null,
+      empresa: datos.marca,
+      calendario: datos.calendario,
+      clienteNombre: datos.nombreCliente,
+      fechaLarga: datos.fechaLarga,
+      hora: datos.hora,
+      duracionMin: datos.duracionMin,
+      ciudadZona: ciudadDeZona(datos.zona),
+      conQuien: datos.conQuien,
+      meetUrl: datos.meetUrl,
+      urlGestion,
     });
 
     // `REQUEST` (no `PUBLISH`) y dentro del correo (no como adjunto): es lo que
@@ -119,25 +56,22 @@ export async function notificarCitaConfirmada(
     // adjunto llegaba un archivo inerte que había que abrir a mano.
     const ics = construirIcs({
       uid: `cita-${citaId}@balleshosteleros.com`,
-      inicioISO,
-      finISO,
-      titulo: nombreEmpresa ? `${nombreCalendario} · ${nombreEmpresa}` : nombreCalendario,
-      descripcion: (cita.google_meet_url as string | null) ?? null,
-      url: (cita.google_meet_url as string | null) ?? null,
+      inicioISO: datos.inicioISO,
+      finISO: datos.finISO,
+      titulo: datos.tituloEvento,
+      descripcion: datos.meetUrl,
+      url: datos.meetUrl,
       metodo: "REQUEST",
-      organizador: { nombre: nombreEmpresa || null, email: direccionRemitente() },
-      asistente: {
-        nombre: [cliente?.nombre, cliente?.apellidos].filter(Boolean).join(" ").trim() || null,
-        email: destino,
-      },
+      organizador: { nombre: datos.marca.nombre || null, email: direccionRemitente() },
+      asistente: { nombre: datos.nombreCliente || null, email: datos.emailCliente },
     });
 
     const res = await sendEmail({
-      to: destino,
+      to: datos.emailCliente,
       subject,
       html,
       text,
-      empresaId,
+      empresaId: datos.empresaId,
       // El correo pinta su propia cabecera de marca, como los de Sala.
       brandHeader: false,
       icalEvent: { method: "REQUEST", filename: "cita.ics", content: ics },

@@ -11,7 +11,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { friendlyError } from "@/shared/lib/friendly-errors";
-import { cancelarCitaEnGoogle } from "../services/google-calendar";
 import type {
   Cita,
   CitaCalendario,
@@ -444,6 +443,28 @@ export async function cambiarEstadoCita(id: string, estado: CitaEstado): Promise
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "Sin empresa." };
 
+    // Anular no es "cambiar un estado": hay que quitar el evento de Google,
+    // avisar a quien había reservado y dejar constancia de quién lo hizo. Todo
+    // eso vive en un solo sitio, el mismo que usa el enlace del cliente, para
+    // que anular desde dentro y desde fuera hagan exactamente lo mismo.
+    if (estado === "CANCELADA") {
+      // Comprobación de empresa: la acción corre con la sesión del usuario,
+      // pero la anulación usa cliente de servicio y se salta la RLS.
+      const { data: suya } = await supabase
+        .from("citas")
+        .select("id")
+        .eq("id", id)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      if (!suya) return { ok: false, error: "Esa cita no es de esta empresa." };
+
+      const { cancelarCita } = await import("../services/cancelar-cita");
+      const res = await cancelarCita(id, "EQUIPO");
+      if (!res.ok) return { ok: false, error: res.error ?? "No se pudo anular la cita." };
+      revalidar();
+      return { ok: true };
+    }
+
     const { error } = await supabase
       .from("citas")
       .update({ estado, updated_at: new Date().toISOString() })
@@ -453,14 +474,6 @@ export async function cambiarEstadoCita(id: string, estado: CitaEstado): Promise
     if (error) {
       console.error("[citas][cambiarEstadoCita]", error.message);
       return { ok: false, error: "No se pudo cambiar el estado." };
-    }
-
-    // Cancelar aquí y dejar el hueco ocupado en Google sería peor que no
-    // sincronizar: el comercial vería una reunión que ya no existe.
-    if (estado === "CANCELADA") {
-      void cancelarCitaEnGoogle(id).catch((e) =>
-        console.error("[citas][cambiarEstadoCita] google:", e),
-      );
     }
 
     revalidar();

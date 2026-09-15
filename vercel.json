@@ -162,6 +162,10 @@
     {
       "path": "/api/cron/reservas-devoluciones-cuadre",
       "schedule": "25 * * * *"
+    },
+    {
+      "path": "/api/cron/citas-google",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

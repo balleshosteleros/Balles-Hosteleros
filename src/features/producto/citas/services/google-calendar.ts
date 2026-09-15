@@ -172,10 +172,11 @@ export async function cancelarCitaEnGoogle(citaId: string): Promise<void> {
   if (!accessToken) return;
 
   try {
-    // Aquí SÍ avisa Google (`sendUpdates=all`): al alta la confirmación la manda
-    // el software, pero la anulación no tiene correo propio todavía, y es peor
-    // que la persona se presente a una cita que ya no existe.
-    await fetch(`${CALENDAR_API}/calendars/primary/events/${eventoId}?sendUpdates=all`, {
+    // `sendUpdates=none`, igual que al darla de alta: la anulación se la manda
+    // el software, con su marca y con el `.ics` de tipo CANCEL que le quita la
+    // cita del calendario. Con `all`, Google mandaba ADEMÁS la suya y la misma
+    // persona recibía dos avisos de lo mismo.
+    await fetch(`${CALENDAR_API}/calendars/primary/events/${eventoId}?sendUpdates=none`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: "no-store",
@@ -183,5 +184,70 @@ export async function cancelarCitaEnGoogle(citaId: string): Promise<void> {
     await supabase.from("citas").update({ google_event_id: null }).eq("id", citaId);
   } catch (err) {
     console.error("[citas][google] borrado:", err);
+  }
+}
+
+/**
+ * Qué dice Google de la cita: si el evento sigue en pie y qué ha contestado
+ * quien fue invitado.
+ *
+ * Es el único modo de enterarse de que el cliente ha rechazado la cita **desde
+ * su calendario**. El correo de invitación lo firma un buzón que nadie lee
+ * (`notificaciones@…`), así que su respuesta no llega a ninguna bandeja: lo que
+ * sí queda es su `responseStatus` en el evento del calendario de la empresa.
+ *
+ * Devuelve `null` si no se puede saber (sin cuenta, sin permiso, Google caído).
+ * `null` NO es "lo ha rechazado": ante la duda no se toca la cita.
+ */
+export async function estadoDeLaCitaEnGoogle(
+  citaId: string,
+): Promise<{ borrado: boolean; rechazada: boolean } | null> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("citas")
+    .select(
+      `google_event_id,
+       clientes_sala(email),
+       citas_calendarios(google_cuenta_email, google_user_id)`,
+    )
+    .eq("id", citaId)
+    .maybeSingle();
+
+  const fila = data as Record<string, unknown> | null;
+  const cal = fila?.citas_calendarios as
+    | { google_cuenta_email?: string | null; google_user_id?: string | null }
+    | null;
+  const eventoId = fila?.google_event_id as string | null;
+  if (!eventoId || !cal?.google_cuenta_email || !cal.google_user_id) return null;
+
+  const accessToken = await permisoDeCuenta(cal.google_user_id, cal.google_cuenta_email);
+  if (!accessToken) return null;
+
+  try {
+    const res = await fetch(`${CALENDAR_API}/calendars/primary/events/${eventoId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+    // 404/410 = el evento ya no está: alguien lo borró del calendario.
+    if (res.status === 404 || res.status === 410) return { borrado: true, rechazada: false };
+    if (!res.ok) return null;
+
+    const evento = (await res.json()) as {
+      status?: string;
+      attendees?: { email?: string; responseStatus?: string }[];
+    };
+    const emailCliente = (
+      (fila?.clientes_sala as { email?: string | null } | null)?.email ?? ""
+    ).toLowerCase();
+    const suyo = (evento.attendees ?? []).find(
+      (a) => (a.email ?? "").toLowerCase() === emailCliente,
+    );
+    return {
+      borrado: evento.status === "cancelled",
+      rechazada: suyo?.responseStatus === "declined",
+    };
+  } catch (err) {
+    console.error("[citas][google] lectura:", err);
+    return null;
   }
 }

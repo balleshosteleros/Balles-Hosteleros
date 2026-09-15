@@ -181,25 +181,28 @@ export function envolverEmail(input: EnvolturaInput): string {
     : "";
 
   /*
-    El isotipo va REDONDO, recortado en un círculo.
+    El isotipo va REDONDO y SIN NADA DEBAJO: recortado en círculo, apoyado
+    directamente sobre el color de la cabecera.
 
-    Antes se metía tal cual dentro de un óvalo blanco, y eso solo queda bien si
-    el isotipo viene recortado y sin fondo. El de BALLES es un cuadrado con su
-    propio fondo azul, así que salía un CUADRADO DENTRO DE UN CÍRCULO. Al
-    recortarlo, el que trae fondo propio queda como una insignia redonda y el
-    que no lo trae sigue apoyado en el blanco, que es lo que lo hace visible
-    cuando el isotipo es del mismo color que la cabecera (el rosa de HABANA
-    sobre fondo rosa desaparecía).
+    Antes se metía dentro de un óvalo blanco, y eso solo queda bien si el
+    isotipo viene recortado y sin fondo. El de BALLES es un cuadrado con su
+    propio fondo azul: salía un cuadrado dentro de un círculo, y al redondearlo
+    seguía viéndose el aro blanco alrededor. Recortado y sin aro, queda como una
+    insignia limpia.
+
+    ¿Y el isotipo que se pierde sobre su propio color (el rosa de HABANA sobre
+    fondo rosa)? Para eso está la **versión para fondos de color** de Ajustes →
+    Imagen de marca (`logo_alt_url`), que es la solución de verdad y la que ya
+    usan HABANA y BACANAL. Si una empresa no la tiene y su isotipo desaparece,
+    se sube esa versión; no se vuelve a poner el aro blanco.
 
     Un LOGO ancho no se recorta: perdería medio nombre. Ese se queda en la
     píldora de siempre.
   */
   const esIsotipo = Boolean(input.empresa.isotipo_url);
-  const insigniaRedonda = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr><td width="96" height="96" align="center" valign="middle" style="width:96px;height:96px;background:#ffffff;border-radius:50%;"><img src="${escapeAttr(
-    marcaSrc ?? "",
-  )}" alt="${escapeAttr(
+  const insigniaRedonda = `<img src="${escapeAttr(marcaSrc ?? "")}" alt="${escapeAttr(
     empresaNombre,
-  )}" width="86" height="86" style="width:86px;height:86px;border-radius:50%;display:inline-block;vertical-align:middle;border:0;outline:none;text-decoration:none;" /></td></tr></table>`;
+  )}" width="96" height="96" style="width:96px;height:96px;border-radius:50%;display:block;margin:0 auto;border:0;outline:none;text-decoration:none;" />`;
 
   const cabeceraHtml = !marcaSrc
     ? `<div style="font-size:22px;font-weight:700;color:${textoSobrePrimario};letter-spacing:0.2px;">${escapeHtml(empresaNombre)}</div>`
@@ -221,7 +224,7 @@ export function envolverEmail(input: EnvolturaInput): string {
         <td align="center">
           <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(15,23,42,0.08);">
             <tr>
-              <td align="center" style="padding:28px 32px;background:linear-gradient(135deg, ${primario} 0%, ${primarioOscuro} 100%);">
+              <td align="center" bgcolor="${primario}" style="padding:28px 32px;background:${primario};background:linear-gradient(135deg, ${primario} 0%, ${primarioOscuro} 100%);">
                 ${cabeceraHtml}
               </td>
             </tr>

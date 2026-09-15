@@ -327,7 +327,16 @@ export async function crearNotificaciones(
 //  - Eventos/crons del sistema (input.system) o sin sesión → service role.
 export async function emitirNotificacion(input: EmitirInput): Promise<EmitirResultado> {
   try {
-    const ctx = await getAppContext();
+    // `getAppContext()` lee las cookies de la petición, y hay emisores que no
+    // están dentro de ninguna: un servicio llamado desde un script o desde una
+    // tarea de fondo. Ahí lanzaba y el aviso se perdía. Sin sesión no hay nada
+    // que resolver: se sigue con la empresa que venga en la entrada y cliente
+    // de servicio, que es justo lo que hacen los crons.
+    const ctx = await getAppContext().catch(() => ({
+      supabase: null as unknown as SupabaseClient,
+      userId: null,
+      empresaId: null,
+    }));
     const empresaId = input.empresaId ?? ctx.empresaId;
     if (!empresaId) return { ok: false, destinatarios: 0, creadas: 0 };
 

@@ -9,6 +9,7 @@
  * Clientes): es una persona a la que hay que seguir la pista, no una fila
  * suelta en un formulario.
  */
+import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { zonaHorariaDeConfig } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona, zonaLocalAUtcISO } from "@/features/empresa/lib/zona-horaria";
@@ -147,6 +148,10 @@ export async function reservarCita(datos: DatosReserva): Promise<ResultadoReserv
       pagina_id: datos.paginaId ?? null,
       origen: datos.origen ?? null,
       notas: datos.notas ?? null,
+      // Llave del enlace de la cita: con ella, y solo con ella, quien reservó
+      // abre su ficha y puede anular. No hay sesión de la que tirar: viene de
+      // un embudo y no tiene cuenta en el software.
+      token_gestion: randomBytes(32).toString("base64url"),
     })
     .select("id")
     .single();

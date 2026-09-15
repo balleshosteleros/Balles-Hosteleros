@@ -36,6 +36,11 @@ export interface CitaConfirmacionInput {
   conQuien?: string | null;
   /** Enlace de la videollamada, si Google llegó a crearla. */
   meetUrl?: string | null;
+  /**
+   * Enlace propio de esta cita, por donde la persona puede anularla. Sin él, la
+   * única salida sería responder a un buzón que nadie lee.
+   */
+  urlGestion?: string | null;
 }
 
 function duracionLegible(min: number): string {
@@ -90,6 +95,13 @@ export function citaConfirmacionEmail(input: CitaConfirmacionInput): {
       <p style="margin:18px 0 0 0;font-size:13px;color:#64748b;line-height:1.6;">
         La cita va como invitación, así que se te queda en el calendario.
       </p>
+      ${
+        input.urlGestion
+          ? `<p style="margin:14px 0 0 0;font-size:13px;color:#64748b;line-height:1.6;">
+        ¿No puedes venir? <a href="${escapeHtml(input.urlGestion)}" style="color:#64748b;font-weight:600;">Anula la cita aquí</a> y el hueco queda libre para otra persona.
+      </p>`
+          : ""
+      }
     `,
   });
 
@@ -104,6 +116,7 @@ export function citaConfirmacionEmail(input: CitaConfirmacionInput): {
     `Duración: ${duracionLegible(input.duracionMin)}`,
     input.conQuien ? `Con: ${input.conQuien}` : null,
     input.meetUrl ? `Videollamada: ${input.meetUrl}` : null,
+    input.urlGestion ? `Si no puedes venir, anúlala aquí: ${input.urlGestion}` : null,
     "",
     "Si no puedes venir, avísanos con tiempo y buscamos otro hueco.",
     input.empresa.nombre,
