@@ -63,29 +63,40 @@ function dbToApp(r: NotifDbRow): NotificacionApp {
 }
 
 async function misFichas(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: SupabaseClient,
   userId: string,
+  empresaId: string,
 ): Promise<string[]> {
-  const { data } = await supabase.from("empleados").select("id").eq("user_id", userId);
+  const { data } = await supabase
+    .from("empleados")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("empresa_id", empresaId);
   return (data ?? []).map((f) => f.id as string);
 }
 
-// Bandeja del empleado: SUS notificaciones (por usuario o por ficha).
+/**
+ * Bandeja del empleado: SUS notificaciones EN LA EMPRESA ACTIVA.
+ *
+ * Los avisos son de una empresa, nunca del grupo. Quien trabaja en dos
+ * (Alejandro y Iván, HABANA y BACANAL) los veía todos juntos en la misma
+ * campana, sin nada que dijera de dónde venía cada uno: avisos de BACANAL
+ * saltando mientras la pantalla enseñaba HABANA. Al cambiar de empresa en el
+ * selector se ven los de esa empresa y solo los de esa.
+ */
 export async function listMisNotificaciones(): Promise<NotificacionApp[]> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return [];
-    const fichas = await misFichas(supabase, user.id);
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId || !empresaId) return [];
+    const fichas = await misFichas(supabase, userId, empresaId);
     const filtro =
       fichas.length > 0
-        ? `usuario_id.eq.${user.id},empleado_id.in.(${fichas.join(",")})`
-        : `usuario_id.eq.${user.id}`;
+        ? `usuario_id.eq.${userId},empleado_id.in.(${fichas.join(",")})`
+        : `usuario_id.eq.${userId}`;
     const { data, error } = await supabase
       .from("notificaciones")
       .select(APP_COLS)
+      .eq("empresa_id", empresaId)
       .or(filtro)
       .order("created_at", { ascending: false })
       .limit(100);
@@ -137,12 +148,11 @@ export async function accionarLiquidacion(
   pagoId: string,
 ): Promise<{ ok: boolean }> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false };
-    const fichas = await misFichas(supabase, user.id);
+    // La ficha y el pago son de la empresa activa: las nóminas de cada empresa
+    // van por su cuenta, y la liquidación que se aprueba aquí es la de esta.
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId || !empresaId) return { ok: false };
+    const fichas = await misFichas(supabase, userId, empresaId);
     if (fichas.length === 0) return { ok: false };
 
     const nowIso = new Date().toISOString();

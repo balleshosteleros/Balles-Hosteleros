@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
@@ -71,7 +71,17 @@ export function NotificacionBell({
   className?: string;
   variant?: "panel" | "toolbar";
 }) {
-  const { empresaActual } = useEmpresa();
+  /**
+   * La bandeja es de UNA empresa. `empresaVisible` es la que el servidor dice
+   * estar sirviendo — la misma con la que se pinta el logotipo de arriba — y es
+   * la que contestan las server actions. Con la elegida (`empresaActual`), que
+   * va un instante por delante, la campana pedía los avisos antes de que el
+   * servidor hubiese cambiado y volvían los de la empresa anterior.
+   */
+  const { empresaVisible, empresaResuelta } = useEmpresa();
+  const empresaSlug = empresaVisible.id;
+  /** UUID real: es lo que la escucha en vivo compara con `empresa_id`. */
+  const empresaDbId = empresaVisible.dbId ?? null;
   const router = useRouter();
   // Dentro de la app del móvil las pantallas viven bajo "/m".
   const pathname = usePathname();
@@ -84,6 +94,30 @@ export function NotificacionBell({
   const cargar = useCallback(() => {
     listMisNotificaciones().then(setItems);
   }, []);
+
+  // Cambio de empresa: los avisos de la anterior se quitan en el acto (el
+  // círculo rojo no puede seguir contando lo que ya no es de esta empresa) y se
+  // piden los de la nueva.
+  //
+  // El primer montaje se salta a propósito: de la carga inicial se encarga el
+  // efecto de abajo, que la retrasa 2,5 s para no competir con el menú en el
+  // arranque. Aquí solo interesa el CAMBIO.
+  const empresaPrevia = useRef<string | null>(null);
+  useEffect(() => {
+    // Mientras la empresa no está resuelta, el valor es el por defecto del
+    // primer render: cambiar a la de verdad no es un cambio de empresa del
+    // usuario y no debe vaciar la bandeja.
+    if (!empresaResuelta) return;
+    if (empresaPrevia.current === null) {
+      empresaPrevia.current = empresaSlug;
+      return;
+    }
+    if (empresaPrevia.current === empresaSlug) return;
+    empresaPrevia.current = empresaSlug;
+    setItems([]);
+    setOpen(false);
+    cargar();
+  }, [empresaSlug, empresaResuelta, cargar]);
 
   useEffect(() => {
     // 1ª carga diferida ~2,5 s: la campana no debe competir en la cola de server
@@ -116,7 +150,10 @@ export function NotificacionBell({
   // nada que el usuario esté escribiendo, así que refrescar nunca le quita nada.
   useSincronizacionEnVivo({
     tablas: ["notificaciones"],
-    empresaId: empresaActual.id,
+    // El UUID, no el slug: el filtro de la escucha es `empresa_id=eq.<uuid>` y
+    // con "habana" no coincidía con ninguna fila, así que la campana no se
+    // encendía sola — solo en el refresco del minuto.
+    empresaId: empresaDbId,
     onCambio: cargar,
   });
 
@@ -235,7 +272,7 @@ export function NotificacionBell({
                         >
                           <div className="flex items-center justify-between gap-2">
                             <p className={`truncate text-sm font-medium ${destino ? "hover:underline" : ""}`}>{n.titulo}</p>
-                            <span className="shrink-0 text-[11px] text-muted-foreground">{fmtFecha(n.createdAt, empresaActual.zonaHoraria)}</span>
+                            <span className="shrink-0 text-[11px] text-muted-foreground">{fmtFecha(n.createdAt, empresaVisible.zonaHoraria)}</span>
                           </div>
                           {n.mensaje && <p className="mt-0.5 text-xs text-muted-foreground">{n.mensaje}</p>}
                         </div>

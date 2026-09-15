@@ -24,6 +24,7 @@ import {
   tamanoLegible,
   urlAdjuntoComunicado,
 } from "@/features/gerencia/data/comunicados-adjuntos";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 function fmt(n: number): string {
   return n.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €";
@@ -36,9 +37,26 @@ function num(v: unknown): number {
 // Cola de notificaciones sin ver: al entrar a la app saltan en secuencia y el
 // empleado debe pulsar Visto / LIQUIDAR para quitarlas.
 export function NotificacionesGate() {
-  const [pend, setPend] = useState<NotificacionApp[]>([]);
+  /**
+   * La cola es de la empresa que se está sirviendo. Quien trabaja en dos
+   * empresas tenía los avisos de las dos saltando en la misma cola, sin nada
+   * que dijera de cuál era cada uno; y al cambiar de empresa seguían en pantalla
+   * los de la anterior. Ahora, al cambiar, se piden los de la empresa nueva y
+   * hasta que llegan no se pinta nada.
+   */
+  const { empresaVisible, empresaResuelta } = useEmpresa();
+  const empresaSlug = empresaVisible.id;
+  /**
+   * La cola, la empresa de la que es y el 2º paso de la liquidación, juntos.
+   * Van en un solo estado porque los tres cambian a la vez: al llegar la cola
+   * de otra empresa, el paso a medias de la anterior ya no vale.
+   */
+  const [cola, setCola] = useState<{
+    empresa: string;
+    items: NotificacionApp[];
+    paso: boolean;
+  }>({ empresa: "", items: [], paso: false });
   const [busy, setBusy] = useState(false);
-  const [pasoTexto, setPasoTexto] = useState(false); // 2º paso de la liquidación
   /**
    * FICHAR VA PRIMERO. Este aviso es un diálogo MODAL: Radix deja el `body` en
    * `pointer-events: none` y el botón verde de fichar, que vive fuera, se veía
@@ -49,14 +67,25 @@ export function NotificacionesGate() {
   const ficharAhora = useAvisoFichajeActivo();
 
   useEffect(() => {
+    // Hasta que la empresa no está resuelta (cookie leída) no se pide nada: si
+    // se pidiera antes, el valor por defecto del primer render cambiaría un
+    // instante después y la cola se vaciaría delante del que estaba leyendo.
+    if (!empresaResuelta) return;
     let on = true;
     listNotificacionesPendientes().then((r) => {
-      if (on) setPend(r);
+      // La cola se guarda CON la empresa de la que es. Mientras llega la de la
+      // empresa nueva no se pinta la anterior (ver `pend`), y no hace falta
+      // vaciarla a mano: el cambio de empresa ya tapa la pantalla.
+      if (on) setCola({ empresa: empresaSlug, items: r, paso: false });
     });
     return () => {
       on = false;
     };
-  }, []);
+  }, [empresaSlug, empresaResuelta]);
+
+  // Solo se pinta la cola de la empresa que se está sirviendo.
+  const pend = cola.empresa === empresaSlug ? cola.items : [];
+  const pasoTexto = cola.empresa === empresaSlug && cola.paso;
 
   const actual = pend[0];
   if (!actual || ficharAhora) return null;
@@ -80,8 +109,7 @@ export function NotificacionesGate() {
     ? ((actual.payload.enlaceTexto as string | null | undefined) ?? null)
     : null;
   const siguiente = () => {
-    setPasoTexto(false);
-    setPend((prev) => prev.slice(1));
+    setCola((prev) => ({ ...prev, items: prev.items.slice(1), paso: false }));
   };
 
   const onVisto = async () => {
@@ -252,7 +280,7 @@ export function NotificacionesGate() {
           <AlertDialogAction
             onClick={(e) => {
               e.preventDefault();
-              if (esLiquidacion) setPasoTexto(true);
+              if (esLiquidacion) setCola((prev) => ({ ...prev, paso: true }));
               else void onVisto();
             }}
             disabled={busy}
