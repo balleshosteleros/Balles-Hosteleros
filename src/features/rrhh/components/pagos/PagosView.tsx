@@ -21,7 +21,6 @@ import { loadHorasMes, type HorasMesRow } from "@/features/rrhh/actions/horas-ac
 import {
   procesarNominasLeidas,
   getNominaArchivoUrl,
-  getNominasMesUrl,
 } from "@/features/rrhh/actions/nominas-archivo-actions";
 import type { NominaLeida } from "@/features/rrhh/services/nominas/procesar-nominas";
 import {
@@ -50,6 +49,7 @@ import {
   type EstadoMesNominas,
   type EstadoSubidaMes,
 } from "@/features/rrhh/actions/nominas-revision-actions";
+import { DocumentosEntregaDialog } from "@/features/rrhh/components/pagos/DocumentosEntregaDialog";
 import { mesAnterior } from "@/features/rrhh/lib/nominas-periodos";
 import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -64,7 +64,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { capitalizeText } from "@/shared/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X, Undo2, Download, Loader2 } from "lucide-react";
+import { Edit2, MessageSquare, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X, Undo2, FolderOpen } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -86,6 +86,7 @@ import {
 } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 
 // Los pagos se registran por MES, pero se pueden ver agregados por trimestre o
@@ -210,6 +211,7 @@ function fromGuardado(
     avisoInactivo: g.avisoInactivo,
     confirmacionEnviadaAt: g.confirmacionEnviadaAt,
     confirmacionAceptadaAt: g.confirmacionAceptadaAt,
+    firmadaEn: g.firmadaEn ?? null,
   };
 }
 
@@ -236,6 +238,7 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
     avisoInactivo: p.avisoInactivo,
     confirmacionEnviadaAt: p.confirmacionEnviadaAt,
     confirmacionAceptadaAt: p.confirmacionAceptadaAt,
+    firmadaEn: p.firmadaEn,
   };
 }
 
@@ -272,6 +275,7 @@ function nuevoPagoVacio(
     avisoInactivo: false,
     confirmacionEnviadaAt: null,
     confirmacionAceptadaAt: null,
+    firmadaEn: null,
   };
 }
 
@@ -293,7 +297,6 @@ export function PagosView() {
   const [showRevision, setShowRevision] = useState(false);
   // empleadoId cuya nómina se está abriendo (para el indicador del icono).
   const [abriendoNomina, setAbriendoNomina] = useState<string | null>(null);
-  const [descargandoMes, setDescargandoMes] = useState(false);
   const [subiendoTc1, setSubiendoTc1] = useState(false);
   const tc1InputRef = useRef<HTMLInputElement>(null);
   // Mes que se COTIZA en el TC1 que se va a adjuntar. No es el de la entrega: los
@@ -302,6 +305,8 @@ export function PagosView() {
   const [mesTc1Elegido, setMesTc1Elegido] = useState<string | null>(null);
   // Diálogo único de la entrega del mes: nóminas + TC1.
   const [showDocsMes, setShowDocsMes] = useState(false);
+  // Diálogo de CONSULTA de los papeles de la gestoría (ver y descargar).
+  const [showDocumentos, setShowDocumentos] = useState(false);
   // Estado del mes: en borrador se puede corregir; confirmado es inmutable.
   const [estadoMes, setEstadoMes] = useState<EstadoMesNominas>({
     confirmado: false,
@@ -322,8 +327,10 @@ export function PagosView() {
   // seguros sociales, que se revisan por separado.
   const [rechazoDe, setRechazoDe] = useState<BloqueCuadre["clave"]>("nominas");
   const [nominasEnMes, setNominasEnMes] = useState(0);
-  // Suma de SS (trabajador + empresa) de las nóminas del mes: el contraste de los TC1.
-  const [ssNominasMes, setSsNominasMes] = useState(0);
+  // Suma del BRUTO de las nóminas que entregó la gestoría (neto + SS del
+  // trabajador + IRPF). Es lo que cobra la plantilla, y lo que se compara con lo
+  // que tiene la app en su tabla de pagos.
+  const [brutoNominasMes, setBrutoNominasMes] = useState(0);
   const [incidenciasNominas, setIncidenciasNominas] = useState(0);
   const [showConfig, setShowConfig] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -374,13 +381,14 @@ export function PagosView() {
     // Cuántas hay en total: es lo que se elimina si el mes se devuelve, y lo que
     // decide si hay algo que devolver.
     setNominasEnMes(lista.length);
-    // Cotización total del mes según las nóminas (trabajador + empresa), sin las
-    // denegadas: es contra esto contra lo que cuadran los TC1.
-    setSsNominasMes(
+    // BRUTO de la entrega: lo que cobran los trabajadores antes de retenciones.
+    // El documento guarda el neto, así que el bruto se reconstruye sumándole lo
+    // que se le descuenta al trabajador: su SS y el IRPF.
+    setBrutoNominasMes(
       Math.round(
         lista
           .filter((n) => n.estado !== "denegada")
-          .reduce((a, n) => a + n.ssEmpleado + n.ssEmpresa, 0) * 100,
+          .reduce((a, n) => a + n.neto + n.ssEmpleado + n.irpf, 0) * 100,
       ) / 100,
     );
   }, [periodo]);
@@ -693,7 +701,11 @@ export function PagosView() {
     const res = await marcarPagado(periodo, p.empleadoId, nuevo);
     if (!res.ok) {
       if (res.requiereAprobacion) {
-        toast.error("El empleado debe aprobar su liquidación (LIQUIDAR) antes de marcarla como pagada.");
+        toast.error(
+          p.confirmacionEnviadaAt
+            ? "El empleado debe aprobar su liquidación (LIQUIDAR) antes de marcarla como pagada."
+            : "Envíale antes la liquidación (LIQUIDAR): hasta que no la confirme no se puede marcar como pagada.",
+        );
       } else {
         toast.error("No se pudo actualizar el pago. Guarda primero la liquidación del empleado.");
       }
@@ -705,12 +717,24 @@ export function PagosView() {
   const pagarBloqueado = (p: PagoEmpleado): boolean =>
     !p.pagado && !!notifCfg?.requiereAprobacion && !p.confirmacionAceptadaAt;
 
+  // LIQUIDACIÓN CERRADA: el trabajador ya la firmó, o ya se le ha pagado. A
+  // partir de ahí no se envía, ni se reenvía, ni se reabre: el mes está cerrado
+  // para él. `firmadaEn` sale del enlace del correo y no lo borra nadie —
+  // `confirmacionAceptadaAt` sí se borraba al reabrir, y por ahí volvía a
+  // aparecer el envío de algo ya aprobado y cobrado (Iván, 15-09).
+  const liquidacionCerrada = (p: PagoEmpleado): boolean =>
+    !!p.firmadaEn || !!p.confirmacionAceptadaAt || p.pagado;
+
+  // Día en el reloj de la empresa (dd/mm/aaaa), nunca en el del navegador.
+  const fechaCorta = (iso: string | null | undefined): string =>
+    formatFechaEnZona(iso, empresaActual?.zonaHoraria);
+
   // Subida de nóminas. Admite un archivo por empleado O un único PDF con TODAS
   // las nóminas (una por página): el servidor lo parte en páginas y devuelve una
   // nómina por página. Por cada nómina, la IA lee DNI/NIE, nombre y SS. Se
   // empareja con su fila por DNI/NIE (inequívoco) y, si falta, por nombre. Además
   // de la SS (informativa, no toca el total), se ADJUNTA la nómina original al
-  // empleado (Storage) para poder verla desde la columna "Nómina". Los pagos ya
+  // empleado (Storage) para poder abrirla desde el icono de la hoja. Los pagos ya
   // enviados (bloqueados) se saltan.
   const subirNominas = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -825,22 +849,6 @@ export function PagosView() {
     }
   };
 
-  // TODAS las nóminas del mes en un PDF: el archivo que manda la gestoría,
-  // reconstruido desde lo guardado. Ordenado por empleado, con su finiquito al
-  // lado si lo tiene.
-  const descargarNominasDelMes = async () => {
-    setDescargandoMes(true);
-    try {
-      const res = await getNominasMesUrl(periodo);
-      if (res.ok) window.open(res.url, "_blank", "noopener,noreferrer");
-      else toast.error(res.error);
-    } catch (err) {
-      toast.error("No se pudieron descargar las nóminas del mes.", { description: friendlyError(err, "descargarNominasDelMes") });
-    } finally {
-      setDescargandoMes(false);
-    }
-  };
-
   // TC1: documento de EMPRESA (bases y cuotas de toda la plantilla). Se guarda
   // aparte de las nóminas y NO se reparte a ningún empleado. Va al MISMO mes que
   // se haya elegido para la entrega, para poder subirlo todo de una vez.
@@ -947,7 +955,9 @@ export function PagosView() {
     // Confirmado el mes, el paso siguiente es siempre el mismo: mandar las
     // liquidaciones. Se pregunta aquí para no depender de que alguien se acuerde
     // de pulsar el botón; si dice que ahora no, el botón sigue estando.
-    const pendientes = pagos.filter((p) => !p.confirmacionEnviadaAt && !p.empleadoId.startsWith("ext-"));
+    const pendientes = pagos.filter(
+      (p) => !p.confirmacionEnviadaAt && !p.empleadoId.startsWith("ext-") && !liquidacionCerrada(p),
+    );
     if (pendientes.length === 0) return;
     const enviarYa = await confirm({
       title: "Enviar liquidaciones",
@@ -1103,34 +1113,43 @@ export function PagosView() {
 
   // Envía la confirmación de liquidación a los empleados indicados (uno o todos).
   // Tras enviar, esos pagos quedan bloqueados y al empleado le salta el pop-up.
-  const enviarConfirmaciones = async (ids: string[], etiqueta: string) => {
+  const enviarConfirmaciones = async (ids: string[], etiqueta: string, reenviar = false) => {
     const reales = ids.filter((id) => !id.startsWith("ext-"));
     if (reales.length === 0) {
       toast.error("No hay empleados con app a los que enviar.");
       return;
     }
     const ok = await confirm({
-      title: `Enviar ${etiqueta}`,
-      description:
-        `Se enviará la liquidación a ${reales.length === 1 ? "este empleado" : `${reales.length} empleados`} y quedará ` +
-        "bloqueada: no se podrá editar hasta que un director la reabra. ¿Continuar?",
-      confirmLabel: "Enviar",
+      title: reenviar ? "Reenviar liquidación" : `Enviar ${etiqueta}`,
+      description: reenviar
+        ? "Se le vuelve a mandar la liquidación, por si no le llegó la primera vez. Sigue bloqueada para editar. ¿Continuar?"
+        : `Se enviará la liquidación a ${reales.length === 1 ? "este empleado" : `${reales.length} empleados`} y quedará ` +
+          "bloqueada: no se podrá editar hasta que un director la reabra. ¿Continuar?",
+      confirmLabel: reenviar ? "Reenviar" : "Enviar",
       cancelLabel: "Cancelar",
     });
     if (!ok) return;
     setEnviando(true);
-    const res = await enviarConfirmacionesPago(periodo, reales);
+    const res = await enviarConfirmacionesPago(periodo, reales, reenviar);
     setEnviando(false);
     if (!res.ok) {
       toast.error("No se pudieron enviar las confirmaciones.");
       return;
     }
     if (res.enviadosIds.length === 0) {
-      toast.info("No había liquidaciones guardadas pendientes de enviar.");
+      toast.info(
+        res.cerradas
+          ? "Esa liquidación ya está firmada o pagada: no se vuelve a enviar."
+          : "No había liquidaciones guardadas pendientes de enviar.",
+      );
       return;
     }
     const enviadosSet = new Set(res.enviadosIds);
-    toast.success(`Liquidación enviada a ${enviadosSet.size} empleado${enviadosSet.size === 1 ? "" : "s"}.`);
+    toast.success(
+      reenviar
+        ? "Liquidación reenviada."
+        : `Liquidación enviada a ${enviadosSet.size} empleado${enviadosSet.size === 1 ? "" : "s"}.`,
+    );
     setPagosPorRango((prev) => {
       const lista = prev[claveRango] ?? [];
       const nowIso = new Date().toISOString();
@@ -1263,8 +1282,6 @@ export function PagosView() {
     { campo: "ssTotal", label: "Total SS" },
     { campo: "costeTotal", label: "Coste total" },
     { campo: "pagado", label: "Pagado" },
-    { campo: "comentario", label: "Comentario" },
-    { campo: "nominaDoc", label: "Nómina (documento)" },
   ];
 
   // Nombres para el filtro de la columna Empleado (todos los del mes, no solo
@@ -1449,38 +1466,6 @@ export function PagosView() {
         </TableCell>
       ),
     },
-    nominaDoc: {
-      th: <TableColumnHeader key="nominaDoc" label="Nómina" className="w-[70px]" align="center" />,
-      td: (p) => (
-        <TableCell key="nominaDoc" className="text-center">
-          {p.numNominas > 0 || p.nominaPath ? (
-            <ToolTooltip label={
-                p.numNominas > 1
-                  ? `Ver las ${p.numNominas} nóminas de ${p.empleadoNombre} (se abren en un único PDF)`
-                  : `Ver la nómina de ${p.empleadoNombre}`
-              }>
-              <button
-                type="button"
-                onClick={() => abrirNominaEmpleado(p)}
-                disabled={abriendoNomina === p.empleadoId}
-                className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
-                aria-label={`Ver la nómina de ${p.empleadoNombre}`}
-              >
-                {abriendoNomina === p.empleadoId ? (
-                  <Clock className="h-4 w-4 animate-pulse" />
-                ) : (
-                  <FileText className="h-4 w-4" />
-                )}
-              </button>
-            </ToolTooltip>
-          ) : (
-            <ToolTooltip label="Sin nómina adjunta">
-              <span className="text-xs text-muted-foreground">—</span>
-            </ToolTooltip>
-          )}
-        </TableCell>
-      ),
-    },
     // Lo que se lleva el trabajador. Se destaca porque es la cifra que se paga.
     total: {
       th: th("total", "Total a pagar", "numero", "right", undefined, "font-bold"),
@@ -1532,7 +1517,9 @@ export function PagosView() {
                 disabled={bloqueado}
                 title={
                   bloqueado
-                    ? "Liquidación enviada: esperando a que el trabajador la confirme"
+                    ? p.confirmacionEnviadaAt
+                      ? "Liquidación enviada: esperando a que el trabajador la confirme"
+                      : "Sin enviar: mándale la liquidación para que la confirme"
                     : p.confirmacionAceptadaAt
                       ? "El trabajador ha confirmado que la cobra: ya se puede pagar"
                       : "Marcar como pagado"
@@ -1545,51 +1532,265 @@ export function PagosView() {
         );
       },
     },
-    // Nota libre de RRHH. Ultima columna de datos y sin fila de total: un texto
-    // no suma (cae en el fallback de `totalDefs`, como `puesto` o `area`).
-    comentario: {
-      th: th("comentario", "Comentario", "texto", "left", undefined, "min-w-[120px]"),
-      td: (p) => {
-        const rechazo = p.confirmacionRechazadaAt ? p.comentarioEmpleado : null;
-        if (!p.comentario && !rechazo) {
-          return <TableCell key="comentario" className="max-w-[280px]"><span className="text-muted-foreground text-xs">—</span></TableCell>;
+  };
+
+  // ── LOS CUATRO ICONOS DE CADA TRABAJADOR ────────────────────────────────
+  // La nómina y el comentario eran dos columnas enteras para, casi siempre, un
+  // guion y un texto cortado. Ahora son dos iconos: la hoja abre su nómina y la
+  // viñeta enseña el comentario al pasar por encima. Así la tabla respira y el
+  // dinero, que es a lo que se viene, gana el ancho que gastaban.
+  //
+  // Siempre cuatro, y siempre en el mismo sitio: nómina · comentario · estado ·
+  // envío. Cuando uno no aplica se queda en gris, pero no desaparece: si los
+  // iconos bailaran de fila en fila habría que leerlos uno a uno.
+  const ICONO = "inline-flex h-7 w-7 items-center justify-center rounded-md transition";
+  const ICONO_APAGADO = `${ICONO} cursor-not-allowed text-muted-foreground/40`;
+
+  const iconoNomina = (p: PagoEmpleado): ReactNode => {
+    if (!(p.numNominas > 0 || p.nominaPath)) {
+      return (
+        <ToolTooltip label="Sin nómina adjunta">
+          <span className={ICONO_APAGADO} aria-label="Sin nómina adjunta">
+            <FileText className="h-4 w-4" />
+          </span>
+        </ToolTooltip>
+      );
+    }
+    return (
+      <ToolTooltip
+        label={
+          p.numNominas > 1
+            ? `Ver las ${p.numNominas} nóminas de ${p.empleadoNombre} (se abren en un único PDF)`
+            : `Ver la nómina de ${p.empleadoNombre}`
         }
-        return (
-          <TableCell key="comentario" className="max-w-[280px]">
+      >
+        <button
+          type="button"
+          onClick={() => abrirNominaEmpleado(p)}
+          disabled={abriendoNomina === p.empleadoId}
+          className={`${ICONO} text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50`}
+          aria-label={`Ver la nómina de ${p.empleadoNombre}`}
+        >
+          {abriendoNomina === p.empleadoId ? (
+            <Clock className="h-4 w-4 animate-pulse" />
+          ) : (
+            <FileText className="h-4 w-4" />
+          )}
+        </button>
+      </ToolTooltip>
+    );
+  };
+
+  const iconoComentario = (p: PagoEmpleado): ReactNode => {
+    const rechazo = p.confirmacionRechazadaAt ? p.comentarioEmpleado : null;
+    if (!p.comentario && !rechazo) {
+      return (
+        <ToolTooltip label="Sin comentario">
+          <span className={ICONO_APAGADO} aria-label="Sin comentario">
+            <MessageSquare className="h-4 w-4" />
+          </span>
+        </ToolTooltip>
+      );
+    }
+    return (
+      <ToolTooltip
+        // Con texto de varias líneas la píldora se abre a tarjeta: la etiqueta
+        // redonda de una línea partiría un comentario largo en una tira.
+        className="max-w-[320px] rounded-2xl px-3 py-2 text-left"
+        label={
+          <span className="block space-y-1">
             {rechazo && (
-              <ToolTooltip label={`El trabajador rechazó la liquidación: ${rechazo}`}>
-                <span
-                  className="block truncate text-xs font-medium text-destructive"
-                >
-                  Rechazado: {rechazo}
-                </span>
-              </ToolTooltip>
+              <span className="block font-semibold">Rechazada por el trabajador: {rechazo}</span>
             )}
-            {p.comentario && (
-              <ToolTooltip label={p.comentario}>
-                <span className="block truncate text-xs">{p.comentario}</span>
-              </ToolTooltip>
-            )}
-          </TableCell>
-        );
-      },
-    },
+            {p.comentario && <span className="block">{p.comentario}</span>}
+          </span>
+        }
+      >
+        <span
+          className={`${ICONO} ${rechazo ? "text-destructive" : "text-foreground/70"} hover:bg-muted`}
+          aria-label={rechazo ? "Liquidación rechazada: leer el motivo" : "Leer el comentario"}
+        >
+          <MessageSquare className="h-4 w-4" />
+        </span>
+      </ToolTooltip>
+    );
+  };
+
+  // Tercer icono: en qué estado está la liquidación. Editar mientras se puede
+  // tocar; candado en cuanto sale; y, si todavía no la ha firmado, el candado
+  // abierto de reabrirla (solo dirección).
+  const iconoEstado = (p: PagoEmpleado): ReactNode => {
+    const cerrada = liquidacionCerrada(p);
+    if (!p.confirmacionEnviadaAt && !cerrada) {
+      return (
+        <ToolTooltip
+          label={
+            estadoMes.confirmado
+              ? "Nóminas del mes confirmadas: la liquidación no se puede editar"
+              : "Editar la liquidación"
+          }
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setEditando(p)}
+            disabled={estadoMes.confirmado || esVistaAgregada}
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+          </Button>
+        </ToolTooltip>
+      );
+    }
+    if (!cerrada && esDirector && !esVistaAgregada && !p.empleadoId.startsWith("ext-")) {
+      return (
+        <ToolTooltip label="Reabrir la liquidación para poder corregirla">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => reabrir(p)}>
+            <Unlock className="h-3.5 w-3.5" />
+          </Button>
+        </ToolTooltip>
+      );
+    }
+    return (
+      <ToolTooltip
+        label={
+          p.firmadaEn
+            ? `Liquidación firmada por el trabajador el ${fechaCorta(p.firmadaEn)}: cerrada`
+            : p.confirmacionAceptadaAt
+              ? `Liquidación confirmada por el trabajador el ${fechaCorta(p.confirmacionAceptadaAt)}: cerrada`
+              : p.pagado
+                ? "Liquidación ya pagada: cerrada"
+                : "Liquidación enviada: bloqueada"
+        }
+      >
+        <span className={ICONO_APAGADO} aria-label="Liquidación bloqueada">
+          <Lock className="h-3.5 w-3.5" />
+        </span>
+      </ToolTooltip>
+    );
+  };
+
+  // Cuarto icono: el envío. FIRMADA O PAGADA = se queda en gris para siempre.
+  // Volver a mandarla sería pedirle al trabajador que apruebe, semanas después,
+  // lo que ya aprobó y cobró (Iván, 15-09: le llegó otra vez la de julio).
+  const iconoEnvio = (p: PagoEmpleado): ReactNode => {
+    const ext = p.empleadoId.startsWith("ext-");
+    if (liquidacionCerrada(p)) {
+      return (
+        <ToolTooltip
+          label={
+            p.firmadaEn || p.confirmacionAceptadaAt
+              ? "Ya la firmó el trabajador: no se le vuelve a enviar"
+              : "Liquidación ya pagada: no se le vuelve a enviar"
+          }
+        >
+          <span className={ICONO_APAGADO} aria-label="Liquidación cerrada: no se reenvía">
+            <Send className="h-3.5 w-3.5" />
+          </span>
+        </ToolTooltip>
+      );
+    }
+    if (ext || esVistaAgregada) {
+      return (
+        <ToolTooltip
+          label={
+            esVistaAgregada
+              ? "La liquidación se envía mes a mes: cambia a vista mensual"
+              : "Sin ficha en la app: no hay a dónde enviársela"
+          }
+        >
+          <span className={ICONO_APAGADO} aria-label="No se puede enviar">
+            <Send className="h-3.5 w-3.5" />
+          </span>
+        </ToolTooltip>
+      );
+    }
+    const yaEnviada = !!p.confirmacionEnviadaAt;
+    return (
+      <ToolTooltip
+        label={
+          yaEnviada
+            ? `Volver a enviarle la liquidación (se le mandó el ${fechaCorta(p.confirmacionEnviadaAt)} y aún no la ha firmado)`
+            : "Enviar la liquidación a este trabajador"
+        }
+      >
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-primary"
+          onClick={() => enviarConfirmaciones([p.empleadoId], "liquidación", yaEnviada)}
+          disabled={enviando}
+        >
+          <Send className="h-3.5 w-3.5" />
+        </Button>
+      </ToolTooltip>
+    );
   };
 
   // Los dos bloques de la tarjeta de cuadre. Cada uno mira SU mes: las nóminas,
   // el que se está viendo; los seguros sociales, el que cotiza el recibo, que va
   // a mes vencido. Las cifras se enseñan aunque no cuadren o falte una: la
   // tarjeta informa siempre, y son los botones los que se desactivan.
+  // Recibos de cotizaciones del mes que se está cuadrando, vengan en la entrega
+  // que vengan: es lo que se enseña en Documentos.
+  const tc1Principal = useMemo(
+    () =>
+      Object.values(estadoSubidaMeses)
+        .flatMap((e) => e.tc1)
+        .filter((t) => t.periodoCotizacion === mesCotizadoPrincipal),
+    [estadoSubidaMeses, mesCotizadoPrincipal],
+  );
+
+  // ¿Hay papeles que mirar? ¿Y queda algo por subir? Lo primero saca el botón de
+  // Documentos; lo segundo mantiene el de subir. Con la entrega completa el de
+  // subir se va: para cambiar algo hay que devolverlo a la gestoría.
+  const hayAlgoEntregado = nominasEnMes > 0 || tc1Principal.length > 0;
+  const faltaAlgoPorSubir = nominasEnMes === 0 || !hayTc1;
+
+  // A quién le falta su liquidación. Los "ext-" (ex-empleados sin ficha) no
+  // tienen a dónde recibirla, así que no cuentan: incluirlos dejaba el botón
+  // eternamente activo aunque ya se hubiera enviado todo. Tampoco cuentan las
+  // CERRADAS —firmadas por el trabajador o ya pagadas—: ésas no se vuelven a
+  // enviar nunca, y si son las únicas que quedan el botón se apaga.
+  const pendientesDeEnviar = useMemo(
+    () =>
+      pagos
+        .filter(
+          (p) =>
+            !p.empleadoId.startsWith("ext-") &&
+            !p.confirmacionEnviadaAt &&
+            !liquidacionCerrada(p),
+        )
+        .map((p) => p.empleadoId),
+    [pagos],
+  );
+
+  // Bruto del mes según la APP: la suma de la tabla de pagos, sin los filtros de
+  // la barra (filtrar la vista no puede cambiar el cuadre de la entrega).
+  const brutoSistemaMes = useMemo(
+    () => Math.round(pagos.reduce((a, p) => a + nominaBruta(p), 0) * 100) / 100,
+    [pagos],
+  );
+
   const bloquesCuadre: BloqueCuadre[] = [
     {
       clave: "nominas",
       titulo: "Nóminas",
       periodo,
       mesLabel: mesLabelNominas,
-      // En las nóminas los dos lados salen del mismo volcado, así que cuadran por
-      // construcción: lo que se aprueba es la entrega, no una comparación.
-      sistema: nominasEnMes > 0 ? ssNominasMes : null,
-      gestoria: nominasEnMes > 0 ? ssNominasMes : null,
+      // El dinero de las nóminas es el BRUTO de la plantilla: lo que cobran los
+      // trabajadores antes de retenciones. Antes aquí salía la cotización a la
+      // Seguridad Social —el coste del OTRO documento—, y la franja enseñaba dos
+      // veces la misma cifra de seguros sin decir en ningún sitio cuánto suman
+      // las nóminas.
+      //   Sistema  = lo que tiene la app en su tabla de pagos (lo que verá cada
+      //              trabajador en su liquidación).
+      //   Gestoría = la suma de los brutos de las nóminas entregadas.
+      // Normalmente coinciden —la tabla se vuelca de los documentos—, pero se
+      // separan en cuanto se deniega una nómina o se retoca un pago a mano, y es
+      // justo ese desvío el que hay que ver antes de aprobar.
+      sistema: nominasEnMes > 0 ? brutoSistemaMes : null,
+      gestoria: nominasEnMes > 0 ? brutoNominasMes : null,
       aprobadoEn: estadoMes.confirmado ? estadoMes.confirmadoEn : null,
       rechazadoEn: estadoMes.rechazado ? estadoMes.rechazadoEn : null,
       aprobadoPor: null,
@@ -1628,6 +1829,11 @@ export function PagosView() {
       puedeGestionar: estadoMes.puedeGestionar,
     },
   ];
+
+  // Entrega cerrada: los dos documentos aprobados. Entonces la franja sobra —no
+  // queda nada que decidir— y se quita de en medio para que la tabla empiece
+  // arriba. Lo que se pierde (reabrir y el histórico) está en «Documentos».
+  const entregaAprobada = bloquesCuadre.every((b) => b.aprobadoEn != null);
 
   const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
     (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
@@ -1694,62 +1900,59 @@ export function PagosView() {
             e.target.value = "";
           }}
         />
-        {/* Todas las nóminas del mes en un PDF. Solo con nóminas subidas: si no,
-            no hay nada que descargar. */}
-        {nominasEnMes > 0 && !esVistaAgregada && (
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/* Los papeles de la gestoría. Aparece en cuanto hay algo que mirar, y
+              desde dentro se abren y se descargan. Sustituye al icono suelto de
+              descarga, que solo bajaba las nóminas y no dejaba ver un recibo. */}
+          {hayAlgoEntregado && !esVistaAgregada && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => setShowDocumentos(true)}
+              title="Ver y descargar los documentos que subió la gestoría"
+            >
+              <FolderOpen className="h-4 w-4" />
+              Documentos
+            </Button>
+          )}
+          {/* Subir solo mientras falte algo de la entrega. Con las nóminas y el
+              recibo ya dentro no hay nada que subir: para cambiarlos se devuelve
+              el mes a la gestoría, y entonces el botón vuelve solo. */}
+          {faltaAlgoPorSubir && !esVistaAgregada && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => setShowDocsMes(true)}
+              disabled={subiendoNominas}
+              title="Elige el mes y sube sus nóminas y TC1; la IA los lee y vuelca los datos"
+            >
+              <Upload className="h-4 w-4" />
+              {subiendoNominas
+                ? `Leyendo nóminas… ${progresoNominas.hechas}/${progresoNominas.total}`
+                : "Subir nóminas"}
+            </Button>
+          )}
           <Button
-            variant="outline"
-            size="icon"
-            className="ml-auto"
-            onClick={descargarNominasDelMes}
-            disabled={descargandoMes}
-            title="Descargar todas las nóminas del mes en un PDF"
+            className="gap-2"
+            onClick={() => enviarConfirmaciones(pendientesDeEnviar, "liquidaciones")}
+            disabled={
+              enviando ||
+              esVistaAgregada ||
+              !estadoMes.confirmado ||
+              pendientesDeEnviar.length === 0
+            }
+            title={
+              !estadoMes.confirmado
+                ? "Primero hay que confirmar las nóminas del mes: hasta entonces los importes pueden cambiar"
+                : pendientesDeEnviar.length === 0
+                  ? "No queda ninguna liquidación por enviar este mes"
+                  : "Envía a cada trabajador su liquidación del mes y avisa a contabilidad de que puede pagar"
+            }
           >
-            {descargandoMes ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
+            <Send className="h-4 w-4" />
+            Enviar liquidaciones
           </Button>
-        )}
-        <Button
-          variant="outline"
-          className={nominasEnMes > 0 && !esVistaAgregada ? "gap-2" : "ml-auto gap-2"}
-          onClick={() => setShowDocsMes(true)}
-          // Con el mes confirmado se sigue pudiendo abrir: dentro, las nóminas
-          // quedan bloqueadas pero el recibo de cotizaciones no, que llega más
-          // tarde y es un documento aparte.
-          disabled={subiendoNominas || esVistaAgregada}
-          title="Elige el mes y sube sus nóminas y TC1; la IA los lee y vuelca los datos"
-        >
-          <Upload className="h-4 w-4" />
-          {subiendoNominas
-            ? `Leyendo nóminas… ${progresoNominas.hechas}/${progresoNominas.total}`
-            : "Subir nóminas"}
-        </Button>
-        <Button
-          className="gap-2"
-          onClick={() =>
-            enviarConfirmaciones(
-              pagos.filter((p) => !p.confirmacionEnviadaAt).map((p) => p.empleadoId),
-              "liquidaciones",
-            )
-          }
-          disabled={
-            enviando ||
-            esVistaAgregada ||
-            !estadoMes.confirmado ||
-            pagos.every((p) => !!p.confirmacionEnviadaAt)
-          }
-          title={
-            !estadoMes.confirmado
-              ? "Primero hay que confirmar las nóminas del mes: hasta entonces los importes pueden cambiar"
-              : "Envía a cada trabajador su liquidación del mes y avisa a contabilidad de que puede pagar"
-          }
-        >
-          <Send className="h-4 w-4" />
-          Enviar liquidaciones
-        </Button>
+        </div>
       </div>
 
       {/* CUADRE DE LA ENTREGA: los dos documentos que manda la gestoría, cada
@@ -1757,7 +1960,7 @@ export function PagosView() {
           sobre la tabla, y se pinta SIEMPRE —también en meses vacíos—, porque es
           donde se ve de un vistazo si queda algo por aprobar. En trimestre/año
           no: sería mezclar meses. */}
-      {!esVistaAgregada && (
+      {!esVistaAgregada && !entregaAprobada && (
         <div>
           <CuadreEntregaCard
             periodo={periodo}
@@ -1769,7 +1972,10 @@ export function PagosView() {
               setShowRechazo(true);
             }}
             onReabrir={(c) => (c === "nominas" ? reabrirMes() : reabrirSs())}
-            onVerDocumentos={() => setShowDocsMes(true)}
+            onVerDocumentos={() =>
+              hayAlgoEntregado ? setShowDocumentos(true) : setShowDocsMes(true)
+            }
+            hayDocumentos={hayAlgoEntregado}
             cargarHistorico={() => listarHistoricoMes(periodo)}
           />
         </div>
@@ -1912,6 +2118,29 @@ export function PagosView() {
         }}
       />
 
+      {/* DOCUMENTOS: solo mirar y descargar lo que subió la gestoría. Separado a
+          propósito del diálogo de subida, que es donde se trabaja con ellos. */}
+      <DocumentosEntregaDialog
+        open={showDocumentos}
+        onOpenChange={setShowDocumentos}
+        periodo={periodo}
+        mesLabelNominas={mesLabelNominas}
+        mesLabelSeguros={nombreMesLargo(mesCotizadoPrincipal)}
+        tc1={tc1Principal}
+        nominasAprobadoEn={estadoMes.confirmado ? estadoMes.confirmadoEn : null}
+        segurosAprobadoEn={cuadreSs?.aprobadoEn ?? null}
+        puedeGestionar={estadoMes.puedeGestionar}
+        onReabrir={(seccion) => {
+          setShowDocumentos(false);
+          if (seccion === "nominas") void reabrirMes();
+          else void reabrirSs();
+        }}
+        onSubir={() => {
+          setShowDocumentos(false);
+          setShowDocsMes(true);
+        }}
+      />
+
       <NominasRevisionDialog
         open={showRevision}
         onOpenChange={setShowRevision}
@@ -1943,7 +2172,7 @@ export function PagosView() {
                     className="min-w-[130px]"
                   />
                   {columnasRender.map((c) => columnDefs[c.campo]?.th)}
-                  <TableHead className="w-[50px]"></TableHead>
+                  <TableHead className="w-[124px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1991,40 +2220,12 @@ export function PagosView() {
                           ) : null}
                         </TableCell>
                         {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
-                        <TableCell>
-                          <div className="flex items-center gap-0.5">
-                            {p.confirmacionEnviadaAt || p.confirmacionAceptadaAt ? (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 cursor-not-allowed text-muted-foreground"
-                                  disabled
-                                  title={p.confirmacionAceptadaAt ? "Liquidación confirmada por el empleado (bloqueada)" : "Liquidación enviada (bloqueada)"}
-                                >
-                                  <Lock className="h-3.5 w-3.5" />
-                                </Button>
-                                {esDirector && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => reabrir(p)} title="Reabrir liquidación"><Unlock className="h-3.5 w-3.5" /></Button>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => setEditando(p)}
-                                  disabled={estadoMes.confirmado || esVistaAgregada}
-                                  title={estadoMes.confirmado ? "Nóminas del mes confirmadas: la liquidación no se puede editar" : "Editar"}
-                                >
-                                  <Edit2 className="h-3.5 w-3.5" />
-                                </Button>
-                                {!p.empleadoId.startsWith("ext-") && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-primary" onClick={() => enviarConfirmaciones([p.empleadoId], "liquidación")} disabled={enviando} title="Enviar liquidación a este empleado"><Send className="h-3.5 w-3.5" /></Button>
-                                )}
-                              </>
-                            )}
+                        <TableCell className="w-[124px]">
+                          <div className="flex items-center justify-end gap-0.5">
+                            {iconoNomina(p)}
+                            {iconoComentario(p)}
+                            {iconoEstado(p)}
+                            {iconoEnvio(p)}
                           </div>
                         </TableCell>
                       </TableRow>

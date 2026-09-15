@@ -158,6 +158,10 @@ export interface PagoGuardado {
   avisoInactivo: boolean;
   confirmacionEnviadaAt: string | null;
   confirmacionAceptadaAt: string | null;
+  // Cuándo FIRMÓ el trabajador su liquidación (del enlace del correo). Es la
+  // única huella que sobrevive a reabrir el pago, y por eso es la que manda
+  // para no volver a enviarle una liquidación que ya dio por buena.
+  firmadaEn: string | null;
 }
 
 type PagoDbRow = {
@@ -246,6 +250,8 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
     avisoInactivo: false,
     confirmacionEnviadaAt: r.confirmacion_enviada_at,
     confirmacionAceptadaAt: r.confirmacion_aceptada_at,
+    // Lo rellena quien carga (loadPagos) con el token de confirmación.
+    firmadaEn: null,
   };
 }
 
@@ -255,7 +261,7 @@ export async function loadPagos(
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, data: [] };
-    const [{ data, error }, { data: nominas }] = await Promise.all([
+    const [{ data, error }, { data: nominas }, { data: firmas }] = await Promise.all([
       supabase.from("rrhh_pagos").select(PAGO_COLS).eq("empresa_id", empresaId).eq("periodo", periodo),
       // Nóminas individuales del mes: sirven para el badge "2","3"…, para el
       // desglose al pulsarlo (qué aporta cada nómina a cada columna) y para el
@@ -267,6 +273,16 @@ export async function loadPagos(
         .eq("periodo", periodo)
         .neq("revision_estado", "denegada")
         .order("orden", { ascending: true }),
+      // FIRMAS del mes: cuándo dio cada trabajador por buena su liquidación
+      // desde el enlace del correo. Va aparte del pago a propósito: reabrir un
+      // pago borra su `confirmacion_aceptada_at`, pero la firma ya ocurrió y
+      // sigue aquí. Es lo que impide reenviarle una liquidación ya firmada.
+      supabase
+        .from("rrhh_pagos_confirmacion_tokens")
+        .select("empleado_id, confirmado_en")
+        .eq("empresa_id", empresaId)
+        .eq("periodo", periodo)
+        .not("confirmado_en", "is", null),
     ]);
     if (error) throw error;
     // Desglose por empleado: sus nóminas individuales (en orden) y si ALGUNA se
@@ -287,6 +303,9 @@ export async function loadPagos(
       porEmpleado.set(id, lista);
       if (r.empleado_inactivo_al_subir === true) inactivoAlSubir.add(id);
     }
+    const firmadoPor = new Map(
+      (firmas ?? []).map((f) => [f.empleado_id as string, f.confirmado_en as string]),
+    );
     const nombres = await nombresDeFicha(
       supabase,
       empresaId,
@@ -294,6 +313,7 @@ export async function loadPagos(
     );
     const filas = (data ?? []).map((r) => {
       const p = dbToPago(r as PagoDbRow);
+      p.firmadaEn = p.empleadoId ? firmadoPor.get(p.empleadoId) ?? null : null;
       if (p.empleadoId) p.empleadoNombre = nombres.get(p.empleadoId) ?? p.empleadoNombre;
       const detalle = p.empleadoId ? porEmpleado.get(p.empleadoId) ?? [] : [];
       p.numNominas = detalle.length;
@@ -369,7 +389,15 @@ export async function savePago(
 export async function enviarConfirmacionesPago(
   periodo: string,
   empleadoIds: string[],
-): Promise<{ ok: boolean; enviadosIds: string[]; error?: string }> {
+  /**
+   * REENVÍO: vuelve a mandar una liquidación que ya salió pero que el trabajador
+   * todavía no ha confirmado (no le llegó el correo, cambió de buzón…). Sin esto
+   * la fila quedaba muda para siempre: el envío normal solo toca las que nunca se
+   * han mandado. Una liquidación ya CONFIRMADA no se reenvía: para tocarla hay
+   * que reabrirla.
+   */
+  reenviar = false,
+): Promise<{ ok: boolean; enviadosIds: string[]; cerradas?: number; error?: string }> {
   try {
     const { supabase, empresaId, userId } = await getAppContext();
     const ids = empleadoIds.filter((id) => id && !id.startsWith("ext-"));
@@ -395,6 +423,39 @@ export async function enviarConfirmacionesPago(
       };
     }
 
+    // BARRERA 2 · LIQUIDACIÓN CERRADA. Si el trabajador YA FIRMÓ la suya —o ya se
+    // le ha pagado—, no se le vuelve a mandar: recibiría, semanas después, la
+    // petición de aprobar algo que aprobó y cobró.
+    //
+    // La firma se mira en el TOKEN del correo, no en el pago. Reabrir un pago
+    // pone `confirmacion_aceptada_at` a NULL (lo hace el trigger), y por ahí se
+    // colaba el reenvío: reabrir borraba el recuerdo de la firma y la fila
+    // volvía a ofrecerse como pendiente. El token guarda el hecho —firmó, y ese
+    // día— y no lo borra nadie.
+    const [{ data: estados }, { data: firmas }] = await Promise.all([
+      supabase
+        .from("rrhh_pagos")
+        .select("empleado_id, pagado, confirmacion_aceptada_at")
+        .eq("empresa_id", empresaId)
+        .eq("periodo", periodo)
+        .in("empleado_id", ids),
+      supabase
+        .from("rrhh_pagos_confirmacion_tokens")
+        .select("empleado_id")
+        .eq("empresa_id", empresaId)
+        .eq("periodo", periodo)
+        .in("empleado_id", ids)
+        .not("confirmado_en", "is", null),
+    ]);
+    const cerradas = new Set((firmas ?? []).map((f) => f.empleado_id as string));
+    for (const r of estados ?? []) {
+      if (r.pagado === true || r.confirmacion_aceptada_at != null) {
+        cerradas.add(r.empleado_id as string);
+      }
+    }
+    const elegibles = ids.filter((id) => !cerradas.has(id));
+    if (elegibles.length === 0) return { ok: true, enviadosIds: [], cerradas: cerradas.size };
+
     // Solo afecta a pagos YA guardados (no a empleados sin datos): si no hay fila
     // en rrhh_pagos no hay liquidación que enviar.
     const { data, error } = await supabase
@@ -405,14 +466,15 @@ export async function enviarConfirmacionesPago(
       })
       .eq("empresa_id", empresaId)
       .eq("periodo", periodo)
-      .in("empleado_id", ids)
-      .is("confirmacion_enviada_at", null)
+      .in("empleado_id", elegibles)
+      .is(reenviar ? "confirmacion_aceptada_at" : "confirmacion_enviada_at", null)
       .select(
         "id, empleado_id, empleado_nombre, fijo, nomina, complemento, ajuste, horas_extras, bonus, ss_empleado, ss_empresa, irpf, total",
       );
     if (error) throw error;
     const updated = data ?? [];
     const enviadosIds = updated.map((r) => r.empleado_id as string);
+    const cuantasCerradas = cerradas.size;
 
     // Notificar a cada empleado (si la empresa lo tiene activado).
     const cfg = await getNotifLiquidacionesConfig();
@@ -510,7 +572,9 @@ export async function enviarConfirmacionesPago(
     // así que ya pueden ordenarse los pagos. Es el punto en que el importe deja
     // de poder cambiar, que es justo lo que contabilidad necesita saber para no
     // pagar sobre cifras aún vivas. Best-effort: no tumba el envío.
-    if (updated.length > 0) {
+    // En un REENVÍO no se vuelve a avisar: contabilidad ya lo supo la primera vez
+    // y un segundo correo diciendo lo mismo solo confunde a quien ordena el pago.
+    if (updated.length > 0 && !reenviar) {
       try {
         const admin = createAdminClient();
         const { data: emp } = await admin
@@ -585,7 +649,7 @@ export async function enviarConfirmacionesPago(
       }
     }
 
-    return { ok: true, enviadosIds };
+    return { ok: true, enviadosIds, cerradas: cuantasCerradas };
   } catch (err) {
     console.error("[rrhh] enviarConfirmacionesPago:", err);
     return { ok: false, enviadosIds: [] };
@@ -686,6 +750,33 @@ export async function reabrirConfirmacionPago(
 
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId || !empleadoId || empleadoId.startsWith("ext-")) return { ok: false };
+
+    // FIRMADA O PAGADA = CERRADA. Reabrir borra la aceptación del trabajador (lo
+    // hace el trigger), así que reabrir una liquidación que él ya firmó era
+    // borrar su firma: la fila volvía a contarse como pendiente y se le podía
+    // reenviar lo que ya había aprobado y cobrado. Lo firmado no se reabre.
+    const [{ data: pago }, { data: firma }] = await Promise.all([
+      supabase
+        .from("rrhh_pagos")
+        .select("pagado, confirmacion_aceptada_at")
+        .eq("empresa_id", empresaId)
+        .eq("periodo", periodo)
+        .eq("empleado_id", empleadoId)
+        .maybeSingle(),
+      supabase
+        .from("rrhh_pagos_confirmacion_tokens")
+        .select("confirmado_en")
+        .eq("empresa_id", empresaId)
+        .eq("periodo", periodo)
+        .eq("empleado_id", empleadoId)
+        .maybeSingle(),
+    ]);
+    if (pago?.confirmacion_aceptada_at || firma?.confirmado_en) {
+      return { ok: false, error: "El trabajador ya firmó esta liquidación: no se puede reabrir ni reenviar." };
+    }
+    if (pago?.pagado) {
+      return { ok: false, error: "Esta liquidación ya está pagada: no se puede reabrir ni reenviar." };
+    }
 
     // El trigger limpia aceptada_at y enviada_por al poner enviada_at = null.
     const { error } = await supabase
@@ -870,6 +961,7 @@ export async function loadPagosRango(
           avisoInactivo: false,
           confirmacionEnviadaAt: null,
           confirmacionAceptadaAt: null,
+          firmadaEn: null,
         });
         continue;
       }

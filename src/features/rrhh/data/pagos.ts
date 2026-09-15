@@ -58,6 +58,12 @@ export interface PagoEmpleado {
   // acepto desde su app. ISO string o null.
   confirmacionEnviadaAt: string | null;
   confirmacionAceptadaAt: string | null;
+  // Cuándo FIRMÓ el trabajador su liquidación de ese mes. Sale del enlace de
+  // confirmación (`rrhh_pagos_confirmacion_tokens.confirmado_en`), no del pago:
+  // reabrir un pago borra `confirmacionAceptadaAt`, y entonces el software se
+  // olvidaba de que ya estaba firmada y dejaba volver a enviarla. La firma es un
+  // hecho: una vez ocurrió, no se deshace.
+  firmadaEn: string | null;
   /** Motivo por el que el trabajador rechazó su liquidación, y cuándo. */
   comentarioEmpleado?: string | null;
   confirmacionRechazadaAt?: string | null;
