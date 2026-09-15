@@ -53,7 +53,6 @@ export type PatronInput = {
   /** Departamento al que pertenece el patrón (nombre). null/"" = sin asignar. */
   departamento?: string | null;
   semanas: { orden: number; dias: (string | null)[] }[];
-  activo?: boolean;
   /** YYYY-MM-DD. Si no se indica, se usa el día actual (default en BD). */
   vigente_desde?: string;
   /** YYYY-MM-DD o null = sin fecha final. */
@@ -506,7 +505,9 @@ export async function createPatron(
         departamento: input.departamento?.trim() || null,
         creado_por_user_id: userId,
         creado_por_nombre: creadorNombre,
-        activo: input.activo ?? true,
+        // Un patrón no se apaga: o está en el catálogo o se borra. Ver
+        // `20260915120000_patron_no_se_desactiva_y_baja_cierra_horario.sql`.
+        activo: true,
         ...(input.vigente_desde ? { vigente_desde: input.vigente_desde } : {}),
         vigente_hasta: input.vigente_hasta ?? null,
       })
@@ -537,7 +538,7 @@ export async function createPatron(
 // ─── UPDATE ────────────────────────────────────────────────────────────
 export async function updatePatron(
   id: string,
-  input: Partial<Pick<PatronInput, "nombre" | "activo" | "vigente_desde" | "vigente_hasta">> & {
+  input: Partial<Pick<PatronInput, "nombre" | "vigente_desde" | "vigente_hasta">> & {
     semanas?: { orden: number; dias: (string | null)[] }[];
   }
 ) {
@@ -608,7 +609,6 @@ export async function updatePatron(
 
     const headerPayload: Record<string, unknown> = {};
     if (input.nombre !== undefined) headerPayload.nombre = input.nombre.trim();
-    if (input.activo !== undefined) headerPayload.activo = input.activo;
     if (input.vigente_desde !== undefined) headerPayload.vigente_desde = input.vigente_desde;
     if (input.vigente_hasta !== undefined) headerPayload.vigente_hasta = input.vigente_hasta;
 
