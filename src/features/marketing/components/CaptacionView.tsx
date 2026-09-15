@@ -100,6 +100,7 @@ export function CaptacionView() {
 
   const totalReservas = datos.porMes.reduce((s, m) => s + m.reservas, 0);
   const totalFichas = datos.clientes.reduce((s, c) => s + c.clientes, 0);
+  const primerAnio = Math.min(...datos.porMes.map((m) => m.anio));
 
   return (
     <div
@@ -107,10 +108,10 @@ export function CaptacionView() {
       style={TEXTO}
     >
       <p className="max-w-[62ch] text-[1.02rem] leading-relaxed text-muted-foreground">
-        Todas las reservas de {empresaActual.nombre} repartidas por el canal que las
-        trajo: {formatNumero(totalReservas)} reservas y {formatNumero(totalFichas)} fichas
-        de cliente. {anioEnCurso} va hasta hoy, así que cuando se compara con años
-        anteriores se compara contra el mismo tramo.
+        Todas las reservas de {empresaActual.nombre} desde {primerAnio}, repartidas por el
+        canal que las trajo: {formatNumero(totalReservas)} reservas y{" "}
+        {formatNumero(totalFichas)} fichas de cliente. {anioEnCurso} va hasta hoy, así que
+        cuando se compara con años anteriores se compara contra el mismo tramo.
       </p>
 
       <TarjetasResumen tarjetas={tarjetas} />
@@ -175,8 +176,11 @@ export function CaptacionView() {
         </Seccion>
       )}
 
-      <p className="border-t pt-4 text-xs text-muted-foreground">
-        Quedan fuera de estas cuentas {formatNumero(datos.sinOrigen.reservas)} reservas y{" "}
+      <p className="border-t pt-4 text-xs leading-relaxed text-muted-foreground">
+        Los años anteriores a que se pusiera en marcha el software salen del histórico que
+        se trajo de CoverManager, con su canal traducido al de aquí; de ahí en adelante son
+        las reservas de este sistema. Quedan fuera de estas cuentas{" "}
+        {formatNumero(datos.sinOrigen.reservas)} reservas y{" "}
         {formatNumero(datos.sinOrigen.clientes)} fichas de cliente sin canal anotado: de
         esas no se sabe por dónde entraron.
       </p>
