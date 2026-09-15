@@ -84,7 +84,13 @@ const PUBLIC_PREFIXES = ['/carta', '/sitio-publico', '/api/google/connect', '/ap
   // sesión de Supabase. `/api/escuela/entrar` es la excepción por dentro: ahí
   // SÍ se lee la sesión del software, pero si no la hay simplemente devuelve al
   // portal en vez de rebotar al login.
-  '/escuela', '/api/escuela']
+  '/escuela', '/api/escuela',
+  // La cita de quien la reservó desde un embudo (`/cita/<token>`): ahí ve su
+  // hora y puede anularla. No tiene cuenta en el software — llegó por una
+  // página de venta — así que exigirle sesión sería mandarle a la pantalla de
+  // acceso de un programa de gestión que no conoce, y el hueco se quedaría
+  // ocupado por alguien que ya no viene.
+  '/cita']
 
 /**
  * Rutas que en el dominio de un cliente se sirven TAL CUAL, sin mandarlas al
@@ -106,6 +112,9 @@ const RUTAS_PUBLICAS_EN_DOMINIO_CLIENTE = [
   '/formacion',
   '/documentacion',
   '/firmar',
+  // Su cita, si el embudo se sirve desde el dominio del propio cliente: el
+  // enlace tiene que abrir la cita, no la web del CMS.
+  '/cita',
 ]
 
 function esRutaPublicaDeCliente(pathname: string) {
