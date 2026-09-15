@@ -130,17 +130,26 @@ export const ESTADO_COLOR: Record<EstadoFirma, string> = {
 };
 
 /**
+ * Documentos que la persona PUEDE negarse a firmar sin que eso los invalide: la
+ * sanción y la comunicación de baja. Cerrarlos «leídos» no es un estado tibio,
+ * es el hecho que hay que poder contar: se le entregó, lo leyó y NO LA FIRMÓ.
+ */
+const DOCS_QUE_SE_PUEDEN_NO_FIRMAR = ["sancion_disciplinaria", "baja_empresa"];
+
+/**
  * Etiqueta y color del estado teniendo en cuenta QUÉ documento es. Una sanción
- * cerrada sin firma no es un «leído» cualquiera: es una sanción NO FIRMADA, y
- * así tiene que leerse —en rojo— allí donde se mire.
+ * o una carta de baja cerradas sin firma no son un «leído» cualquiera: son
+ * documentos NO FIRMADOS, y así tienen que leerse —en rojo— allí donde se miren.
  */
 export function estadoFirmaLabel(estado: EstadoFirma | string, tipo?: string): string {
-  if (estado === "leido" && tipo === "sancion_disciplinaria") return "No firmada";
+  if (estado === "leido" && DOCS_QUE_SE_PUEDEN_NO_FIRMAR.includes(tipo ?? "")) {
+    return "No firmada";
+  }
   return ESTADO_LABEL[estado as EstadoFirma] ?? String(estado);
 }
 
 export function estadoFirmaColor(estado: EstadoFirma | string, tipo?: string): string {
-  if (estado === "leido" && tipo === "sancion_disciplinaria") {
+  if (estado === "leido" && DOCS_QUE_SE_PUEDEN_NO_FIRMAR.includes(tipo ?? "")) {
     return "border-rose-300 bg-rose-50 text-rose-700";
   }
   return ESTADO_COLOR[estado as EstadoFirma] ?? "border-zinc-300 bg-zinc-50 text-zinc-600";

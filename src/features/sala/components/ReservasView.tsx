@@ -3005,6 +3005,49 @@ function encuadreAutomatico(
 }
 
 /**
+ * Lo único que dice la barra de unir: las mesas que la reserva tiene ahora y,
+ * tras la flecha, las que va a tener. Sin flecha mientras no se haya tocado
+ * nada, porque entonces no hay dos estados que comparar.
+ */
+function MesasDeLaUnion({
+  originales,
+  seleccion,
+  hayCambios,
+}: {
+  originales: string[];
+  seleccion: string[];
+  hayCambios: boolean;
+}) {
+  const juntar = (codigos: string[]) =>
+    codigos.length > 0
+      ? [...codigos]
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+          .join(" + ")
+      : "Sin mesa";
+
+  return (
+    <span className="flex min-w-0 items-center gap-2 truncate">
+      <span
+        className={cn(
+          "font-mono text-[13px] font-bold tabular-nums",
+          hayCambios && "text-muted-foreground line-through",
+        )}
+      >
+        {juntar(originales)}
+      </span>
+      {hayCambios && (
+        <>
+          <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="font-mono text-[13px] font-bold tabular-nums">
+            {juntar(seleccion)}
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
+
+/**
  * Unión de mesas en curso SOBRE EL PLANO. La lleva la vista y el plano solo la
  * pinta: nada de esto toca la base de datos hasta que se pulsa "Guardar", así
  * que un clic de más se deshace pulsando otra vez la misma mesa.
@@ -3250,36 +3293,18 @@ function PlanoCanvas({
     <div className="flex-1 flex flex-col overflow-hidden py-3 min-h-0">
       {/* UNIR: aquí sí hace falta barra, porque a diferencia de mover no hay un
           clic que cierre la operación —se pueden pulsar varias mesas— y el
-          cambio no existe hasta que se guarda. Enseña cómo va quedando la
-          reserva y las dos únicas salidas: guardar o dejarlo como estaba. */}
+          cambio no existe hasta que se pulsa Unir.
+          Dice UNA sola cosa: las mesas que la reserva tiene hoy → las que va a
+          tener. No lleva ni el nombre del cliente ni instrucciones: el nombre
+          ya está en la mesa del plano, y lo que hay que hacer se ve solo,
+          porque las mesas marcadas salen con el recuadro rojo. */}
       {union && (
-        <div className="mx-2 mb-2 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs">
-          <IconoUnirMesas className="h-4 w-4 shrink-0 text-emerald-600" />
-          <span className="min-w-0 truncate">
-            Uniendo mesas de{" "}
-            <span className="font-semibold">
-              {union.reserva.cliente || "WALK IN"} {union.reserva.apellidos}
-            </span>{" "}
-            · {union.reserva.hora.slice(0, 5)} · {union.reserva.comensales} per
-          </span>
-          <span className="min-w-0 truncate text-muted-foreground">
-            {union.originales.length > 0 ? union.originales.join(" + ") : "sin mesa"}
-            {union.hayCambios && (
-              <>
-                {" → "}
-                <span className="font-semibold text-foreground">
-                  {union.seleccion.length > 0
-                    ? [...union.seleccion]
-                        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-                        .join(" + ")
-                    : "sin mesa"}
-                </span>
-              </>
-            )}
-          </span>
-          <span className="text-muted-foreground">
-            — pulsa en el plano las mesas que juntas; púlsalas otra vez para quitarlas.
-          </span>
+        <div className="mx-2 mb-2 flex shrink-0 items-center gap-2 rounded-md border bg-background/95 px-3 py-2 text-xs">
+          <MesasDeLaUnion
+            originales={union.originales}
+            seleccion={union.seleccion}
+            hayCambios={union.hayCambios}
+          />
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <Button
               size="sm"
@@ -3296,7 +3321,7 @@ function PlanoCanvas({
               disabled={union.ocupado || !union.hayCambios}
               onClick={onGuardarUnion}
             >
-              {union.ocupado ? "Guardando…" : "Guardar"}
+              {union.ocupado ? "Uniendo…" : "Unir"}
             </Button>
           </div>
         </div>
@@ -3449,11 +3474,13 @@ function PlanoCanvas({
                         "!border-red-500 !border-[6px] ring-[18px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
                       moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
                       destinoInvalido && "opacity-40 cursor-not-allowed",
-                      // Verde = va con la reserva. El aro grueso de las
-                      // elegidas se ve desde lejos, que es como se comprueba
-                      // una unión: mirando el bloque entero, no mesa a mesa.
-                      enUnion && "ring-4 ring-emerald-500 ring-offset-2 ring-offset-transparent z-10",
-                      uniendo && !enUnion && !unionInvalida && "cursor-copy ring-2 ring-emerald-500/50 hover:ring-4 hover:scale-105",
+                      // Marcada = el MISMO recuadro rojo que sale al pasar el
+                      // ratón, pero clavado: se pulsa una mesa y se queda
+                      // marcada. Así la unión se comprueba mirando el bloque
+                      // entero desde lejos, sin repasar mesa a mesa.
+                      enUnion &&
+                        "!border-red-500 !border-[6px] ring-[18px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
+                      uniendo && !enUnion && !unionInvalida && "cursor-copy",
                       unionInvalida && "opacity-40 cursor-not-allowed",
                     )}
                     onMouseEnter={() => onHoverMesa?.(m.id)}
@@ -6126,7 +6153,7 @@ export function ReservasView() {
     setChoquesUnion(null);
     // La ficha desde la que se ha pulsado se cierra: tapaba el plano.
     setFilaPopoverAbiertaId(null);
-    toast.info("Pulsa en el plano las mesas de esta reserva. Se guardan al pulsar Guardar.");
+    toast.info("Marca en el plano las mesas de esta reserva y pulsa Unir.");
   };
 
   const cancelarUnion = useCallback(() => {
@@ -7255,30 +7282,12 @@ export function ReservasView() {
               {/* Misma barra de unir que en el plano: esta vista es el mismo
                   salón puesto en rejilla, así que se une igual. */}
               {unionEnPlano && (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs">
-                  <IconoUnirMesas className="h-4 w-4 shrink-0 text-emerald-600" />
-                  <span className="min-w-0 truncate">
-                    Uniendo mesas de{" "}
-                    <span className="font-semibold">
-                      {unionEnPlano.reserva.cliente || "WALK IN"} {unionEnPlano.reserva.apellidos}
-                    </span>{" "}
-                    · {unionEnPlano.reserva.hora.slice(0, 5)} · {unionEnPlano.reserva.comensales} per
-                  </span>
-                  <span className="min-w-0 truncate text-muted-foreground">
-                    {unionEnPlano.originales.length > 0
-                      ? unionEnPlano.originales.join(" + ")
-                      : "sin mesa"}
-                    {unionEnPlano.hayCambios && (
-                      <>
-                        {" → "}
-                        <span className="font-semibold text-foreground">
-                          {unionEnPlano.seleccion.length > 0
-                            ? codigoUnionCompuesto.split("+").join(" + ")
-                            : "sin mesa"}
-                        </span>
-                      </>
-                    )}
-                  </span>
+                <div className="flex items-center gap-2 rounded-md border bg-background/95 px-3 py-2 text-xs">
+                  <MesasDeLaUnion
+                    originales={unionEnPlano.originales}
+                    seleccion={unionEnPlano.seleccion}
+                    hayCambios={unionEnPlano.hayCambios}
+                  />
                   <div className="ml-auto flex shrink-0 items-center gap-2">
                     <Button
                       size="sm"
@@ -7295,7 +7304,7 @@ export function ReservasView() {
                       disabled={unionEnPlano.ocupado || !unionEnPlano.hayCambios}
                       onClick={guardarUnion}
                     >
-                      {unionEnPlano.ocupado ? "Guardando…" : "Guardar"}
+                      {unionEnPlano.ocupado ? "Uniendo…" : "Unir"}
                     </Button>
                   </div>
                 </div>
@@ -7398,8 +7407,10 @@ export function ReservasView() {
                                         "!border-red-500 !border-[6px] ring-[18px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
                                       moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
                                       destinoInvalido && "opacity-40 cursor-not-allowed",
-                                      enUnionAqui && "ring-4 ring-emerald-500 ring-offset-2 z-10",
-                                      uniendoAqui && !enUnionAqui && !unionInvalidaAqui && "cursor-copy ring-2 ring-emerald-500/50 hover:ring-4 hover:scale-105",
+                                      // Mismo recuadro rojo que en el plano.
+                                      enUnionAqui &&
+                                        "!border-red-500 !border-[6px] ring-[18px] ring-red-500 ring-offset-2 ring-offset-transparent z-20",
+                                      uniendoAqui && !enUnionAqui && !unionInvalidaAqui && "cursor-copy",
                                       unionInvalidaAqui && "opacity-40 cursor-not-allowed",
                                     )}
                                     style={isLibre ? { backgroundImage: fondoMesaLibre(m.id, esOscuro) } : undefined}

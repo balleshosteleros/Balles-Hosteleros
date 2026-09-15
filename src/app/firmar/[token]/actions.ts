@@ -643,10 +643,10 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       }
     }
 
-    // Sanción disciplinaria: en la hoja queda escrito cuándo la abrió, cuándo
+    // Sanción y carta de baja: en la hoja queda escrito cuándo la abrió, cuándo
     // quedó informado y desde dónde. El acta de detrás lo detalla, pero esto se
     // lee en la misma página de la firma, sin pasar hoja.
-    if ((doc.tipo as string) === "sancion_disciplinaria") {
+    if (DOCS_ACUSE_LECTURA.includes(doc.tipo as string)) {
       originalBytes = new Uint8Array(await sellarSancionSiProcede(originalBytes, doc, eventos, {
         cerradoEn: firmadoEnIso,
         ip: meta.ip,
@@ -734,6 +734,23 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
         sufijo: "firmada",
         categoria: "sanciones",
         prefijo: "sancion",
+      });
+    }
+
+    // Carta de baja firmada: a su carpeta de «Contratos». Firmarla o darla por
+    // leída son dos finales del mismo documento, y hasta ahora solo el segundo
+    // dejaba copia en su expediente: quien la firmaba se quedaba sin ella.
+    if ((doc.tipo as string) === "baja_empresa") {
+      await archivarEnCarpetaEmpleado(admin, {
+        empresaId: doc.empresa_id as string,
+        empleadoId: doc.empleado_id as string,
+        documentoId,
+        titulo: doc.titulo as string,
+        bytes: firmadoBytes,
+        creadoPor: (emp?.user_id as string) ?? null,
+        sufijo: "firmada",
+        categoria: "contratos",
+        prefijo: "baja",
       });
     }
 
@@ -1279,9 +1296,9 @@ export async function acusarLectura(
     if (dlErr || !originalDl) return { ok: false, error: "No se pudo cargar el PDF original" };
     let originalBytes = new Uint8Array(await originalDl.arrayBuffer());
 
-    // Sanción sin firmar: la hoja se marca NO FIRMADO en rojo, con la hora en que
+    // Cerrado sin firmar: la hoja se marca NO FIRMADO en rojo, con la hora en que
     // la abrió y en que quedó informado. Quien abra el PDF lo ve de inmediato.
-    if ((doc.tipo as string) === "sancion_disciplinaria") {
+    if (DOCS_ACUSE_LECTURA.includes(doc.tipo as string)) {
       originalBytes = new Uint8Array(await sellarSancionSiProcede(originalBytes, doc, eventos, {
         cerradoEn: leidoEnIso,
         ip: meta.ip,
@@ -1321,8 +1338,11 @@ export async function acusarLectura(
       .eq("id", res.tokenRow.id)
       .is("consumido_en", null);
 
-    // Su carpeta: el documento se archiva igual, firmado o solo leído. La
-    // sanción va a «Sanciones» y con el nombre en claro: «(no firmada)».
+    // Su carpeta: el documento se archiva igual, firmado o solo leído, y con el
+    // nombre en claro: «(no firmada)». Ni la sanción ni la carta de baja son
+    // acuerdos —se pueden no firmar— y el expediente tiene que decir cuál de las
+    // dos cosas pasó sin abrir el PDF. La sanción va a «Sanciones»; la baja, a
+    // «Contratos».
     const esSancion = (doc.tipo as string) === "sancion_disciplinaria";
     await archivarEnCarpetaEmpleado(admin, {
       empresaId: doc.empresa_id as string,
@@ -1331,7 +1351,7 @@ export async function acusarLectura(
       titulo: doc.titulo as string,
       bytes: finalBytes,
       creadoPor: (emp?.user_id as string) ?? null,
-      sufijo: esSancion ? "no firmada" : "leída",
+      sufijo: "no firmada",
       categoria: esSancion ? "sanciones" : "contratos",
       prefijo: esSancion ? "sancion" : "baja",
     });

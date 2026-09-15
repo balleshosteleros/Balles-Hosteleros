@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
 import { escapeHtml } from "@/lib/email/escape-html";
+import { diaSiguienteIso } from "@/shared/lib/fecha";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   crearTokenContratoGestoria,
@@ -52,6 +53,15 @@ const fila = (k: string, v: string | null | undefined) =>
  * CENTRO donde trabaja la persona. El centro sale del local del empleado, no de
  * la empresa: dos locales de la misma sociedad pueden cotizar en cuentas
  * distintas y el alta va contra la del centro.
+ *
+ * VAN MINIMIZADAS, en UNA sola caja y en letra pequeña. Son siempre los mismos
+ * datos correo tras correo —la gestoría ya se los sabe— y ocupaban dos tablas
+ * enteras por delante de lo único que cambia: la persona. Aquí caben en un
+ * bloque que se lee de un vistazo y deja el protagonismo a quien entra o sale.
+ * No se quita ni un dato: la gestoría los necesita todos.
+ *
+ * Fuente ÚNICA para alta, baja y cambio de puesto: los tres correos enseñan
+ * exactamente la misma ficha, con la misma pinta.
  */
 function fichasGestoria(
   empresaRow: { nombre?: string | null; datos_generales?: unknown } | null,
@@ -62,13 +72,29 @@ function fichasGestoria(
     empresaRow?.nombre ?? undefined,
   );
   const centro = camposCentroTrabajo(local);
-  const aFilas = (c: CampoGestoria[]) => c.map((x) => fila(x.label, x.value)).join("");
   const aTexto = (c: CampoGestoria[]) => c.map((x) => `${x.label}: ${x.value}`).join("\n");
   return {
-    html: `${tarjeta("Datos fiscales", aFilas(fiscales))}${tarjeta("Centro de trabajo", aFilas(centro))}`,
+    html: tarjeta(
+      "Empresa y centro de trabajo",
+      `${bloqueMinimizado("Datos fiscales", fiscales)}${bloqueMinimizado("Centro de trabajo", centro)}`,
+    ),
     texto: `DATOS FISCALES\n${aTexto(fiscales)}\n\nCENTRO DE TRABAJO\n${aTexto(centro)}`,
   };
 }
+
+/**
+ * Sub-bloque de la ficha minimizada: el rótulo pequeño y, debajo, los datos como
+ * «Etiqueta: valor» uno por línea. Sin bordes ni filas: es el contexto, no el
+ * asunto del correo.
+ */
+const bloqueMinimizado = (titulo: string, campos: CampoGestoria[]) => `
+        <tr><td colspan="2" style="padding:10px 16px 2px 16px;font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#94a3b8;">${escapeHtml(titulo)}</td></tr>
+        <tr><td colspan="2" style="padding:0 16px 10px 16px;font-size:12px;line-height:1.65;color:#0f172a;">${campos
+          .map(
+            (c) =>
+              `<span style="color:#64748b;">${escapeHtml(c.label)}:</span> <b>${escapeHtml(c.value) || "—"}</b>`,
+          )
+          .join("<br>")}</td></tr>`;
 
 /** El local del empleado tal como lo devuelve el embed (objeto o lista). */
 function localDe(emp: { locales?: unknown } | null): LocalParaGestoria | null {
@@ -82,6 +108,24 @@ const tarjeta = (titulo: string, filas: string) => `
       <table role="presentation" width="100%" style="border-collapse:separate;border-spacing:0;margin:18px 0;max-width:480px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
         <tr><td colspan="2" style="background:#ffffff;padding:12px 16px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">${escapeHtml(titulo)}</td></tr>
         ${filas}
+      </table>`;
+
+/**
+ * Bloque para un texto LARGO (el motivo de una baja, una causa redactada): el
+ * título arriba y el texto corrido debajo, ocupando toda la caja y alineado a
+ * la izquierda. Un párrafo de varias líneas metido como una fila más de la
+ * ficha sale en una columna estrecha y alineado a la derecha: se lee fatal.
+ * Por eso va aparte y al final, después de las fichas de datos.
+ */
+const bloqueTexto = (titulo: string, texto: string) => `
+      <table role="presentation" width="100%" style="border-collapse:separate;border-spacing:0;margin:18px 0;max-width:480px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+        <tr><td style="background:#ffffff;padding:12px 16px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">${escapeHtml(titulo)}</td></tr>
+        <tr><td style="padding:14px 16px;color:#0f172a;font-size:14px;line-height:1.6;text-align:left;">${texto
+          .trim()
+          .split(/\n+/)
+          .map((l) => escapeHtml(l.trim()))
+          .filter(Boolean)
+          .join("<br><br>")}</td></tr>
       </table>`;
 import {
   INCORPORACION_TITULO_DEFAULT,
@@ -838,7 +882,8 @@ export async function enviarCambioPuestoGestoria(
  *   · Último día de trabajo (fecha efectiva que el empleado indicó al solicitar).
  *   · Día oficial de la baja = último día + 1 (la baja en Seguridad Social es el
  *     día siguiente al último trabajado).
- *   · Motivo (si lo hay).
+ *   · La causa comunicada al trabajador (y la nota interna, si la hay): van al
+ *     final, fuera de la ficha, porque son textos largos.
  *   · Nombre, DNI/NIE, teléfono, email, puesto (SIN nivel), tipo de contrato y
  *     convenio. NO se envían nivel, primer día, jornada, horas ni salario.
  *
@@ -853,7 +898,14 @@ export async function enviarBajaGestoria(
   baja: {
     ultimoDiaIso: string;
     tipoBaja: TipoBajaContrato;
+    /** Nota interna que RRHH escribe para la gestoría (opcional). */
     motivo?: string | null;
+    /**
+     * LA CAUSA, tal y como se le ha comunicado al trabajador en su carta. Es el
+     * texto que manda: la gestoría tiene que leer exactamente lo mismo que se
+     * le dijo a la persona, no una versión resumida ni otra distinta.
+     */
+    hechos?: string | null;
     /** Etiqueta a mostrar para el tipo de baja (p. ej. «Voluntaria forzosa»
      *  cuando la causa la empresa). Si no viene, se usa ETIQUETA_TIPO_BAJA. */
     tipoBajaLabel?: string | null;
@@ -870,14 +922,8 @@ export async function enviarBajaGestoria(
       const [y, m, d] = iso.split("-");
       return y && m && d ? `${d}/${m}/${y}` : iso;
     };
-    const sumarUnDia = (iso: string): string => {
-      const t = new Date(`${iso}T00:00:00Z`);
-      if (Number.isNaN(t.getTime())) return iso;
-      t.setUTCDate(t.getUTCDate() + 1);
-      return t.toISOString().slice(0, 10);
-    };
     const ultimoDiaTrabajo = fmt(baja.ultimoDiaIso);
-    const diaOficialBaja = fmt(sumarUnDia(baja.ultimoDiaIso));
+    const diaOficialBaja = fmt(diaSiguienteIso(baja.ultimoDiaIso) ?? baja.ultimoDiaIso);
     const tipoBajaLabel =
       (baja.tipoBajaLabel && baja.tipoBajaLabel.trim()) ||
       ETIQUETA_TIPO_BAJA[baja.tipoBaja] ||
@@ -930,10 +976,20 @@ export async function enviarBajaGestoria(
       if (!tipoContrato) tipoContrato = (p?.tipo_contrato_defecto as string | null) ?? null;
     }
 
-    // VACACIONES PENDIENTES DE DISFRUTAR: el número que la gestoría necesita
-    // para el finiquito. Sale del mismo saldo que ve RRHH en su calendario, así
-    // que empresa y gestoría cuentan lo mismo. Si no se puede calcular se manda
-    // vacío antes que un cero falso, que se liquidaría como "no le debemos nada".
+    // VACACIONES AL CAUSAR BAJA: el número que la gestoría necesita para el
+    // finiquito. Sale del mismo saldo que ve RRHH en su calendario, así que
+    // empresa y gestoría cuentan lo mismo.
+    //
+    // PUEDE SER NEGATIVO y ese es justo el caso que hay que decir en voz alta:
+    // quien se va habiendo disfrutado MÁS días de los que había devengado hasta
+    // su último día tiene un saldo EN CONTRA, que se le descuenta del finiquito.
+    // Antes esto viajaba como «0 días» —`diasRestantes` se corta en cero para no
+    // ofrecer días que no existen— y la gestoría lo leía como "no hay nada que
+    // ajustar". Caso real: Eduardo Charro (alta 15-05, último día 10-09) devengó
+    // 10 días y disfrutó 14: son −4, no 0.
+    //
+    // Si no se puede calcular se manda vacío antes que un cero falso.
+    let vacacionesLabel = "Vacaciones pendientes de disfrutar";
     let vacacionesPendientes: string | null = null;
     let vacacionesLiquidadas: number | null = null;
     try {
@@ -948,12 +1004,20 @@ export async function enviarBajaGestoria(
         baja.ultimoDiaIso,
       );
       if (saldo.ok && saldo.data) {
-        const d = saldo.data.diasRestantes;
-        vacacionesPendientes = `${d} ${d === 1 ? "día" : "días"}`;
+        const exceso = saldo.data.diasExcedidos;
+        const d = exceso > 0 ? -exceso : saldo.data.diasRestantes;
         vacacionesLiquidadas = d;
+        vacacionesPendientes = `${d} ${Math.abs(d) === 1 ? "día" : "días"}`;
+        if (exceso > 0) {
+          vacacionesLabel = "Vacaciones disfrutadas de más (a descontar)";
+          vacacionesPendientes +=
+            ` — ha disfrutado ${exceso} ${exceso === 1 ? "día" : "días"} por encima de` +
+            ` lo que le corresponde hasta su último día (devengados ${saldo.data.diasTotales},` +
+            ` disfrutados ${saldo.data.diasDisfrutados}). Se descuenta en el finiquito.`;
+        }
       }
     } catch (e) {
-      console.error("[rrhh] enviarBajaGestoria → vacaciones pendientes:", e);
+      console.error("[rrhh] enviarBajaGestoria → vacaciones:", e);
     }
 
     // Nombre + datos del centro (CCC, convenio, tipo de local) en una consulta.
@@ -1002,8 +1066,7 @@ export async function enviarBajaGestoria(
       { label: "Tipo de baja", value: tipoBajaLabel },
       { label: "Último día de trabajo", value: ultimoDiaTrabajo },
       { label: "Día oficial de la baja", value: diaOficialBaja },
-      { label: "Vacaciones pendientes de disfrutar", value: vacacionesPendientes },
-      ...(baja.motivo ? [{ label: "Motivo", value: baja.motivo }] : []),
+      { label: vacacionesLabel, value: vacacionesPendientes },
       { label: "Nombre", value: nombre },
       { label: "DNI/NIE", value: emp.dni_nie },
       { label: "Teléfono", value: emp.telefono },
@@ -1034,7 +1097,32 @@ export async function enviarBajaGestoria(
     const filasHtml = camposBaja.map((c) => fila(c.label, c.value)).join("");
     const filasText = camposBaja.map((c) => `${c.label}: ${c.value || "—"}`).join("\n");
 
-    const tablaHtml = `${fichas.html}${tarjeta("Datos de la baja", filasHtml)}`;
+    // EL MOTIVO VA AL FINAL Y FUERA DE LA FICHA. Es una descripción larga —a
+    // veces un párrafo entero— y como fila de la tabla salía espachurrada en
+    // media columna y alineada a la derecha. Aquí se lee como lo que es.
+    //
+    // Y el texto es EL MISMO QUE RECIBIÓ EL TRABAJADOR en su carta (`hechos`):
+    // la gestoría debe leer exactamente la causa que se le comunicó a la
+    // persona. La nota interna, si la hay y dice algo distinto, se añade debajo
+    // sin mezclarse con ella. Si no hay carta (baja voluntaria: la causa la
+    // expresa el propio trabajador al solicitarla), el motivo es esa.
+    const causaComunicada = baja.hechos?.trim() || null;
+    const notaInterna = baja.motivo?.trim() || null;
+    const bloques: Array<{ titulo: string; texto: string }> = [];
+    if (causaComunicada) {
+      bloques.push({ titulo: "Motivo de la baja", texto: causaComunicada });
+      if (notaInterna && notaInterna !== causaComunicada) {
+        bloques.push({ titulo: "Nota interna de RRHH", texto: notaInterna });
+      }
+    } else if (notaInterna) {
+      bloques.push({ titulo: "Motivo de la baja", texto: notaInterna });
+    }
+    const bloquesHtml = bloques.map((b) => bloqueTexto(b.titulo, b.texto)).join("");
+    const bloquesText = bloques
+      .map((b) => `\n\n${b.titulo.toUpperCase()}\n${b.texto.trim()}`)
+      .join("");
+
+    const tablaHtml = `${fichas.html}${tarjeta("Datos de la baja", filasHtml)}${bloquesHtml}`;
 
     const { resolverPlantillaOnboarding, resolverDestinatario, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } =
       await import("@/features/rrhh/services/email-plantillas/resolver");
@@ -1061,11 +1149,12 @@ export async function enviarBajaGestoria(
     // Enlace para que la gestoría adjunte los DOCUMENTOS OFICIALES de la baja
     // (justificante del RED — obligatorio — y certificado de empresa del SEPE).
     //
-    // El token se crea AQUÍ, pero su correo NO sale todavía: la petición de
-    // documentos se envía EL DÍA DE LA BAJA (o al momento si la baja se comunica
-    // con la fecha ya pasada). Este correo es solo el aviso de que el trabajador
-    // causa baja; los papeles no existen hasta que la baja se tramita.
-    const { crearTokenDocsBaja } = await import(
+    // VA EN ESTE MISMO CORREO, igual que el alta lleva el botón para adjuntar el
+    // contrato firmado. Antes salía en un segundo correo aparte y el aviso de la
+    // baja llegaba sin ningún enlace: quien lo abría no tenía dónde subir nada.
+    // Un aviso, un botón. El enlace sigue vivo 30 días después del último día,
+    // así que no importa que los papeles aún no existan al recibirlo.
+    const { crearTokenDocsBaja, botonDocsBajaHtml, urlSubidaDocsBaja } = await import(
       "@/features/rrhh/services/gestoria/gestoria-baja-documentos"
     );
     const tkDocs = await crearTokenDocsBaja(admin, {
@@ -1073,6 +1162,11 @@ export async function enviarBajaGestoria(
       empleadoId,
       ultimoDiaIso: baja.ultimoDiaIso,
     });
+    const botonDocsHtml = tkDocs.ok ? botonDocsBajaHtml(urlSubidaDocsBaja(tkDocs.token)) : "";
+    const enlaceDocsText = tkDocs.ok
+      ? `\n\nAdjuntar los documentos de la baja (justificante de la Seguridad Social y ` +
+        `certificado de empresa): ${urlSubidaDocsBaja(tkDocs.token)}`
+      : "";
 
     let subject: string;
     let html: string;
@@ -1083,15 +1177,16 @@ export async function enviarBajaGestoria(
       const cuerpoHtml = partes.length > 1
         ? partes.map((p) => cuerpoOnboardingAHtml(p)).join(tablaHtml)
         : `${cuerpoOnboardingAHtml(tpl.cuerpo)}${tablaHtml}`;
-      html = cuerpoHtml;
-      text = tpl.cuerpo.replace("{{gestoria_datos}}", `\n${fichas.texto}\n\nDATOS DE LA BAJA\n${filasText}`);
+      html = `${cuerpoHtml}${botonDocsHtml}`;
+      text = `${tpl.cuerpo.replace("{{gestoria_datos}}", `\n${fichas.texto}\n\nDATOS DE LA BAJA\n${filasText}${bloquesText}`)}${enlaceDocsText}`;
     } else {
       subject = `Baja de trabajador · ${nombre} · ${empresaNombre}`;
       html = `
       <p>El siguiente trabajador causa baja (${escapeHtml(tipoBajaLabel)}) en la empresa. Su último día efectivo de trabajo será el ${escapeHtml(ultimoDiaTrabajo)} y la baja será oficial el ${escapeHtml(diaOficialBaja)}:</p>
       ${tablaHtml}
+      ${botonDocsHtml}
       <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-      text = `Baja de trabajador\n\n${fichas.texto}\n\nDATOS DE LA BAJA\n${filasText}`;
+      text = `Baja de trabajador\n\n${fichas.texto}\n\nDATOS DE LA BAJA\n${filasText}${bloquesText}${enlaceDocsText}`;
     }
 
     const res = await sendEmail({ to, subject, html, text, empresaId });
@@ -1112,11 +1207,13 @@ export async function enviarBajaGestoria(
           puesto: emp.puesto ?? null,
           tipo_baja: baja.tipoBaja,
           tipo_baja_label: tipoBajaLabel,
-          motivo: baja.motivo ?? null,
+          // Foto fija de lo enviado: el motivo que ha leído la gestoría.
+          motivo: bloques[0]?.texto ?? null,
           ultimo_dia: baja.ultimoDiaIso,
           origen: baja.origen ?? "reclutamiento",
           // Los días que se le liquidan en el finiquito: a partir de aquí ya no
-          // son días disponibles, están pagados.
+          // son días disponibles, están pagados. En NEGATIVO cuando disfrutó de
+          // más: entonces no se le pagan, se le descuentan.
           vacaciones_liquidadas: vacacionesLiquidadas,
           email_estado: res.ok ? "enviado" : "fallido",
           email_to: dst.to,
@@ -1137,10 +1234,11 @@ export async function enviarBajaGestoria(
       console.error("[rrhh] enviarBajaGestoria → histórico:", e);
     }
 
-    // BAJA YA EFECTIVA al comunicarla (fecha de hoy o anterior): la petición de
-    // documentos, que normalmente sale el día de la baja, se manda AHORA mismo —
-    // ese día ya llegó. Si no, habría que esperar a la vuelta del cron (una vez
-    // al día) justo en el caso que más corre.
+    // La petición de documentos ya ha viajado en este mismo correo (el botón de
+    // arriba), así que no se le manda otro. Lo que sí queda por hacer, cuando la
+    // baja YA es efectiva, es lo demás de ese circuito: avisar al TRABAJADOR —ese
+    // día suele estar ya Inactivo y sin acceso al sistema— y dejar el barrido del
+    // cron armado para insistirle a la gestoría si el justificante no llega.
     if (res.ok && tkDocs.ok) {
       try {
         const { enviarPeticionDocsBaja } = await import(
@@ -1156,6 +1254,8 @@ export async function enviarBajaGestoria(
           // Decisión de Iván: la gestoría recibe la petición EN EL MOMENTO en que
           // RRHH pasa al empleado a «Baja contrato», sin esperar al día de la baja.
           forzar: true,
+          // …pero en el propio aviso de la baja, no en un correo suelto.
+          omitirGestoria: true,
         });
       } catch (e) {
         console.error("[rrhh] enviarBajaGestoria → petición docs baja:", e);

@@ -335,6 +335,13 @@ export async function enviarPeticionDocsBaja(
     expiraEn: string;
     /** Envía sin mirar la fecha (lo usa la comunicación de la baja). */
     forzar?: boolean;
+    /**
+     * El enlace ya ha viajado en el correo de la baja, así que NO se le manda
+     * otro a la gestoría. El resto del circuito sí se ejecuta: el aviso al
+     * trabajador cuando su baja ya es efectiva y el sello que arma el barrido
+     * del cron para insistir si el justificante no llega.
+     */
+    omitirGestoria?: boolean;
   },
 ): Promise<boolean> {
   try {
@@ -368,13 +375,6 @@ export async function enviarPeticionDocsBaja(
     const enlace = urlRecordatorioDocsBaja(tk.tokenHash);
     const botonHtml = botonDocsBajaHtml(enlace, { recordatorio: true });
 
-    const { resolverDestinatario } = await import(
-      "@/features/rrhh/services/email-plantillas/resolver"
-    );
-    const dst = await resolverDestinatario(admin, tk.empresaId, "departamento", "correoGestoria", null);
-    const to = [dst.to, dst.cc].filter(Boolean).join(", ");
-    if (!to) return false;
-
     const fechaES = tk.ultimoDia.split("-").reverse().join("/");
     const subject = vencido
       ? `⚠️ Urgente: faltan los documentos de la baja de ${nombre} · ${empresaNombre}`
@@ -401,8 +401,16 @@ export async function enviarPeticionDocsBaja(
       `Documentos de la baja de ${nombre} (fecha de baja: ${fechaES}). ` +
       `Súbelos aquí: ${enlace}`;
 
-    const res = await sendEmail({ to, subject, html, text, empresaId: tk.empresaId });
-    if (!res.ok) return false;
+    if (!tk.omitirGestoria) {
+      const { resolverDestinatario } = await import(
+        "@/features/rrhh/services/email-plantillas/resolver"
+      );
+      const dst = await resolverDestinatario(admin, tk.empresaId, "departamento", "correoGestoria", null);
+      const to = [dst.to, dst.cc].filter(Boolean).join(", ");
+      if (!to) return false;
+      const res = await sendEmail({ to, subject, html, text, empresaId: tk.empresaId });
+      if (!res.ok) return false;
+    }
 
     // Aviso al TRABAJADOR, solo cuando su baja YA es efectiva (hoy o antes): ese
     // día ya suele estar Inactivo y sin acceso al sistema, así que el correo es su
@@ -440,8 +448,10 @@ export async function enviarPeticionDocsBaja(
         tipo: "gestoria_recordatorio",
         titulo: `Documentos de baja pendientes: ${nombre}`,
         mensaje: vencido
-          ? `La baja de ${nombre} (${fechaES}) ya pasó y la gestoría aún no ha subido el justificante. Se le ha reenviado el enlace.`
-          : `La baja de ${nombre} es el ${fechaES} y faltan los documentos. Se ha recordado a la gestoría.`,
+          ? `La baja de ${nombre} (${fechaES}) ya pasó y la gestoría aún no ha subido el justificante.` +
+            (tk.omitirGestoria ? " El enlace va en el aviso de la baja." : " Se le ha reenviado el enlace.")
+          : `La baja de ${nombre} es el ${fechaES} y faltan los documentos.` +
+            (tk.omitirGestoria ? " El enlace va en el aviso de la baja." : " Se ha recordado a la gestoría."),
         empleadoId: tk.empleadoId,
         dedupeKey: `gestoria_baja_docs:${tk.id}`,
       });

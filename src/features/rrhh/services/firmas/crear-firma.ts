@@ -258,6 +258,26 @@ export async function crearFirmaInterno(
       },
     });
 
+    // ACTIVIDAD DE SU FICHA. Por esta puerta pasa TODO lo que el sistema manda a
+    // firmar (la carta de baja, el contrato interno, la anulación del preaviso…),
+    // así que es el único sitio donde el registro no se puede olvidar. Sin esto,
+    // la ficha enseñaba el correo a la gestoría y ni rastro del que recibió la
+    // persona: parecía que no se le había avisado de su propia baja.
+    // Best-effort: el registro es informativo y jamás tumba el envío.
+    try {
+      const { registrarEmailEnHistorial } = await import(
+        "@/features/rrhh/services/registrar-email-historial"
+      );
+      await registrarEmailEnHistorial(admin, {
+        empresaId,
+        empleadoId,
+        asunto: input.emailAsunto?.trim() || `Documento para firmar — ${titulo}`,
+        html: sendResult.ok ? sendResult.html : null,
+      });
+    } catch (e) {
+      console.error("[firmas] registrar el correo de firma en la actividad:", e);
+    }
+
     // Aviso in-app, con botón que abre el mismo enlace de firma del correo.
     // El correo se puede perder entre cien; el aviso salta al entrar en la app.
     // Best-effort: si falla, el documento ya salió por correo igualmente.

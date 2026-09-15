@@ -457,8 +457,9 @@ export function FirmaPublicaView({
                     {acusando ? "Guardando…" : "Leído y cerrar"}
                   </Button>
                   <p className="text-xs text-zinc-600">
-                    No estás obligado a firmarla. Con «Leído y cerrar» queda constancia
-                    de que la has recibido y leído, con la fecha y la hora.
+                    No estás obligado a firmarla, y no firmarla no la anula. Con «Leído y
+                    cerrar» queda constancia de que la has recibido y leído, con la fecha
+                    y la hora, y la carta se archiva marcada como NO FIRMADA.
                   </p>
                 </>
               )}
@@ -577,14 +578,16 @@ export function FirmaPublicaView({
                   {cerradoPorLectura
                     ? esSancion
                       ? "Sanción no firmada"
-                      : "Documento leído"
+                      : esComunicacionBaja
+                        ? "Comunicación no firmada"
+                        : "Documento leído"
                     : "Documento firmado"}
                 </h2>
               </div>
               <p className="text-sm text-zinc-700">
                 {cerradoPorLectura
-                  ? esSancion
-                    ? "Queda constancia del día y la hora en que la abriste y en que se te informó. El documento se ha guardado marcado como NO FIRMADO. Recibirás una copia en tu email. También puedes descargarla ahora:"
+                  ? esAcuseRecibo
+                    ? "Queda constancia del día y la hora en que lo abriste y en que se te informó. El documento se ha guardado marcado como NO FIRMADO. Recibirás una copia en tu email. También puedes descargarla ahora:"
                     : "Queda constancia de que lo has recibido y leído, con la fecha y la hora. Recibirás una copia en tu email. También puedes descargarla ahora:"
                   : "Recibirás una copia firmada en tu email. También puedes descargarla ahora:"}
               </p>
