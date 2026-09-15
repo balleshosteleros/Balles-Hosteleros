@@ -474,6 +474,8 @@ export const DIAS_SEMANA_LABELS: Record<DiaSemanaKey, string> = {
 export type SemanaHorarioInicioKey  = `${DiaSemanaKey}_inicio_${TurnoKey}`;
 export type SemanaHorarioFinKey     = `${DiaSemanaKey}_fin_${TurnoKey}`;
 export type SemanaHorarioCerradoKey = `${DiaSemanaKey}_cerrado_${TurnoKey}`;
+/** Clave de la rejilla de pases propia de un día: "vie_cena", "sab_comida"… */
+export type SlotsPorDiaKey = `${DiaSemanaKey}_${TurnoKey}`;
 export type SemanaHorarios =
   & { [K in SemanaHorarioInicioKey]:  string | null }
   & { [K in SemanaHorarioFinKey]:     string | null }
@@ -498,13 +500,24 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   generalCerradoComida: boolean;
   generalCerradoCena:   boolean;
   /**
-   * Slots de 15 min ("HH:MM") DESACTIVADOS para reservas. Aplica IGUAL a
-   * todos los días del turno (genérico). Empty = todos los slots entre
-   * apertura y cierre están activos. Si la apertura/cierre cambia, los
-   * nuevos slots aparecen activos sin necesidad de tocar nada.
+   * Slots de 15 min ("HH:MM") DESACTIVADOS para reservas. Es la rejilla
+   * COMÚN del turno: la heredan todos los días que no se separen de ella.
+   * Empty = todos los slots entre apertura y cierre están activos. Si la
+   * apertura/cierre cambia, los nuevos slots aparecen activos sin tocar nada.
    */
   generalSlotsInactivosComida: string[];
   generalSlotsInactivosCena:   string[];
+  /**
+   * Pases apagados de los días que SÍ se separan de la rejilla común, por
+   * `<dia>_<turno>` (p. ej. `vie_cena`).
+   *
+   * Solo se guarda la diferencia: si la clave no está, ese día hereda la
+   * general; si está con lista vacía, ese día tiene todos los pases activos.
+   * Antes la rejilla era única para los siete días y no había forma de que el
+   * viernes aceptara mesa más tarde que el martes por mucho que se le pusiera
+   * otro horario: el tope lo marcaban unos pases apagados comunes a todos.
+   */
+  slotsInactivosPorDia: Partial<Record<SlotsPorDiaKey, string[]>>;
   // Política de cancelación (texto fijo en código; solo estas dos cifras
   // y el mensaje opcional son configurables por empresa).
   /**
@@ -818,6 +831,11 @@ export interface EmpresaReservasHorarioExcepcion {
   inicio: string | null;       // null si cerrado
   fin: string | null;          // null si cerrado
   cerrado: boolean;
+  /**
+   * Pases apagados mientras dura la excepción. `null` = hereda los del patrón
+   * semanal (día → general); una lista, aunque esté vacía, manda sobre él.
+   */
+  slotsInactivos: string[] | null;
   motivo: string | null;
   createdAt: string;
   updatedAt: string;

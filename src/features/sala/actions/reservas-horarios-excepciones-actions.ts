@@ -30,6 +30,10 @@ function rowToHorarioExcepcion(row: Record<string, unknown>): EmpresaReservasHor
     inicio: (row.inicio as string | null) ?? null,
     fin: (row.fin as string | null) ?? null,
     cerrado: Boolean(row.cerrado),
+    // null = la excepción no toca los pases y se heredan del patrón semanal.
+    slotsInactivos: Array.isArray(row.slots_inactivos)
+      ? (row.slots_inactivos as string[]).map((h) => h.slice(0, 5))
+      : null,
     motivo: (row.motivo as string | null) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -63,6 +67,8 @@ export interface CrearHorarioExcepcionInput {
   inicio?: string | null;
   fin?: string | null;
   cerrado: boolean;
+  /** null = no toca los pases; lista (aunque vacía) = manda sobre el semanal. */
+  slotsInactivos?: string[] | null;
   motivo?: string | null;
 }
 
@@ -101,6 +107,9 @@ export async function createHorarioExcepcion(input: CrearHorarioExcepcionInput) 
         inicio:  input.cerrado ? null : input.inicio,
         fin:     input.cerrado ? null : input.fin,
         cerrado: input.cerrado,
+        // Un turno cerrado no tiene pases que apagar: se guarda null y así la
+        // excepción no arrastra una rejilla huérfana si luego se reabre.
+        slots_inactivos: input.cerrado ? null : (input.slotsInactivos ?? null),
         motivo:  input.motivo ?? null,
       })
       .select("*")

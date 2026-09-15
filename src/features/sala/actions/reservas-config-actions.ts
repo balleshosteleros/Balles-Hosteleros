@@ -17,6 +17,7 @@ import {
   RECONFIRMACION_HORA_DEFAULT,
   type EmpresaReservasConfig,
   type DiaSemanaKey,
+  type SlotsPorDiaKey,
   type TurnoKey,
   type MaxPersonasHoraModo,
   type MaxPersonasReglaTramo,
@@ -57,6 +58,23 @@ function aHoraCorta(v: unknown): string | null {
   return typeof v === "string" && v.length >= 5 ? v.slice(0, 5) : null;
 }
 
+/**
+ * Rejillas de pases propias de un día. Se descarta lo que no sea una lista de
+ * horas: la columna es jsonb y un valor raro ahí apagaría pases a ciegas en la
+ * web pública, que es justo lo que no puede pasar.
+ */
+function aSlotsPorDia(v: unknown): Partial<Record<SlotsPorDiaKey, string[]>> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  const out: Partial<Record<SlotsPorDiaKey, string[]>> = {};
+  for (const [clave, horas] of Object.entries(v as Record<string, unknown>)) {
+    if (!Array.isArray(horas)) continue;
+    out[clave as SlotsPorDiaKey] = horas
+      .filter((h): h is string => typeof h === "string")
+      .map((h) => h.slice(0, 5));
+  }
+  return out;
+}
+
 function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
   const out: Record<string, unknown> = {
     empresaId: row.empresa_id,
@@ -75,6 +93,7 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     generalSlotsInactivosCena: Array.isArray(row.general_slots_inactivos_cena)
       ? (row.general_slots_inactivos_cena as string[])
       : [],
+    slotsInactivosPorDia: aSlotsPorDia(row.slots_inactivos_por_dia),
     devolucionDepartamentos:         (row.devolucion_departamentos as string[] | null) ?? ["DIRECCIÓN"],
     cancelacionActiva:               Boolean(row.cancelacion_activa ?? true),
     cancelacionHorasAntes:           (row.cancelacion_horas_antes as number) ?? CANCELACION_HORAS_DEFAULT,
@@ -198,6 +217,7 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("generalCerradoCena"   in updates) db.general_cerrado_cena   = updates.generalCerradoCena;
     if ("generalSlotsInactivosComida" in updates) db.general_slots_inactivos_comida = updates.generalSlotsInactivosComida ?? [];
     if ("generalSlotsInactivosCena"   in updates) db.general_slots_inactivos_cena   = updates.generalSlotsInactivosCena   ?? [];
+    if ("slotsInactivosPorDia"        in updates) db.slots_inactivos_por_dia        = updates.slotsInactivosPorDia        ?? {};
     if ("devolucionDepartamentos"         in updates) db.devolucion_departamentos         = updates.devolucionDepartamentos;
     if ("cancelacionActiva"               in updates) db.cancelacion_activa                = updates.cancelacionActiva;
     if ("cancelacionHorasAntes"           in updates) db.cancelacion_horas_antes           = updates.cancelacionHorasAntes;

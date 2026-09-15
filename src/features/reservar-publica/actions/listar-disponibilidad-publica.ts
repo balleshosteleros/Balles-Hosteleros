@@ -117,27 +117,72 @@ function ventanaEfectiva(cfg: Record<string, unknown>, dia: string, t: Turno): V
   return { cerrado: false, inicio: "20:00", fin: "02:00" };
 }
 
-/** Excepción puntual (fecha suelta, rango o lista) que pisa al horario semanal. */
-function excepcionParaFecha(
+/**
+ * Excepción puntual (fecha suelta, rango o lista) que pisa al horario semanal.
+ *
+ * Gana la más específica, igual que en el back office (`horario-resolver`):
+ * días sueltos › fecha suelta › rango. Antes se quedaba con la primera que
+ * apareciera en la lista, así que un cierre por vacaciones de un mes podía
+ * ganarle al horario especial de un día concreto dentro de ese mes.
+ */
+function excepcionDeFecha(
   excepciones: Record<string, unknown>[],
   fecha: string,
   t: Turno,
-): Ventana | null {
-  for (const e of excepciones) {
-    if ((e.turno as string) !== t) continue;
-    const ambito = e.ambito as string;
-    let aplica = false;
-    if (ambito === "fecha") aplica = e.fecha === fecha;
-    else if (ambito === "rango") {
-      aplica = Boolean(e.fecha_inicio && e.fecha_fin && fecha >= (e.fecha_inicio as string) && fecha <= (e.fecha_fin as string));
-    } else if (ambito === "dias_especificos") {
-      aplica = Array.isArray(e.fechas) && (e.fechas as string[]).includes(fecha);
-    }
-    if (!aplica) continue;
-    if (e.cerrado === true) return { cerrado: true, inicio: "", fin: "" };
-    if (e.inicio && e.fin) return { cerrado: false, inicio: e.inicio as string, fin: e.fin as string };
-  }
+): Record<string, unknown> | null {
+  const delTurno = excepciones.filter((e) => (e.turno as string) === t);
+  const porLista = delTurno.find(
+    (e) =>
+      e.ambito === "dias_especificos" &&
+      Array.isArray(e.fechas) &&
+      (e.fechas as string[]).includes(fecha),
+  );
+  const porFecha = delTurno.find((e) => e.ambito === "fecha" && e.fecha === fecha);
+  const porRango = delTurno.find(
+    (e) =>
+      e.ambito === "rango" &&
+      Boolean(e.fecha_inicio && e.fecha_fin) &&
+      fecha >= (e.fecha_inicio as string) &&
+      fecha <= (e.fecha_fin as string),
+  );
+  return porLista ?? porFecha ?? porRango ?? null;
+}
+
+/** La ventana que impone una excepción, o null si no dice nada de horas. */
+function ventanaDeExcepcion(e: Record<string, unknown> | null): Ventana | null {
+  if (!e) return null;
+  if (e.cerrado === true) return { cerrado: true, inicio: "", fin: "" };
+  if (e.inicio && e.fin) return { cerrado: false, inicio: e.inicio as string, fin: e.fin as string };
   return null;
+}
+
+/**
+ * Pases apagados de esa fecha: excepción › día de la semana › rejilla común
+ * del turno. Espejo de `resolveSlotsInactivosReservas`, que es el que usa el
+ * back office; lo que ve el cliente en la web y lo que ve la sala al coger el
+ * teléfono tienen que ser los mismos huecos.
+ */
+function slotsInactivosDeFecha(
+  cfg: Record<string, unknown>,
+  dia: string,
+  t: Turno,
+  excepcion: Record<string, unknown> | null,
+): Set<string> {
+  const aHoras = (v: unknown): Set<string> =>
+    new Set(
+      (Array.isArray(v) ? (v as unknown[]) : [])
+        .filter((h): h is string => typeof h === "string")
+        .map((h) => h.slice(0, 5)),
+    );
+  if (excepcion && Array.isArray(excepcion.slots_inactivos)) {
+    return aHoras(excepcion.slots_inactivos);
+  }
+  const porDia = cfg.slots_inactivos_por_dia;
+  if (porDia && typeof porDia === "object" && !Array.isArray(porDia)) {
+    const propios = (porDia as Record<string, unknown>)[`${dia}_${t}`];
+    if (Array.isArray(propios)) return aHoras(propios);
+  }
+  return aHoras(cfg[`general_slots_inactivos_${t}`]);
 }
 
 export async function listarDisponibilidadPublicaAction(
@@ -304,16 +349,12 @@ export async function listarDisponibilidadPublicaAction(
   const slots: SlotPublico[] = [];
 
   for (const t of ["comida", "cena"] as Turno[]) {
-    const ventana = excepcionParaFecha(excepciones, fecha, t) ?? ventanaEfectiva(cfg, dia, t);
+    const excepcion = excepcionDeFecha(excepciones, fecha, t);
+    const ventana = ventanaDeExcepcion(excepcion) ?? ventanaEfectiva(cfg, dia, t);
     if (ventana.cerrado) continue;
     if (turnoBloqueado(t)) continue;
 
-    const slotsInactivos = new Set(
-      (Array.isArray(cfg[`general_slots_inactivos_${t}`])
-        ? (cfg[`general_slots_inactivos_${t}`] as string[])
-        : []
-      ).map((s) => s.slice(0, 5)),
-    );
+    const slotsInactivos = slotsInactivosDeFecha(cfg, dia, t, excepcion);
 
     const [ini, fin] = intervaloMinutos(ventana.inicio, ventana.fin);
     // Los huecos van siempre en 00, 15, 30 y 45: si la apertura cae a media

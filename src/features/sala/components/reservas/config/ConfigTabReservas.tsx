@@ -183,7 +183,6 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
 
       <HorariosAperturaPanel
         config={config}
-        onChange={handleConfigChange}
         handleRef={horariosRef}
         onDirtyChange={avisarPanelSucio}
       />

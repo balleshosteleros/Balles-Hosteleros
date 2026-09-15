@@ -3,6 +3,7 @@ import type {
   EmpresaReservasHorarioExcepcion,
   TurnoKey,
   DiaSemanaKey,
+  SlotsPorDiaKey,
 } from "@/features/sala/data/reservas";
 import { DIA_SEMANA_KEY } from "@/features/sala/data/reservas";
 
@@ -128,4 +129,55 @@ export function resolveHorarioReservas(
   }
 
   return { cerrado: false, inicio: null, fin: null, fuente: "sin_definir", motivo: null };
+}
+
+/**
+ * Pases (slots de 15 min) APAGADOS en una fecha concreta.
+ *
+ * Misma precedencia que el horario, y por el mismo motivo: si el horario de un
+ * día se puede separar del general, la rejilla de pases también tiene que
+ * poder, o el tope real del día lo acaba marcando una lista común a los siete
+ * y no hay forma de que el viernes llegue más tarde que el martes.
+ *
+ *   1. Excepción que cubra la fecha (días sueltos › fecha › rango), si trae
+ *      lista propia. `slotsInactivos = null` significa "no cambio los pases",
+ *      así que se sigue bajando.
+ *   2. Rejilla propia del día de la semana (`slotsInactivosPorDia`).
+ *   3. Rejilla común del turno (`generalSlotsInactivos*`).
+ *
+ * Devuelve siempre horas en HH:MM, que es como se comparan los slots.
+ */
+export function resolveSlotsInactivosReservas(
+  fecha: string,
+  turno: TurnoKey,
+  config: EmpresaReservasConfig,
+  excepciones: EmpresaReservasHorarioExcepcion[],
+): Set<string> {
+  const aHoras = (lista: readonly string[]): Set<string> =>
+    new Set(lista.map((s) => s.slice(0, 5)));
+
+  const aplicables = excepciones.filter((e) => e.turno === turno);
+  const excepcion =
+    aplicables.find(
+      (e) => e.ambito === "dias_especificos" && (e.fechas ?? []).includes(fecha),
+    ) ??
+    aplicables.find((e) => e.ambito === "fecha" && e.fecha === fecha) ??
+    aplicables.find(
+      (e) =>
+        e.ambito === "rango" &&
+        e.fechaInicio != null &&
+        e.fechaFin != null &&
+        dentroDeRango(fecha, e.fechaInicio, e.fechaFin),
+    );
+  if (excepcion?.slotsInactivos != null) return aHoras(excepcion.slotsInactivos);
+
+  const dia = diaSemanaDeISO(fecha);
+  const propios = config.slotsInactivosPorDia?.[`${dia}_${turno}` as SlotsPorDiaKey];
+  if (propios != null) return aHoras(propios);
+
+  return aHoras(
+    (turno === "comida"
+      ? config.generalSlotsInactivosComida
+      : config.generalSlotsInactivosCena) ?? [],
+  );
 }

@@ -21,6 +21,7 @@ import type {
   EmpresaReservasHorarioExcepcion,
   TurnoKey,
   DiaSemanaKey,
+  SlotsPorDiaKey,
   SemanaHorarioInicioKey,
   SemanaHorarioFinKey,
   SemanaHorarioCerradoKey,
@@ -45,7 +46,6 @@ import { SelectorFecha } from "@/components/ui/selector-fecha";
 
 interface Props {
   config: EmpresaReservasConfig;
-  onChange: (parche: Partial<EmpresaReservasConfig>) => void;
   /** La pestaña lo usa para volcar las excepciones pendientes al guardar. */
   handleRef?: RefObject<PanelPendienteHandle | null>;
   onDirtyChange?: () => void;
@@ -64,6 +64,37 @@ function listaDias(dias: DiaSemanaKey[]): string {
   const nombres = orden.map((d) => DIAS_LABELS[d]);
   if (nombres.length === 1) return nombres[0];
   return `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+}
+
+/** La rejilla común del turno: la que heredan los días que no se separan. */
+function slotsComunes(cfg: EmpresaReservasConfig, turno: TurnoKey): string[] {
+  return (
+    (turno === "comida" ? cfg.generalSlotsInactivosComida : cfg.generalSlotsInactivosCena) ?? []
+  );
+}
+
+/** Los pases apagados que rigen HOY en un día concreto (propios o comunes). */
+function slotsDelDia(cfg: EmpresaReservasConfig, dia: DiaSemanaKey, turno: TurnoKey): string[] {
+  const propios = cfg.slotsInactivosPorDia?.[`${dia}_${turno}` as SlotsPorDiaKey];
+  return propios != null ? propios : slotsComunes(cfg, turno);
+}
+
+function mismaLista(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const x = [...a].sort();
+  const y = [...b].sort();
+  return x.every((v, i) => v === y[i]);
+}
+
+/**
+ * Hora del último pase que se ofrece con esa ventana, o null si no hay ninguno.
+ * Se enseña bajo el horario porque el cierre NO es reservable: poner 02:15 da
+ * como última mesa las 02:00, y sin decirlo hay que adivinarlo (Iván, 15-09).
+ */
+function ultimaMesaDe(inicio: string, fin: string, apagados: readonly string[]): string | null {
+  const apagadosSet = new Set(apagados.map((h) => h.slice(0, 5)));
+  const vivos = generarSlotsTurno(inicio, fin).filter((h) => !apagadosSet.has(h));
+  return vivos.length > 0 ? vivos[vivos.length - 1] : null;
 }
 
 function hoyISO(): string {
@@ -200,7 +231,6 @@ function turnoPorHoraActual(cfg: EmpresaReservasConfig): TurnoKey {
 
 export function HorariosAperturaPanel({
   config,
-  onChange,
   handleRef,
   onDirtyChange,
 }: Props) {
@@ -209,6 +239,12 @@ export function HorariosAperturaPanel({
   const [inicio, setInicio] = useState("20:00");
   const [fin, setFin] = useState("02:00");
   const [ambito, setAmbito] = useState<Ambito>("dia_semana");
+  /**
+   * Pases apagados que se están editando. Antes la rejilla se guardaba sola y
+   * SIEMPRE en la común de los siete días; ahora es un borrador más y viaja
+   * con el mismo Guardar que el horario, a los mismos días o fechas.
+   */
+  const [slotsApagados, setSlotsApagados] = useState<string[]>([]);
 
   // Siempre apunta al config más reciente sin provocar re-suscripciones.
   const configRef = useRef(config);
@@ -260,6 +296,7 @@ export function HorariosAperturaPanel({
       inicio: e.inicio,
       fin: e.fin,
       cerrado: e.cerrado,
+      slotsInactivos: e.slotsInactivos,
       motivo: e.motivo,
     }),
   });
@@ -285,8 +322,13 @@ export function HorariosAperturaPanel({
       setCerrado(ventana?.cerrado ?? false);
       setInicio(ventana && !ventana.cerrado ? ventana.inicio : porDefecto.inicio);
       setFin(ventana && !ventana.cerrado ? ventana.fin : porDefecto.fin);
+      setSlotsApagados(slotsDelDia(cfg, diaSemanaRef, turno));
       return;
     }
+
+    // En una excepción se parte de la rejilla común: es lo que rige de fondo, y
+    // desde ahí se apaga o enciende lo que haga falta esos días concretos.
+    setSlotsApagados(slotsComunes(cfg, turno));
 
     if (turno === "comida") {
       setInicio(cfg.generalInicioComida ?? porDefecto.inicio);
@@ -339,11 +381,18 @@ export function HorariosAperturaPanel({
   }
 
   /**
-   * Traduce el horario que se está editando arriba a un parche de config para
-   * TODOS los días marcados. Se escriben esos días y nada más: la ventana
-   * general (horas y cerrado) NUNCA se toca aquí. Es el horario que heredan los
-   * días sin horario propio, así que pisarla al editar los lunes cambiaba de
-   * paso todos los demás días. Cambiar los lunes es cambiar los lunes.
+   * Traduce lo que se está editando arriba (horario y pases) a un parche de
+   * config para los días marcados.
+   *
+   * Dos caminos, y la diferencia importa:
+   *  · Algunos días marcados → se escriben ESOS días y nada más. La ventana
+   *    común no se toca: es la que heredan los días sin horario propio, y
+   *    pisarla al editar los lunes cambiaba de paso todos los demás.
+   *  · Los SIETE marcados → se escribe la ventana común UNA vez y se borran
+   *    las diferencias por día. Decir "todos los días igual" no debe dejar
+   *    siete copias del mismo horario: eso es lo voluminoso que no queremos, y
+   *    además deja la común imposible de cambiar desde aquí (Iván, 15-09).
+   *
    * Devuelve null si la validación comida/cena lo impide (ya ha avisado).
    */
   const parcheHorarioSemanal = useCallback((): Partial<EmpresaReservasConfig> | null => {
@@ -368,12 +417,43 @@ export function HorariosAperturaPanel({
         toast.error(`En ${DIAS_LABELS[dia]}: ${err}`);
         return null;
       }
-      parche[`${dia}_inicio_${turno}`]  = cerrado ? null : inicio;
-      parche[`${dia}_fin_${turno}`]     = cerrado ? null : fin;
-      parche[`${dia}_cerrado_${turno}`] = cerrado;
     }
+
+    const cfg = configRef.current;
+    const todaLaSemana = diasSemanaSel.length === DIAS_ORDEN.length;
+    const claveComun = turno === "comida"
+      ? "generalSlotsInactivosComida"
+      : "generalSlotsInactivosCena";
+    const porDia = { ...(cfg.slotsInactivosPorDia ?? {}) };
+    const rejilla = [...slotsApagados].sort();
+
+    if (todaLaSemana) {
+      parche[turno === "comida" ? "generalInicioComida"  : "generalInicioCena"]  = cerrado ? null : inicio;
+      parche[turno === "comida" ? "generalFinComida"     : "generalFinCena"]     = cerrado ? null : fin;
+      parche[turno === "comida" ? "generalCerradoComida" : "generalCerradoCena"] = cerrado;
+      for (const dia of DIAS_ORDEN) {
+        parche[`${dia}_inicio_${turno}`]  = null;
+        parche[`${dia}_fin_${turno}`]     = null;
+        parche[`${dia}_cerrado_${turno}`] = null;
+        delete porDia[`${dia}_${turno}` as SlotsPorDiaKey];
+      }
+      if (!cerrado) parche[claveComun] = rejilla;
+    } else {
+      for (const dia of diasSemanaSel) {
+        parche[`${dia}_inicio_${turno}`]  = cerrado ? null : inicio;
+        parche[`${dia}_fin_${turno}`]     = cerrado ? null : fin;
+        parche[`${dia}_cerrado_${turno}`] = cerrado;
+        // Solo se guarda la diferencia: si ese día acaba con la misma rejilla
+        // que la común, se le quita la propia y vuelve a heredarla.
+        if (cerrado) continue;
+        const clave = `${dia}_${turno}` as SlotsPorDiaKey;
+        if (mismaLista(rejilla, slotsComunes(cfg, turno))) delete porDia[clave];
+        else porDia[clave] = rejilla;
+      }
+    }
+    if (!cerrado) parche.slotsInactivosPorDia = porDia;
     return parche as Partial<EmpresaReservasConfig>;
-  }, [cerrado, inicio, fin, turno, diasSemanaSel]);
+  }, [cerrado, inicio, fin, turno, diasSemanaSel, slotsApagados]);
 
   /**
    * ¿El horario que se ve arriba difiere del guardado en ALGUNO de los días
@@ -393,9 +473,24 @@ export function HorariosAperturaPanel({
       return (
         guardada?.cerrado !== false ||
         guardada.inicio !== inicio ||
-        guardada.fin !== fin
+        guardada.fin !== fin ||
+        // Los pases también cuentan: tocar solo la rejilla y pulsar Guardar
+        // tiene que escribir, ahora que ya no se guarda sola.
+        !mismaLista(slotsApagados, slotsDelDia(config, dia, turno))
       );
     });
+
+  /** A quién se le está cambiando: lo dice el selector de arriba. */
+  const alcanceTexto =
+    ambito === "dia_semana"
+      ? listaDias(diasSemanaSel)
+      : ambito === "rango"
+        ? `del ${formateaFecha(rangoIni)} al ${formateaFecha(rangoFin)}`
+        : fechasLista.length > 0
+          ? `${fechasLista.length} ${fechasLista.length === 1 ? "día" : "días"} sueltos`
+          : "los días que añadas";
+
+  const ultimaMesa = cerrado ? null : ultimaMesaDe(inicio, fin, slotsApagados);
 
   useEffect(() => {
     onDirtyChange?.();
@@ -462,6 +557,7 @@ export function HorariosAperturaPanel({
           cerrado,
           inicio: cerrado ? null : inicio,
           fin: cerrado ? null : fin,
+          slotsInactivos: cerrado ? null : [...slotsApagados].sort(),
           motivo: motivo.trim() || null,
         };
       } else {
@@ -487,6 +583,7 @@ export function HorariosAperturaPanel({
           cerrado,
           inicio: cerrado ? null : inicio,
           fin: cerrado ? null : fin,
+          slotsInactivos: cerrado ? null : [...slotsApagados].sort(),
           motivo: motivo.trim() || null,
         };
       }
@@ -504,6 +601,7 @@ export function HorariosAperturaPanel({
         inicio: payload.inicio ?? null,
         fin: payload.fin ?? null,
         cerrado: payload.cerrado,
+        slotsInactivos: payload.slotsInactivos ?? null,
         motivo: payload.motivo ?? null,
         createdAt: "",
         updatedAt: "",
@@ -525,8 +623,8 @@ export function HorariosAperturaPanel({
       <div>
         <h4 className="text-sm font-semibold">Horario de apertura y cierre</h4>
         <p className="text-xs text-muted-foreground">
-          Define cuándo aceptas reservas en cada turno. Aplícalo a un día concreto de la semana
-          (se repite siempre), a un rango entre dos fechas, o a días específicos del calendario.
+          Marca a quién afecta —unos días de la semana para siempre, un rango entre dos fechas o
+          días sueltos del calendario— y debajo pon el horario y los pases. Solo cambia eso.
         </p>
         <p className="mt-1 text-[11px] text-muted-foreground">
           El horario de comida debe terminar antes de que empiece el de cena. Nunca pueden solaparse:
@@ -534,7 +632,7 @@ export function HorariosAperturaPanel({
         </p>
       </div>
 
-      {/* Fila 1: turno + cierre + horario */}
+      {/* Fila 1: turno y estado. El horario baja: primero se dice a quién. */}
       <div className="flex flex-wrap items-end gap-4">
         <div className="space-y-1.5">
           <Label className="block text-xs">Turno</Label>
@@ -582,55 +680,25 @@ export function HorariosAperturaPanel({
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <Label className="text-xs">
-            Horario <span className="text-muted-foreground font-normal">| Apertura y cierre de reservas</span>
-          </Label>
-          {/* En cuartos, igual que las reservas. De estas dos horas salen los
-              slots que se ofrecen al reservar: una apertura a las 13:07
-              generaba 13:07, 13:22, 13:37… y ninguna hora del día caía en la
-              cuadrícula, que es justo lo que la regla evita. */}
-          <div className="flex items-center gap-2">
-            <SelectorHoraCuartos
-              value={inicio}
-              onChange={setInicio}
-              disabled={cerrado}
-              requerido
-              className="w-28"
-            />
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            <SelectorHoraCuartos
-              value={fin}
-              onChange={setFin}
-              disabled={cerrado}
-              requerido
-              className="w-28"
-            />
-          </div>
-        </div>
       </div>
-
-      {/* Indicador genérico de slots activos para reservas (mismo para todos los días).
-          Refleja EN VIVO el estado y las horas que estás editando arriba, no lo guardado. */}
-      <SlotsActivosPicker
-        turno={turno}
-        config={config}
-        cerrado={cerrado}
-        inicio={inicio}
-        fin={fin}
-        onChange={onChange}
-      />
 
       <Separator />
 
-      {/* Fila 2: ámbito */}
+      {/* Fila 2: a quién afecta. Va ANTES del horario a propósito: primero se
+          dice a quién se le cambia y luego qué se le cambia. Este selector
+          manda sobre todo lo que viene debajo, horario y pases incluidos. */}
       <div className="space-y-2">
-        <Label className="text-xs">Aplicar esta configuración a</Label>
+        <Label className="text-xs">
+          A quién afecta{" "}
+          <span className="font-normal text-muted-foreground">
+            | el horario y los pases de abajo se aplican a esto
+          </span>
+        </Label>
         <div className="flex flex-wrap items-center gap-1.5">
           {([
-            { value: "dia_semana",       label: "Todos los…" },
+            { value: "dia_semana",       label: "Para siempre" },
             { value: "rango",            label: "Entre dos fechas" },
-            { value: "dias_especificos", label: "Días específicos" },
+            { value: "dias_especificos", label: "Días sueltos" },
           ] as { value: Ambito; label: string }[]).map((opt) => (
             <button
               key={opt.value}
@@ -712,7 +780,9 @@ export function HorariosAperturaPanel({
           <p className="text-[10px] text-muted-foreground">
             {diasSemanaSel.length === 0
               ? "Marca al menos un día para poder aplicar el horario."
-              : `Se aplicará el mismo horario a ${listaDias(diasSemanaSel)}.`}
+              : diasSemanaSel.length === DIAS_ORDEN.length
+                ? "Toda la semana igual: se guarda una sola vez y se borran las diferencias por día."
+                : `Se aplicará lo mismo a ${listaDias(diasSemanaSel)}, y a nadie más.`}
           </p>
         </div>
       )}
@@ -773,6 +843,53 @@ export function HorariosAperturaPanel({
         </div>
       )}
 
+      <Separator />
+
+      {/* Qué se le cambia: el horario y los pases, para lo elegido arriba. */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">
+          Horario <span className="text-muted-foreground font-normal">| Apertura y cierre de reservas</span>
+        </Label>
+        {/* En cuartos, igual que las reservas. De estas dos horas salen los
+            slots que se ofrecen al reservar: una apertura a las 13:07
+            generaba 13:07, 13:22, 13:37… y ninguna hora del día caía en la
+            cuadrícula, que es justo lo que la regla evita. */}
+        <div className="flex items-center gap-2">
+          <SelectorHoraCuartos
+            value={inicio}
+            onChange={setInicio}
+            disabled={cerrado}
+            requerido
+            className="w-28"
+          />
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <SelectorHoraCuartos
+            value={fin}
+            onChange={setFin}
+            disabled={cerrado}
+            requerido
+            className="w-28"
+          />
+        </div>
+        {!cerrado && (
+          <p className="text-[11px] text-muted-foreground">
+            {ultimaMesa
+              ? `El cierre no se reserva: la última mesa entra a las ${ultimaMesa}.`
+              : "Con este horario no queda ningún pase disponible."}
+          </p>
+        )}
+      </div>
+
+      <SlotsActivosPicker
+        turno={turno}
+        cerrado={cerrado}
+        inicio={inicio}
+        fin={fin}
+        apagados={slotsApagados}
+        onApagadosChange={setSlotsApagados}
+        alcance={alcanceTexto}
+      />
+
       {/* Motivo (solo en excepciones por rango/lista) */}
       {ambito !== "dia_semana" && (
         <div className="space-y-1.5 max-w-md">
@@ -832,6 +949,9 @@ export function HorariosAperturaPanel({
                   {e.ambito === "dias_especificos" && `Días: ${(e.fechas ?? []).map(formateaFecha).join(", ")}`}
                   {" — "}
                   {e.cerrado ? <span className="text-destructive">Cerrado</span> : `${e.inicio?.slice(0,5)} → ${e.fin?.slice(0,5)}`}
+                  {!e.cerrado && (e.slotsInactivos?.length ?? 0) > 0
+                    ? ` · ${e.slotsInactivos!.length} ${e.slotsInactivos!.length === 1 ? "pase apagado" : "pases apagados"}`
+                    : ""}
                   {e.motivo ? ` · ${e.motivo}` : ""}
                 </span>
                 {esFilaNueva(e.id) && (
@@ -872,35 +992,44 @@ export function HorariosAperturaPanel({
  */
 function SlotsActivosPicker({
   turno,
-  config,
   cerrado,
   inicio,
   fin,
-  onChange,
+  apagados,
+  onApagadosChange,
+  alcance,
 }: {
   turno: TurnoKey;
-  config: EmpresaReservasConfig;
   cerrado: boolean;
   inicio: string;
   fin: string;
-  onChange: (parche: Partial<EmpresaReservasConfig>) => void;
+  apagados: string[];
+  onApagadosChange: (horas: string[]) => void;
+  alcance: string;
 }) {
   const slots = cerrado ? [] : generarSlotsTurno(inicio, fin);
-  const inactivosKey: keyof EmpresaReservasConfig =
-    turno === "comida" ? "generalSlotsInactivosComida" : "generalSlotsInactivosCena";
-  const inactivos = new Set<string>(
-    (turno === "comida" ? config.generalSlotsInactivosComida : config.generalSlotsInactivosCena) ?? [],
-  );
+  const inactivos = new Set<string>(apagados);
 
   function toggle(slot: string) {
     const next = new Set(inactivos);
     if (next.has(slot)) next.delete(slot);
     else next.add(slot);
-    onChange({ [inactivosKey]: [...next].sort() } as Partial<EmpresaReservasConfig>);
+    onApagadosChange([...next].sort());
   }
 
+  /**
+   * "Todos" y "Ninguno" solo mueven los pases de la franja que se ve. Si
+   * borraran la lista entera se llevarían por delante los de otras horas —los
+   * de comida cuando estás en cena, o los que quedan fuera tras estrechar el
+   * horario—, que nadie ha pedido tocar.
+   */
   function setTodos(activo: boolean) {
-    onChange({ [inactivosKey]: activo ? [] : [...slots] } as Partial<EmpresaReservasConfig>);
+    const next = new Set(inactivos);
+    for (const s of slots) {
+      if (activo) next.delete(s);
+      else next.add(s);
+    }
+    onApagadosChange([...next].sort());
   }
 
   const activosCount = slots.length - [...inactivos].filter((s) => slots.includes(s)).length;
@@ -910,13 +1039,12 @@ function SlotsActivosPicker({
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <Label className="text-xs">
-            Slots activos para reservas{" "}
-            <span className="text-muted-foreground font-normal">
-              | mismos para todos los días de {turnoLabel(turno).toLowerCase()} · 15 min
-            </span>
+            Pases de {turnoLabel(turno).toLowerCase()}{" "}
+            <span className="text-muted-foreground font-normal">| cada 15 min</span>
           </Label>
           <p className="text-[11px] text-muted-foreground mt-0.5">
             Por defecto todos activos. Desmarca los huecos en los que NO quieras aceptar reservas.
+            Se aplican a {alcance}.
           </p>
         </div>
         {slots.length > 0 && (
@@ -944,11 +1072,11 @@ function SlotsActivosPicker({
 
       {cerrado ? (
         <p className="text-xs text-muted-foreground italic">
-          Turno cerrado: no hay slots configurables.
+          Turno cerrado: no hay pases que configurar.
         </p>
       ) : slots.length === 0 ? (
         <p className="text-xs text-muted-foreground italic">
-          Configura la hora de apertura y cierre general del turno para ver los slots.
+          Indica la hora de apertura y cierre para ver los pases.
         </p>
       ) : (
         <div className="flex flex-wrap gap-1.5">

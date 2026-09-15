@@ -5,7 +5,10 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
 import { listHorariosExcepciones } from "@/features/sala/actions/reservas-horarios-excepciones-actions";
-import { resolveHorarioReservas } from "@/features/sala/lib/horario-resolver";
+import {
+  resolveHorarioReservas,
+  resolveSlotsInactivosReservas,
+} from "@/features/sala/lib/horario-resolver";
 import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
 import {
   ESTADOS_NO_OCUPANTES,
@@ -202,12 +205,14 @@ export async function getDisponibilidadTurno(input: {
       return { ok: true, data: { ...VACIO, duracionMin } };
     }
 
-    // Slots inactivos: horas que la empresa ha apagado a mano en Configuración.
-    const inactivos = new Set(
-      (turnoKey === "cena"
-        ? cfg.generalSlotsInactivosCena
-        : cfg.generalSlotsInactivosComida
-      ).map((s) => s.slice(0, 5)),
+    // Pases que la empresa ha apagado a mano en Configuración. Con la misma
+    // precedencia que el horario: lo que valga para esa fecha concreta manda
+    // sobre el día de la semana, y este sobre la rejilla común del turno.
+    const inactivos = resolveSlotsInactivosReservas(
+      input.fecha,
+      turnoKey,
+      cfg,
+      excRes.ok ? excRes.data : [],
     );
     const horas = generarSlots(horario.inicio, horario.fin)
       .filter((h) => !inactivos.has(h));
