@@ -29,7 +29,6 @@ const PUBLIC_PREFIXES = ['/carta', '/sitio-publico', '/api/google/connect', '/ap
   // carta impresa. Si exigiera login, el QR mandaría al cliente a la pantalla de
   // acceso del sistema en vez de a la carta.
   '/q',
-  '/zz-prueba-calendario',
   // Subida de contrato por la gestoría externa (enlace tokenizado, sin cuenta).
   '/gestoria/contrato', '/api/gestoria/contrato',
   // Documentos oficiales de la BAJA (justificante del RED + certificado SEPE),

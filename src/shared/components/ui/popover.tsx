@@ -3,6 +3,21 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * DENTRO DE UNA VENTANA (Dialog), ESTE POPOVER VA SIEMPRE CON `modal`.
+ *
+ * En Safari —o sea, en TODOS los iPhone— tocar un `<button>` no le da el foco.
+ * Al abrirse el panel, la ventana ve que el foco anda fuera de ella y se lo
+ * lleva de vuelta; el panel lo interpreta como "han tocado fuera" y se cierra
+ * en el mismo milisegundo. El usuario ve el desplegable muerto: lo toca y no
+ * pasa nada. Así se quedaron sin poder elegir fecha todas las solicitudes del
+ * teléfono (Iván, 15-sep-2026).
+ *
+ * `modal` lo arregla de raíz: el panel pasa a mandar sobre el foco mientras
+ * está abierto y deja de leer como "fuera" lo que hace la ventana que lo
+ * contiene. Nuestros selectores propios (fecha, opción, múltiple y color) ya lo
+ * llevan puesto.
+ */
 const Popover = PopoverPrimitive.Root;
 
 const PopoverTrigger = PopoverPrimitive.Trigger;

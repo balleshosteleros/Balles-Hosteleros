@@ -98,6 +98,11 @@ export function SelectorMultiple({
         setAbierto(o);
         if (!o) setBusqueda("");
       }}
+      // `modal`: OBLIGATORIO. Dentro de una ventana (Dialog) y en Safari, el
+      // panel se abría y se cerraba en el mismo instante — el iPhone no da el
+      // foco al botón al tocarlo, la ventana se lo lleva de vuelta y el panel
+      // lo lee como "han tocado fuera". Ver la nota de `popover.tsx`.
+      modal
     >
       <PopoverTrigger asChild>
         <button

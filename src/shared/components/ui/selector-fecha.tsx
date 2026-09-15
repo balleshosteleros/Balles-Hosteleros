@@ -122,7 +122,15 @@ export function SelectorFecha({
   const meses = pantallaAncha && !conDesplegables ? 2 : 1;
 
   return (
-    <Popover open={abierto} onOpenChange={setAbierto}>
+    <Popover
+      open={abierto}
+      onOpenChange={setAbierto}
+      // `modal`: OBLIGATORIO. Dentro de una ventana (Dialog) y en Safari, el
+      // calendario se abría y se cerraba en el mismo instante — el iPhone no da
+      // el foco al botón al tocarlo, la ventana se lo lleva de vuelta y el
+      // calendario lo lee como "han tocado fuera". Ver la nota de `popover.tsx`.
+      modal
+    >
       <PopoverTrigger asChild>
         <button
           id={id}
