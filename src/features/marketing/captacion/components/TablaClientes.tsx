@@ -1,6 +1,7 @@
 "use client";
 
 import { colorOrigen, labelOrigen } from "@/features/sala/data/origenes";
+import { CIFRA, TITULAR } from "../lib/estilo";
 import { formatNumero, formatPorcentaje } from "@/shared/lib/numero";
 import type { ClientesCanal } from "../types";
 
@@ -29,7 +30,10 @@ export function TablaClientes({ clientes }: { clientes: ClientesCanal[] }) {
     <div className="overflow-x-auto">
       <table className="w-full min-w-max text-sm">
         <thead>
-          <tr className="border-b bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+          <tr
+            className="border-b text-[.7rem] uppercase tracking-[.07em] text-muted-foreground"
+            style={TITULAR}
+          >
             <th className="p-3 text-left font-medium">Canal</th>
             <th className="p-3 text-right font-medium">Fichas</th>
             <th className="p-3 text-right font-medium">Han venido</th>
@@ -49,11 +53,11 @@ export function TablaClientes({ clientes }: { clientes: ClientesCanal[] }) {
                   {labelOrigen(c.canal)}
                 </span>
               </td>
-              <td className="p-3 text-right tabular-nums">{formatNumero(c.clientes)}</td>
-              <td className="p-3 text-right tabular-nums text-muted-foreground">
+              <td className="p-3 text-right text-[.86rem]" style={CIFRA}>{formatNumero(c.clientes)}</td>
+              <td className="p-3 text-right text-[.86rem] text-muted-foreground" style={CIFRA}>
                 {formatNumero(c.hanVenido)}
               </td>
-              <td className="p-3 text-right tabular-nums">
+              <td className="p-3 text-right text-[.86rem]" style={CIFRA}>
                 {formatNumero(c.repiten)}
                 {c.hanVenido > 0 && (
                   <span className="ml-1 text-xs text-muted-foreground">
@@ -61,7 +65,7 @@ export function TablaClientes({ clientes }: { clientes: ClientesCanal[] }) {
                   </span>
                 )}
               </td>
-              <td className="p-3 text-right tabular-nums text-muted-foreground">
+              <td className="p-3 text-right text-[.86rem] text-muted-foreground" style={CIFRA}>
                 {formatNumero(c.conEmail)}
               </td>
             </tr>

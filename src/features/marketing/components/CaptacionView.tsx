@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -14,9 +13,10 @@ import { CAPTACION_VACIA, type CaptacionDatos } from "@/features/marketing/capta
 import {
   compararMismoTramo,
   rankingCanales,
-  resumenClientes,
   variacion,
 } from "@/features/marketing/captacion/lib/agregados";
+import { construirHallazgos } from "@/features/marketing/captacion/lib/hallazgos";
+import { TEXTO, TITULAR } from "@/features/marketing/captacion/lib/estilo";
 import {
   TarjetasResumen,
   type Tarjeta,
@@ -31,16 +31,19 @@ import { TablaClientes } from "@/features/marketing/captacion/components/TablaCl
  * Marketing → Captación: por dónde entra la gente, comparado con los años
  * anteriores.
  *
- * Responde cuatro preguntas, en este orden:
- *   1. ¿Cómo vamos este año? (las cuatro cifras de arriba)
- *   2. ¿De dónde vinieron las reservas, año a año? (las dos gráficas)
- *   3. ¿Qué canal sube y cuál baja, con sus números? (la tabla comparativa)
- *   4. ¿Qué canal trae buena reserva y qué base de clientes deja? (las dos
- *      últimas tablas)
+ * Está maquetada como un INFORME y no como un panel de widgets: se lee de
+ * arriba abajo, cada bloque es una pregunta y la siguiente contesta a la
+ * anterior. De ahí la tipografía propia (ver `page.tsx`), las secciones
+ * separadas por una regla y los hallazgos escritos en palabras al final.
  *
- * "Hoy" se decide en la zona horaria de la EMPRESA, no en la del navegador: es
- * lo que fija hasta qué mes llega el año en curso y con qué tramo del año
- * pasado se compara.
+ *   1. ¿Cómo vamos este año?          → las cuatro cifras
+ *   2. ¿De dónde vinieron?            → la gráfica apilada
+ *   3. ¿Qué sube y qué baja?          → la gráfica de líneas y la tabla
+ *   4. ¿Qué trae cada canal?          → calidad de la reserva y clientela
+ *   5. ¿Y entonces qué miro?          → los hallazgos, sacados de los datos
+ *
+ * "Hoy" se decide en la zona horaria de la EMPRESA: es lo que fija hasta qué
+ * mes llega el año en curso y con qué tramo del año pasado se compara.
  */
 
 export function CaptacionView() {
@@ -78,88 +81,142 @@ export function CaptacionView() {
     () => construirTarjetas(datos, anioEnCurso, mesEnCurso),
     [datos, anioEnCurso, mesEnCurso],
   );
+  const hallazgos = useMemo(
+    () => construirHallazgos(datos, anioEnCurso, mesEnCurso),
+    [datos, anioEnCurso, mesEnCurso],
+  );
 
   if (cargando) return <LoadingSpinner className="py-24" size="lg" />;
 
-  const hayDatos = datos.porMes.length > 0;
+  if (datos.porMes.length === 0) {
+    return (
+      <div className="p-6">
+        <p className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+          Todavía no hay reservas con canal anotado en esta empresa.
+        </p>
+      </div>
+    );
+  }
+
+  const totalReservas = datos.porMes.reduce((s, m) => s + m.reservas, 0);
+  const totalFichas = datos.clientes.reduce((s, c) => s + c.clientes, 0);
 
   return (
-    <div className="space-y-6 p-4 pb-28 md:p-6">
-      {!hayDatos ? (
-        <Card>
-          <CardContent className="p-10 text-center text-sm text-muted-foreground">
-            Todavía no hay reservas con canal anotado en esta empresa.
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <TarjetasResumen tarjetas={tarjetas} />
+    <div
+      className="mx-auto flex max-w-[1080px] flex-col gap-10 p-4 pb-28 md:p-6"
+      style={TEXTO}
+    >
+      <p className="max-w-[62ch] text-[1.02rem] leading-relaxed text-muted-foreground">
+        Todas las reservas de {empresaActual.nombre} repartidas por el canal que las
+        trajo: {formatNumero(totalReservas)} reservas y {formatNumero(totalFichas)} fichas
+        de cliente. {anioEnCurso} va hasta hoy, así que cuando se compara con años
+        anteriores se compara contra el mismo tramo.
+      </p>
 
-          <div className="grid gap-6 xl:grid-cols-2">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">De dónde vinieron las reservas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <GraficaCanalesAnio porMes={datos.porMes} anioEnCurso={anioEnCurso} />
-              </CardContent>
-            </Card>
+      <TarjetasResumen tarjetas={tarjetas} />
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Qué canal sube y cuál baja</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <GraficaTendenciaCanales porMes={datos.porMes} anioEnCurso={anioEnCurso} />
-              </CardContent>
-            </Card>
+      <Seccion titulo="Qué trajo cada canal, año a año" apunte="Reservas, apiladas por canal">
+        <Marco>
+          <GraficaCanalesAnio porMes={datos.porMes} anioEnCurso={anioEnCurso} />
+        </Marco>
+      </Seccion>
+
+      <Seccion titulo="Cuál sube y cuál baja" apunte="Cada canal por su cuenta">
+        <Marco>
+          <GraficaTendenciaCanales porMes={datos.porMes} anioEnCurso={anioEnCurso} />
+        </Marco>
+      </Seccion>
+
+      <Seccion titulo="Todos los canales, con sus números" apunte="Reservas por año">
+        <Caja>
+          <TablaComparativa
+            porMes={datos.porMes}
+            anioEnCurso={anioEnCurso}
+            hastaMes={mesEnCurso}
+          />
+        </Caja>
+      </Seccion>
+
+      <Seccion titulo="Qué reserva trae cada canal" apunte="Últimos dos años">
+        <Caja>
+          <TablaCalidad calidad={datos.calidad} />
+        </Caja>
+      </Seccion>
+
+      <Seccion titulo="La clientela que deja cada canal" apunte="Fichas, no reservas">
+        <Caja>
+          <TablaClientes clientes={datos.clientes} />
+        </Caja>
+      </Seccion>
+
+      {hallazgos.length > 0 && (
+        <Seccion titulo="Lo que hay que mirar" apunte="Sacado de los números de arriba">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {hallazgos.map((h) => (
+              <article
+                key={h.titulo}
+                className="flex flex-col gap-2 rounded-lg border bg-card p-5"
+              >
+                <p
+                  className="text-[.72rem] font-medium uppercase tracking-[.09em] text-primary"
+                  style={TITULAR}
+                >
+                  {h.rotulo}
+                </p>
+                <h3 className="text-[1.02rem] font-bold leading-snug" style={TITULAR}>
+                  {h.titulo}
+                </h3>
+                <p className="text-[.92rem] leading-relaxed text-muted-foreground" style={TEXTO}>
+                  {h.texto}
+                </p>
+              </article>
+            ))}
           </div>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Todos los canales, año a año</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <TablaComparativa
-                porMes={datos.porMes}
-                anioEnCurso={anioEnCurso}
-                hastaMes={mesEnCurso}
-              />
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-6 xl:grid-cols-2">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Qué reserva trae cada canal</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <TablaCalidad calidad={datos.calidad} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">La clientela que deja cada canal</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <TablaClientes clientes={datos.clientes} />
-              </CardContent>
-            </Card>
-          </div>
-
-          {(datos.sinOrigen.reservas > 0 || datos.sinOrigen.clientes > 0) && (
-            <p className="text-xs text-muted-foreground">
-              Fuera de estas cuentas quedan{" "}
-              {formatNumero(datos.sinOrigen.reservas)} reservas y{" "}
-              {formatNumero(datos.sinOrigen.clientes)} fichas de cliente sin canal
-              anotado: de esas no se sabe por dónde entraron.
-            </p>
-          )}
-        </>
+        </Seccion>
       )}
+
+      <p className="border-t pt-4 text-xs text-muted-foreground">
+        Quedan fuera de estas cuentas {formatNumero(datos.sinOrigen.reservas)} reservas y{" "}
+        {formatNumero(datos.sinOrigen.clientes)} fichas de cliente sin canal anotado: de
+        esas no se sabe por dónde entraron.
+      </p>
     </div>
   );
+}
+
+/** Bloque del informe: regla arriba, título y apunte en la misma línea. */
+function Seccion({
+  titulo,
+  apunte,
+  children,
+}: {
+  titulo: string;
+  apunte: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-baseline gap-3 border-t pt-4">
+        <h2 className="text-[1.35rem] font-bold tracking-tight" style={TITULAR}>
+          {titulo}
+        </h2>
+        <p className="text-sm text-muted-foreground" style={TITULAR}>
+          {apunte}
+        </p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Caja de gráfica: con aire alrededor del dibujo. */
+function Marco({ children }: { children: ReactNode }) {
+  return <div className="rounded-lg border bg-card p-5">{children}</div>;
+}
+
+/** Caja de tabla: sin aire, la tabla llega hasta el borde. */
+function Caja({ children }: { children: ReactNode }) {
+  return <div className="overflow-hidden rounded-lg border bg-card">{children}</div>;
 }
 
 /** Las cuatro cifras de arriba, con su comparación contra el año pasado. */
@@ -170,9 +227,7 @@ function construirTarjetas(
 ): Tarjeta[] {
   const { actual, anterior } = compararMismoTramo(datos.porMes, anio, mes);
 
-  const principal = rankingCanales(
-    datos.porMes.filter((m) => m.anio === anio),
-  )[0];
+  const principal = rankingCanales(datos.porMes.filter((m) => m.anio === anio))[0];
   const reservasPrincipal = datos.porMes
     .filter((m) => m.anio === anio && m.canal === principal)
     .reduce((s, m) => s + m.reservas, 0);
@@ -181,13 +236,13 @@ function construirTarjetas(
 
   const totalCalidad = datos.calidad.reduce((s, c) => s + c.reservas, 0);
   const noShow = datos.calidad.reduce((s, c) => s + c.noShow, 0);
+  const canceladas = datos.calidad.reduce((s, c) => s + c.canceladas, 0);
   const pctNoShow = totalCalidad > 0 ? (noShow / totalCalidad) * 100 : 0;
-
-  const clientes = resumenClientes(datos);
+  const pctCancela = totalCalidad > 0 ? (canceladas / totalCalidad) * 100 : 0;
 
   return [
     {
-      etiqueta: "Reservas en lo que va de año",
+      etiqueta: `Reservas en lo que va de ${anio}`,
       valor: formatNumero(actual.reservas),
       variacion: variacion(actual.reservas, anterior.reservas),
       pie: `Frente a ${formatNumero(anterior.reservas)} en el mismo tramo de ${anio - 1}`,
@@ -199,17 +254,17 @@ function construirTarjetas(
       pie: `Frente a ${formatNumero(anterior.comensales)} en el mismo tramo de ${anio - 1}`,
     },
     {
-      etiqueta: "Canal principal",
+      etiqueta: `Canal principal en ${anio}`,
       valor: principal ? labelOrigen(principal) : "—",
       pie: principal
-        ? `${formatPorcentaje(pesoPrincipal, { max: 0 })} de las reservas de ${anio}`
+        ? `${formatPorcentaje(pesoPrincipal, { max: 0 })} de las reservas del año`
         : "Sin reservas este año",
     },
     {
-      etiqueta: "No aparecen",
+      etiqueta: "Mesas que se pierden",
       valor: formatPorcentaje(pctNoShow, { max: 1 }),
       subirEsMalo: true,
-      pie: `${formatNumero(clientes.total)} fichas de cliente, ${formatNumero(clientes.repiten)} han vuelto`,
+      pie: `No aparecen. Otro ${formatPorcentaje(pctCancela, { max: 0 })} cancela y avisa`,
     },
   ];
 }

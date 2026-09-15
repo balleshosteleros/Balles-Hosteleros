@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { colorOrigen, labelOrigen } from "@/features/sala/data/origenes";
+import { CIFRA, TITULAR } from "../lib/estilo";
 import { formatNumero, formatPorcentaje } from "@/shared/lib/numero";
 import type { MesCanal } from "../types";
 import {
@@ -50,7 +51,10 @@ export function TablaComparativa({ porMes, anioEnCurso, hastaMes }: Props) {
     <div className="overflow-x-auto">
       <table className="w-full min-w-max text-sm">
         <thead>
-          <tr className="border-b bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+          <tr
+            className="border-b text-[.7rem] uppercase tracking-[.07em] text-muted-foreground"
+            style={TITULAR}
+          >
             <th className="p-3 text-left font-medium">Canal</th>
             {anios.map((a) => (
               <th key={a} className="p-3 text-right font-medium">
@@ -85,7 +89,7 @@ export function TablaComparativa({ porMes, anioEnCurso, hastaMes }: Props) {
                   </span>
                 </td>
                 {anios.map((a) => (
-                  <td key={a} className="p-3 text-right tabular-nums">
+                  <td key={a} className="p-3 text-right text-[.86rem]" style={CIFRA}>
                     {formatNumero(fila?.get(a) ?? 0)}
                   </td>
                 ))}
@@ -100,14 +104,15 @@ export function TablaComparativa({ porMes, anioEnCurso, hastaMes }: Props) {
                         }}
                       />
                     </span>
-                    <span className="w-12 tabular-nums">
+                    <span className="w-14 text-[.86rem]" style={CIFRA}>
                       {formatPorcentaje(peso, { max: 1 })}
                     </span>
                   </span>
                 </td>
                 <td
+                  style={CIFRA}
                   className={cn(
-                    "p-3 text-right tabular-nums",
+                    "p-3 text-right text-[.86rem]",
                     dif === null && "text-muted-foreground",
                     dif !== null && dif > 0.5 && "text-emerald-600",
                     dif !== null && dif < -0.5 && "text-red-600",

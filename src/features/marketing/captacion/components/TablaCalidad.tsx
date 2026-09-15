@@ -1,6 +1,7 @@
 "use client";
 
 import { colorOrigen, labelOrigen } from "@/features/sala/data/origenes";
+import { CIFRA, TITULAR } from "../lib/estilo";
 import { formatNumero, formatPorcentaje } from "@/shared/lib/numero";
 import { cn } from "@/lib/utils";
 import type { CalidadCanal } from "../types";
@@ -33,7 +34,10 @@ export function TablaCalidad({ calidad }: { calidad: CalidadCanal[] }) {
     <div className="overflow-x-auto">
       <table className="w-full min-w-max text-sm">
         <thead>
-          <tr className="border-b bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+          <tr
+            className="border-b text-[.7rem] uppercase tracking-[.07em] text-muted-foreground"
+            style={TITULAR}
+          >
             <th className="p-3 text-left font-medium">Canal</th>
             <th className="p-3 text-right font-medium">Reservas</th>
             <th className="p-3 text-right font-medium">Mesa de</th>
@@ -56,18 +60,19 @@ export function TablaCalidad({ calidad }: { calidad: CalidadCanal[] }) {
                     {labelOrigen(c.canal)}
                   </span>
                 </td>
-                <td className="p-3 text-right tabular-nums">
+                <td className="p-3 text-right text-[.86rem]" style={CIFRA}>
                   {formatNumero(c.reservas)}
                 </td>
-                <td className="p-3 text-right tabular-nums">
+                <td className="p-3 text-right text-[.86rem]" style={CIFRA}>
                   {formatNumero(c.mediaPersonas, { min: 1, max: 1 })} personas
                 </td>
-                <td className="p-3 text-right tabular-nums text-muted-foreground">
+                <td className="p-3 text-right text-[.86rem] text-muted-foreground" style={CIFRA}>
                   {formatPorcentaje(pctCancela, { max: 1 })}
                 </td>
                 <td
+                  style={CIFRA}
                   className={cn(
-                    "p-3 text-right font-medium tabular-nums",
+                    "p-3 text-right text-[.86rem] font-medium",
                     pctNoShow >= 8 && "text-red-600",
                     pctNoShow >= 4 && pctNoShow < 8 && "text-amber-600",
                     pctNoShow < 4 && "text-muted-foreground",

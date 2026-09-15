@@ -1,48 +1,56 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { colorOrigen, labelOrigen } from "@/features/sala/data/origenes";
 import { formatNumero } from "@/shared/lib/numero";
 import type { MesCanal } from "../types";
 import { CANAL_RESTO, canalesDestacados, filasPorAnio } from "../lib/agregados";
+import { CIFRA, COLOR_RESTO } from "../lib/estilo";
 
 /**
- * Cuántas reservas trajo cada canal, año a año.
+ * Qué trajo cada canal, año a año. Barras apiladas, dibujadas a mano en SVG.
  *
- * Barras apiladas y no líneas porque la pregunta es doble: cuánto entró en
- * total ese año (la altura) y de dónde vino (los tramos). Los colores son los
- * del canal en el resto del software (`colorOrigen`), para que el verde de
+ * Apiladas y no líneas porque la pregunta es doble: cuánto entró ese año (la
+ * altura, con su número encima) y de dónde vino (los tramos). Los colores son
+ * los del canal en el resto del software (`colorOrigen`), para que el verde de
  * Google sea el mismo aquí que en el listado de reservas.
  *
- * Solo llevan color propio los siete canales que más traen; el resto se apila
- * junto en gris. Ninguno se pierde: la tabla de debajo los lista todos.
+ * Entre tramo y tramo hay 2 px del color del fondo: dos canales de tonos
+ * parecidos —el verde de Google y el turquesa de la web— se separan por el
+ * corte aunque el ojo dude del color.
  *
- * Entre tramo y tramo hay una separación de 2 px del color del fondo: dos
- * canales de tonos parecidos —el verde de Google y el turquesa de la web— se
- * distinguen por el corte aunque el ojo dude del color.
+ * El montón gris de canales pequeños va SIEMPRE abajo, para que los grandes se
+ * apoyen en una base que no se mueve de un año a otro.
  */
 
-const COLOR_RESTO = "#94a3b8"; // slate-400, el mismo gris del "sin dato"
+const ANCHO = 900;
+const ALTO = 380;
+const MARGEN = { arriba: 30, abajo: 42, izquierda: 56, derecha: 12 };
 
 interface Props {
   porMes: MesCanal[];
-  /** Año que aún no ha terminado: se avisa de que va hasta hoy. */
+  /** Año que aún no ha terminado: su barra es más corta por fuerza. */
   anioEnCurso: number;
 }
 
 export function GraficaCanalesAnio({ porMes, anioEnCurso }: Props) {
   const destacados = useMemo(() => canalesDestacados(porMes), [porMes]);
   const filas = useMemo(() => filasPorAnio(porMes, destacados), [porMes, destacados]);
+
+  const { barras, rejilla, tope } = useMemo(() => {
+    const barras = filas.map((f) => {
+      const anio = Number(f.anio);
+      const tramos = [CANAL_RESTO, ...[...destacados].reverse()]
+        .map((canal) => ({ canal, valor: Number(f[canal] ?? 0) }))
+        .filter((t) => t.valor > 0);
+      const total = tramos.reduce((s, t) => s + t.valor, 0);
+      return { anio, tramos, total };
+    });
+    const maximo = Math.max(1, ...barras.map((b) => b.total));
+    const tope = Math.ceil(maximo / 1000) * 1000 || 1000;
+    const rejilla = [0, 1, 2, 3, 4].map((i) => (tope / 4) * i);
+    return { barras, rejilla, tope };
+  }, [filas, destacados]);
 
   if (filas.length === 0) {
     return (
@@ -52,89 +60,127 @@ export function GraficaCanalesAnio({ porMes, anioEnCurso }: Props) {
     );
   }
 
-  // El montón de canales pequeños va abajo del todo y los grandes encima: así
-  // el ojo compara los que importan contra una base que no se mueve.
-  const series = [CANAL_RESTO, ...[...destacados].reverse()];
+  const utilAncho = ANCHO - MARGEN.izquierda - MARGEN.derecha;
+  const utilAlto = ALTO - MARGEN.arriba - MARGEN.abajo;
+  const y = (v: number) => MARGEN.arriba + utilAlto - (v / tope) * utilAlto;
+  const paso = utilAncho / barras.length;
+  const ancho = Math.min(88, paso * 0.56);
 
   return (
-    <div className="space-y-2">
-      <div className="h-[320px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={filas} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/40" />
-            <XAxis
-              dataKey="anio"
-              tickLine={false}
-              axisLine={false}
-              tick={{ fontSize: 12 }}
-              className="text-muted-foreground"
+    <div className="space-y-4">
+      <svg
+        viewBox={`0 0 ${ANCHO} ${ALTO}`}
+        className="block h-auto w-full overflow-visible"
+        role="img"
+        aria-label="Reservas por año y canal"
+        style={CIFRA}
+      >
+        <text
+          x={MARGEN.izquierda - 10}
+          y={MARGEN.arriba - 12}
+          textAnchor="end"
+          className="fill-muted-foreground text-[11px]"
+        >
+          reservas
+        </text>
+
+        {rejilla.map((v) => (
+          <g key={v}>
+            <line
+              x1={MARGEN.izquierda}
+              x2={ANCHO - MARGEN.derecha}
+              y1={y(v)}
+              y2={y(v)}
+              className="stroke-border"
+              strokeWidth={1}
             />
-            <YAxis
-              allowDecimals={false}
-              tickLine={false}
-              axisLine={false}
-              width={44}
-              tick={{ fontSize: 11 }}
-              tickFormatter={(v: number) => formatNumero(v)}
-              className="text-muted-foreground"
-            />
-            <Tooltip
-              cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null;
-                const total = payload.reduce((s, p) => s + Number(p.value ?? 0), 0);
+            <text
+              x={MARGEN.izquierda - 10}
+              y={y(v) + 4}
+              textAnchor="end"
+              className="fill-muted-foreground text-[11px]"
+            >
+              {formatNumero(v)}
+            </text>
+          </g>
+        ))}
+
+        {barras.map((barra, i) => {
+          const x = MARGEN.izquierda + paso * i + (paso - ancho) / 2;
+          let acumulado = 0;
+          return (
+            <g key={barra.anio}>
+              {barra.tramos.map((tramo) => {
+                const arriba = y(acumulado + tramo.valor);
+                const alto = (tramo.valor / tope) * utilAlto;
+                acumulado += tramo.valor;
+                const relleno =
+                  tramo.canal === CANAL_RESTO ? COLOR_RESTO : colorOrigen(tramo.canal);
                 return (
-                  <div className="rounded-lg border bg-background px-3 py-2 shadow-sm">
-                    <p className="mb-1 text-xs font-medium">
-                      {label}
-                      {Number(label) === anioEnCurso ? " (hasta hoy)" : ""}
-                    </p>
-                    {[...payload].reverse().map((p) => (
-                      <p key={String(p.dataKey)} className="flex items-center gap-2 text-xs">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                          style={{ backgroundColor: p.color }}
-                        />
-                        <span className="flex-1">{nombreSerie(String(p.dataKey))}</span>
-                        <span className="font-medium tabular-nums">
-                          {formatNumero(Number(p.value ?? 0))}
-                        </span>
-                      </p>
-                    ))}
-                    <p className="mt-1 border-t pt-1 text-xs font-medium">
-                      Total {formatNumero(total)}
-                    </p>
-                  </div>
+                  <rect
+                    key={tramo.canal}
+                    x={x}
+                    y={arriba}
+                    width={ancho}
+                    height={Math.max(0, alto)}
+                    fill={relleno}
+                    stroke="hsl(var(--card))"
+                    strokeWidth={2}
+                  >
+                    <title>
+                      {barra.anio} · {nombreSerie(tramo.canal)}:{" "}
+                      {formatNumero(tramo.valor)} reservas
+                    </title>
+                  </rect>
                 );
-              }}
-            />
-            <Legend
-              verticalAlign="bottom"
-              height={36}
-              iconType="square"
-              iconSize={10}
-              formatter={(value: string) => (
-                <span className="text-xs text-muted-foreground">{nombreSerie(value)}</span>
-              )}
-            />
-            {series.map((canal, i) => (
-              <Bar
-                key={canal}
-                dataKey={canal}
-                stackId="canales"
-                fill={canal === CANAL_RESTO ? COLOR_RESTO : colorOrigen(canal)}
-                stroke="hsl(var(--background))"
-                strokeWidth={2}
-                // Solo el tramo de arriba lleva las esquinas redondeadas.
-                radius={i === series.length - 1 ? [4, 4, 0, 0] : 0}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+              })}
+              <text
+                x={x + ancho / 2}
+                y={y(barra.total) - 9}
+                textAnchor="middle"
+                className="fill-foreground text-[12px] font-medium"
+              >
+                {formatNumero(barra.total)}
+              </text>
+              <text
+                x={x + ancho / 2}
+                y={ALTO - 14}
+                textAnchor="middle"
+                className="fill-muted-foreground text-[13px] font-medium"
+              >
+                {barra.anio}
+                {barra.anio === anioEnCurso ? "*" : ""}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      <Leyenda canales={[...destacados, CANAL_RESTO]} />
+
       <p className="text-xs text-muted-foreground">
-        {anioEnCurso} va hasta hoy, así que su barra es más corta por fuerza.
+        Los siete canales que más traen llevan color propio; el resto se apila junto en
+        gris. * {anioEnCurso} va hasta hoy. En la tabla de abajo están todos, uno por uno.
       </p>
+    </div>
+  );
+}
+
+/** Leyenda compartida: cuadrito de color y nombre del canal. */
+export function Leyenda({ canales }: { canales: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+      {canales.map((canal) => (
+        <span key={canal} className="inline-flex items-center gap-2">
+          <span
+            className="h-2.5 w-2.5 shrink-0 rounded-sm border border-black/10"
+            style={{
+              backgroundColor: canal === CANAL_RESTO ? COLOR_RESTO : colorOrigen(canal),
+            }}
+          />
+          {nombreSerie(canal)}
+        </span>
+      ))}
     </div>
   );
 }
