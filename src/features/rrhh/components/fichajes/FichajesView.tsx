@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
-import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { formatHoraEnZona, hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { ESTADO_FICHAJE_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE, fichajeColorBadge } from "@/features/rrhh/data/fichajes";
 import type { EstadoFichaje, Fichaje, LocalGeo, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
 import { listFichajes, crearFichajeManual } from "@/features/rrhh/actions/fichajes-actions";
@@ -17,9 +17,12 @@ import { cn } from "@/shared/lib/utils";
 
 type EmpleadoOpcion = { id: string; nombre: string; puesto: string | null; departamento: string | null };
 
-const initialManualForm = () => ({
+// El día que propone el formulario es HOY EN LA EMPRESA, no el del navegador:
+// quien abra esto desde otro huso (o de madrugada) se encontraba la fecha de
+// ayer puesta de fábrica.
+const initialManualForm = (hoy: string) => ({
   empleadoId: "",
-  fecha: new Date().toISOString().split("T")[0],
+  fecha: hoy,
   horaEntrada: "",
   horaSalida: "",
   observaciones: "",
@@ -145,7 +148,9 @@ export function FichajesView() {
   const [showConfig, setShowConfig] = useState(false);
   const [showNuevo, setShowNuevo] = useState(false);
   const [empleadosOpts, setEmpleadosOpts] = useState<EmpleadoOpcion[]>([]);
-  const [manualForm, setManualForm] = useState(initialManualForm());
+  const [manualForm, setManualForm] = useState(() =>
+    initialManualForm(hoyEnZona(empresaActual.zonaHoraria)),
+  );
   const [savingManual, setSavingManual] = useState(false);
   const [tiposFichaje, setTiposFichaje] = useState<TipoFichajeRow[]>([]);
 
@@ -248,7 +253,7 @@ export function FichajesView() {
   );
 
   const openNuevoDialog = useCallback(async () => {
-    setManualForm(initialManualForm());
+    setManualForm(initialManualForm(hoyEnZona(empresaActual.zonaHoraria)));
     setShowNuevo(true);
     const res = await getEmpleadosActivos(empresaActual.dbId);
     if (res.ok) {
@@ -262,7 +267,7 @@ export function FichajesView() {
     } else {
       toast.error("No se pudo cargar la lista de empleados");
     }
-  }, [empresaActual.dbId]);
+  }, [empresaActual.dbId, empresaActual.zonaHoraria]);
 
   const submitFichajeManual = useCallback(async () => {
     if (!manualForm.empleadoId) {
