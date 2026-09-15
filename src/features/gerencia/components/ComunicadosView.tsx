@@ -164,6 +164,39 @@ function EstadoBadge({ estado }: { estado: EstadoComunicado }) {
 }
 
 /**
+ * El título del comunicado, leído COMO UN TÍTULO: una sola línea.
+ *
+ * Los títulos son frases enteras —«Empiezan las felicitaciones de cumpleaños:
+ * llegarán clientes con código»— y, partidas en seis renglones, engordaban la
+ * fila hasta dejar el resto de la tabla en un hilo. Aquí se corta en una línea
+ * y la frase entera se lee al ponerse delante (Iván, 15-09-2026).
+ */
+function TituloEnUnaLinea({ titulo, debajo }: { titulo: string; debajo?: string }) {
+  const linea = (
+    <div className="max-w-[260px]">
+      <p className="truncate font-semibold leading-tight">{titulo}</p>
+      {debajo && <p className="truncate text-[11px] text-muted-foreground">{debajo}</p>}
+    </div>
+  );
+
+  // Lo que cabe entero no necesita que nadie lo repita por encima.
+  if (titulo.length <= 38) return linea;
+
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="cursor-default">{linea}</div>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="max-w-xs">
+          <p className="text-xs">{titulo}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/**
  * Los pulgares del comunicado y, al ponerse delante, QUIÉN votó cada cosa.
  *
  * Es un termómetro, nada más: la empresa lo mira para saber si lo que cuenta
@@ -178,17 +211,17 @@ function ValoracionResumen({
   const total = arriba.length + abajo.length;
 
   const cifras = (
-    <div className="flex items-center gap-3 text-sm tabular-nums">
+    <div className="flex items-center gap-2 text-[13px] tabular-nums whitespace-nowrap">
       <span
         className={`flex items-center gap-1 ${arriba.length > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
       >
-        <ThumbsUp className="h-4 w-4" />
+        <ThumbsUp className="h-3.5 w-3.5" />
         {arriba.length}
       </span>
       <span
         className={`flex items-center gap-1 ${abajo.length > 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}`}
       >
-        <ThumbsDown className="h-4 w-4" />
+        <ThumbsDown className="h-3.5 w-3.5" />
         {abajo.length}
       </span>
     </div>
@@ -260,16 +293,16 @@ function AlcanceCircle({
     );
   }
 
-  const r = 16, c = 2 * Math.PI * r;
+  const r = 12, c = 2 * Math.PI * r;
   const color = pct >= 80 ? "text-emerald-500" : pct >= 40 ? "text-amber-500" : "text-muted-foreground";
   const rueda = (
-    <div className="flex items-center gap-2">
-      <svg width="40" height="40" className="-rotate-90">
-        <circle cx="20" cy="20" r={r} fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
-        <circle cx="20" cy="20" r={r} fill="none" stroke="currentColor" strokeWidth="3" className={color}
+    <div className="flex items-center gap-1.5 whitespace-nowrap">
+      <svg width="30" height="30" className="-rotate-90">
+        <circle cx="15" cy="15" r={r} fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
+        <circle cx="15" cy="15" r={r} fill="none" stroke="currentColor" strokeWidth="3" className={color}
           strokeDasharray={`${(pct / 100) * c} ${c}`} strokeLinecap="round" />
       </svg>
-      <span className="text-sm font-medium">{pct}%</span>
+      <span className="text-[13px] font-medium tabular-nums">{pct}%</span>
     </div>
   );
 
@@ -2327,15 +2360,15 @@ export function ComunicadosView() {
 
   const columnDefs: Record<string, { th: ReactNode; td: (c: FilaComunicado) => ReactNode }> = {
     titulo: {
-      th: <TableHead key="titulo">Título</TableHead>,
+      th: <TableHead key="titulo" className="w-[280px]">Título</TableHead>,
       td: (c) => (
         <TableCell key="titulo">
-          <p className="font-semibold text-sm">{c.titulo}</p>
           {/* En una sanción, la calificación de la falta se lee aquí mismo:
               es lo primero que se busca y estaba dentro del PDF. */}
-          {c.firma && (
-            <p className="text-[11px] text-muted-foreground">{gravedadLabel(c.firma.gravedad)}</p>
-          )}
+          <TituloEnUnaLinea
+            titulo={c.titulo}
+            debajo={c.firma ? gravedadLabel(c.firma.gravedad) : undefined}
+          />
         </TableCell>
       ),
     },
@@ -2362,13 +2395,13 @@ export function ComunicadosView() {
     creadoEl: {
       th: <TableHead key="creadoEl">Creado el</TableHead>,
       td: (c) => (
-        <TableCell key="creadoEl" className="text-sm text-muted-foreground whitespace-nowrap">{formatFechaHoraEnZona(c.creadoEl, tz)}</TableCell>
+        <TableCell key="creadoEl" className="text-xs tabular-nums text-muted-foreground whitespace-nowrap">{formatFechaHoraEnZona(c.creadoEl, tz)}</TableCell>
       ),
     },
     envio: {
       th: <TableHead key="envio">Envío</TableHead>,
       td: (c) => (
-        <TableCell key="envio" className="text-sm text-muted-foreground whitespace-nowrap">
+        <TableCell key="envio" className="text-xs tabular-nums text-muted-foreground whitespace-nowrap">
           {/* En lo que ya salió, el día que salió. En lo que está esperando, el
               día que le toca: son dos cosas distintas y se leen distinto. */}
           {!c.envio
@@ -2422,7 +2455,10 @@ export function ComunicadosView() {
       th: <TableHead key="destinatarios">Destinatarios</TableHead>,
       td: (c) => (
         <TableCell key="destinatarios">
-          <div className="flex flex-wrap gap-1">
+          {/* Una píldora a cero no dice nada y partía la celda en dos
+              renglones: lo que va a tres departamentos y a nadie más se lee
+              «3 dptos» y ya está (Iván, 15-09-2026). */}
+          <div className="flex items-center gap-1 whitespace-nowrap">
             {c.firma ? (
               <Badge variant="outline" className="text-[11px] gap-1">
                 <Users className="h-3 w-3" />{c.firma.empleadoNombre}
@@ -2431,12 +2467,19 @@ export function ComunicadosView() {
               <Badge variant="secondary" className="text-[11px] gap-1"><Users className="h-3 w-3" />Todos</Badge>
             ) : (
               <>
-                <ConQuienes titulo="Departamentos" nombres={c.departamentosDestinatarios}>
-                  <Badge variant="secondary" className="text-[11px] gap-1 cursor-default"><Users className="h-3 w-3" />{c.destinatarios.departamentos} dptos</Badge>
-                </ConQuienes>
-                <ConQuienes titulo="Empleados" nombres={c.empleadosDestinatarios.map(nombreDeEmpleado)}>
-                  <Badge variant="outline" className="text-[11px] gap-1 cursor-default">{c.destinatarios.empleados} empleados</Badge>
-                </ConQuienes>
+                {c.destinatarios.departamentos > 0 && (
+                  <ConQuienes titulo="Departamentos" nombres={c.departamentosDestinatarios}>
+                    <Badge variant="secondary" className="text-[11px] gap-1 cursor-default"><Users className="h-3 w-3" />{c.destinatarios.departamentos} dptos</Badge>
+                  </ConQuienes>
+                )}
+                {c.destinatarios.empleados > 0 && (
+                  <ConQuienes titulo="Empleados" nombres={c.empleadosDestinatarios.map(nombreDeEmpleado)}>
+                    <Badge variant="outline" className="text-[11px] gap-1 cursor-default">{c.destinatarios.empleados} empleados</Badge>
+                  </ConQuienes>
+                )}
+                {c.destinatarios.departamentos === 0 && c.destinatarios.empleados === 0 && (
+                  <span className="text-xs text-muted-foreground">Sin destinatarios</span>
+                )}
               </>
             )}
           </div>
@@ -2521,7 +2564,10 @@ export function ComunicadosView() {
             />
           ) : (
           <Card>
-            <Table data-tabla-consulta>
+            <Table
+              data-tabla-consulta
+              className="[&_th]:h-9 [&_th]:px-2 [&_th]:whitespace-nowrap [&_td]:px-2 [&_td]:py-2 text-[13px]"
+            >
               <TableHeader>
                 <TableRow>
                   {columnasRender.map((c) => columnDefs[c.campo]?.th)}
