@@ -33,3 +33,19 @@ export function formatearFechaHoraEs(iso: string | null | undefined): string {
   const hora = iso.length >= 16 ? iso.slice(11, 16) : "";
   return hora ? `${fecha} ${hora}` : fecha;
 }
+
+/**
+ * Día SIGUIENTE a una fecha de calendario ("AAAA-MM-DD" → "AAAA-MM-DD").
+ *
+ * Se calcula en UTC puro, sin hora, para que el +1 no dependa de la zona del
+ * servidor ni del navegador. Lo usa la baja: el último día de trabajo es uno y
+ * el día oficial de la baja en la Seguridad Social es el siguiente, y ese par
+ * tiene que salir igual en el correo a la gestoría y en la pantalla.
+ */
+export function diaSiguienteIso(iso: string | null | undefined): string | null {
+  if (!iso || iso.length < 10) return null;
+  const t = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(t.getTime())) return null;
+  t.setUTCDate(t.getUTCDate() + 1);
+  return t.toISOString().slice(0, 10);
+}
