@@ -316,10 +316,13 @@ function VerCorreoButton({
   onAbrir: (correo: CorreoArchivadoVisible) => void;
 }) {
   const [cargando, setCargando] = useState(false);
+  // Sin copia archivada no hay nada que enseñar: mejor sin ojito que un ojito
+  // que no lleva a ninguna parte.
+  if (!row.correo_id) return null;
 
   const abrir = async () => {
     setCargando(true);
-    const res = await getCorreoGestoria(row.tipo, row.id);
+    const res = await getCorreoGestoria(row.correo_id as string);
     setCargando(false);
     if (res.ok) onAbrir({ asunto: res.asunto, html: res.html, destinatario: "gestoria" });
     else toast.error("No se puede ver el correo", { description: res.error });

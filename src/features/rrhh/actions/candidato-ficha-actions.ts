@@ -110,11 +110,10 @@ export async function getActividadCandidato(
   const empleadoId = (cand?.empleado_id as string | null) ?? null;
   if (empleadoId) {
     try {
-      const { emparejarCorreosGestoria } = await import(
+      const { correosDeGestoriaDeUnCandidato } = await import(
         "@/features/rrhh/services/gestoria/correo-gestoria-archivado"
       );
-      const r = await emparejarCorreosGestoria(supabase, { empresaId, empleadoId, candidatoId });
-      correosGestoria = r.historialIds;
+      correosGestoria = await correosDeGestoriaDeUnCandidato(supabase, { empresaId, empleadoId });
     } catch (e) {
       // Etiquetar el destinatario es un extra: nunca puede dejar sin actividad.
       console.error("[candidato-ficha] correos de gestoría:", e);

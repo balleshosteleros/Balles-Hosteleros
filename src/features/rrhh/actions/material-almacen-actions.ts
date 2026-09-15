@@ -261,6 +261,9 @@ const lineaEntradaSchema = z.object({
 const entradaSchema = z.object({
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida"),
   proveedor: z.string().trim().min(1, "Pon el proveedor").max(200),
+  // El nº de albarán o factura es del ALBARÁN entero, no de cada línea: cinco
+  // chaquetas y dos gorros del mismo papel llevan la misma referencia.
+  documentoReferencia: z.string().trim().min(1, "Pon el nº de albarán o factura").max(100),
   observaciones: z.string().trim().max(1000).nullable(),
   lineas: z.array(lineaEntradaSchema).min(1, "Añade al menos una pieza"),
 });
@@ -343,6 +346,7 @@ export async function registrarEntradaMaterial(input: EntradaMaterialInput) {
         unidades: p.unidades,
         fecha: parsed.data.fecha,
         proveedor: parsed.data.proveedor,
+        documentoReferencia: parsed.data.documentoReferencia,
         costeUnitario: p.costeUnitario,
         observaciones: parsed.data.observaciones,
         usuarioId: userId,

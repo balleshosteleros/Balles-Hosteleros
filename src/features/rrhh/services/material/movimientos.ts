@@ -60,6 +60,8 @@ export interface RegistrarMovimientoInput {
   motivo?: string | null;
   observaciones?: string | null;
   proveedor?: string | null;
+  /** Nº de albarán o factura del proveedor: solo lo traen las compras. */
+  documentoReferencia?: string | null;
   costeUnitario?: number | null;
   usuarioId?: string | null;
   usuarioNombre?: string | null;
@@ -108,6 +110,7 @@ export async function registrarMovimiento(
     motivo = null,
     observaciones = null,
     proveedor = null,
+    documentoReferencia = null,
     costeUnitario = null,
     usuarioId = null,
     usuarioNombre = null,
@@ -158,6 +161,7 @@ export async function registrarMovimiento(
       motivo: motivo?.trim() || null,
       observaciones: observaciones?.trim() || null,
       proveedor: proveedor?.trim() || null,
+      documento_referencia: documentoReferencia?.trim() || null,
       coste_unitario: costeUnitario,
       created_by: usuarioId,
       created_por_nombre: usuarioNombre,

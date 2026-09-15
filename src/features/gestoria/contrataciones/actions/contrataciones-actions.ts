@@ -156,6 +156,31 @@ export async function listContrataciones(): Promise<{
     const data = [...altas, ...bajas, ...modificaciones].filter((r) => !r.migrado).sort((a, b) =>
       a.enviado_en < b.enviado_en ? 1 : a.enviado_en > b.enviado_en ? -1 : 0,
     );
+
+    // Qué correo archivado le corresponde a cada trámite, de una sola vez: así el
+    // ojito solo sale en las filas de las que SÍ hay copia que enseñar. Nunca
+    // puede tumbar el listado: sin emparejar, la tabla se ve igual y sin ojitos.
+    try {
+      const { correosGestoriaPorTramite } = await import(
+        "@/features/rrhh/services/gestoria/correo-gestoria-archivado"
+      );
+      const mapa = await correosGestoriaPorTramite(
+        supabase as unknown as SupabaseClient,
+        empresaId,
+        data.map((r) => ({
+          tipo: r.tipo,
+          id: r.id,
+          empleadoId: r.empleado_id,
+          enviadoEn: r.enviado_en,
+        })),
+      );
+      if (mapa.size > 0) {
+        for (const r of data) r.correo_id = mapa.get(`${r.tipo}:${r.id}`) ?? null;
+      }
+    } catch (e) {
+      console.error("[contrataciones] correos archivados:", e);
+    }
+
     return { ok: true, data };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -277,6 +302,8 @@ async function listAltas(
       estado: pendiente ? ("pendiente" as const) : ("correcto" as const),
       pendiente_de: pendienteDe,
       migrado,
+      // Lo rellena `listContrataciones` de una vez para todas las filas.
+      correo_id: null,
       ...calcularAviso(pendiente, fechaEvento, hoy, {
         hoy: "Empieza HOY y el contrato sigue sin cerrar",
         pasado: "Ya ha empezado a trabajar y el contrato sigue sin cerrar",
@@ -365,6 +392,8 @@ async function listAltasNuncaEnviadas(
       estado: "pendiente" as const,
       pendiente_de: "email_fallido" as MotivoPendiente,
       migrado,
+      // Lo rellena `listContrataciones` de una vez para todas las filas.
+      correo_id: null,
       ...calcularAviso(true, fechaEvento, hoy, {
         hoy: "Empieza HOY y la gestoría no ha recibido el alta",
         pasado: "Ya ha empezado a trabajar y la gestoría no ha recibido el alta",
@@ -450,6 +479,8 @@ async function listBajas(
       estado: pendiente ? ("pendiente" as const) : ("correcto" as const),
       pendiente_de: pendienteDe,
       migrado,
+      // Lo rellena `listContrataciones` de una vez para todas las filas.
+      correo_id: null,
       tipo_baja_label: (b.tipo_baja_label as string | null) ?? null,
       motivo: (b.motivo as string | null) ?? null,
       // El día que la gestoría tramita en el RED: el siguiente al último trabajado.
@@ -503,6 +534,8 @@ async function listModificaciones(
       // Las modificaciones solo existen si se enviaron desde el software, así que
       // nunca vienen de la migración.
       migrado: false,
+      // Lo rellena `listContrataciones` de una vez para todas las filas.
+      correo_id: null,
       aviso: "ninguno" as const,
       aviso_texto: null,
       puesto_anterior: (m.puesto_origen_nombre as string | null) ?? null,
@@ -579,62 +612,33 @@ export async function reenviarAltaGestoria(
 }
 
 /**
- * El CORREO que recibió la gestoría por un trámite concreto, tal cual salió.
+ * El CORREO que recibió la gestoría, tal cual salió.
  *
  * No se reconstruye: se devuelve la copia archivada en el historial del
  * candidato — la misma que enseña su ficha en Reclutamiento —, así que lo que se
  * ve aquí es literalmente lo que hay en la bandeja de la gestoría, aunque la
- * plantilla haya cambiado después. Si no hay copia (trabajadores dados de alta
- * a mano, sin ficha de candidato) se dice, no se inventa.
+ * plantilla haya cambiado después. El listado ya dice de qué correo se trata
+ * (`correo_id`); aquí solo se trae su contenido, que es lo que pesa.
  */
 export async function getCorreoGestoria(
-  tipo: TipoContratacion,
-  tramiteId: string,
+  correoId: string,
 ): Promise<{ ok: true; asunto: string; html: string } | { ok: false; error: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "Sin empresa" };
 
-    const TABLA: Record<TipoContratacion, string> = {
-      alta: "gestoria_contrato_tokens",
-      baja: "gestoria_bajas",
-      modificacion: "empleado_promociones",
+    const { data } = await supabase
+      .from("candidato_historial")
+      .select("email_asunto, email_html")
+      .eq("id", correoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle<{ email_asunto: string | null; email_html: string | null }>();
+    if (!data?.email_html) return { ok: false, error: "No se encuentra la copia de este correo." };
+    return {
+      ok: true,
+      asunto: data.email_asunto ?? "Correo a la gestoría",
+      html: data.email_html,
     };
-    const { data: tramite } = await supabase
-      .from(TABLA[tipo])
-      .select("empleado_id")
-      .eq("id", tramiteId)
-      .eq("empresa_id", empresaId)
-      .maybeSingle<{ empleado_id: string | null }>();
-    const empleadoId = tramite?.empleado_id ?? null;
-    if (!empleadoId) return { ok: false, error: "Este trámite ya no tiene ficha de trabajador." };
-
-    const { data: cand } = await supabase
-      .from("candidatos")
-      .select("id")
-      .eq("empleado_id", empleadoId)
-      .eq("empresa_id", empresaId)
-      .maybeSingle<{ id: string }>();
-    if (!cand?.id) {
-      return {
-        ok: false,
-        error:
-          "No hay copia del correo: este trabajador no entró por el portal de empleo, " +
-          "así que no tiene ficha en Reclutamiento donde archivarlo.",
-      };
-    }
-
-    const { emparejarCorreosGestoria, claveTramite } = await import(
-      "@/features/rrhh/services/gestoria/correo-gestoria-archivado"
-    );
-    const { porTramite } = await emparejarCorreosGestoria(supabase as unknown as SupabaseClient, {
-      empresaId,
-      empleadoId,
-      candidatoId: cand.id,
-    });
-    const correo = porTramite.get(claveTramite(tipo, tramiteId));
-    if (!correo) return { ok: false, error: "No se archivó copia de este correo." };
-    return { ok: true, asunto: correo.asunto, html: correo.html };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[contrataciones] getCorreoGestoria:", msg);

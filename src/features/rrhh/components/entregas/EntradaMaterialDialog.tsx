@@ -117,15 +117,22 @@ export function EntradaMaterialDialog({
     }
 
     setGuardando(true);
+    // La entrada se graba como un ALBARÁN, aunque aquí solo se meta una pieza:
+    // la fecha, el proveedor y el nº de documento son del papel, y lo que entra
+    // va en líneas.
     const res = await registrarEntradaMaterial({
-      tipoId: tipoElegido.id,
-      talla: tipoElegido.requiereTalla ? talla : null,
-      unidades: cuantas,
       fecha,
       proveedor: proveedor.trim(),
       documentoReferencia: documento.trim(),
-      costeUnitario: costeNum,
       observaciones: observaciones.trim() || null,
+      lineas: [
+        {
+          tipoId: tipoElegido.id,
+          talla: tipoElegido.requiereTalla ? talla : null,
+          unidades: cuantas,
+          costeUnitario: costeNum,
+        },
+      ],
     });
     setGuardando(false);
     if (!res.ok) { toast.error(res.error); return; }

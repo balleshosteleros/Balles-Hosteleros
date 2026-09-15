@@ -63,6 +63,13 @@ export interface ContratacionRow {
    */
   migrado: boolean;
 
+  /**
+   * Correo archivado que recibió la gestoría por este trámite, si lo hay. Es el
+   * mismo que enseña la ficha del candidato en Reclutamiento. `null` cuando no
+   * hay copia (trabajadores dados de alta a mano, sin ficha de candidato).
+   */
+  correo_id: string | null;
+
   /** Peligro: pendiente y la fecha del trámite ya llegó (o pasó). */
   aviso: NivelAviso;
   aviso_texto: string | null;
