@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { whatsappHref } from "@/shared/lib/telefono";
 import { Dialog, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import {
+  CorreoArchivadoDialog,
+  type CorreoArchivadoVisible,
+} from "@/shared/components/CorreoArchivadoDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1394,7 +1398,7 @@ function ActividadTab({
     historial.length > 0 ? historial[0].faseAnterior : getFasePrincipal(candidato.fase);
 
   // Correo abierto en el visor (HTML archivado tal cual lo recibió el candidato).
-  const [emailVisor, setEmailVisor] = useState<{ asunto: string; html: string } | null>(null);
+  const [emailVisor, setEmailVisor] = useState<CorreoArchivadoVisible | null>(null);
 
   return (
     <Section title="Historial de actividad" icon={<History className="h-4 w-4" />}>
@@ -1496,20 +1500,40 @@ function ActividadTab({
                 {h.usuario} · {h.fecha}
                 {h.emailEnviado && (
                   <span className="ml-2 inline-flex items-center gap-1 text-primary">
-                    <Send className="h-3 w-3" /> Email enviado
+                    <Send className="h-3 w-3" />{" "}
+                    {h.emailDestinatario === "gestoria" ? "Email a la gestoría" : "Email enviado"}
                   </span>
                 )}
               </div>
               {h.emailEnviado && h.emailAsunto && (
                 h.emailHtml ? (
                   // Con HTML archivado: el asunto abre el visor con el correo
-                  // EXACTO que recibió el candidato (inmutable aunque cambie la
-                  // plantilla).
-                  <ToolTooltip label="Ver el correo que recibió el candidato">
+                  // EXACTO que se envió (inmutable aunque cambie la plantilla).
+                  // Por aquí pasan también los avisos a la GESTORÍA (alta,
+                  // cambio de puesto y baja), así que se dice quién lo recibió.
+                  <ToolTooltip
+                    label={
+                      h.emailDestinatario === "gestoria"
+                        ? "Ver el correo que recibió la gestoría"
+                        : "Ver el correo que recibió el candidato"
+                    }
+                  >
                     <button
                       type="button"
-                      onClick={() => setEmailVisor({ asunto: h.emailAsunto!, html: h.emailHtml! })}
-                      className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-primary transition-colors hover:bg-primary/20" aria-label="Ver el correo que recibió el candidato">
+                      onClick={() =>
+                        setEmailVisor({
+                          asunto: h.emailAsunto!,
+                          html: h.emailHtml!,
+                          destinatario: h.emailDestinatario ?? "candidato",
+                        })
+                      }
+                      className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-primary transition-colors hover:bg-primary/20"
+                      aria-label={
+                        h.emailDestinatario === "gestoria"
+                          ? "Ver el correo que recibió la gestoría"
+                          : "Ver el correo que recibió el candidato"
+                      }
+                    >
                       <Mail className="h-3 w-3 shrink-0" />
                       <span className="truncate">{h.emailAsunto}</span>
                       <Eye className="h-3 w-3 shrink-0 opacity-70" />
@@ -1561,51 +1585,8 @@ function ActividadTab({
 
       {/* Visor del correo archivado: muestra el HTML EXACTO que recibió el
           candidato, aislado en un iframe (sin heredar estilos de la app). */}
-      <EmailPreviewDialog email={emailVisor} onClose={() => setEmailVisor(null)} />
+      <CorreoArchivadoDialog correo={emailVisor} onClose={() => setEmailVisor(null)} />
     </Section>
-  );
-}
-
-// ─── Visor de correo archivado ────────────────────────────────
-function EmailPreviewDialog({
-  email,
-  onClose,
-}: {
-  email: { asunto: string; html: string } | null;
-  onClose: () => void;
-}) {
-  return (
-    <Dialog open={!!email} onOpenChange={(o) => !o && onClose()}>
-      <DialogPortal>
-        <DialogOverlay />
-        <DialogPrimitive.Content
-          className="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[92vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-background shadow-lg focus:outline-none"
-          aria-describedby={undefined}
-        >
-          <div className="flex items-start gap-3 border-b px-4 py-3">
-            <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <div className="min-w-0 flex-1">
-              <DialogPrimitive.Title className="truncate text-sm font-semibold">
-                {email?.asunto}
-              </DialogPrimitive.Title>
-              <p className="text-[11px] text-muted-foreground">
-                Correo enviado al candidato (copia exacta archivada)
-              </p>
-            </div>
-            <DialogPrimitive.Close className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-              <X className="h-4 w-4" />
-            </DialogPrimitive.Close>
-          </div>
-          {/* sandbox vacío: HTML estático sin scripts ni navegación. */}
-          <iframe
-            title="Correo recibido por el candidato"
-            sandbox=""
-            srcDoc={email?.html ?? ""}
-            className="h-[65vh] w-full border-0 bg-white"
-          />
-        </DialogPrimitive.Content>
-      </DialogPortal>
-    </Dialog>
   );
 }
 

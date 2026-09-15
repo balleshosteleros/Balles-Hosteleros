@@ -1343,6 +1343,9 @@ export async function darBajaContratoEmpresa(
       // La causa la empresa: la voluntaria se etiqueta «Voluntaria forzosa».
       tipoBajaLabel: etiquetaTipoBajaEmpresa(input.tipoBaja),
       motivo: input.motivo ?? null,
+      // La causa que se le comunica al trabajador en su carta es la que tiene
+      // que leer la gestoría: es la misma baja contada una sola vez.
+      hechos: input.hechos ?? null,
       origen: "reclutamiento",
     });
     if (!avisoGestoria.ok && avisoGestoria.datosIncompletos) {

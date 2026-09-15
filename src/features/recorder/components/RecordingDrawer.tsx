@@ -479,7 +479,7 @@ function RecordingContent() {
           </p>
           <Button variant="outline" onClick={reset} className="gap-2">
             <RotateCcw className="h-4 w-4" />
-            Nueva grabación
+            Nueva
           </Button>
         </div>
         <RecordingsList />

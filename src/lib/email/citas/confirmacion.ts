@@ -93,6 +93,8 @@ export function citaConfirmacionEmail(input: CitaConfirmacionInput): {
     `,
   });
 
+  // `null` = línea que no toca; "" = línea en blanco a propósito. Filtrar por
+  // "valor vacío" se comía los blancos y el texto salía todo apelmazado.
   const text = [
     nombre ? `Hola, ${nombre}.` : "Hola.",
     "",
@@ -100,13 +102,13 @@ export function citaConfirmacionEmail(input: CitaConfirmacionInput): {
     `Día: ${input.fechaLarga}`,
     `Hora: ${input.hora} (hora de ${input.ciudadZona})`,
     `Duración: ${duracionLegible(input.duracionMin)}`,
-    input.conQuien ? `Con: ${input.conQuien}` : "",
-    input.meetUrl ? `Videollamada: ${input.meetUrl}` : "",
+    input.conQuien ? `Con: ${input.conQuien}` : null,
+    input.meetUrl ? `Videollamada: ${input.meetUrl}` : null,
     "",
     "Si no puedes venir, avísanos con tiempo y buscamos otro hueco.",
     input.empresa.nombre,
   ]
-    .filter(Boolean)
+    .filter((l) => l !== null)
     .join("\n");
 
   return {

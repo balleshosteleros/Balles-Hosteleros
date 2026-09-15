@@ -61,8 +61,10 @@ interface Props {
   onAprobar: (clave: BloqueCuadre["clave"]) => void;
   onRechazar: (clave: BloqueCuadre["clave"]) => void;
   onReabrir: (clave: BloqueCuadre["clave"]) => void;
-  /** Abre el diálogo de documentos del mes. */
+  /** Abre la consulta de documentos (ver y descargar) o la subida, según toque. */
   onVerDocumentos: () => void;
+  /** ¿Hay ya algún papel de la gestoría? Decide si el botón mira o sube. */
+  hayDocumentos: boolean;
   /** En marcha ahora mismo (bloquea los botones de ese bloque). */
   ocupado: BloqueCuadre["clave"] | null;
   cargarHistorico: () => Promise<HistoricoEntrada[]>;
@@ -89,6 +91,7 @@ export function CuadreEntregaCard({
   onRechazar,
   onReabrir,
   onVerDocumentos,
+  hayDocumentos,
   ocupado,
   cargarHistorico,
 }: Props) {
@@ -108,6 +111,7 @@ export function CuadreEntregaCard({
             onRechazar={() => onRechazar(b.clave)}
             onReabrir={() => onReabrir(b.clave)}
             onVerDocumentos={onVerDocumentos}
+            hayDocumentos={hayDocumentos}
           />
         ))}
       </div>
@@ -135,6 +139,7 @@ function Bloque({
   onRechazar,
   onReabrir,
   onVerDocumentos,
+  hayDocumentos,
 }: {
   b: BloqueCuadre;
   ocupado: boolean;
@@ -142,6 +147,7 @@ function Bloque({
   onRechazar: () => void;
   onReabrir: () => void;
   onVerDocumentos: () => void;
+  hayDocumentos: boolean;
 }) {
   // Al céntimo, igual que el cuadre del servidor: en dinero no hay holgura.
   const hayDatos = b.sistema != null && b.gestoria != null;
@@ -206,7 +212,7 @@ function Bloque({
                 Rechazar
               </Button>
               <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={onVerDocumentos}>
-                {hayDatos ? "Ver" : "Subir"}
+                {hayDocumentos ? "Ver" : "Subir"}
               </Button>
             </>
           )}

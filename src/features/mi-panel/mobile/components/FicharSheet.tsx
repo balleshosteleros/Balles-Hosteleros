@@ -35,29 +35,39 @@ export function FicharSheet({
   onCerrar: () => void;
 }) {
   const [fichaje, setFichaje] = useState<MiFichajeHoy | null>(null);
-  const [cargando, setCargando] = useState(true);
+  const [cargado, setCargado] = useState(false);
 
   const refrescar = () => {
     getMiFichajeHoy().then((r) => {
       if (r.ok) setFichaje(r.data);
-      setCargando(false);
+      setCargado(true);
     });
   };
 
-  // Se lee al abrir, no al montar: así el estado es el de ESTE momento y no el
-  // de cuando arrancó la app (que puede ser de hace horas).
+  // Se adelanta al toque: la barra de abajo está montada siempre, así que el
+  // fichaje de hoy se lee ya, en segundo plano. Antes la lectura empezaba al
+  // pulsar la huella y la hoja se quedaba unos segundos con el título a secas.
+  useEffect(() => {
+    refrescar();
+  }, []);
+
+  // Y al abrir se vuelve a leer, en silencio: lo precargado puede ser de hace
+  // rato y el estado que manda es el de ESTE momento.
   useEffect(() => {
     if (!abierto) return;
-    setCargando(true);
     refrescar();
   }, [abierto]);
 
-  if (!abierto) return null;
-
   const estado = deriveEstado(fichaje);
 
+  // Montada SIEMPRE, escondida mientras no se usa. No es un capricho: el botón
+  // de dentro es quien lee el turno, la cortesía y los tipos de fichaje, y si
+  // nace al pulsar la huella, esas lecturas empiezan justo cuando el empleado
+  // ya está mirando la pantalla. Montado desde el principio, al tocar la huella
+  // todo eso está resuelto y la hoja sale entera.
   return (
     <div
+      hidden={!abierto}
       className="fixed inset-0 z-[60] flex flex-col justify-end bg-black/50"
       onClick={onCerrar}
     >
@@ -88,15 +98,16 @@ export function FicharSheet({
           </p>
         )}
 
-        {/* Mientras carga no se pinta el botón: enseñarlo con el estado
-            equivocado (verde cuando toca gris) engaña más que esperar. */}
-        {!cargando && (
-          <BigClockButton
-            fichajeId={fichaje?.id ?? null}
-            estado={estado}
-            onAction={refrescar}
-          />
-        )}
+        {/* El botón se pinta SIEMPRE, desde el primer instante. Mientras no se
+            sabe el estado sale en gris con su reloj — nunca en verde, que sería
+            mentir; pero tampoco se esconde, que era peor: la hoja se abría
+            vacía y parecía rota. */}
+        <BigClockButton
+          fichajeId={fichaje?.id ?? null}
+          estado={estado}
+          cargando={!cargado}
+          onAction={refrescar}
+        />
       </div>
     </div>
   );

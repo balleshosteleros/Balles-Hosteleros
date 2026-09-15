@@ -234,7 +234,7 @@ export function AcuerdosConfigView({ onBack, onChanged }: Props) {
           </p>
         </div>
         <Button className="ml-auto" onClick={openNew}>
-          Nueva marca
+          Nueva
         </Button>
       </div>
 

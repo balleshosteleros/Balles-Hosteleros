@@ -209,6 +209,9 @@ export async function getMovimientosVacaciones(
     }
 
     // 2) Liquidadas al causar baja: el número que se comunicó a la gestoría.
+    //    Solo si es POSITIVO: cuando sale negativo no se le pagan días, se le
+    //    descuentan, y esos días ya están en el histórico como disfrutados. Una
+    //    línea más aquí los restaría dos veces.
     const { data: baja } = await supabase
       .from("gestoria_bajas")
       .select("ultimo_dia, vacaciones_liquidadas")

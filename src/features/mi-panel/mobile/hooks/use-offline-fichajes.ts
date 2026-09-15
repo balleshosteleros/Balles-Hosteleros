@@ -13,6 +13,16 @@ import { sincronizarFichajesOffline } from "@/features/mi-panel/actions/mi-panel
 
 const MAX_RETRIES = 5;
 
+/**
+ * Una sola sincronización a la vez EN TODA LA APP, no una por componente.
+ *
+ * El botón de fichar vive en varios sitios (la hoja de la barra de abajo, la
+ * tarjeta de /m/fichar, el aviso emergente) y más de uno puede estar montado a
+ * la vez. Cada instancia tenía su propio cerrojo, así que dos vaciaban la cola
+ * en paralelo: leían los mismos fichajes pendientes y los mandaban dos veces.
+ */
+let flushEnCurso: Promise<void> | null = null;
+
 function monotonicNowMs(): number {
   if (typeof performance !== "undefined") {
     return performance.timeOrigin + performance.now();
@@ -36,64 +46,73 @@ export function useOfflineFichajes(onFlushed?: () => void) {
   }, []);
 
   const flush = useCallback(async () => {
-    if (flushing) return;
+    // Otra instancia ya está sincronizando: se espera a la suya, no se manda
+    // la cola por segunda vez.
+    if (flushEnCurso) return flushEnCurso;
     setFlushing(true);
-    try {
-      const queue = await listQueue();
-      if (queue.length === 0) return;
+    const trabajo = (async () => {
+      try {
+        const queue = await listQueue();
+        if (queue.length === 0) return;
 
-      // Enriquecer cada item con offlineSeconds calculado en este momento.
-      const nowMono = monotonicNowMs();
-      const payload = queue.map((q) => ({
-        kind: q.kind,
-        fichajeId: q.fichajeId,
-        deviceTimestampIso: q.deviceTimestampIso,
-        deviceMonotonicMs: q.deviceMonotonicMs,
-        offlineSeconds: Math.max(0, (nowMono - q.deviceMonotonicMs) / 1000),
-        geo: q.geo ?? null,
-      }));
+        // Enriquecer cada item con offlineSeconds calculado en este momento.
+        const nowMono = monotonicNowMs();
+        const payload = queue.map((q) => ({
+          kind: q.kind,
+          fichajeId: q.fichajeId,
+          deviceTimestampIso: q.deviceTimestampIso,
+          deviceMonotonicMs: q.deviceMonotonicMs,
+          offlineSeconds: Math.max(0, (nowMono - q.deviceMonotonicMs) / 1000),
+          geo: q.geo ?? null,
+        }));
 
-      const res = await sincronizarFichajesOffline({ items: payload });
-      if (!res.ok) {
-        toast.error(res.error || "No se pudieron sincronizar los fichajes pendientes");
-        // Aumentar retries para los items procesados
-        await Promise.all(queue.map((q) => (q.id ? bumpRetries(q.id) : Promise.resolve())));
-        return;
-      }
+        const res = await sincronizarFichajesOffline({ items: payload });
+        if (!res.ok) {
+          toast.error(res.error || "No se pudieron sincronizar los fichajes pendientes");
+          // Aumentar retries para los items procesados
+          await Promise.all(queue.map((q) => (q.id ? bumpRetries(q.id) : Promise.resolve())));
+          return;
+        }
 
-      let okCount = 0;
-      let revisionCount = 0;
-      for (let i = 0; i < queue.length; i++) {
-        const item: FichajeOfflineItem = queue[i];
-        const r = res.results[i];
-        if (r?.ok) {
-          if (item.id) await deleteFromQueue(item.id);
-          okCount++;
-          if (r.requiere_revision) revisionCount++;
-        } else if (item.id) {
-          await bumpRetries(item.id);
-          if ((item.retries ?? 0) + 1 >= MAX_RETRIES) {
-            await deleteFromQueue(item.id);
+        let okCount = 0;
+        let revisionCount = 0;
+        for (let i = 0; i < queue.length; i++) {
+          const item: FichajeOfflineItem = queue[i];
+          const r = res.results[i];
+          if (r?.ok) {
+            if (item.id) await deleteFromQueue(item.id);
+            okCount++;
+            if (r.requiere_revision) revisionCount++;
+          } else if (item.id) {
+            await bumpRetries(item.id);
+            if ((item.retries ?? 0) + 1 >= MAX_RETRIES) {
+              await deleteFromQueue(item.id);
+            }
           }
         }
-      }
 
-      if (okCount > 0) {
-        toast.success(
-          revisionCount > 0
-            ? `Sincronizados ${okCount} fichaje${okCount === 1 ? "" : "s"} (${revisionCount} marcados para revisión)`
-            : `Sincronizados ${okCount} fichaje${okCount === 1 ? "" : "s"} pendiente${okCount === 1 ? "" : "s"}`,
-        );
-        onFlushed?.();
+        if (okCount > 0) {
+          toast.success(
+            revisionCount > 0
+              ? `Sincronizados ${okCount} fichaje${okCount === 1 ? "" : "s"} (${revisionCount} marcados para revisión)`
+              : `Sincronizados ${okCount} fichaje${okCount === 1 ? "" : "s"} pendiente${okCount === 1 ? "" : "s"}`,
+          );
+          onFlushed?.();
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Error sincronizando";
+        toast.error(msg);
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Error sincronizando";
-      toast.error(msg);
+    })();
+    flushEnCurso = trabajo;
+    try {
+      await trabajo;
     } finally {
+      flushEnCurso = null;
       setFlushing(false);
       await refresh();
     }
-  }, [flushing, onFlushed, refresh]);
+  }, [onFlushed, refresh]);
 
   useEffect(() => {
     refresh();

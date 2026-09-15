@@ -91,7 +91,6 @@ export interface MovimientoMaterial {
   /** Texto libre opcional. Lo unico que no es obligatorio en los formularios. */
   observaciones: string | null;
   proveedor: string | null;
-  documentoReferencia: string | null;
   costeUnitario: number | null;
   /** Si esta linea deshace otra, el id de la original. */
   revierteA: string | null;

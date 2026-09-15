@@ -156,7 +156,6 @@ type FilaMovimiento = {
   motivo: string | null;
   observaciones: string | null;
   proveedor: string | null;
-  documento_referencia: string | null;
   coste_unitario: number | null;
   revierte_a: string | null;
   created_por_nombre: string | null;
@@ -178,7 +177,7 @@ export async function listMovimientosMaterial(
   const { data, error } = await db
     .from("material_movimientos")
     .select(
-      "id, tipo_id, tipo_nombre, categoria, talla, fecha, tipo_movimiento, delta_almacen, delta_manos, entrega_id, empleado_id, motivo, observaciones, proveedor, documento_referencia, coste_unitario, revierte_a, created_por_nombre, created_at",
+      "id, tipo_id, tipo_nombre, categoria, talla, fecha, tipo_movimiento, delta_almacen, delta_manos, entrega_id, empleado_id, motivo, observaciones, proveedor, coste_unitario, revierte_a, created_por_nombre, created_at",
     )
     .eq("empresa_id", empresaId)
     .order("fecha", { ascending: false })
@@ -228,7 +227,6 @@ export async function listMovimientosMaterial(
       motivo: f.motivo,
       observaciones: f.observaciones,
       proveedor: f.proveedor,
-      documentoReferencia: f.documento_referencia,
       costeUnitario: f.coste_unitario,
       revierteA: f.revierte_a,
       creadoPorNombre: f.created_por_nombre,
@@ -243,27 +241,37 @@ export async function listMovimientosMaterial(
 // ------------------------------------------------------------------
 
 /**
- * Regla de Iban (10-09-2026): en el almacen TODOS los campos son obligatorios
- * menos las observaciones. Un albaran sin proveedor ni numero no se puede
- * reclamar despues, y sin coste no se sabe cuanto vale lo que se pierde.
+ * Una linea del albaran: que pieza entra, cuantas y a que precio.
+ *
+ * El coste es obligatorio (regla de Ivan, 10-09-2026): sin el no se sabe cuanto
+ * vale lo que luego se pierde. El numero de albaran se quito el 14-09-2026: se
+ * pedia por costumbre contable y nadie lo miraba nunca.
  */
-const entradaSchema = z.object({
-  tipoId: z.string().uuid("Elige un tipo de material"),
+const lineaEntradaSchema = z.object({
+  tipoId: z.string().guid("Elige un tipo de material"),
   talla: z.string().trim().max(20).nullable(),
   unidades: z.number().int("Las unidades son números enteros").min(1, "Al menos una unidad"),
+  costeUnitario: z.number("Pon el coste por unidad").min(0, "El coste no puede ser negativo"),
+});
+
+/**
+ * Un albaran entero: lo que entra de una vez. Cinco chaquetas y dos gorros son
+ * la misma compra, no dos visitas al formulario.
+ */
+const entradaSchema = z.object({
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida"),
   proveedor: z.string().trim().min(1, "Pon el proveedor").max(200),
-  documentoReferencia: z.string().trim().min(1, "Pon el nº de albarán o factura").max(100),
-  costeUnitario: z.number("Pon el coste por unidad").min(0, "El coste no puede ser negativo"),
   observaciones: z.string().trim().max(1000).nullable(),
+  lineas: z.array(lineaEntradaSchema).min(1, "Añade al menos una pieza"),
 });
 
 export type EntradaMaterialInput = z.infer<typeof entradaSchema>;
 
 /**
- * Entra material nuevo al almacen. Sube lo que hay en la estanteria y el total
- * de la empresa: es la unica forma junto al saldo inicial de que aparezca
- * material que antes no existia.
+ * Entra material nuevo al almacen, una linea del libro por pieza.
+ *
+ * Se comprueba TODO antes de escribir nada: un albaran que falla a mitad dejaria
+ * media compra dentro y la otra media fuera, y nadie sabria cual es cual.
  */
 export async function registrarEntradaMaterial(input: EntradaMaterialInput) {
   try {
@@ -276,41 +284,91 @@ export async function registrarEntradaMaterial(input: EntradaMaterialInput) {
     if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
     const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
 
-    const tipo = await cargarTipo(db, empresaId, parsed.data.tipoId);
-    if (!tipo) return { ok: false as const, error: "Ese tipo de material no existe" };
-    if (tipo.requiereTalla && !parsed.data.talla) {
-      return { ok: false as const, error: `Indica la talla de ${tipo.nombre.toLowerCase()}` };
+    // Los tipos, de una sola consulta y ya filtrados por empresa.
+    const tipos = await cargarTipos(
+      db,
+      empresaId,
+      parsed.data.lineas.map((l) => l.tipoId),
+    );
+
+    // Preparacion completa antes de tocar el libro.
+    const preparadas: {
+      tipo: TipoCatalogo;
+      talla: string | null;
+      unidades: number;
+      costeUnitario: number;
+    }[] = [];
+    const vistas = new Set<string>();
+
+    for (const linea of parsed.data.lineas) {
+      const tipo = tipos.get(linea.tipoId);
+      if (!tipo) return { ok: false as const, error: "Ese tipo de material no existe" };
+      if (tipo.requiereTalla && !linea.talla) {
+        return { ok: false as const, error: `Indica la talla de ${tipo.nombre.toLowerCase()}` };
+      }
+      const talla = tipo.requiereTalla ? linea.talla : null;
+
+      // La misma pieza dos veces en un albaran es casi siempre un descuido al
+      // anadir lineas: se avisa en vez de grabar dos entradas sueltas.
+      const clave = `${tipo.id}|${talla ?? ""}`;
+      if (vistas.has(clave)) {
+        return {
+          ok: false as const,
+          error: `${tipo.nombre}${talla ? ` (${talla})` : ""} está dos veces: júntalas en una línea`,
+        };
+      }
+      vistas.add(clave);
+
+      preparadas.push({
+        tipo,
+        talla,
+        unidades: linea.unidades,
+        costeUnitario: linea.costeUnitario,
+      });
     }
 
-    const res = await registrarMovimiento({
-      empresaId,
-      pieza: {
-        tipoId: tipo.id,
-        tipoNombre: tipo.nombre,
-        categoria: tipo.categoria,
-        talla: tipo.requiereTalla ? parsed.data.talla : null,
-      },
-      tipoMovimiento: "compra",
-      unidades: parsed.data.unidades,
-      fecha: parsed.data.fecha,
-      proveedor: parsed.data.proveedor,
-      documentoReferencia: parsed.data.documentoReferencia,
-      costeUnitario: parsed.data.costeUnitario,
-      observaciones: parsed.data.observaciones,
-      usuarioId: userId,
-      usuarioNombre: await nombreUsuarioActual(db, userId),
-    });
-    if (!res.ok) return { ok: false as const, error: res.error ?? "No se pudo registrar" };
+    const usuarioNombre = await nombreUsuarioActual(db, userId);
+    let unidadesTotales = 0;
+
+    for (const p of preparadas) {
+      const res = await registrarMovimiento({
+        empresaId,
+        pieza: {
+          tipoId: p.tipo.id,
+          tipoNombre: p.tipo.nombre,
+          categoria: p.tipo.categoria,
+          talla: p.talla,
+        },
+        tipoMovimiento: "compra",
+        unidades: p.unidades,
+        fecha: parsed.data.fecha,
+        proveedor: parsed.data.proveedor,
+        costeUnitario: p.costeUnitario,
+        observaciones: parsed.data.observaciones,
+        usuarioId: userId,
+        usuarioNombre,
+      });
+      if (!res.ok) {
+        return {
+          ok: false as const,
+          // Se dice cuanto entro de verdad: lo escrito en el libro no se borra.
+          error: unidadesTotales
+            ? `${p.tipo.nombre}: ${res.error ?? "no se pudo registrar"}. Lo anterior del albarán sí ha entrado.`
+            : `${p.tipo.nombre}: ${res.error ?? "no se pudo registrar"}`,
+        };
+      }
+      unidadesTotales += p.unidades;
+    }
 
     revalidatePath("/rrhh/entregas");
-    return { ok: true as const };
+    return { ok: true as const, piezas: preparadas.length, unidades: unidadesTotales };
   } catch (err) {
     return { ok: false as const, error: mensajeError(err) };
   }
 }
 
 const bajaSchema = z.object({
-  tipoId: z.string().uuid("Elige un tipo de material"),
+  tipoId: z.string().guid("Elige un tipo de material"),
   talla: z.string().trim().max(20).nullable(),
   unidades: z.number().int("Las unidades son números enteros").min(1, "Al menos una unidad"),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida"),
@@ -335,7 +393,7 @@ export async function registrarBajaAlmacen(input: BajaAlmacenInput) {
     if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
     const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
 
-    const tipo = await cargarTipo(db, empresaId, parsed.data.tipoId);
+    const tipo = (await cargarTipos(db, empresaId, [parsed.data.tipoId])).get(parsed.data.tipoId);
     if (!tipo) return { ok: false as const, error: "Ese tipo de material no existe" };
 
     const talla = tipo.requiereTalla ? parsed.data.talla : null;
@@ -378,29 +436,46 @@ export async function registrarBajaAlmacen(input: BajaAlmacenInput) {
   }
 }
 
-/** El tipo del catalogo, comprobando que es de esta empresa. */
-async function cargarTipo(
+/** Lo que hace falta saber del catalogo para mover una pieza. */
+type TipoCatalogo = {
+  id: string;
+  nombre: string;
+  categoria: CategoriaMaterial;
+  requiereTalla: boolean;
+};
+
+/**
+ * Varios tipos del catalogo de una vez, comprobando que son de esta empresa.
+ * Los pide juntos porque un albaran trae varias piezas: una consulta por linea
+ * seria una llamada a la base de datos por cada chaqueta.
+ */
+async function cargarTipos(
   db: Awaited<ReturnType<typeof createClient>>,
   empresaId: string,
-  tipoId: string,
-): Promise<{ id: string; nombre: string; categoria: CategoriaMaterial; requiereTalla: boolean } | null> {
+  tipoIds: string[],
+): Promise<Map<string, TipoCatalogo>> {
+  const unicos = [...new Set(tipoIds)];
+  const mapa = new Map<string, TipoCatalogo>();
+  if (unicos.length === 0) return mapa;
+
   const { data } = await db
     .from("entregas_tipos_material")
     .select("id, nombre, categoria, requiere_talla")
-    .eq("id", tipoId)
-    .eq("empresa_id", empresaId)
-    .maybeSingle();
-  if (!data) return null;
-  const t = data as {
+    .in("id", unicos)
+    .eq("empresa_id", empresaId);
+
+  for (const t of (data ?? []) as {
     id: string;
     nombre: string;
     categoria: string;
     requiere_talla: boolean | null;
-  };
-  return {
-    id: t.id,
-    nombre: t.nombre,
-    categoria: (t.categoria === "uniforme" ? "uniforme" : "material") as CategoriaMaterial,
-    requiereTalla: !!t.requiere_talla,
-  };
+  }[]) {
+    mapa.set(t.id, {
+      id: t.id,
+      nombre: t.nombre,
+      categoria: (t.categoria === "uniforme" ? "uniforme" : "material") as CategoriaMaterial,
+      requiereTalla: !!t.requiere_talla,
+    });
+  }
+  return mapa;
 }

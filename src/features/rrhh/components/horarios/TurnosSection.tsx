@@ -6,17 +6,13 @@ import {
   pillStyleDepartamento,
   formatTurnoHorario,
   type Descanso,
-  type TipoJornada,
   type Turno,
-  type TurnoTramo,
 } from "@/features/rrhh/data/horarios";
 import {
   listTurnos,
   createTurno,
-  updateTurno,
   deleteTurno,
   getEmpleadosDirectosPorTurno,
-  setEmpleadosDirectosTurno,
 } from "@/features/rrhh/actions/turnos-actions";
 import {
   AsistenteVersionTurno,
@@ -29,9 +25,13 @@ import {
 } from "@/features/rrhh/actions/patrones-actions";
 import {
   getEmpleadosActivos,
-  listDepartamentos,
   type EmpleadoActivo,
 } from "@/features/rrhh/actions/empleados-actions";
+import {
+  TurnoFormDialog,
+  flexHorasDiaDeTurno,
+  pluralEmpleados,
+} from "@/features/rrhh/components/horarios/TurnoFormDialog";
 import { Card } from "@/shared/components/ui/card";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
@@ -54,79 +54,16 @@ import {
   Copy,
   Trash2,
   Search,
-  Type,
-  Quote,
   Clock,
-  X,
   MoreVertical,
   Archive,
   Loader2,
-  Users,
-  Check,
   Building2,
-  History,
-  ChevronDown,
-  ArrowRight,
-  ArrowLeft,
   CalendarClock,
   Timer,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
-import { Desplegable } from "@/components/ui/desplegable";
-import { SelectorFecha } from "@/components/ui/selector-fecha";
-import { SelectorHora } from "@/components/ui/selector-hora";
-
-interface TurnoDraft {
-  nombre: string;
-  codigo: string;
-  tramos: TurnoTramo[];
-  departamento: string;
-  empleadoIds: string[];
-  tipoJornada: TipoJornada;
-  /** Horas/día del flexible (sin días). 0 = sin definir. */
-  flexHorasDia: number;
-  vigenteDesde: string;          // YYYY-MM-DD (fecha de inicio, por defecto hoy)
-  vigenteHasta: string;          // YYYY-MM-DD o "" = sin fecha de fin
-}
-
-function hoyISOTurno(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-// Para flexibles legacy (sin flex_horas_dia) deriva el valor del mapa por día.
-function flexHorasDiaDeTurno(t: Turno): number {
-  if (t.flexHorasDia != null) return t.flexHorasDia;
-  const valores = Object.values(t.flexHoras).filter((h): h is number => !!h);
-  return valores.length ? Math.max(...valores) : 0;
-}
-
-function turnoToDraft(t: Turno | null, empleadoIds: string[] = []): TurnoDraft {
-  if (!t) {
-    return {
-      nombre: "",
-      codigo: "",
-      tramos: [{ inicio: "09:00", fin: "17:00" }],
-      departamento: "",
-      empleadoIds,
-      tipoJornada: "fijo",
-      flexHorasDia: 0,
-      vigenteDesde: hoyISOTurno(),
-      vigenteHasta: "",
-    };
-  }
-  return {
-    nombre: t.nombre,
-    codigo: t.codigo,
-    tramos: t.tramos.length ? t.tramos.map((tr) => ({ ...tr })) : [{ inicio: "09:00", fin: "17:00" }],
-    departamento: t.departamento ?? "",
-    empleadoIds,
-    tipoJornada: t.tipoJornada,
-    flexHorasDia: flexHorasDiaDeTurno(t),
-    vigenteDesde: t.vigenteDesde ?? hoyISOTurno(),
-    vigenteHasta: t.vigenteHasta ?? "",
-  };
-}
 
 type EmpleadoConOrigen = EmpleadoBasico & {
   directo: boolean;
@@ -134,50 +71,10 @@ type EmpleadoConOrigen = EmpleadoBasico & {
   puesto?: string | null;
 };
 
-function pluralEmpleados(n: number) {
-  if (n === 0) return "0 empleados";
-  if (n === 1) return "1 empleado";
-  return `${n} empleados`;
-}
-
 function pluralDescansos(n: number) {
   if (n === 0) return "0 descansos";
   if (n === 1) return "1 descanso";
   return `${n} descansos`;
-}
-
-// Minutos de un tramo (admite tramos que cruzan medianoche).
-function minutosDeTramo(inicio: string, fin: string): number {
-  if (!inicio || !fin) return 0;
-  const [hi, mi] = inicio.split(":").map(Number);
-  const [hf, mf] = fin.split(":").map(Number);
-  let min = hf * 60 + mf - (hi * 60 + mi);
-  if (min < 0) min += 24 * 60;
-  return min;
-}
-
-// Horas calculadas en vivo desde el draft del modal. El flexible (sin días) es
-// un valor por día; el fijo es la duración del turno en un día.
-function horasSemanaDraft(draft: TurnoDraft): number {
-  if (draft.tipoJornada === "flexible") {
-    return Math.round((draft.flexHorasDia || 0) * 100) / 100;
-  }
-  const minDia = draft.tramos.reduce(
-    (acc, t) => acc + minutosDeTramo(t.inicio, t.fin),
-    0,
-  );
-  return Math.round((minDia / 60) * 100) / 100;
-}
-
-// "8" → "8h"; "8.5" → "8h 30min"; "0" → "0h".
-function fmtHoras(horas: number): string {
-  if (horas <= 0) return "0h";
-  const totalMin = Math.round(horas * 60);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  if (m === 0) return `${h}h`;
-  if (h === 0) return `${m}min`;
-  return `${h}h ${m}min`;
 }
 
 export function TurnosSection({ empresaId }: { empresaId: string }) {
@@ -190,19 +87,12 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
     Record<string, EmpleadoBasico[]>
   >({});
   const [empleadosActivos, setEmpleadosActivos] = useState<EmpleadoActivo[]>([]);
-  const [departamentos, setDepartamentos] = useState<string[]>([]);
-  const [empBusqueda, setEmpBusqueda] = useState("");
-  const [empPanelOpen, setEmpPanelOpen] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   useGlobalLoadingSync(cargando || guardando);
   const [busqueda, setBusqueda] = useState("");
   const [showModal, setShowModal] = useState(false);
-  // En creación: true mientras se elige Fijo/Flexible (paso 1). En edición
-  // siempre false (se va directo a la configuración).
-  const [eligiendoTipo, setEligiendoTipo] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<TurnoDraft>(() => turnoToDraft(null));
   const [verEmpleadosTurno, setVerEmpleadosTurno] = useState<Turno | null>(null);
   const [verDescansosTurno, setVerDescansosTurno] = useState<Turno | null>(null);
   const [versionandoTurno, setVersionandoTurno] = useState<Turno | null>(null);
@@ -210,25 +100,18 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
 
   const refrescar = useCallback(async () => {
     setCargando(true);
-    const [tr, dr, ep, ed, ea, dp] = await Promise.all([
+    const [tr, dr, ep, ed, ea] = await Promise.all([
       listTurnos(empresaId),
       listDescansos(empresaId),
       getEmpleadosPorTurno(empresaId),
       getEmpleadosDirectosPorTurno(empresaId),
       getEmpleadosActivos(empresaId),
-      listDepartamentos(),
     ]);
     if (tr.ok) setTurnos(tr.data);
     if (dr.ok) setDescansos(dr.data);
     if (ep.ok) setEmpleadosPorTurno(ep.data);
     if (ed.ok) setEmpleadosDirectosPorTurno(ed.data);
     if (ea.ok) setEmpleadosActivos(ea.data);
-    if (dp.ok) {
-      const nombres = Array.from(
-        new Set((dp.data ?? []).map((d) => d.nombre).filter(Boolean)),
-      ).sort((a, b) => a.localeCompare(b, "es"));
-      setDepartamentos(nombres);
-    }
     setCargando(false);
   }, [empresaId]);
 
@@ -279,17 +162,6 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
     return map;
   }, [empleadosDirectosPorTurno, empleadosPorTurno, empleadosActivos]);
 
-  // Empleados seleccionables: solo los del departamento vinculado al turno.
-  // Se recalcula en vivo, de modo que si un empleado cambia de departamento
-  // deja de estar disponible aquí en cuanto se recargan los datos.
-  const empleadosDelDepto = useMemo(
-    () =>
-      draft.departamento
-        ? empleadosActivos.filter((e) => e.departamento === draft.departamento)
-        : [],
-    [empleadosActivos, draft.departamento],
-  );
-
   const filtrados = turnos.filter(
     (t) =>
       !busqueda ||
@@ -299,26 +171,11 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
 
   const abrirNuevo = () => {
     setEditandoId(null);
-    setEmpBusqueda("");
-    setEmpPanelOpen(false);
-    setDraft(turnoToDraft(null));
-    setEligiendoTipo(true);
     setShowModal(true);
-  };
-
-  // Elegir tipo en el paso 1 fija el tipo de jornada y pasa a la configuración.
-  const elegirTipo = (tipo: TipoJornada) => {
-    setDraft((d) => ({ ...d, tipoJornada: tipo }));
-    setEligiendoTipo(false);
   };
 
   const abrirEditar = (t: Turno) => {
     setEditandoId(t.id);
-    setEmpBusqueda("");
-    setEmpPanelOpen(false);
-    setEligiendoTipo(false);
-    const idsDirectos = (empleadosDirectosPorTurno[t.id] ?? []).map((e) => e.id);
-    setDraft(turnoToDraft(t, idsDirectos));
     setShowModal(true);
   };
 
@@ -350,96 +207,9 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
     setGuardando(false);
   };
 
-  const guardar = async () => {
-    const nombre = draft.nombre.trim();
-    const codigo = draft.codigo.trim().toUpperCase();
-    const departamento = draft.departamento.trim();
-    if (!nombre || !codigo || !departamento) return;
-
-    const esFlexible = draft.tipoJornada === "flexible";
-    // Ni fijo ni flexible llevan días: el día lo pone el patrón o la asignación
-    // directa. El flexible solo indica las horas/día; el fijo, sus tramos.
-    const flexHorasDia = esFlexible ? draft.flexHorasDia || 0 : null;
-    if (esFlexible && flexHorasDia! <= 0) return;
-    const tramos = esFlexible
-      ? []
-      : draft.tramos.filter((tr) => tr.inicio && tr.fin);
-    if (!esFlexible && tramos.length === 0) return;
-
-    // Solo se persisten empleados que sigan perteneciendo al departamento del
-    // turno (el vínculo manda; si alguien cambió de departamento, se descarta).
-    const idsDelDepto = new Set(
-      empleadosActivos
-        .filter((e) => e.departamento === departamento)
-        .map((e) => e.empleadoId),
-    );
-    const empleadoIds = draft.empleadoIds.filter((id) => idsDelDepto.has(id));
-
-    const vigenteDesde = draft.vigenteDesde || hoyISOTurno();
-    const vigenteHasta = draft.vigenteHasta ? draft.vigenteHasta : null;
-    if (vigenteHasta && vigenteHasta < vigenteDesde) {
-      toast.error("La fecha de fin del turno no puede ser anterior a la de inicio.");
-      return;
-    }
-
-    setGuardando(true);
-    let turnoId = editandoId;
-    if (editandoId) {
-      // Solo metadatos: la jornada (tramos, días, horas flexibles, vigencia) no
-      // se edita en sitio, se cambia creando una versión nueva del turno.
-      const res = await updateTurno(editandoId, { nombre, codigo, departamento });
-      if (!res.ok) {
-        // P. ej. turno en uso por un patrón: hay que cambiar antes el patrón.
-        toast.error(res.error || "No se pudo guardar el turno");
-        setGuardando(false);
-        return;
-      }
-    } else {
-      const res = await createTurno(empresaId, {
-        nombre,
-        codigo,
-        tramos,
-        departamento,
-        tipoJornada: draft.tipoJornada,
-        dias: [],
-        flexHorasDia,
-        vigenteDesde,
-        vigenteHasta,
-      });
-      if (!res.ok) {
-        toast.error(res.error || "No se pudo crear el turno");
-        setGuardando(false);
-        return;
-      }
-      turnoId = res.id ?? null;
-    }
-    if (turnoId) {
-      const resAsig = await setEmpleadosDirectosTurno(empresaId, turnoId, empleadoIds);
-      if (!resAsig.ok) {
-        // P. ej. turno fuera de su vigencia: no se puede asignar hoy.
-        toast.error(resAsig.error || "No se pudieron asignar los empleados");
-        await refrescar();
-        setGuardando(false);
-        return;
-      }
-    }
-    await refrescar();
-    setGuardando(false);
-    setShowModal(false);
-    setEditandoId(null);
-  };
-
   const turnoEditando = editandoId
     ? turnos.find((t) => t.id === editandoId) ?? null
     : null;
-
-  const esFlexible = draft.tipoJornada === "flexible";
-  const totalSemana = horasSemanaDraft(draft);
-  // Duración diaria del turno fijo (suma de tramos): el fijo no tiene días, así
-  // que su métrica es las horas que dura el turno en un día (partido incluido).
-  const duracionDia =
-    draft.tramos.reduce((acc, t) => acc + minutosDeTramo(t.inicio, t.fin), 0) /
-    60;
 
   return (
     <div className="space-y-4">
@@ -611,453 +381,23 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
         {turnos.length} {turnos.length === 1 ? "turno" : "turnos"}
       </div>
 
-      <Dialog
+      <TurnoFormDialog
+        empresaId={empresaId}
         open={showModal}
-        onOpenChange={(open) => {
-          setShowModal(open);
-          if (!open) {
-            setEditandoId(null);
-            setEligiendoTipo(false);
-          }
+        onOpenChange={(abierto) => {
+          setShowModal(abierto);
+          if (!abierto) setEditandoId(null);
         }}
-      >
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editandoId ? "Editar turno" : "Crear turno"}</DialogTitle>
-          </DialogHeader>
-
-          {eligiendoTipo && !editandoId ? (
-            <TipoJornadaChooser onElegir={elegirTipo} />
-          ) : (
-          <>
-          {/* Cabecera de tipo de jornada con opción de volver al paso 1. */}
-          <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
-            {esFlexible ? (
-              <Timer className="h-4 w-4 text-muted-foreground shrink-0" />
-            ) : (
-              <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0" />
-            )}
-            <span className="text-sm font-medium">
-              {esFlexible ? "Horario flexible" : "Horario fijo"}
-            </span>
-            {!editandoId && (
-              <button
-                type="button"
-                onClick={() => setEligiendoTipo(true)}
-                className="ml-auto text-xs text-primary hover:underline inline-flex items-center gap-1"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Cambiar tipo
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Type className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="relative flex-1">
-                <Input
-                  value={draft.nombre}
-                  onChange={(e) => setDraft((d) => ({ ...d, nombre: e.target.value }))}
-                  placeholder="Nombre del turno"
-                  className="pr-9"
-                />
-                {draft.nombre && (
-                  <button
-                    type="button"
-                    onClick={() => setDraft((d) => ({ ...d, nombre: "" }))}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Quote className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="relative flex-1">
-                <Input
-                  value={draft.codigo}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, codigo: e.target.value.toUpperCase() }))
-                  }
-                  placeholder="Código (ej. COC)"
-                  maxLength={4}
-                  className="pr-9 uppercase"
-                />
-                {draft.codigo && (
-                  <button
-                    type="button"
-                    onClick={() => setDraft((d) => ({ ...d, codigo: "" }))}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Desplegable
-                value={draft.departamento}
-                onChange={(e) => {
-                  const departamento = e.target.value;
-                  setDraft((d) => {
-                    // Al cambiar de departamento se descartan los empleados que ya
-                    // no pertenecen a él; el vínculo turno↔departamento manda.
-                    const idsDelDepto = new Set(
-                      empleadosActivos
-                        .filter((emp) => emp.departamento === departamento)
-                        .map((emp) => emp.empleadoId),
-                    );
-                    return {
-                      ...d,
-                      departamento,
-                      empleadoIds: d.empleadoIds.filter((id) => idsDelDepto.has(id)),
-                    };
-                  });
-                }}
-                className="flex h-9 flex-1 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="">Selecciona un departamento…</option>
-                {departamentos.map((dep) => (
-                  <option key={dep} value={dep}>
-                    {dep}
-                  </option>
-                ))}
-              </Desplegable>
-            </div>
-            <p className="pl-6 text-xs text-muted-foreground">
-              El color del turno lo define su departamento (se edita en
-              Configuración → Colores de departamento).
-            </p>
-
-            {/* Vigencia del turno: manda el turno (ningún patrón puede usarlo
-                fuera de estas fechas). Inicio por defecto hoy; fin opcional.
-                Solo aplica al horario fijo; el flexible no fija vigencia. */}
-            {!esFlexible && (
-            <div className="flex items-center gap-2">
-              <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="flex flex-1 flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-xs font-medium mb-1 text-muted-foreground">Fecha de inicio</label>
-                  <SelectorFecha
-                    value={draft.vigenteDesde}
-                    disabled={!!editandoId}
-                    onChange={(valor) => setDraft((d) => ({ ...d, vigenteDesde: valor }))}
-                    className="w-40"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1 text-muted-foreground">Fecha de fin</label>
-                  <SelectorFecha
-                    value={draft.vigenteHasta}
-                    min={draft.vigenteDesde || undefined}
-                    disabled={!!editandoId}
-                    onChange={(valor) => setDraft((d) => ({ ...d, vigenteHasta: valor }))}
-                    className="w-40"
-                  />
-                </div>
-                {!editandoId && (
-                  <span className="pb-2 text-[11px] text-muted-foreground">Vacío = sin fecha de fin.</span>
-                )}
-              </div>
-            </div>
-            )}
-
-            {/* El día NO vive en el turno: lo pone el patrón o la asignación
-                directa a días/empleados (igual en fijo y flexible). */}
-            <p className="flex items-start gap-1.5 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              <CalendarClock className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-              {esFlexible
-                ? "Este turno solo indica las horas. El día y la repetición se deciden en el patrón o asignándolo directo a días y empleados."
-                : "Este turno no tiene día propio: el día se decide en el patrón (colocas el turno en cada día de la semana) y el patrón marca desde qué día empieza."}
-            </p>
-
-            {esFlexible ? (
-              /* Jornada flexible (sin días): solo las horas por día. */
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Timer className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Horas por día</span>
-                </div>
-                <div className="flex items-center gap-2 pl-6">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={24}
-                    step={0.5}
-                    value={draft.flexHorasDia || ""}
-                    disabled={!!editandoId}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setDraft((d) => ({
-                        ...d,
-                        flexHorasDia:
-                          v === "" ? 0 : Math.max(0, Math.min(24, Number(v))),
-                      }));
-                    }}
-                    placeholder="0"
-                    className="w-28"
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    horas al día
-                  </span>
-                </div>
-              </div>
-            ) : (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Rangos horarios</span>
-                {!editandoId && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDraft((d) => ({
-                        ...d,
-                        tramos: [...d.tramos, { inicio: "12:00", fin: "16:00" }],
-                      }))
-                    }
-                    className="ml-auto text-sm text-primary hover:underline inline-flex items-center gap-1"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Añadir rango
-                  </button>
-                )}
-              </div>
-              <div className="space-y-2 pl-6">
-                {draft.tramos.map((tramo, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <SelectorHora value={tramo.inicio}
-                      disabled={!!editandoId}
-                      onChange={(valor) =>
-                        setDraft((d) => ({
-                          ...d,
-                          tramos: d.tramos.map((tr, i) =>
-                            i === idx ? { ...tr, inicio: valor } : tr,
-                          ),
-                        }))
-                      }
-                      className="w-28"
-                    />
-                    <span className="text-muted-foreground">-</span>
-                    <SelectorHora value={tramo.fin}
-                      disabled={!!editandoId}
-                      onChange={(valor) =>
-                        setDraft((d) => ({
-                          ...d,
-                          tramos: d.tramos.map((tr, i) =>
-                            i === idx ? { ...tr, fin: valor } : tr,
-                          ),
-                        }))
-                      }
-                      className="w-28"
-                    />
-                    {!editandoId && draft.tramos.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDraft((d) => ({
-                            ...d,
-                            tramos: d.tramos.filter((_, i) => i !== idx),
-                          }))
-                        }
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-            )}
-
-            {/* La jornada entera (horario, horas del flexible y vigencia) está
-                bloqueada al editar: es el molde del que cuelgan las horas
-                teóricas ya calculadas. Se cambia creando una versión nueva. */}
-            {editandoId && turnoEditando && (
-              <div className="space-y-2 rounded-lg border bg-muted/40 px-3 py-2.5">
-                <p className="text-xs text-muted-foreground">
-                  La jornada está bloqueada: cambiarla alteraría las horas
-                  previstas de los meses ya cerrados. Para cambiarla se crea una
-                  versión nueva, conservando el histórico y aplicándola a los
-                  empleados que elijas desde una fecha. Aquí solo se editan el
-                  nombre, el código y el departamento.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5"
-                    onClick={() => {
-                      setShowModal(false);
-                      setVersionandoTurno(turnoEditando);
-                    }}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Crear nueva versión de turno
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="gap-1.5"
-                    onClick={() => setHistorialTurno(turnoEditando)}
-                  >
-                    <History className="h-3.5 w-3.5" />
-                    Ver versiones
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Total en vivo: ambos sin días. El flexible muestra sus horas/día;
-                el fijo, la duración del turno en un día. */}
-            <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 text-sm">
-              <span className="text-muted-foreground">
-                {esFlexible ? "Horas por día" : "Duración del turno"}
-              </span>
-              <span className="font-semibold tabular-nums">
-                {fmtHoras(esFlexible ? totalSemana : duracionDia)}
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Empleados asignados</span>
-                {draft.empleadoIds.length > 0 && (
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {pluralEmpleados(draft.empleadoIds.length)}
-                  </span>
-                )}
-              </div>
-              <p className="pl-6 text-xs text-muted-foreground">
-                Solo aparecen los empleados del departamento del turno. Asigna a
-                quien solo trabaja ese horario; para quien rota entre varios
-                turnos, usa un patrón.
-              </p>
-              {!draft.departamento ? (
-                <p className="pl-6 text-xs text-amber-600 dark:text-amber-500">
-                  Selecciona primero un departamento para ver sus empleados.
-                </p>
-              ) : (
-              <div className="pl-6 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setEmpPanelOpen((o) => !o)}
-                  className="flex w-full items-center justify-between gap-2 rounded-md border bg-background px-3 h-9 text-sm hover:bg-muted/60 transition-colors"
-                >
-                  <span className="truncate text-left">
-                    {draft.empleadoIds.length === 0
-                      ? "Seleccionar empleados…"
-                      : pluralEmpleados(draft.empleadoIds.length)}
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-                      empPanelOpen && "rotate-180",
-                    )}
-                  />
-                </button>
-                {empPanelOpen && (
-                  <div className="space-y-2 rounded-md border p-2">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                      <Input
-                        placeholder="Buscar empleado..."
-                        value={empBusqueda}
-                        onChange={(e) => setEmpBusqueda(e.target.value)}
-                        className="pl-9 h-8 text-sm"
-                      />
-                    </div>
-                    <div className="max-h-44 overflow-y-auto rounded-md border divide-y">
-                      {empleadosDelDepto.length === 0 && (
-                        <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-                          No hay empleados en este departamento.
-                        </p>
-                      )}
-                      {empleadosDelDepto
-                        .filter((e) =>
-                          !empBusqueda
-                            ? true
-                            : e.nombreCompleto
-                                .toLowerCase()
-                                .includes(empBusqueda.toLowerCase()),
-                        )
-                        .map((e) => {
-                          const checked = draft.empleadoIds.includes(e.empleadoId);
-                          return (
-                            <button
-                              key={e.empleadoId}
-                              type="button"
-                              onClick={() =>
-                                setDraft((d) => ({
-                                  ...d,
-                                  empleadoIds: checked
-                                    ? d.empleadoIds.filter((id) => id !== e.empleadoId)
-                                    : [...d.empleadoIds, e.empleadoId],
-                                }))
-                              }
-                              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted/60 transition-colors"
-                            >
-                              <span
-                                className={cn(
-                                  "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                                  checked
-                                    ? "bg-primary border-primary text-primary-foreground"
-                                    : "border-input",
-                                )}
-                              >
-                                {checked && <Check className="h-3 w-3" />}
-                              </span>
-                              <span className="truncate">
-                                {e.nombreCompleto}
-                                {e.puesto && (
-                                  <span className="text-muted-foreground">
-                                    {" — "}{e.puesto}
-                                  </span>
-                                )}
-                              </span>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </div>
-                )}
-              </div>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowModal(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={guardar}
-              disabled={
-                guardando ||
-                !draft.nombre.trim() ||
-                !draft.codigo.trim() ||
-                !draft.departamento.trim() ||
-                (esFlexible
-                  ? !draft.flexHorasDia || draft.flexHorasDia <= 0
-                  : draft.tramos.filter((tr) => tr.inicio && tr.fin).length === 0)
-              }
-            >
-              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar"}
-            </Button>
-          </DialogFooter>
-          </>
-          )}
-        </DialogContent>
-      </Dialog>
+        turno={turnoEditando}
+        empleadoIdsDirectos={
+          editandoId
+            ? (empleadosDirectosPorTurno[editandoId] ?? []).map((e) => e.id)
+            : []
+        }
+        onGuardado={() => refrescar()}
+        onCrearVersion={(t) => setVersionandoTurno(t)}
+        onVerVersiones={(t) => setHistorialTurno(t)}
+      />
 
       <EmpleadosTurnoDialog
         turno={verEmpleadosTurno}
@@ -1231,58 +571,3 @@ function DescansosTurnoDialog({
     </Dialog>
   );
 }
-
-// Paso 1 de la creación: elegir entre jornada fija o flexible.
-function TipoJornadaChooser({
-  onElegir,
-}: {
-  onElegir: (tipo: TipoJornada) => void;
-}) {
-  const opciones: {
-    tipo: TipoJornada;
-    icono: typeof CalendarClock;
-    titulo: string;
-    descripcion: string;
-    ejemplo: string;
-  }[] = [
-    {
-      tipo: "fijo",
-      icono: CalendarClock,
-      titulo: "Horario fijo",
-      descripcion:
-        "La hora de entrada y salida es fija y común para todos los empleados que tengan este horario.",
-      ejemplo: "Ejemplo: de 09:00 a 17:00",
-    },
-    {
-      tipo: "flexible",
-      icono: Timer,
-      titulo: "Horario flexible",
-      descripcion:
-        "Se establece una cantidad de horas a realizar en un periodo de tiempo concreto.",
-      ejemplo: "Ejemplo: 40:00 horas semanales",
-    },
-  ];
-  return (
-    <div className="space-y-3">
-      {opciones.map((o) => (
-        <button
-          key={o.tipo}
-          type="button"
-          onClick={() => onElegir(o.tipo)}
-          className="group flex w-full items-center gap-4 rounded-lg border p-4 text-left transition-colors hover:border-primary hover:bg-primary/5"
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
-            <o.icono className="h-5 w-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">{o.titulo}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{o.descripcion}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{o.ejemplo}</p>
-          </div>
-          <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-        </button>
-      ))}
-    </div>
-  );
-}
-

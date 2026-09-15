@@ -250,7 +250,7 @@ export function AgendaView() {
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex justify-end">
         <Button onClick={abrirNuevo}>
-          <Plus className="mr-1 h-4 w-4" /> Nuevo contacto
+          <Plus className="mr-1 h-4 w-4" /> Nuevo
         </Button>
       </div>
 

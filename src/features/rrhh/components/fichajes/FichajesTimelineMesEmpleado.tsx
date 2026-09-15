@@ -7,7 +7,7 @@
  * fichaje (horario + tipo). Fuente: loadTimelineMesEmpleado.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, ChevronLeft } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
   LeyendaTimeline,
   fmtHM,
 } from "@/features/rrhh/components/fichajes/timeline-shared";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -29,9 +30,12 @@ const MESES = [
 ];
 const DIAS_SEM = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
-function periodoActual(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+/**
+ * El mes y el "hoy" salen del reloj de la EMPRESA, no del navegador: quien
+ * abre esto desde otro huso (o de madrugada el día 1) veía el mes equivocado.
+ */
+function periodoDe(hoyISO: string): string {
+  return hoyISO.slice(0, 7);
 }
 function labelMes(periodo: string): string {
   const [y, m] = periodo.split("-").map(Number);
@@ -49,7 +53,9 @@ function moverMes(periodo: string, delta: number): string {
 
 export function FichajesTimelineMesEmpleado({ empleadoId }: { empleadoId: string }) {
   const { empresaActual } = useEmpresa();
-  const [periodo, setPeriodo] = useState<string>(() => periodoActual());
+  const tz = empresaActual.zonaHoraria;
+  const [hoyISO, setHoyISO] = useState("");
+  const [periodo, setPeriodo] = useState("");
   const [dias, setDias] = useState<TimelineDiaMes[]>([]);
   const [totFichadas, setTotFichadas] = useState(0);
   const [totTeoricas, setTotTeoricas] = useState(0);
@@ -57,6 +63,13 @@ export function FichajesTimelineMesEmpleado({ empleadoId }: { empleadoId: string
   const [abierto, setAbierto] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    const hoy = hoyEnZona(tz);
+    setHoyISO(hoy);
+    setPeriodo((prev) => prev || periodoDe(hoy));
+  }, [tz]);
+
+  useEffect(() => {
+    if (!periodo) return;
     let vivo = true;
     setCargando(true);
     void loadTimelineMesEmpleado(empleadoId, periodo).then((r) => {
@@ -70,11 +83,6 @@ export function FichajesTimelineMesEmpleado({ empleadoId }: { empleadoId: string
       vivo = false;
     };
   }, [empleadoId, periodo, empresaActual.id]);
-
-  const hoyISO = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, []);
 
   const toggle = (fechaISO: string) =>
     setAbierto((prev) => {
@@ -102,7 +110,7 @@ export function FichajesTimelineMesEmpleado({ empleadoId }: { empleadoId: string
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPeriodo((p) => moverMes(p, -1))}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="min-w-[120px] text-center text-sm font-medium">{labelMes(periodo)}</span>
+            <span className="min-w-[120px] text-center text-sm font-medium">{periodo ? labelMes(periodo) : ""}</span>
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPeriodo((p) => moverMes(p, 1))}>
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -147,7 +155,7 @@ export function FichajesTimelineMesEmpleado({ empleadoId }: { empleadoId: string
                       </div>
                       <div className="relative flex-1 px-0 py-3">
                         {tieneAlgo ? (
-                          <TimelineBarra previsto={d.previsto} fichado={d.fichado} superponer />
+                          <TimelineBarra previsto={d.previsto} fichado={d.fichado} />
                         ) : (
                           <div className="h-4" />
                         )}

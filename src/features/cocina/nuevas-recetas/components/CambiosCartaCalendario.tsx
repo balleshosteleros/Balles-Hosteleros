@@ -196,7 +196,7 @@ export function CambiosCartaCalendario() {
           />
           <Button size="sm" className="h-9" onClick={() => setShowNuevo(true)}>
             <CalendarPlus className="h-4 w-4 mr-1.5" />
-            Nuevo cambio
+            Nuevo
           </Button>
         </div>
       </div>

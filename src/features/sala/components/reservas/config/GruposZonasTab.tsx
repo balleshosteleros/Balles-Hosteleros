@@ -239,7 +239,7 @@ export function GruposZonasTab() {
         )}
         <Button onClick={abrirNueva} size="sm" className="ml-auto">
           <Plus className="h-4 w-4 mr-1.5" />
-          Nuevo grupo
+          Nuevo
         </Button>
       </div>
 

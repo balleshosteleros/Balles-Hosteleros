@@ -46,7 +46,7 @@ export function QrDescargaDialog({
   if (!qr) return null;
 
   const prefijoEmpresa = nombreEmpresa ? `${slug(nombreEmpresa)}-` : "";
-  const nombreArchivo = `qr-${prefijoEmpresa}${qr.codigo}-${slug(qr.nombre)}`;
+  const nombreArchivo = `qr-${prefijoEmpresa}${slug(qr.nombre)}`;
 
   async function copiarEnlace() {
     try {

@@ -90,7 +90,7 @@ export function CalendarioMarketingView({ embedded }: { embedded?: boolean } = {
     <div className={embedded ? "space-y-5" : "p-4 md:p-6 space-y-5"}>
       <div className="flex items-center justify-end">
         <Button className="gap-1.5" onClick={() => { setEditItem(null); setModalOpen(true); }}>
-          <Plus className="h-4 w-4" /> Nueva publicación
+          <Plus className="h-4 w-4" /> Nueva
         </Button>
       </div>
 

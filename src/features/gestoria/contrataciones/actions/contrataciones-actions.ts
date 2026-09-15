@@ -24,6 +24,7 @@ import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { diaSiguienteIso } from "@/shared/lib/fecha";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ContratacionRow,
@@ -451,6 +452,8 @@ async function listBajas(
       migrado,
       tipo_baja_label: (b.tipo_baja_label as string | null) ?? null,
       motivo: (b.motivo as string | null) ?? null,
+      // El día que la gestoría tramita en el RED: el siguiente al último trabajado.
+      fecha_baja_oficial: diaSiguienteIso(ultimoDia),
       ...aviso,
     };
   });
@@ -571,6 +574,70 @@ export async function reenviarAltaGestoria(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[contrataciones] reenviarAlta:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * El CORREO que recibió la gestoría por un trámite concreto, tal cual salió.
+ *
+ * No se reconstruye: se devuelve la copia archivada en el historial del
+ * candidato — la misma que enseña su ficha en Reclutamiento —, así que lo que se
+ * ve aquí es literalmente lo que hay en la bandeja de la gestoría, aunque la
+ * plantilla haya cambiado después. Si no hay copia (trabajadores dados de alta
+ * a mano, sin ficha de candidato) se dice, no se inventa.
+ */
+export async function getCorreoGestoria(
+  tipo: TipoContratacion,
+  tramiteId: string,
+): Promise<{ ok: true; asunto: string; html: string } | { ok: false; error: string }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "Sin empresa" };
+
+    const TABLA: Record<TipoContratacion, string> = {
+      alta: "gestoria_contrato_tokens",
+      baja: "gestoria_bajas",
+      modificacion: "empleado_promociones",
+    };
+    const { data: tramite } = await supabase
+      .from(TABLA[tipo])
+      .select("empleado_id")
+      .eq("id", tramiteId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle<{ empleado_id: string | null }>();
+    const empleadoId = tramite?.empleado_id ?? null;
+    if (!empleadoId) return { ok: false, error: "Este trámite ya no tiene ficha de trabajador." };
+
+    const { data: cand } = await supabase
+      .from("candidatos")
+      .select("id")
+      .eq("empleado_id", empleadoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle<{ id: string }>();
+    if (!cand?.id) {
+      return {
+        ok: false,
+        error:
+          "No hay copia del correo: este trabajador no entró por el portal de empleo, " +
+          "así que no tiene ficha en Reclutamiento donde archivarlo.",
+      };
+    }
+
+    const { emparejarCorreosGestoria, claveTramite } = await import(
+      "@/features/rrhh/services/gestoria/correo-gestoria-archivado"
+    );
+    const { porTramite } = await emparejarCorreosGestoria(supabase as unknown as SupabaseClient, {
+      empresaId,
+      empleadoId,
+      candidatoId: cand.id,
+    });
+    const correo = porTramite.get(claveTramite(tipo, tramiteId));
+    if (!correo) return { ok: false, error: "No se archivó copia de este correo." };
+    return { ok: true, asunto: correo.asunto, html: correo.html };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[contrataciones] getCorreoGestoria:", msg);
     return { ok: false, error: msg };
   }
 }

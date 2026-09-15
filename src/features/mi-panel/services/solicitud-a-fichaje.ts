@@ -3,8 +3,8 @@ import "server-only";
 /**
  * Materializa el FICHAJE de una solicitud de trabajo aprobada.
  *
- *   • subtipo 'dia_trabajado' → fichaje NORMAL (tipo NOR)
- *   • subtipo 'horas_extras'  → fichaje EXTRA  (tipo EXT)
+ *   • subtipo 'dia_trabajado' → fichaje POR SOLICITUD (tipo SOL)
+ *   • subtipo 'horas_extras'  → fichaje EXTRA         (tipo EXT)
  *
  * El trabajador indica el TRAMO (hora entrada–salida) al solicitar; al aprobar
  * se crea el fichaje con ese tramo. Regla anti-solape: un día admite VARIOS
@@ -17,6 +17,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { horasSegunTipo } from "@/features/rrhh/services/horas/computa-tiempo";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { formatHoraEnZona, zonaLocalAUtcISO } from "@/features/empresa/lib/zona-horaria";
 
 /** "HH:MM[:SS]" → minutos del día (0–1439). null si no válido. */
 function hhmmAMin(hhmm?: string | null): number | null {
@@ -64,6 +66,11 @@ export async function materializarFichajeDeSolicitud(
     return { ok: false, error: "La solicitud no tiene un tramo de horas válido." };
   }
 
+  // La hora que escribe el trabajador en la solicitud ("00:00") es la del
+  // RELOJ DE LA EMPRESA, no la del servidor. Sin esto se guardaba el texto tal
+  // cual y Postgres lo leía como UTC: en Madrid salía dos horas más tarde.
+  const tz = await getZonaHorariaEmpresa(admin, sol.empresa_id);
+
   // Idempotencia: si ya existe el fichaje de esta solicitud, no duplicar.
   const { data: yaExiste } = await admin
     .from("fichajes")
@@ -81,9 +88,10 @@ export async function materializarFichajeDeSolicitud(
     .eq("empleado_id", sol.user_id)
     .eq("fecha", sol.fecha_inicio);
   for (const f of delDia ?? []) {
-    // hora_entrada/salida son timestamptz; extraemos HH:MM de la parte de hora.
-    const eIni = hhmmAMin(extraerHora(f.hora_entrada as string | null));
-    const eFin = hhmmAMin(extraerHora(f.hora_salida as string | null));
+    // hora_entrada/salida son instantes UTC: se leen en la hora del local para
+    // poder compararlos con el tramo que pidió el trabajador.
+    const eIni = hhmmAMin(horaLocal(f.hora_entrada as string | null, tz));
+    const eFin = hhmmAMin(horaLocal(f.hora_salida as string | null, tz));
     if (eIni == null || eFin == null) continue; // fichaje sin salida: no bloquea por tramo
     if (seSolapan(ini, fin, eIni, eFin)) {
       return {
@@ -95,7 +103,7 @@ export async function materializarFichajeDeSolicitud(
 
   let min = fin - ini;
   if (min < 0) min += 1440;
-  const tipo = sol.subtipo === "horas_extras" ? "EXT" : "NOR";
+  const tipo = sol.subtipo === "horas_extras" ? "EXT" : "SOL";
   // Si el tipo resultante no computa tiempo, el fichaje se crea igual (queda el
   // rastro de la solicitud aprobada) pero con 0 horas.
   const horasTotales = await horasSegunTipo(
@@ -105,12 +113,21 @@ export async function materializarFichajeDeSolicitud(
     Math.round((min / 60) * 100) / 100,
   );
 
-  // Construir timestamptz de entrada/salida a partir de la fecha + tramo. Se usa
-  // hora local naïf (sin sufijo Z) para que la fecha del fichaje coincida.
-  const entradaISO = `${sol.fecha_inicio}T${normalizarHHMM(sol.hora_inicio!)}:00`;
+  // Instante real de entrada/salida: fecha + tramo leídos en la zona de la
+  // empresa y convertidos a UTC, que es como se guardan todos los fichajes.
+  const entradaISO = zonaLocalAUtcISO(sol.fecha_inicio, normalizarHHMM(sol.hora_inicio!), tz);
   const cruzaMedianoche = fin <= ini;
   const fechaSalida = cruzaMedianoche ? sumarUnDia(sol.fecha_inicio) : sol.fecha_inicio;
-  const salidaISO = `${fechaSalida}T${normalizarHHMM(sol.hora_fin!)}:00`;
+  const salidaISO = zonaLocalAUtcISO(fechaSalida, normalizarHHMM(sol.hora_fin!), tz);
+
+  // El local sale del empleado, igual que en un fichaje hecho a mano. Sin esto
+  // la columna Local del histórico salía vacía justo en estos fichajes.
+  const { data: emp } = await admin
+    .from("empleados")
+    .select("local_id")
+    .eq("empresa_id", sol.empresa_id)
+    .eq("user_id", sol.user_id)
+    .maybeSingle();
 
   const { error } = await admin.from("fichajes").insert({
     empresa_id: sol.empresa_id,
@@ -122,6 +139,7 @@ export async function materializarFichajeDeSolicitud(
     horas_totales: horasTotales,
     estado: "completado",
     tipo,
+    local_id: (emp?.local_id as string | null) ?? null,
     solicitud_id: sol.id,
     observaciones: sol.subtipo === "horas_extras" ? "Horas extras (solicitud aprobada)" : "Día trabajado (solicitud aprobada)",
   });
@@ -133,11 +151,11 @@ export async function materializarFichajeDeSolicitud(
   return { ok: true, creado: true };
 }
 
-/** Extrae "HH:MM" de un timestamptz/ISO ("2026-07-08T09:30:00+00" → "09:30"). */
-function extraerHora(iso: string | null): string | null {
+/** "HH:MM" de un timestamptz en la zona de la empresa (no en la del servidor). */
+function horaLocal(iso: string | null, tz: string): string | null {
   if (!iso) return null;
-  const m = /T(\d{2}:\d{2})/.exec(iso);
-  return m ? m[1] : null;
+  const s = formatHoraEnZona(iso, tz, { hour12: false });
+  return /^\d{2}:\d{2}/.test(s) ? s.slice(0, 5) : null;
 }
 
 /** "9:5" → "09:05" (asegura dos dígitos). */

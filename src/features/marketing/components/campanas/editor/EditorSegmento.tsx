@@ -37,7 +37,6 @@ const GRUPOS: Array<{ grupo: string; tipos: Array<{ value: TipoSegmentoCondicion
   {
     grupo: "Qué clase de cliente",
     tipos: [
-      { value: "clasificacion", label: "Es VIP, habitual o nuevo" },
       { value: "visitas_min", label: "Ha venido al menos N veces" },
       { value: "visitas_max", label: "Ha venido como mucho N veces" },
     ],
@@ -90,7 +89,6 @@ const ETIQUETA_TIPO: Record<TipoSegmentoCondicion, string> = Object.fromEntries(
   GRUPOS.flatMap((g) => g.tipos.map((t) => [t.value, t.label])),
 ) as Record<TipoSegmentoCondicion, string>;
 
-const CLASIFICACIONES = ["REGULAR", "VIP", "NUEVO"] as const;
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
@@ -103,7 +101,6 @@ function hoyISO(): string {
 
 function condicionVacia(tipo: TipoSegmentoCondicion): SegmentoCondicion {
   switch (tipo) {
-    case "clasificacion": return { tipo, valores: ["VIP"] };
     case "visitas_min": return { tipo, min: 3 };
     case "visitas_max": return { tipo, max: 1 };
     case "ultima_visita_hace_dias": return { tipo, max: 30 };
@@ -125,7 +122,7 @@ function condicionVacia(tipo: TipoSegmentoCondicion): SegmentoCondicion {
 }
 
 export function EditorSegmento({ segmento, onChange, coincidencias }: Props) {
-  const [tipoNuevo, setTipoNuevo] = useState<TipoSegmentoCondicion>("clasificacion");
+  const [tipoNuevo, setTipoNuevo] = useState<TipoSegmentoCondicion>("visitas_min");
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
 
   // Las etiquetas del cliente se piden una vez: son las mismas para todas las
@@ -301,35 +298,6 @@ function ValoresDeCondicion({
   onChange: (c: SegmentoCondicion) => void;
 }) {
   switch (condicion.tipo) {
-    case "clasificacion":
-      return (
-        <div className="flex flex-wrap gap-1">
-          {CLASIFICACIONES.map((v) => {
-            const puesta = condicion.valores.includes(v);
-            return (
-              <button
-                key={v}
-                type="button"
-                onClick={() =>
-                  onChange({
-                    ...condicion,
-                    valores: puesta
-                      ? condicion.valores.filter((x) => x !== v)
-                      : [...condicion.valores, v],
-                  })
-                }
-                className={cn(
-                  "rounded-full border px-2.5 py-0.5",
-                  puesta ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted",
-                )}
-              >
-                {v === "REGULAR" ? "Habitual" : v === "VIP" ? "VIP" : "Nuevo"}
-              </button>
-            );
-          })}
-        </div>
-      );
-
     case "visitas_min":
     case "sin_visitar_desde_dias":
     case "valoracion_min":

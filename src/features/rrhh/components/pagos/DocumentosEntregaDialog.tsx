@@ -83,15 +83,14 @@ export function DocumentosEntregaDialog({
   onSubir,
 }: Props) {
   const [seccion, setSeccion] = useState<Seccion | null>(null);
-  const [nominas, setNominas] = useState<NominaRevision[]>([]);
-  const [cargando, setCargando] = useState(false);
+  // `null` = todavía no se han pedido. Distingue "cargando" de "no hay ninguna"
+  // sin un segundo estado que haya que poner a mano antes de cada consulta.
+  const [nominas, setNominas] = useState<NominaRevision[] | null>(null);
   const [abriendo, setAbriendo] = useState<string | null>(null);
   const [descargando, setDescargando] = useState(false);
 
   const cargar = useCallback(async () => {
-    setCargando(true);
     setNominas(await listarNominasRevision(periodo));
-    setCargando(false);
   }, [periodo]);
 
   useEffect(() => {
@@ -102,7 +101,10 @@ export function DocumentosEntregaDialog({
   // Al cerrar se vuelve al menú: la próxima vez que se abra, se abre por donde
   // se elige, no por donde se quedó la vez anterior.
   const cerrar = (v: boolean) => {
-    if (!v) setSeccion(null);
+    if (!v) {
+      setSeccion(null);
+      setNominas(null);
+    }
     onOpenChange(v);
   };
 
@@ -130,7 +132,8 @@ export function DocumentosEntregaDialog({
     else toast.error(res.error ?? "No se pudo abrir el recibo.");
   };
 
-  const conDocumento = nominas.filter((n) => n.tieneDocumento);
+  const lista = nominas ?? [];
+  const conDocumento = lista.filter((n) => n.tieneDocumento);
   const aprobadoEn = seccion === "seguros" ? segurosAprobadoEn : nominasAprobadoEn;
 
   return (
@@ -162,7 +165,7 @@ export function DocumentosEntregaDialog({
             <Opcion
               icono={<FileText className="h-4 w-4" />}
               titulo="Nóminas"
-              detalle={`${mesLabelNominas} · ${nominas.length || "sin"} document${nominas.length === 1 ? "o" : "os"}`}
+              detalle={`${mesLabelNominas} · ${lista.length || "sin"} document${lista.length === 1 ? "o" : "os"}`}
               onClick={() => setSeccion("nominas")}
             />
             <Opcion
@@ -193,13 +196,13 @@ export function DocumentosEntregaDialog({
               )}
             </div>
 
-            {cargando ? (
+            {nominas == null ? (
               <Cargando />
-            ) : nominas.length === 0 ? (
+            ) : lista.length === 0 ? (
               <Vacio texto={`La gestoría todavía no ha entregado las nóminas de ${mesLabelNominas}.`} />
             ) : (
               <div className="max-h-[50vh] space-y-1 overflow-y-auto pr-1">
-                {nominas.map((n) => (
+                {lista.map((n) => (
                   <Fila
                     key={n.id}
                     titulo={n.empleadoNombre}

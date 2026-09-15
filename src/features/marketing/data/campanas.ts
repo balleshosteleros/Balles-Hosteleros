@@ -32,7 +32,6 @@ export type SegmentoOperador = "AND" | "OR";
 
 export type SegmentoCondicion =
   // ── Cómo de cliente es ──
-  | { tipo: "clasificacion"; valores: Array<"REGULAR" | "VIP" | "NUEVO"> }
   | { tipo: "visitas_min"; min: number }
   | { tipo: "visitas_max"; max: number }
   // ── Cuándo vino ──

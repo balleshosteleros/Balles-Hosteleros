@@ -136,7 +136,7 @@ export function EmpresaTab() {
             className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
             onClick={() => setAvisoCrear(true)}
           >
-            <Plus className="h-4 w-4" /> Nueva empresa
+            <Plus className="h-4 w-4" /> Nueva
           </Button>
           <Button
             variant="destructive"

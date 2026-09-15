@@ -145,7 +145,7 @@ export function MisAusenciasView() {
             className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-6 py-3 text-base font-semibold text-white shadow-md transition-colors hover:bg-emerald-600"
           >
             <Plus className="h-5 w-5" />
-            Nueva solicitud
+            Nueva
           </button>
         )}
       </div>

@@ -11,7 +11,6 @@ import { listTiposFichaje, type TipoFichajeRow } from "@/features/rrhh/actions/h
 import { getEmpleadosActivos } from "@/features/rrhh/actions/empleados-actions";
 import { FichajeDetalleDialog } from "@/features/rrhh/components/fichajes/FichajeDetalleDialog";
 import { ConfiguracionFichajesSheet } from "@/features/rrhh/components/fichajes/ConfiguracionFichajesSheet";
-import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
@@ -30,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertTriangle, Settings } from "lucide-react";
 import {
@@ -47,6 +46,7 @@ import {
 import { IOActions } from "@/shared/io";
 import { fichajesIO } from "@/features/rrhh/io/fichajes.io";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
 import { Desplegable } from "@/components/ui/desplegable";
 import { SelectorFecha } from "@/components/ui/selector-fecha";
@@ -147,11 +147,7 @@ export function FichajesView() {
   const [empleadosOpts, setEmpleadosOpts] = useState<EmpleadoOpcion[]>([]);
   const [manualForm, setManualForm] = useState(initialManualForm());
   const [savingManual, setSavingManual] = useState(false);
-  const [locales, setLocales] = useState<LocalGeo[]>([]);
   const [tiposFichaje, setTiposFichaje] = useState<TipoFichajeRow[]>([]);
-  // Rango de fechas del histórico. Vacío = todos los fichajes desde el inicio.
-  const [fechaDesde, setFechaDesde] = useState("");
-  const [fechaHasta, setFechaHasta] = useState("");
 
   const loadFichajes = useCallback(async () => {
     const empresaId = empresaActivaRef.current;
@@ -164,8 +160,8 @@ export function FichajesView() {
 
     setLoading(true);
     try {
-      // Histórico completo: sin filtro de fecha en servidor. El acotado por
-      // rango (fechaDesde/fechaHasta) se hace en cliente.
+      // Histórico completo: el acotado por fechas se hace desde la propia
+      // columna Fecha, en cliente.
       const res = await listFichajes();
       if (empresaId !== empresaActivaRef.current) return;
       if (res.ok) {
@@ -191,7 +187,6 @@ export function FichajesView() {
   useEffect(() => {
     empresaActivaRef.current = empresaActual.id;
     setFichajes([]);
-    setLocales([]);
     setFichajeModal(null);
     loadFichajes();
   }, [empresaActual.id, loadFichajes]);
@@ -252,44 +247,6 @@ export function FichajesView() {
     [tiposFichaje],
   );
 
-  // Carga de locales con su geolocalización para pintar círculos en la tab Mapa.
-  // Se re-carga al cambiar de empresa activa para preservar multi-tenant.
-  useEffect(() => {
-    let cancelado = false;
-    const empresaId = empresaActual.id;
-    if (!empresaId) {
-      setLocales([]);
-      return;
-    }
-    (async () => {
-      const res = await listLocales(empresaId);
-      if (cancelado) return;
-      if (res.ok) {
-        const data = res.data as Array<{
-          id: string;
-          nombre: string;
-          lat: number | null;
-          lng: number | null;
-          radio_metros: number;
-          color: string;
-        }>;
-        setLocales(
-          data.map((l) => ({
-            id: l.id,
-            nombre: l.nombre,
-            lat: l.lat,
-            lng: l.lng,
-            radioMetros: l.radio_metros,
-            color: l.color,
-          })),
-        );
-      }
-    })();
-    return () => {
-      cancelado = true;
-    };
-  }, [empresaActual.id]);
-
   const openNuevoDialog = useCallback(async () => {
     setManualForm(initialManualForm());
     setShowNuevo(true);
@@ -336,36 +293,47 @@ export function FichajesView() {
 
   const _dptos = useMemo(() => [...new Set(fichajes.map(f => f.departamento))].sort(), [fichajes]);
 
-  const acceso = (f: Fichaje, campo: string): unknown => {
-    if (campo === "estado") return ESTADO_FICHAJE_LABEL[f.estado];
-    if (campo === "departamento") return f.departamento;
-    if (campo === "centro") return f.centro;
-    if (campo === "horasTotales") return f.horasTotales;
-    if (campo === "fecha") return f.fecha;
-    if (campo === "empleado") return f.empleadoNombre;
-    if (campo === "local") return f.local?.nombre ?? "—";
-    if (campo === "geo") {
-      // Para orden: usar distancia (null → Infinity sortea al final asc).
-      // Para filtro: el campo es categórico derivado; se aplica fuera del
-      // flujo genérico (ver useMemo fichajesFiltrados).
-      return f.distanciaEntradaMetros ?? Number.POSITIVE_INFINITY;
-    }
-    return (f as unknown as Record<string, unknown>)[campo];
-  };
+  const formatHora = useCallback(
+    (s: string | null): string => {
+      if (!s) return "—";
+      // Hora en la zona horaria de la empresa activa (PRP-069): quien mira la
+      // pantalla ve la hora del local, esté donde esté.
+      if (s.includes("T")) return formatHoraEnZona(s, empresaActual.zonaHoraria);
+      return s.slice(0, 5);
+    },
+    [empresaActual.zonaHoraria],
+  );
+
+  // Cada columna filtra y ordena por lo MISMO que enseña: si la celda dice
+  // "22:30", el filtro busca sobre "22:30", no sobre el instante en crudo.
+  const acceso = useCallback(
+    (f: Fichaje, campo: string): unknown => {
+      if (campo === "estado") return ESTADO_FICHAJE_LABEL[f.estado];
+      if (campo === "departamento") return f.departamento;
+      if (campo === "centro") return f.centro;
+      if (campo === "horas" || campo === "horasTotales") return f.horasTotales;
+      if (campo === "fecha") return f.fecha;
+      if (campo === "empleado") return f.empleadoNombre;
+      if (campo === "entrada") return formatHora(f.horaEntrada);
+      if (campo === "salida") return formatHora(f.horaSalida);
+      if (campo === "tipo") return tipoBadge(f.tipo).label;
+      if (campo === "local") return f.local?.nombre ?? "—";
+      return (f as unknown as Record<string, unknown>)[campo];
+    },
+    [formatHora, tipoBadge],
+  );
 
   const fichajesFiltrados = useMemo(() => {
-    let lista = fichajes.filter(f => {
-      if (busqueda && !f.empleadoNombre.toLowerCase().includes(busqueda.toLowerCase())) return false;
-      // Rango de fechas (histórico). f.fecha es "YYYY-MM-DD", comparable como string.
-      if (fechaDesde && f.fecha < fechaDesde) return false;
-      if (fechaHasta && f.fecha > fechaHasta) return false;
-      return true;
-    });
+    let lista = busqueda
+      ? fichajes.filter((f) =>
+          f.empleadoNombre.toLowerCase().includes(busqueda.toLowerCase()),
+        )
+      : fichajes;
 
     lista = aplicarFiltrosToolbar(lista, filtros, acceso);
     lista = aplicarOrdenToolbar(lista, orden, acceso);
     return lista;
-  }, [fichajes, busqueda, filtros, orden, fechaDesde, fechaHasta]);
+  }, [fichajes, busqueda, filtros, orden, acceso]);
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "empleado", label: "Empleado" },
@@ -377,16 +345,42 @@ export function FichajesView() {
     { campo: "local", label: "Local" },
   ];
 
-  function formatHora(s: string | null): string {
-    if (!s) return "—";
-    // Hora en la zona horaria de la empresa activa (PRP-069).
-    if (s.includes("T")) return formatHoraEnZona(s, empresaActual.zonaHoraria);
-    return s.slice(0, 5);
-  }
+  // Opciones de los filtros de lista: lo que hay DE VERDAD en el histórico, no
+  // el catálogo entero (un local sin un solo fichaje no pinta nada ahí).
+  const opcionesTipo = useMemo(
+    () => [...new Set(fichajes.map((f) => tipoBadge(f.tipo).label))].sort((a, b) => a.localeCompare(b, "es")),
+    [fichajes, tipoBadge],
+  );
+  const opcionesLocal = useMemo(
+    () => [...new Set(fichajes.map((f) => f.local?.nombre ?? "—"))].sort((a, b) => a.localeCompare(b, "es")),
+    [fichajes],
+  );
+
+  /** Cabecera con orden + filtro, la misma para todas las columnas. */
+  const cabecera = (
+    campo: string,
+    label: string,
+    filtroTipo: "texto" | "fecha" | "numero" | "lista",
+    extra?: { opciones?: string[]; align?: "left" | "right" | "center" },
+  ) => (
+    <TableColumnHeader
+      key={campo}
+      label={label}
+      campo={campo}
+      ordenable
+      orden={orden}
+      onOrdenChange={setOrden}
+      filtroTipo={filtroTipo}
+      opciones={extra?.opciones}
+      filtros={filtros}
+      onFiltrosChange={setFiltros}
+      align={extra?.align}
+    />
+  );
 
   const columnDefs: Record<string, { th: ReactNode; td: (f: Fichaje) => ReactNode }> = {
     empleado: {
-      th: <TableHead key="empleado">Empleado</TableHead>,
+      th: cabecera("empleado", "Empleado", "texto"),
       td: (f) => (
         <TableCell key="empleado">
           <div>
@@ -437,25 +431,27 @@ export function FichajesView() {
       ),
     },
     fecha: {
-      th: <TableHead key="fecha">Fecha</TableHead>,
+      th: cabecera("fecha", "Fecha", "fecha"),
+      // En pantalla, día/mes/año. El "2026-09-05" es solo la clave interna, y
+      // es la que usa el filtro de la columna para acotar el rango.
       td: (f) => (
-        <TableCell key="fecha" className="text-sm">{f.fecha}</TableCell>
+        <TableCell key="fecha" className="text-sm">{formatearFechaEs(f.fecha)}</TableCell>
       ),
     },
     entrada: {
-      th: <TableHead key="entrada">Entrada</TableHead>,
+      th: cabecera("entrada", "Entrada", "texto"),
       td: (f) => (
         <TableCell key="entrada" className="text-sm">{formatHora(f.horaEntrada)}</TableCell>
       ),
     },
     salida: {
-      th: <TableHead key="salida">Salida</TableHead>,
+      th: cabecera("salida", "Salida", "texto"),
       td: (f) => (
         <TableCell key="salida" className="text-sm">{formatHora(f.horaSalida)}</TableCell>
       ),
     },
     horas: {
-      th: <TableHead key="horas" className="text-right">Horas</TableHead>,
+      th: cabecera("horas", "Horas", "numero", { align: "right" }),
       td: (f) => {
         // Tipo que no computa tiempo: el fichaje se ve, pero sus horas son 0 y
         // no suman. Se marca en gris para que el 0 se lea como intencionado.
@@ -472,7 +468,7 @@ export function FichajesView() {
       },
     },
     tipo: {
-      th: <TableHead key="tipo">Tipo</TableHead>,
+      th: cabecera("tipo", "Tipo", "lista", { opciones: opcionesTipo }),
       td: (f) => {
         const { className, label } = tipoBadge(f.tipo);
         return (
@@ -485,23 +481,7 @@ export function FichajesView() {
       },
     },
     local: {
-      // El cliente filtra los fichajes por local desde la propia cabecera
-      // (filtro de lista con los nombres de locales de la empresa). Mismo
-      // patrón que EmpleadosView aplica a "empresas".
-      th: (
-        <TableColumnHeader
-          key="local"
-          label="Local"
-          campo="local"
-          ordenable
-          orden={orden}
-          onOrdenChange={setOrden}
-          filtroTipo="lista"
-          opciones={locales.map((l) => l.nombre)}
-          filtros={filtros}
-          onFiltrosChange={setFiltros}
-        />
-      ),
+      th: cabecera("local", "Local", "lista", { opciones: opcionesLocal }),
       td: (f) => (
         <TableCell key="local" className="text-sm">{f.local?.nombre ?? "—"}</TableCell>
       ),
@@ -559,35 +539,6 @@ export function FichajesView() {
           </>
         }
       />
-      <div className="flex flex-wrap items-center gap-2 px-1">
-        <span className="text-xs text-muted-foreground">Histórico desde</span>
-        <SelectorFecha
-          value={fechaDesde}
-          max={fechaHasta || undefined}
-          onChange={setFechaDesde}
-          className="h-8 w-auto text-xs"
-        />
-        <span className="text-xs text-muted-foreground">hasta</span>
-        <SelectorFecha
-          value={fechaHasta}
-          min={fechaDesde || undefined}
-          onChange={setFechaHasta}
-          className="h-8 w-auto text-xs"
-        />
-        {(fechaDesde || fechaHasta) && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 text-xs"
-            onClick={() => {
-              setFechaDesde("");
-              setFechaHasta("");
-            }}
-          >
-            Ver todo
-          </Button>
-        )}
-      </div>
       <Card>
         <Table data-tabla-consulta>
           <TableHeader>

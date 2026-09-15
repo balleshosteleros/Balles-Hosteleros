@@ -26,6 +26,7 @@ import {
   UserMinus,
   FileSignature,
   Send,
+  Eye,
 } from "lucide-react";
 import {
   Dialog,
@@ -55,9 +56,16 @@ import {
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import {
+  getCorreoGestoria,
   listContrataciones,
   reenviarAltaGestoria,
 } from "@/features/gestoria/contrataciones/actions/contrataciones-actions";
+import {
+  CorreoArchivadoDialog,
+  type CorreoArchivadoVisible,
+} from "@/shared/components/CorreoArchivadoDialog";
+import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import type { ContratacionRow, TipoContratacion } from "@/features/gestoria/contrataciones/types";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -88,6 +96,9 @@ function columnasDe(tipo: TipoContratacion): ToolbarColumna[] {
     { campo: "puesto", label: tipo === "modificacion" ? "Puesto nuevo" : "Puesto" },
     { campo: "enviado_en", label: "Aviso enviado" },
     { campo: "fecha_evento", label: LABEL_FECHA_EVENTO[tipo] },
+    // Solo en bajas: el último día trabajado y el día en que la baja es oficial
+    // en la Seguridad Social son distintos, y la gestoría tramita el segundo.
+    ...(tipo === "baja" ? [{ campo: "fecha_baja_oficial", label: "Fecha de baja" }] : []),
     { campo: "estado", label: "Estado" },
   ];
 }
@@ -292,6 +303,47 @@ function ReenviarAltaButton({ row, onHecho }: { row: ContratacionRow; onHecho: (
   );
 }
 
+/**
+ * El correo que recibió la gestoría por este trámite. Se pide al abrirlo (el
+ * HTML de un correo pesa, y en una tabla de cien filas no tiene sentido cargarlo
+ * entero de antemano).
+ */
+function VerCorreoButton({
+  row,
+  onAbrir,
+}: {
+  row: ContratacionRow;
+  onAbrir: (correo: CorreoArchivadoVisible) => void;
+}) {
+  const [cargando, setCargando] = useState(false);
+
+  const abrir = async () => {
+    setCargando(true);
+    const res = await getCorreoGestoria(row.tipo, row.id);
+    setCargando(false);
+    if (res.ok) onAbrir({ asunto: res.asunto, html: res.html, destinatario: "gestoria" });
+    else toast.error("No se puede ver el correo", { description: res.error });
+  };
+
+  return (
+    <ToolTooltip label="Ver el correo que recibió la gestoría">
+      <button
+        type="button"
+        onClick={abrir}
+        disabled={cargando}
+        aria-label="Ver el correo que recibió la gestoría"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+      >
+        {cargando ? (
+          <LoadingSpinner size="sm" className="py-0" iconClassName="h-3.5 w-3.5" />
+        ) : (
+          <Eye className="h-3.5 w-3.5" />
+        )}
+      </button>
+    </ToolTooltip>
+  );
+}
+
 function csvEscape(v: string | number | null | undefined): string {
   const s = v == null ? "" : String(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -304,6 +356,7 @@ function downloadCSV(rows: ContratacionRow[], tipo: TipoContratacion, tz: string
     "Puesto",
     "Aviso enviado",
     LABEL_FECHA_EVENTO[tipo],
+    ...(tipo === "baja" ? ["Fecha de baja"] : []),
     "Estado",
     "Pendiente de",
     "Aviso",
@@ -317,6 +370,7 @@ function downloadCSV(rows: ContratacionRow[], tipo: TipoContratacion, tz: string
         r.puesto ?? "",
         fmtInstante(r.enviado_en, tz),
         fmtFechaES(r.fecha_evento),
+        ...(tipo === "baja" ? [fmtFechaES(r.fecha_baja_oficial)] : []),
         r.estado === "correcto" ? "Correcto" : "Pendiente",
         r.pendiente_de ? TEXTO_PENDIENTE[r.pendiente_de] ?? "" : "",
         r.aviso_texto ?? "",
@@ -338,9 +392,9 @@ function downloadCSV(rows: ContratacionRow[], tipo: TipoContratacion, tz: string
 }
 
 const TABS: Array<{ tipo: TipoContratacion; label: string; Icon: typeof UserPlus }> = [
-  { tipo: "alta", label: "Altas", Icon: UserPlus },
-  { tipo: "baja", label: "Bajas", Icon: UserMinus },
-  { tipo: "modificacion", label: "Modificaciones", Icon: FileSignature },
+  { tipo: "alta", label: "ALTAS", Icon: UserPlus },
+  { tipo: "baja", label: "BAJAS", Icon: UserMinus },
+  { tipo: "modificacion", label: "MODIFICACIONES", Icon: FileSignature },
 ];
 
 export function ContratacionesView() {
@@ -351,6 +405,7 @@ export function ContratacionesView() {
   useGlobalLoadingSync(loading);
   const [tipoActivo, setTipoActivo] = useState<TipoContratacion>("alta");
   const [search, setSearch] = useState("");
+  const [correoVisor, setCorreoVisor] = useState<CorreoArchivadoVisible | null>(null);
   const [verFiscales, setVerFiscales] = useState(false);
   const [verCentro, setVerCentro] = useState(false);
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
@@ -389,15 +444,10 @@ export function ContratacionesView() {
     return c;
   }, [rows]);
 
-  /** Trámites en peligro del tipo activo (pendientes cuya fecha ya llegó). */
-  const enPeligro = useMemo(
-    () => rows.filter((r) => r.tipo === tipoActivo && r.aviso === "peligro"),
-    [rows, tipoActivo],
-  );
-
   const acceso = (r: ContratacionRow, campo: string): unknown => {
     if (campo === "estado") return r.estado;
     if (campo === "fecha_evento") return r.fecha_evento ?? "";
+    if (campo === "fecha_baja_oficial") return r.fecha_baja_oficial ?? "";
     return (r as unknown as Record<string, unknown>)[campo];
   };
 
@@ -483,7 +533,14 @@ export function ContratacionesView() {
           onOrdenChange={setOrden}
         />
       ),
-      td: (r) => <td key="enviado_en" className="px-3 py-2.5 whitespace-nowrap text-xs">{fmtInstante(r.enviado_en, tz)}</td>,
+      td: (r) => (
+        <td key="enviado_en" className="px-3 py-2.5 whitespace-nowrap text-xs">
+          <span className="inline-flex items-center gap-1.5">
+            {fmtInstante(r.enviado_en, tz)}
+            <VerCorreoButton row={r} onAbrir={setCorreoVisor} />
+          </span>
+        </td>
+      ),
     },
     fecha_evento: {
       th: (
@@ -502,6 +559,26 @@ export function ContratacionesView() {
       td: (r) => (
         <td key="fecha_evento" className={`px-3 py-2.5 whitespace-nowrap text-xs ${r.aviso === "peligro" ? "text-red-600 font-medium" : ""}`}>
           {fmtFechaES(r.fecha_evento)}
+        </td>
+      ),
+    },
+    fecha_baja_oficial: {
+      th: (
+        <TableColumnHeader
+          key="fecha_baja_oficial"
+          label="Fecha de baja"
+          campo="fecha_baja_oficial"
+          filtroTipo="fecha"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (r) => (
+        <td key="fecha_baja_oficial" className="px-3 py-2.5 whitespace-nowrap text-xs">
+          {fmtFechaES(r.fecha_baja_oficial)}
         </td>
       ),
     },
@@ -554,26 +631,6 @@ export function ContratacionesView() {
         ))}
       </div>
 
-      {/* Aviso de cabecera: lo que requiere atención YA. */}
-      {enPeligro.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
-          <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
-          <div className="text-sm text-red-800">
-            <span className="font-semibold">
-              {enPeligro.length === 1
-                ? "1 trámite requiere atención"
-                : `${enPeligro.length} trámites requieren atención`}
-            </span>
-            <span className="text-red-700">
-              {" — "}
-              {tipoActivo === "alta"
-                ? "hay trabajadores que ya han empezado (o empiezan hoy) con el contrato sin cerrar."
-                : "faltan documentos oficiales de bajas que ya son efectivas."}
-            </span>
-          </div>
-        </div>
-      )}
-
       <SubmoduleToolbar
         busqueda={search}
         onBusquedaChange={setSearch}
@@ -619,6 +676,7 @@ export function ContratacionesView() {
         </button>
       </div>
 
+      <CorreoArchivadoDialog correo={correoVisor} onClose={() => setCorreoVisor(null)} />
       <DatosFiscalesDialog open={verFiscales} onOpenChange={setVerFiscales} />
       <DatosCentroDialog open={verCentro} onOpenChange={setVerCentro} />
 

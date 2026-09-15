@@ -128,7 +128,7 @@ export function NotificacionesRegistroView() {
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar notificación"
         onNuevo={() => setNuevoAviso(true)}
-        textoNuevo="Nuevo aviso"
+        textoNuevo="Nuevo"
         columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}

@@ -73,26 +73,52 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
     };
   }, [deviceId, itemIds]);
 
-  // Scroll-spy: observa qué categoría es la más visible.
+  // Scroll-spy: la pestaña marcada es la categoría por la que se va pasando.
+  //
+  // Se mide con una linea imaginaria a un tercio de la pantalla y se marca la
+  // categoría que la cruza: la anterior (por proporción de la seccion visible)
+  // se equivocaba en cuanto dos categorías tenían tamaños distintos —una de
+  // tres platos ganaba a una de doce aunque fuera la larga la que se estaba
+  // mirando— y con las fotos verticales, que alargan las secciones, se quedaba
+  // clavada durante media carta.
   useEffect(() => {
-    const sections = document.querySelectorAll<HTMLElement>("[data-cat-section]");
-    if (sections.length === 0) return;
+    let pendiente = 0;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-        if (visible[0]) {
-          const id = visible[0].target.getAttribute("data-cat-section");
-          if (id) setActiveCat(id);
-        }
-      },
-      { rootMargin: "-30% 0px -55% 0px", threshold: [0, 0.25, 0.5, 0.75, 1] },
-    );
-    sections.forEach((s) => observer.observe(s));
-    return () => observer.disconnect();
-  }, [carta.categorias]);
+    const marcar = () => {
+      pendiente = 0;
+      const secciones = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-cat-section]"),
+      );
+      if (secciones.length === 0) return;
+      const linea = window.innerHeight / 3;
+      // La ultima seccion que ya ha cruzado la linea; si aun no la cruzó
+      // ninguna (arriba del todo), manda la primera.
+      let elegida = secciones[0];
+      for (const s of secciones) {
+        if (s.getBoundingClientRect().top <= linea) elegida = s;
+        else break;
+      }
+      const id = elegida.getAttribute("data-cat-section");
+      if (id) setActiveCat((actual) => (actual === id ? actual : id));
+    };
+
+    const alScroll = () => {
+      if (pendiente) return;
+      pendiente = window.requestAnimationFrame(marcar);
+    };
+
+    marcar();
+    window.addEventListener("scroll", alScroll, { passive: true });
+    window.addEventListener("resize", alScroll);
+    return () => {
+      if (pendiente) window.cancelAnimationFrame(pendiente);
+      window.removeEventListener("scroll", alScroll);
+      window.removeEventListener("resize", alScroll);
+    };
+    // Las secciones del DOM son las de la familia abierta y las del filtro, no
+    // todas: sin esto, al cambiar de COMIDA a BEBIDA se seguía midiendo sobre
+    // las secciones que ya no estaban.
+  }, [catsFamilia]);
 
   const totalItems = useMemo(
     () => carta.categorias.reduce((acc, c) => acc + c.items.length, 0),

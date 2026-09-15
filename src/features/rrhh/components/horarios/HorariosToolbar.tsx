@@ -93,43 +93,49 @@ export function HorariosToolbar({
           >
             Hoy
           </Button>
-          <div className="flex items-center rounded-md border">
+          {/* Igual que el resto de indicadores del software: una flecha a cada
+              lado del periodo, no las dos juntas. */}
+          <div className="flex items-center gap-1 rounded-md border p-0.5">
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-r-none"
+              className="h-7 w-7"
               onClick={onPrev}
               aria-label="Anterior"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 min-w-[170px] justify-center gap-1.5 font-medium"
+                >
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                  {label}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={refDate}
+                  onSelect={(d) => d && onSaltarA(d)}
+                  weekStartsOn={1}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-l-none"
+              className="h-7 w-7"
               onClick={onNext}
               aria-label="Siguiente"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-1.5 font-medium capitalize">
-                <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                {label}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={refDate}
-                onSelect={(d) => d && onSaltarA(d)}
-                weekStartsOn={1}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
         </div>
       </div>
     </div>

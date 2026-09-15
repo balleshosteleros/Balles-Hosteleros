@@ -129,6 +129,12 @@ export interface Entrega {
   mermaMotivo: string | null;
   /** Cuando firmo el trabajador la baja por deterioro. */
   mermaEn: string | null;
+  /**
+   * La devolucion la pidio el TRABAJADOR desde Solicitudes: por que la devuelve
+   * y la foto que mando de la prenda. Null cuando la devolucion la abrio RRHH.
+   */
+  devolucionMotivoTrabajador: "desgaste" | "tallaje" | "baja_contrato" | null;
+  devolucionFotoPath: string | null;
   /** Por que no volvio la pieza. Solo cuando se marca como no devuelta. */
   noDevueltaMotivo: string | null;
   /** Cuando RRHH dio la pieza por perdida. */

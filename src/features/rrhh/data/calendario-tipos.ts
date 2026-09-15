@@ -56,14 +56,3 @@ export function labelDeSubtipo(subtipo: string): string {
   return TIPOS_CALENDARIO.find((t) => t.subtipo === subtipo)?.label ?? subtipo;
 }
 
-/**
- * Estados en que puede estar una ausencia dentro del calendario. Se distinguen
- * porque no es lo mismo algo ya aprobado que algo pendiente de decidir: al
- * cuadrar turnos hay que ver ambos, pero sin confundirlos.
- */
-export type EstadoCalendario = "aprobada" | "pendiente";
-
-export const ESTADOS_CALENDARIO: { estado: EstadoCalendario; label: string; ayuda: string }[] = [
-  { estado: "aprobada", label: "Aprobadas", ayuda: "Ya confirmadas" },
-  { estado: "pendiente", label: "Pendientes", ayuda: "Sin decidir todavía" },
-];

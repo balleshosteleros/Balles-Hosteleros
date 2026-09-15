@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Popover,
@@ -28,10 +27,8 @@ import {
 import { EmpleadoAvatar } from "@/features/rrhh/components/EmpleadoAvatar";
 import {
   TIPOS_CALENDARIO,
-  ESTADOS_CALENDARIO,
   colorDeSubtipo,
   labelDeSubtipo,
-  type EstadoCalendario,
 } from "@/features/rrhh/data/calendario-tipos";
 import type { AusenciaCalendario } from "@/features/rrhh/actions/calendario-ausencias-actions";
 import type { FestivoInfo } from "@/features/rrhh/hooks/useFestivos";
@@ -166,12 +163,9 @@ interface Props {
 export function CalendarioUnico({ ausencias, liquidaciones, festivoEnFecha, onAnioChange, cargando, slotControles }: Props) {
   const rango = useCalendarRange("MENSUAL");
 
-  // Filtros: por tipo de ausencia y por estado. Todos activos de inicio.
+  // Filtro: solo por tipo de ausencia. Todos activos de inicio.
   const [tiposOn, setTiposOn] = useState<Set<SolicitudSubtipoAusencia>>(
     () => new Set(TIPOS_CALENDARIO.map((t) => t.subtipo)),
-  );
-  const [estadosOn, setEstadosOn] = useState<Set<EstadoCalendario>>(
-    () => new Set<EstadoCalendario>(["aprobada", "pendiente"]),
   );
   const [festivosOn, setFestivosOn] = useState(true);
 
@@ -188,36 +182,9 @@ export function CalendarioUnico({ ausencias, liquidaciones, festivoEnFecha, onAn
       return s;
     });
   }
-  function toggleEstado(e: EstadoCalendario) {
-    setEstadosOn((prev) => {
-      const s = new Set(prev);
-      if (s.has(e)) s.delete(e); else s.add(e);
-      return s;
-    });
-  }
-
-  const todosOn =
-    tiposOn.size === TIPOS_CALENDARIO.length && estadosOn.size === 2 && festivosOn;
-
-  function marcarTodos() {
-    setTiposOn(new Set(TIPOS_CALENDARIO.map((t) => t.subtipo)));
-    setEstadosOn(new Set<EstadoCalendario>(["aprobada", "pendiente"]));
-    setFestivosOn(true);
-  }
-  function desmarcarTodos() {
-    setTiposOn(new Set());
-    setEstadosOn(new Set());
-    setFestivosOn(false);
-  }
-
   const visibles = useMemo(
-    () =>
-      ausencias.filter(
-        (a) =>
-          tiposOn.has(a.subtipo) &&
-          estadosOn.has(a.estado as EstadoCalendario),
-      ),
-    [ausencias, tiposOn, estadosOn],
+    () => ausencias.filter((a) => tiposOn.has(a.subtipo)),
+    [ausencias, tiposOn],
   );
 
   // Cada ausencia se reparte en todos los días que abarca, para poder pintar
@@ -392,35 +359,6 @@ export function CalendarioUnico({ ausencias, liquidaciones, festivoEnFecha, onAn
           </button>
         </ToolTooltip>
 
-        <span className="mx-1 h-4 w-px bg-border" />
-
-        {ESTADOS_CALENDARIO.map((e) => {
-          const on = estadosOn.has(e.estado);
-          return (
-            <ToolTooltip key={e.estado} label={e.ayuda}>
-              <button
-                type="button"
-                onClick={() => toggleEstado(e.estado)}
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-                  on ? "bg-card" : "bg-transparent text-muted-foreground opacity-50",
-                  e.estado === "pendiente" && on && "border-dashed",
-                )}
-              >
-                {e.label}
-              </button>
-            </ToolTooltip>
-          );
-        })}
-
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto h-7 text-xs"
-          onClick={todosOn ? desmarcarTodos : marcarTodos}
-        >
-          {todosOn ? "Quitar todo" : "Ver todo"}
-        </Button>
       </div>
 
       {cargando ? (

@@ -67,7 +67,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  SOLICITUD_HORAS_AVISO,
   SOLICITUD_HORAS_OPCIONES,
   minutosTramo,
   validarTramo,
@@ -104,6 +103,12 @@ const PREAVISO_MIN_DIAS = 30;
 const PARTE_BAJA_MAX = 3;
 const PARTE_BAJA_MAX_BYTES = MAX_DOCUMENTO_BYTES;
 const PARTE_BAJA_ACCEPT = "image/*,application/pdf";
+
+// El recuadro del motivo se lee igual en TODAS las solicitudes: mismo rótulo y
+// mismo ejemplo. Antes cada tipo escribía el suyo y la misma pantalla cambiaba
+// de idioma según lo que pidieras.
+const MOTIVO_LABEL = "Motivo o detalles";
+const MOTIVO_PLACEHOLDER = `Detalla el motivo, mínimo ${HORAS_EXTRAS_MOTIVO_MIN} caracteres`;
 
 function todayISO(): string {
   return new Date().toISOString().split("T")[0];
@@ -826,13 +831,13 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="motivo">Motivo (opcional)</Label>
+                  <Label htmlFor="motivo">{MOTIVO_LABEL}</Label>
                   <Textarea
                     id="motivo"
                     value={motivo}
                     onChange={(e) => setMotivo(e.target.value)}
                     rows={3}
-                    placeholder="Si quieres, cuéntanos por qué te vas. Nos ayuda a mejorar."
+                    placeholder={MOTIVO_PLACEHOLDER}
                   />
                 </div>
               </div>
@@ -915,12 +920,12 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                 )}
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="motivoEntrega">Motivo (opcional)</Label>
+                  <Label htmlFor="motivoEntrega">{MOTIVO_LABEL}</Label>
                   <Textarea
                     id="motivoEntrega"
                     value={motivo}
                     onChange={(e) => setMotivo(e.target.value)}
-                    placeholder="Por ejemplo: se me ha roto, o es mi primera semana."
+                    placeholder={MOTIVO_PLACEHOLDER}
                     rows={3}
                   />
                 </div>
@@ -939,7 +944,9 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                   <Label htmlFor="fechaInicio">
                     {subtipo === "horas_extras" || subtipo === "dia_trabajado"
                       ? "Fecha"
-                      : "Desde"}
+                      : subtipo === "baja_medica"
+                        ? "Baja desde"
+                        : "Desde"}
                   </Label>
                   <SelectorFecha id="fechaInicio" 
                     value={fechaInicio}
@@ -970,7 +977,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                 {subtipo !== "horas_extras" && subtipo !== "dia_trabajado" && (
                   <div className="space-y-1.5">
                     <Label htmlFor="fechaFin">
-                      {subtipo === "baja_medica" ? "Vuelta aproximada" : "Hasta"}
+                      {subtipo === "baja_medica" ? "Alta hasta" : "Hasta"}
                     </Label>
                     <SelectorFecha id="fechaFin" 
                       value={fechaFin}
@@ -978,10 +985,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                       min={fechaInicio || undefined}
                     />
                     {subtipo === "baja_medica" && (
-                      <p className="text-xs text-muted-foreground">
-                        No hace falta acertar. Es para cubrir tu turno mientras tanto; cuando
-                        te den el alta la corriges y el calendario se ajusta solo.
-                      </p>
+                      <p className="text-xs text-muted-foreground">(aproximada)</p>
                     )}
                   </div>
                 )}
@@ -1042,11 +1046,6 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                       </SelectContent>
                     </Select>
                   </div>
-                  {/* Regla fija: solo en punto o y media, por eso se elige de
-                      una lista cerrada en vez de teclear la hora. */}
-                  <p className="col-span-2 text-xs text-muted-foreground">
-                    {SOLICITUD_HORAS_AVISO}
-                  </p>
                   {errorTramo && (
                     <p className="col-span-2 text-xs font-medium text-rose-600 flex items-center gap-1.5">
                       <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -1181,49 +1180,20 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
               })()}
 
               <div className="space-y-1.5">
-                <Label htmlFor="motivo">
-                  {subtipo === "horas_extras"
-                    ? `Motivo o detalles (obligatorio, mínimo ${HORAS_EXTRAS_MOTIVO_MIN} caracteres)`
-                    : "Motivo o detalles"}
-                </Label>
+                <Label htmlFor="motivo">{MOTIVO_LABEL}</Label>
                 <Textarea
                   id="motivo"
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
                   rows={3}
-                  placeholder={
-                    subtipo === "baja_medica"
-                      ? "Cuéntanos brevemente qué te pasa (opcional)…"
-                      : subtipo === "horas_extras"
-                        ? `¿Por qué? ¿En qué tarea? (mínimo ${HORAS_EXTRAS_MOTIVO_MIN} caracteres)`
-                        : "Detalles para tu responsable"
-                  }
+                  placeholder={MOTIVO_PLACEHOLDER}
                 />
-                {subtipo === "horas_extras" && (
-                  motivoCorto ? (
-                    <p className="text-xs font-medium text-rose-600">
-                      Explica por qué hiciste las horas extras: faltan{" "}
-                      {HORAS_EXTRAS_MOTIVO_MIN - motivo.trim().length} caracteres
-                      para llegar al mínimo de {HORAS_EXTRAS_MOTIVO_MIN}.
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      {motivo.trim().length} caracteres (mínimo{" "}
-                      {HORAS_EXTRAS_MOTIVO_MIN}).
-                    </p>
-                  )
-                )}
               </div>
 
               {/* Parte de baja médica: hasta 3 fotos o PDFs, se envían a gestoría. */}
               {subtipo === "baja_medica" && (
                 <div className="space-y-2">
                   <Label>Parte de baja (opcional)</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Adjunta una foto o PDF del parte médico. Puedes subir hasta{" "}
-                    {PARTE_BAJA_MAX} y se enviarán juntos a la gestoría. Si aún no
-                    lo tienes, envía la baja igualmente.
-                  </p>
 
                   {partes.length > 0 && (
                     <ul className="space-y-1.5">

@@ -2,17 +2,15 @@
 
 /**
  * Timeline de fichajes por DÍA (estilo Sesame). Regla horaria 0–24h arriba y una
- * fila por empleado: avatar + nombre · fichado/previsto · barra gris (previsto) +
- * barras de color (verde=normal directo, azul=normal por solicitud, rojo=extra
- * por solicitud). Fuente de datos: loadTimelineDia.
+ * fila por empleado: avatar + nombre · fichado/previsto · línea gris (horario) +
+ * barras de color (verde=normal, azul=por solicitud, rojo=horas extras).
+ * Fuente de datos: loadTimelineDia.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { loadTimelineDia, type TimelineFichajeRow } from "@/features/rrhh/actions/horas-actions";
@@ -23,6 +21,7 @@ import {
   fmtHM,
 } from "@/features/rrhh/components/fichajes/timeline-shared";
 import { ToolTooltip } from "@/components/ui/tool-tooltip";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 
 function iniciales(nombre: string): string {
   return nombre
@@ -33,35 +32,49 @@ function iniciales(nombre: string): string {
     .join("");
 }
 
-function toISO(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
 const DIAS_SEM = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
-function labelDia(d: Date): string {
-  return `${DIAS_SEM[d.getDay()]}, ${d.getDate()} de ${MESES[d.getMonth()]}`;
+
+/**
+ * El día se mueve como TEXTO "AAAA-MM-DD", nunca como `Date` del navegador.
+ * Quien abre esta pantalla desde otro huso (o de madrugada) veía el día del
+ * reloj de su portátil, que puede ir uno por delante del de la empresa.
+ */
+function sumarDias(fechaISO: string, delta: number): string {
+  const [a, m, d] = fechaISO.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, d + delta)).toISOString().slice(0, 10);
+}
+
+function labelDia(fechaISO: string): string {
+  const [a, m, d] = fechaISO.split("-").map(Number);
+  const diaSemana = new Date(Date.UTC(a, m - 1, d)).getUTCDay();
+  return `${DIAS_SEM[diaSemana]}, ${d} de ${MESES[m - 1]}`;
 }
 
 export function FichajesTimelineDia() {
   const { empresaActual } = useEmpresa();
   const router = useRouter();
-  const [fecha, setFecha] = useState<Date>(() => new Date());
+  const tz = empresaActual.zonaHoraria;
+  // El día se resuelve YA MONTADO, con el reloj de la empresa: en el servidor
+  // no se sabe todavía cuál es "hoy" para este local, y adivinarlo desde el
+  // navegador es justamente lo que descuadraba la pantalla fuera de España.
+  const [fechaISO, setFechaISO] = useState("");
+  const [hoyISO, setHoyISO] = useState("");
   const [rows, setRows] = useState<TimelineFichajeRow[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [superponer, setSuperponer] = useState(true);
   const [busqueda, setBusqueda] = useState("");
 
-  const fechaISO = useMemo(() => toISO(fecha), [fecha]);
-  const hoyISO = useMemo(() => toISO(new Date()), []);
+  useEffect(() => {
+    const hoy = hoyEnZona(tz);
+    setHoyISO(hoy);
+    setFechaISO((prev) => prev || hoy);
+  }, [tz]);
 
   useEffect(() => {
+    if (!fechaISO) return;
     let vivo = true;
     setCargando(true);
     void loadTimelineDia(fechaISO).then((r) => {
@@ -80,11 +93,7 @@ export function FichajesTimelineDia() {
   }, [rows, busqueda]);
 
   const cambiarDia = (delta: number) => {
-    setFecha((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() + delta);
-      return d;
-    });
+    setFechaISO((prev) => (prev ? sumarDias(prev, delta) : prev));
   };
 
   return (
@@ -98,16 +107,12 @@ export function FichajesTimelineDia() {
             placeholder="Buscar empleado"
             className="h-9 w-52 rounded-md border bg-background px-3 text-sm"
           />
-          <div className="flex items-center gap-2">
-            <Switch id="superponer" checked={superponer} onCheckedChange={setSuperponer} />
-            <Label htmlFor="superponer" className="text-sm">Superponer horario</Label>
-          </div>
           <div className="ml-auto">
             <CalendarRangeNav
-              label={labelDia(fecha)}
+              label={fechaISO ? labelDia(fechaISO) : ""}
               onPrev={() => cambiarDia(-1)}
               onNext={() => cambiarDia(1)}
-              onToday={() => setFecha(new Date())}
+              onToday={() => setFechaISO(hoyEnZona(tz))}
               isToday={fechaISO === hoyISO}
             />
           </div>
@@ -153,7 +158,7 @@ export function FichajesTimelineDia() {
                   </div>
                   {/* Barra */}
                   <div className="relative flex-1 px-0 py-3">
-                    <TimelineBarra previsto={r.previsto} fichado={r.fichado} superponer={superponer} />
+                    <TimelineBarra previsto={r.previsto} fichado={r.fichado} />
                   </div>
                 </div>
               ))

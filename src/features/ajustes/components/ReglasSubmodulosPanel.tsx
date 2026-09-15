@@ -29,6 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { ValidadoresSolicitudesConfig } from "@/features/ajustes/components/RrhhConfigTab";
 import { FichajesConfigPanel } from "@/features/ajustes/components/FichajesConfigPanel";
+import { CalendarioConfigPanel } from "@/features/ajustes/components/CalendarioConfigPanel";
 import { CierresPlazoPanel } from "@/features/ajustes/components/CierresPlazoPanel";
 import { NominasGestoriaConfigPanel } from "@/features/rrhh/components/pagos/NominasGestoriaConfigPanel";
 import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
@@ -228,7 +229,9 @@ function SubmoduloRow({
         )}
         <span className="text-sm font-medium flex-1">{submodulo.label}</span>
         {submodulo.placeholder &&
-          !["solicitudes", "fichajes", "pagos", "jornadas", "contratos", "cierres"].includes(submodulo.key) && (
+          !["solicitudes", "fichajes", "pagos", "jornadas", "contratos", "cierres", "calendarios"].includes(
+            submodulo.key,
+          ) && (
             <Badge variant="outline" className="text-[9px] text-muted-foreground">
               PRÓXIMAMENTE
             </Badge>
@@ -265,6 +268,11 @@ function SubmoduloRow({
             <ValidadoresSolicitudesConfig embedded />
           ) : submodulo.key === "fichajes" ? (
             <FichajesConfigPanel embedded />
+          ) : submodulo.key === "calendarios" ? (
+            // Días de vacaciones al año y comunidad autónoma de los festivos:
+            // afectan al saldo y al calendario de TODA la plantilla, así que
+            // viven aquí y ya no en el engranaje de la vista de Calendarios.
+            <CalendarioConfigPanel embedded />
           ) : submodulo.key === "pagos" ? (
             // Dos normas de empresa del submódulo Pagos: los avisos de
             // liquidación y el envío mensual de nóminas a la gestoría. Este

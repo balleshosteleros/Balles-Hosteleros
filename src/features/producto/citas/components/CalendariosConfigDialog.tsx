@@ -215,7 +215,7 @@ export function CalendariosConfigDialog({ open, onOpenChange, onGuardado }: Prop
                 </Card>
               ))}
               <Button variant="outline" className="w-full" onClick={() => void abrirNuevo()}>
-                <Plus className="mr-1 h-4 w-4" /> Nuevo calendario
+                <Plus className="mr-1 h-4 w-4" /> Nuevo
               </Button>
             </div>
           ) : (

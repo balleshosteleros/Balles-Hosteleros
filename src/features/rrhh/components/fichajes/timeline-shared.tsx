@@ -29,9 +29,13 @@ export function pos(iniMin: number, finMin: number | null): { left: string; widt
   };
 }
 
+/**
+ * Color de un tramo fichado. Mismos tres del catálogo `tipos_fichaje`: normal
+ * verde, por solicitud azul, horas extras rojo.
+ */
 export function colorFichado(t: TramoFichado): string {
-  if (t.extra) return "bg-rose-500";
-  if (t.origen === "solicitud") return "bg-sky-500";
+  if (t.extra) return "bg-red-500";
+  if (t.origen === "solicitud") return "bg-blue-500";
   return "bg-emerald-500";
 }
 
@@ -59,28 +63,33 @@ export function ReglaHoras() {
 }
 
 /**
- * Barra de una fila del timeline: fichado (color, grueso, debajo) + previsto
- * (gris, fino, encima) en escala 0–24h, con tooltips. `superponer` controla si se
- * muestra el previsto gris.
+ * Barra de una fila del timeline, en escala 0–24h. Son DOS líneas que nunca se
+ * tapan:
+ *
+ *   • arriba, gruesa y de color, los FICHAJES (verde normal, azul por
+ *     solicitud, rojo horas extras);
+ *   • debajo, fina y gris, el HORARIO previsto — solo dice a qué hora le tocaba
+ *     entrar y salir, y está siempre, no se puede quitar.
+ *
+ * Antes iban superpuestas y el gris pasaba por encima del color, así que el
+ * fichaje quedaba partido por la mitad y no se leía ninguno de los dos.
  */
 export function TimelineBarra({
   previsto,
   fichado,
-  superponer,
 }: {
   previsto: TramoPrevisto[];
   fichado: TramoFichado[];
-  superponer: boolean;
 }) {
   return (
-    <div className="relative h-4 w-full border-r border-muted/40">
+    <div className="relative h-5 w-full border-r border-muted/40">
       {/* Líneas de hora de fondo (24 columnas = 24 horas completas) */}
       <div className="absolute inset-0 flex">
         {HORAS.map((h) => (
           <div key={h} className="flex-1 border-l border-muted/40" />
         ))}
       </div>
-      {/* Fichado (color), grueso y debajo. Tooltip con tipo + horario realizado. */}
+      {/* Fichaje (color), arriba y grueso. Tooltip con tipo + horario realizado. */}
       {fichado.map((t, i) => {
         const ini = hhmmAMin(t.horaInicio);
         if (ini == null) return null;
@@ -88,13 +97,13 @@ export function TimelineBarra({
         const etiquetaTipo = t.extra
           ? "Fichaje horas extras"
           : t.origen === "solicitud"
-            ? "Fichaje normal (por solicitud)"
+            ? "Fichaje por solicitud"
             : "Fichaje normal";
         return (
           <Tooltip key={`f-${i}`}>
             <TooltipTrigger asChild>
               <div
-                className={`absolute top-1/2 z-10 h-3 -translate-y-1/2 cursor-help rounded-full ${colorFichado(t)}`}
+                className={`absolute top-0.5 z-20 h-2.5 cursor-help rounded-full ${colorFichado(t)}`}
                 style={{ left, width }}
               />
             </TooltipTrigger>
@@ -107,33 +116,32 @@ export function TimelineBarra({
           </Tooltip>
         );
       })}
-      {/* Previsto (gris) encima, fino: referencia sin tapar el color. */}
-      {superponer &&
-        previsto.map((tr, i) => {
-          const ini = hhmmAMin(tr.inicio);
-          const fin = hhmmAMin(tr.fin);
-          if (ini == null || fin == null) return null;
-          const { left, width } = pos(ini, fin);
-          let dur = fin - ini;
-          if (dur < 0) dur += 1440;
-          return (
-            <Tooltip key={`p-${i}`}>
-              <TooltipTrigger asChild>
-                <div
-                  className="absolute top-1/2 z-20 h-1.5 -translate-y-1/2 cursor-help rounded-full bg-zinc-400/80 ring-1 ring-white/60"
-                  style={{ left, width }}
-                />
-              </TooltipTrigger>
-              <TooltipContent className="text-center">
-                {tr.turnoNombre && <div className="font-semibold uppercase">{tr.turnoNombre}</div>}
-                <div className="text-muted-foreground">turno · {fmtHM(dur / 60)}</div>
-                <div className="tabular-nums">
-                  {tr.inicio} – {tr.fin}
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          );
-        })}
+      {/* Horario previsto (gris), abajo y fino: la referencia, siempre visible. */}
+      {previsto.map((tr, i) => {
+        const ini = hhmmAMin(tr.inicio);
+        const fin = hhmmAMin(tr.fin);
+        if (ini == null || fin == null) return null;
+        const { left, width } = pos(ini, fin);
+        let dur = fin - ini;
+        if (dur < 0) dur += 1440;
+        return (
+          <Tooltip key={`p-${i}`}>
+            <TooltipTrigger asChild>
+              <div
+                className="absolute bottom-0.5 z-10 h-1 cursor-help rounded-full bg-zinc-400/80"
+                style={{ left, width }}
+              />
+            </TooltipTrigger>
+            <TooltipContent className="text-center">
+              {tr.turnoNombre && <div className="font-semibold uppercase">{tr.turnoNombre}</div>}
+              <div className="text-muted-foreground">turno · {fmtHM(dur / 60)}</div>
+              <div className="tabular-nums">
+                {tr.inicio} – {tr.fin}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        );
+      })}
     </div>
   );
 }
@@ -141,10 +149,10 @@ export function TimelineBarra({
 /** Leyenda de colores del timeline. */
 export function LeyendaTimeline() {
   const items = [
-    { c: "bg-muted-foreground/25", l: "Previsto (horario)" },
-    { c: "bg-emerald-500", l: "Fichado normal" },
-    { c: "bg-sky-500", l: "Normal por solicitud" },
-    { c: "bg-rose-500", l: "Extra por solicitud" },
+    { c: "bg-zinc-400/80", l: "Horario previsto" },
+    { c: "bg-emerald-500", l: "Fichaje normal" },
+    { c: "bg-blue-500", l: "Fichaje por solicitud" },
+    { c: "bg-red-500", l: "Fichaje horas extras" },
   ];
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">

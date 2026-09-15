@@ -95,7 +95,7 @@ export async function getActividadCandidato(
       .order("created_at", { ascending: true }),
     supabase
       .from("candidatos")
-      .select("created_at")
+      .select("created_at, empleado_id")
       .eq("id", candidatoId)
       .maybeSingle(),
   ]);
@@ -103,6 +103,24 @@ export async function getActividadCandidato(
     console.error("[candidato-ficha] getActividad:", error.message);
     return [];
   }
+
+  // Correos que NO fueron al candidato sino a la GESTORÍA (alta, cambio de
+  // puesto, baja). Solo existen cuando el candidato ya es empleado.
+  let correosGestoria = new Set<string>();
+  const empleadoId = (cand?.empleado_id as string | null) ?? null;
+  if (empleadoId) {
+    try {
+      const { emparejarCorreosGestoria } = await import(
+        "@/features/rrhh/services/gestoria/correo-gestoria-archivado"
+      );
+      const r = await emparejarCorreosGestoria(supabase, { empresaId, empleadoId, candidatoId });
+      correosGestoria = r.historialIds;
+    } catch (e) {
+      // Etiquetar el destinatario es un extra: nunca puede dejar sin actividad.
+      console.error("[candidato-ficha] correos de gestoría:", e);
+    }
+  }
+
   const inscripcionIso = (cand?.created_at as string | null) ?? null;
   // Inicio de la fase anterior a cada cambio: para el primer evento es la
   // inscripción; para los siguientes, la fecha del cambio inmediatamente previo.
@@ -128,6 +146,9 @@ export async function getActividadCandidato(
       emailEnviado: !!r.email_enviado,
       emailAsunto: (r.email_asunto as string | null) ?? null,
       emailHtml: (r.email_html as string | null) ?? null,
+      emailDestinatario: correosGestoria.has(r.id as string)
+        ? ("gestoria" as const)
+        : ("candidato" as const),
       vacanteAnterior: (r.vacante_anterior_nombre as string | null) ?? null,
       vacanteNueva: (r.vacante_nueva_nombre as string | null) ?? null,
       diasEnFaseAnterior,

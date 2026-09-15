@@ -318,7 +318,7 @@ export function CamarasDrawer({ children }: { children: ReactNode }) {
                   onClick={abrirNueva}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Nueva cámara
+                  Nueva
                 </Button>
               </div>
             )}

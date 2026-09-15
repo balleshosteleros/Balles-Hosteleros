@@ -158,6 +158,10 @@
     {
       "path": "/api/cron/tickets-compras-caducar",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/reservas-devoluciones-cuadre",
+      "schedule": "25 * * * *"
     }
   ]
 }

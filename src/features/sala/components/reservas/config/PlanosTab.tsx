@@ -192,7 +192,7 @@ export function PlanosTab({
           onClick={() => setNuevoOpen(true)}
           disabled={!localId}
         >
-          <Plus className="h-4 w-4 mr-1" />Nuevo plano
+          <Plus className="h-4 w-4 mr-1" />Nuevo
         </Button>
       </header>
 

@@ -14,14 +14,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, Settings } from "lucide-react";
+import { Plus, ChevronDown } from "lucide-react";
 import {
   TIPOS_CALENDARIO,
   colorDeSubtipo,
 } from "@/features/rrhh/data/calendario-tipos";
 import { CalendarioUnico } from "@/features/rrhh/components/calendarios/CalendarioUnico";
 import { RegistrarAusenciaDialog } from "@/features/rrhh/components/calendarios/RegistrarAusenciaDialog";
-import { ConfigCalendarioDialog } from "@/features/rrhh/components/calendarios/ConfigCalendarioDialog";
 import type { SolicitudSubtipoAusencia } from "@/features/mi-panel/types";
 
 /**
@@ -50,7 +49,6 @@ export function CalendariosRRHHView() {
   // Hueco de la cabecera donde el calendario coloca sus controles de vista.
   const [slotControles, setSlotControles] = useState<HTMLDivElement | null>(null);
   const [recarga, setRecarga] = useState(0);
-  const [configAbierta, setConfigAbierta] = useState(false);
 
   useEffect(() => {
     let activo = true;
@@ -72,29 +70,19 @@ export function CalendariosRRHHView() {
 
   return (
     <div className="space-y-4 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Calendario</h2>
-          <p className="text-sm text-muted-foreground">
-            Quién falta cada día y por qué. Pasa el ratón por una cara para ver
-            el detalle.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Aquí aterrizan el selector de vista y la navegación del
-              calendario, para no gastar una fila propia y que el año entero
-              quepa en pantalla. */}
-          <div ref={setSlotControles} className="flex flex-wrap items-center gap-2" />
-
-          {/* Un solo botón: al pulsarlo se elige qué se registra. */}
-          <DropdownMenu>
+      {/* El botón primario a la izquierda y, a la derecha, los controles del
+          calendario. Sin título ni subtítulo: la cabecera de la app ya dice en
+          qué vista estamos. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Un solo botón: al pulsarlo se elige qué se registra. */}
+        <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="sm" className="gap-1">
               <Plus className="h-4 w-4" />Nuevo
               <ChevronDown className="h-4 w-4 opacity-70" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuContent align="start" className="w-52">
             {REGISTRABLES.map((t) => (
               <DropdownMenuItem
                 key={t.subtipo}
@@ -108,21 +96,13 @@ export function CalendariosRRHHView() {
                 {t.label}
               </DropdownMenuItem>
             ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-          {/* Configuración del submódulo: de aquí salen los días de vacaciones
-              al año, que son los mismos para toda la empresa. */}
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1"
-            onClick={() => setConfigAbierta(true)}
-          >
-            <Settings className="h-4 w-4" />
-            Configuración
-          </Button>
-        </div>
+        {/* Aquí aterrizan el selector de vista y la navegación del calendario,
+            para no gastar una fila propia y que el año entero quepa en
+            pantalla. */}
+        <div ref={setSlotControles} className="flex flex-wrap items-center gap-2" />
       </div>
 
       <CalendarioUnico
@@ -131,12 +111,6 @@ export function CalendariosRRHHView() {
         onAnioChange={handleAnio}
         cargando={cargando}
         slotControles={slotControles}
-      />
-
-      <ConfigCalendarioDialog
-        empresaId={empresaActual.id}
-        open={configAbierta}
-        onOpenChange={setConfigAbierta}
       />
 
       <RegistrarAusenciaDialog

@@ -70,6 +70,12 @@ export interface ContratacionRow {
   /** Detalle propio de bajas. */
   tipo_baja_label?: string | null;
   motivo?: string | null;
+  /**
+   * Día OFICIAL de la baja en la Seguridad Social: el siguiente al último día
+   * trabajado. Es el que la gestoría tramita en el sistema RED y el que viaja en
+   * el correo, así que la pantalla enseña los dos y no obliga a sumar un día.
+   */
+  fecha_baja_oficial?: string | null;
   /** Detalle propio de modificaciones. */
   puesto_anterior?: string | null;
   puesto_nuevo?: string | null;

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { CalendarOff, Clock, Loader2 } from "lucide-react";
 import { getMiFichajeHoy } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
-import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { formatHoraEnZona, minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { BigClockButton } from "./BigClockButton";
 import type { JornadaHoy } from "../lib/mobile-inicio-data";
 
@@ -137,6 +138,7 @@ interface Props {
 }
 
 export function FicharCard({ jornadaHoy }: Props) {
+  const { empresaActual } = useEmpresa();
   const [cargado, setCargado] = useState(false);
   const [habilitado, setHabilitado] = useState(false);
   const [fichaje, setFichaje] = useState<MiFichajeHoy | null>(null);
@@ -178,17 +180,17 @@ export function FicharCard({ jornadaHoy }: Props) {
   }, [refetch]);
 
   // Minuto actual para la marca de la barra del turno. El reloj es un sistema
-  // externo: se consulta en el efecto, nunca durante el render.
+  // externo: se consulta en el efecto, nunca durante el render. Y se lee en la
+  // zona de la EMPRESA: quien mira desde otro huso tiene que ver la marca donde
+  // está en el local, no donde está su móvil.
+  const tz = empresaActual.zonaHoraria;
   const [minutoAhora, setMinutoAhora] = useState<number | null>(null);
   useEffect(() => {
-    const refrescar = () => {
-      const d = new Date();
-      setMinutoAhora(d.getHours() * 60 + d.getMinutes());
-    };
+    const refrescar = () => setMinutoAhora(minutosDiaEnZona(new Date(), tz));
     refrescar();
     const i = setInterval(refrescar, 60000);
     return () => clearInterval(i);
-  }, []);
+  }, [tz]);
 
   if (!cargado) {
     return (

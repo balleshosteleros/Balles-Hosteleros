@@ -152,7 +152,7 @@ export function AgentesIAView() {
           )}
           <Button size="sm" onClick={onNuevo} className="h-9">
             <Plus className="h-3.5 w-3.5 mr-2" />
-            Nuevo agente
+            Nuevo
           </Button>
         </div>
       </div>

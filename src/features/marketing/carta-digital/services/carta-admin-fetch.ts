@@ -22,6 +22,7 @@ interface CategoriaRow {
   orden: number;
   visible: boolean;
   familia: string | null;
+  formato_foto: string | null;
   destacada: boolean | null;
   dias_semana: number[] | null;
   hora_desde: string | null;
@@ -62,7 +63,7 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
   const [empresaRes, catRes, itemsRes] = await Promise.all([
     supabase
       .from("empresas")
-      .select("id, slug, nombre, carta_slug, carta_publicada, carta_descripcion")
+      .select("id, slug, nombre, carta_slug, carta_publicada, carta_descripcion, carta_formato_foto")
       .eq("id", empresaId)
       .maybeSingle(),
     supabase
@@ -88,6 +89,7 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
         carta_slug: string | null;
         carta_publicada: boolean;
         carta_descripcion: string | null;
+        carta_formato_foto: string | null;
       }
     | null;
 
@@ -99,6 +101,10 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
         carta_slug: empresaRow.carta_slug ?? "",
         carta_publicada: empresaRow.carta_publicada ?? false,
         carta_descripcion: empresaRow.carta_descripcion,
+        // Forma de foto por defecto de la casa. Sin ella, el editor recortaba
+        // SIEMPRE en cuadrado y se comía medio plato.
+        carta_formato_foto:
+          (empresaRow.carta_formato_foto as CartaEmpresaPublica["carta_formato_foto"]) ?? null,
       }
     : null;
 
@@ -111,12 +117,13 @@ export async function fetchCartaAdmin(): Promise<CartaAdminData> {
     visible: r.visible,
     created_at: r.created_at,
     updated_at: r.updated_at,
-      familia: (r.familia as CartaCategoria["familia"]) ?? null,
+    familia: (r.familia as CartaCategoria["familia"]) ?? null,
+    formato_foto: (r.formato_foto as CartaCategoria["formato_foto"]) ?? null,
     destacada: r.destacada ?? false,
     dias_semana: r.dias_semana,
     hora_desde: r.hora_desde,
     hora_hasta: r.hora_hasta,
-}));
+  }));
 
   // Nombre real de los productos vinculados, en una sola consulta.
   const productoIds = Array.from(

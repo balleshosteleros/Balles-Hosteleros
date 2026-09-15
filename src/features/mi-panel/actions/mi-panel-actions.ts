@@ -39,7 +39,7 @@ import {
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 import { getZonaHorariaEmpresa, zonaHorariaDeConfig, ZONA_HORARIA_DEFAULT } from "@/features/empresa/lib/empresa-server";
 import { getDiasVacacionesAnio } from "@/features/rrhh/actions/calendario-config-actions";
-import { minutosDiaEnZona, ahoraEnZona, hoyEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { minutosDiaEnZona, ahoraEnZona, hoyEnZona, formatHoraEnZona, zonaLocalAUtcISO } from "@/features/empresa/lib/zona-horaria";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
@@ -631,6 +631,112 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
     const msg = extractErrorMessage(err);
     console.error("[mi-panel] getMiVentanaFichajeHoy:", msg);
     return { ok: false, ...base, error: msg };
+  }
+}
+
+/**
+ * Próxima hora a la que este empleado PODRÁ fichar la entrada, con los minutos
+ * de cortesía YA descontados, y el día al que corresponde.
+ *
+ * Existe porque el botón apagado solo sabía decir "fuera de tu turno": cierto,
+ * pero inútil. Quien lo mira quiere saber cuándo vuelve a servir. Los turnos de
+ * HOY los resuelve el propio móvil con la ventana que ya tiene; esto es para lo
+ * que el móvil no puede saber: que hoy ya no queda nada y el siguiente turno es
+ * mañana, el jueves o el lunes que viene.
+ *
+ * Se miran ocho días: una semana entera más el de hoy, que es lo que cubre
+ * cualquier patrón semanal. Si en ocho días no hay nada planificado, no se
+ * inventa una fecha — se devuelve vacío y el botón dice solo que no hay turno.
+ */
+export interface ProximaEntradaFichaje {
+  ok: boolean;
+  /** Instante (UTC ISO) a partir del cual ya se puede fichar. null = no hay. */
+  aperturaISO: string | null;
+  /** Hora a la que empieza el turno de verdad, sin la cortesía. */
+  inicioISO: string | null;
+  zonaHoraria: string;
+  error?: string;
+}
+
+const DIAS_BUSQUEDA_PROXIMO_TURNO = 8;
+
+/** Suma días a una fecha "AAAA-MM-DD" sin tocar zonas horarias. */
+function sumarDiasISO(fechaISO: string, dias: number): string {
+  const [a, m, d] = fechaISO.split("-").map(Number);
+  return new Date(Date.UTC(a, (m ?? 1) - 1, (d ?? 1) + dias)).toISOString().slice(0, 10);
+}
+
+export async function getProximaEntradaFichaje(): Promise<ProximaEntradaFichaje> {
+  const vacio = {
+    aperturaISO: null,
+    inicioISO: null,
+    zonaHoraria: ZONA_HORARIA_DEFAULT,
+  };
+  try {
+    const { supabase, user, empresaId: cookieEmpresaId } = await getContext();
+    if (!user) return { ok: false, ...vacio, error: "No autenticado" };
+
+    const filas = await getMisFilasEmpleado(supabase, user.id);
+    if (filas.length === 0) return { ok: true, ...vacio };
+
+    // Cortesía y zona de CADA empresa: quien trabaja en dos puede tener el
+    // siguiente turno en la otra, con su propia cortesía.
+    const empresas = [...new Set(filas.map((f) => f.empresaId))];
+    const config = new Map<string, { antes: number; tz: string }>();
+    await Promise.all(
+      empresas.map(async (e) => {
+        const [cfg, tz] = await Promise.all([
+          leerPopupConfig(supabase, e),
+          getZonaHorariaEmpresa(supabase, e),
+        ]);
+        config.set(e, { antes: cfg.margenAntesMin, tz });
+      }),
+    );
+
+    const hoy = await hoyDelEmpleado(supabase, cookieEmpresaId, user.id);
+    const dias = Array.from({ length: DIAS_BUSQUEDA_PROXIMO_TURNO }, (_, i) => sumarDiasISO(hoy, i));
+    const porDia = await Promise.all(
+      dias.map((fecha) => getHorariosDiaUnificado(supabase, user.id, fecha, filas)),
+    );
+
+    const ahoraMs = Date.now();
+    let aperturaMs: number | null = null;
+    let inicioMs = 0;
+    let zona = ZONA_HORARIA_DEFAULT;
+
+    for (let i = 0; i < dias.length; i++) {
+      for (const h of porDia[i]) {
+        if (h.horario.tipo !== "fijo") continue;
+        const cfg = config.get(h.empresaId) ?? { antes: 0, tz: ZONA_HORARIA_DEFAULT };
+        for (const tr of h.horario.tramos) {
+          const ini = Date.parse(zonaLocalAUtcISO(dias[i], tr.inicio, cfg.tz));
+          if (Number.isNaN(ini)) continue;
+          const abre = ini - cfg.antes * 60_000;
+          // Ya pasó (o estamos dentro): no es "la próxima".
+          if (abre <= ahoraMs) continue;
+          if (aperturaMs === null || abre < aperturaMs) {
+            aperturaMs = abre;
+            inicioMs = ini;
+            zona = cfg.tz;
+          }
+        }
+      }
+      // Los días van en orden: en cuanto uno da resultado, ninguno posterior
+      // puede adelantarlo.
+      if (aperturaMs !== null) break;
+    }
+
+    if (aperturaMs === null) return { ok: true, ...vacio };
+    return {
+      ok: true,
+      aperturaISO: new Date(aperturaMs).toISOString(),
+      inicioISO: new Date(inicioMs).toISOString(),
+      zonaHoraria: zona,
+    };
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    console.error("[mi-panel] getProximaEntradaFichaje:", msg);
+    return { ok: false, ...vacio, error: msg };
   }
 }
 

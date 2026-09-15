@@ -6,7 +6,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BotonDevolver } from "@/features/sala/components/reservas/CobroPoliticaBloque";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatEur, formatNumero } from "@/shared/lib/numero";
@@ -1268,25 +1267,11 @@ export function ListadoReservasPanel({
 
   return (
     <div className="space-y-3">
-      {/* Sin título ni subtítulo: la cabecera de la vista ya dice dónde está
-          uno, el periodo se ve en los botones de arriba y el recuento, en la
-          tabla. Repetirlo solo alejaba las cifras, que es lo que se viene a
-          mirar. */}
-      <div className="flex flex-wrap items-end justify-end gap-3">
-        <div className="flex items-center gap-3">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={recargar}
-            disabled={pending}
-            title="Recargar"
-            className="h-8 w-8 p-0"
-          >
-            <RefreshCw className={cn("h-4 w-4", pending && "animate-spin")} />
-          </Button>
-        </div>
-      </div>
-
+      {/* Sin cabecera propia: ni título, ni subtítulo, ni botón de recargar.
+          La vista ya dice dónde está uno y el periodo se ve en los botones de
+          arriba; esa fila solo servía para empujar las cifras hacia abajo y
+          dejar un hueco en blanco encima de lo que se viene a mirar. Los datos
+          se refrescan solos al cambiar de periodo. */}
       {/* Resumen de dinero: solo en la vista de cobros. En Analítica sobraría,
           porque allí la pregunta es de dónde vienen las reservas, no cuánto
           dinero hay retenido. */}

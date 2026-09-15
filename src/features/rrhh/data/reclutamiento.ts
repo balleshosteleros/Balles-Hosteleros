@@ -314,6 +314,12 @@ export interface HistorialCambioFase {
    */
   emailHtml?: string | null;
   /**
+   * A quién se le envió ese correo. Por el historial pasan tanto los correos al
+   * candidato como los avisos a la GESTORÍA (alta, cambio de puesto y baja), y
+   * la ficha no puede decir que lo recibió el candidato cuando no fue así.
+   */
+  emailDestinatario?: "candidato" | "gestoria";
+  /**
    * Si la fila es un movimiento de vacante, títulos de origen y destino.
    * `vacanteNueva` no-null marca la fila como movimiento (no cambio de fase).
    */

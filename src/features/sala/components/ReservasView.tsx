@@ -20,7 +20,7 @@ import { ahoraEnZona, formatFechaHoraEnZona } from "@/features/empresa/lib/zona-
 import { HORA_CORTE_DIA_NEGOCIO, diaNegocioDe, turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useBloqueoCambioEmpresa } from "@/shared/hooks/useBloqueoCambioEmpresa";
-import { Plus, Search, ChevronLeft, ChevronRight, Check, Move, Map as MapIcon, List as ListIcon, Lock, Table2, ArrowLeftRight, ArrowRight } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, Check, Move, Map as MapIcon, List as ListIcon, Lock, ArrowLeftRight, ArrowRight } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
   () =>
@@ -53,7 +53,7 @@ import {
   AvisoAforoMesa,
   type EstadoMesaParaReserva,
 } from "@/features/sala/components/reservas/SelectorMesaConAvisos";
-import { EditorMesasReserva, codigosDeMesa } from "@/features/sala/components/reservas/EditorMesasReserva";
+import { codigosDeMesa } from "@/features/sala/components/reservas/EditorMesasReserva";
 import { CalendarioMes } from "@/features/sala/components/reservas/CalendarioMes";
 import { CalendarDays, Grid3X3, Users, LayoutGrid, AlertTriangle, Clock, Mail, CheckCircle2 } from "lucide-react";
 import {
@@ -3991,7 +3991,6 @@ export function ReservasView() {
 
   const [showDetalleReserva, setShowDetalleReserva] = useState(false);
   // Salón para reasignar a mano las mesas de la reserva abierta.
-  const [showEditorMesas, setShowEditorMesas] = useState(false);
   const [selectedInsights, setSelectedInsights] = useState<ClienteInsights | null>(null);
   // Datos del cliente editables en la ficha. Se sincronizan con la reserva
   // seleccionada y solo se persisten al pulsar Guardar.
@@ -5657,7 +5656,6 @@ export function ReservasView() {
         ? `Mesas de la reserva: ${codigoMesas.split("+").join(" + ")}`
         : "Reserva sin mesa asignada",
     );
-    setShowEditorMesas(false);
     setActividadVersion((v) => v + 1);
     setSelectedReserva((prev) =>
       prev && prev.id === id ? { ...prev, mesaCodigo: codigoMesas } : prev,
@@ -5693,7 +5691,6 @@ export function ReservasView() {
     toast.success(
       `Mesas intercambiadas: ${p.mesaDestino.split("+").join(" + ")}`,
     );
-    setShowEditorMesas(false);
     setActividadVersion((v) => v + 1);
     setSelectedReserva((prev) =>
       prev && prev.id === id ? { ...prev, mesaCodigo: p.mesaDestino } : prev,
@@ -5811,25 +5808,6 @@ export function ReservasView() {
     setSelectedMesa(m);
     setNuevaComoWalkIn(true);
     setShowNueva(true);
-  };
-
-  /**
-   * "Abrir salón" desde la ficha: enseña el plano de la sala DONDE ESTÁ la
-   * mesa de la reserva, no la que hubiera en pantalla.
-   *
-   * Un local puede tener varias salas y la ficha se abre desde el listado, que
-   * las mezcla: sin este salto, una reserva de la terraza se editaría sobre el
-   * plano del comedor y sus mesas no aparecerían por ningún lado.
-   */
-  const abrirEditorMesas = (r: Reserva) => {
-    const primerCodigo = (r.mesaCodigo ?? "").split("+")[0]?.trim().toUpperCase();
-    const mesaId = primerCodigo ? mesaIdPorCodigo.get(primerCodigo) : r.mesaId;
-    const zonaId = mesaId ? mesasMeta.get(mesaId)?.zonaId : null;
-    const salaId = zonaId ? zonasReales.find((z) => z.id === zonaId)?.salaId : null;
-    // Sin mesa (o sin poder resolverla) se abre la sala que ya se está viendo:
-    // es donde el usuario está mirando y sigue pudiendo elegir mesa a mano.
-    if (salaId && salaId !== salaActualId) setSalaActualId(salaId);
-    setShowEditorMesas(true);
   };
 
   // "Editar" desde el popover: abre la ficha completa de la reserva.
@@ -7556,7 +7534,7 @@ export function ReservasView() {
             para llegar al estado o a las etiquetas; ahora el marco queda
             quieto en pantalla y, si algún bloque largo (correos, actividad) no
             cabe, se desplaza solo ese bloque dentro de su columna. */}
-        <DialogContent className="flex h-[88vh] max-w-5xl flex-col overflow-hidden p-4 gap-3 sm:rounded-lg">
+        <DialogContent className="flex h-[88vh] max-w-5xl flex-col overflow-hidden p-3.5 gap-2 sm:rounded-lg">
           <DialogHeader className="shrink-0 pb-1">
             <DialogTitle className="text-base">Detalle de reserva</DialogTitle>
           </DialogHeader>
@@ -7570,7 +7548,7 @@ export function ReservasView() {
               filas de rejilla fijas, la banda no declarada (el aviso solo
               aparece a veces) descuadraba el reparto. */}
           {selectedReserva && (
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto text-sm">
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto text-sm">
 
               {/* Vinculación pendiente de revisar: va lo primero y a lo ancho
                   de las dos columnas. Es lo más importante de esta ficha —los
@@ -7594,7 +7572,7 @@ export function ReservasView() {
                   propias bandas. Con dos scrolls anidados había que bajar
                   dentro de una columna para ver lo que ya estaba a la vista en
                   la otra. */}
-              <div className="grid shrink-0 gap-3 md:grid-cols-2">
+              <div className="grid shrink-0 gap-2 md:grid-cols-2">
               {/* ── Columna izquierda: la reserva ─────────────────────────
                   Las dos mitades van sobre fondos distintos porque cuentan
                   cosas distintas: a la izquierda lo que le pasa a ESTA reserva
@@ -7602,8 +7580,8 @@ export function ReservasView() {
                   la persona, que sigue existiendo entre reserva y reserva. Sin
                   esa separacion las dos "Etiquetas" y las dos "Actividad" se
                   leian como lo mismo. */}
-              <div className="flex flex-col gap-2 rounded-lg border bg-muted/25 p-2.5">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/25 p-2">
+                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Ficha de la reserva
                 </h3>
 
@@ -7914,65 +7892,42 @@ export function ReservasView() {
                     <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Mesa
                     </Label>
-                    {/* Igual en LOS DOS casos —mesa suelta o unión—: arriba qué
-                        mesa tiene, debajo el botón que abre el plano. La ficha
-                        no cambia de forma según la reserva que abras. */}
-                    <div className="space-y-1">
-                      <div className="min-w-0">
-                        {esReservaUnion ? (
-                          <p className="flex h-8 items-center gap-1.5 text-sm font-medium">
-                            <span className="truncate">
-                              {(selectedReserva.mesaCodigo ?? "")
-                                .split("+")
-                                .map((c) => c.trim())
-                                .join(" + ")}
-                            </span>
-                            {/* La unión no se toca desde un desplegable: daría
-                                una sola mesa y elegir una soltaría la otra sin
-                                decirlo. Se dice dónde se cambia. */}
-                            <span className="shrink-0 text-[10px] font-normal text-muted-foreground">
-                              (unión)
-                            </span>
-                          </p>
-                        ) : (
-                          <SelectorMesaConAvisos
-                            value={mesaIdReservaAbierta}
-                            onChange={(mesaId) => {
-                              const m = mesas.find((x) => x.id === mesaId);
-                              guardarMesasReserva(
-                                selectedReserva.id,
-                                m ? m.codigo : "",
-                                false,
-                              );
-                            }}
-                            mesas={mesasParaReservaAbierta}
-                            estadoPorMesa={estadoMesasReservaAbierta}
-                            placeholder="— Sin asignar —"
-                          />
-                        )}
-                      </div>
-                      {/* Abre el PLANO de la sala con las mesas de la reserva
-                          ya marcadas en rojo, para añadir o quitar las que
-                          haga falta cuando el grupo crece o mengua. Es la
-                          única forma de unir dos mesas: el desplegable de
-                          arriba da una sola.
-
-                          Va DEBAJO y con su palabra, a lo ancho de la celda.
-                          Estuvo un tiempo como un cuadradito con solo el icono
-                          de una mesa, superpuesto al borde del desplegable,
-                          para no restarle ancho: nadie lo encontraba y el
-                          plano parecía haber desaparecido del software. Un
-                          botón que no se lee es un botón que no está. */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 w-full gap-1.5 px-2 text-[11px]"
-                        title="Unir, cambiar o soltar las mesas de esta reserva sobre el plano de la sala"
-                        onClick={() => abrirEditorMesas(selectedReserva)}
-                      >
-                        <Table2 className="size-3.5" />
-                        Unir mesas
-                      </Button>
+                    {/* Solo el dato, sin botón debajo: unir mesas se hace en el
+                        plano de la sala, marcándolas ahí. Tener además un botón
+                        aquí abría un segundo camino para lo mismo y dejaba un
+                        hueco al final de la columna. */}
+                    <div className="min-w-0">
+                      {esReservaUnion ? (
+                        <p className="flex h-7 items-center gap-1.5 text-xs font-medium">
+                          <span className="truncate">
+                            {(selectedReserva.mesaCodigo ?? "")
+                              .split("+")
+                              .map((c) => c.trim())
+                              .join(" + ")}
+                          </span>
+                          {/* La unión no se toca desde un desplegable: daría
+                              una sola mesa y elegir una soltaría la otra sin
+                              decirlo. Se dice dónde se cambia. */}
+                          <span className="shrink-0 text-[10px] font-normal text-muted-foreground">
+                            (unión)
+                          </span>
+                        </p>
+                      ) : (
+                        <SelectorMesaConAvisos
+                          value={mesaIdReservaAbierta}
+                          onChange={(mesaId) => {
+                            const m = mesas.find((x) => x.id === mesaId);
+                            guardarMesasReserva(
+                              selectedReserva.id,
+                              m ? m.codigo : "",
+                              false,
+                            );
+                          }}
+                          mesas={mesasParaReservaAbierta}
+                          estadoPorMesa={estadoMesasReservaAbierta}
+                          placeholder="— Sin asignar —"
+                        />
+                      )}
                     </div>
                   </div>
                   </div>
@@ -8064,8 +8019,8 @@ export function ReservasView() {
               </div>
 
               {/* ── Columna derecha: el cliente ─────────────────────────── */}
-              <div className="flex flex-col gap-2 rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-2.5">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+              <div className="flex flex-col gap-1.5 rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-2">
+                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
                   Ficha del cliente
                 </h3>
 
@@ -8077,32 +8032,32 @@ export function ReservasView() {
                   zonaHoraria={empresaActual.zonaHoraria}
                 />
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-muted-foreground text-xs">Nombre</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Nombre</Label>
                     <Input
-                      className="h-8 text-xs"
+                      className="h-7 text-xs"
                       value={clienteEdit.nombre}
                       onChange={(e) =>
                         setClienteEdit((p) => ({ ...p, nombre: e.target.value }))
                       }
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-muted-foreground text-xs">Apellidos</Label>
+                  <div>
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Apellidos</Label>
                     <Input
-                      className="h-8 text-xs"
+                      className="h-7 text-xs"
                       value={clienteEdit.apellidos}
                       onChange={(e) =>
                         setClienteEdit((p) => ({ ...p, apellidos: e.target.value }))
                       }
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div>
                     {/* Sin bandera junto al rótulo: el selector de prefijo que
                         va justo debajo ya la lleva en cada opción, así que era
                         el mismo dato dos veces en dos renglones seguidos. */}
-                    <Label className="text-muted-foreground text-xs">Teléfono</Label>
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Teléfono</Label>
                     {/* El prefijo se elige de la lista y el número se escribe
                         al lado, pero se guardan juntos: la ficha no puede
                         quedar con un número al que nadie sabe a qué país
@@ -8124,7 +8079,7 @@ export function ReservasView() {
                               ),
                             }))
                           }
-                          className="h-8 w-[86px] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs"
+                          className="h-7 w-[78px] shrink-0 rounded-md border border-input bg-background px-1 text-xs"
                         >
                           {PREFIJOS_TELEFONO.map((x) => (
                             <option key={x.prefijo} value={x.prefijo}>
@@ -8135,7 +8090,7 @@ export function ReservasView() {
                       </ToolTooltip>
                       <Input
                         type="tel"
-                        className="h-8 flex-1 text-xs"
+                        className="h-7 flex-1 text-xs"
                         value={separarPrefijo(clienteEdit.telefono).numero}
                         onChange={(e) =>
                           setClienteEdit((p) => ({
@@ -8149,11 +8104,11 @@ export function ReservasView() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-muted-foreground text-xs">Email</Label>
+                  <div>
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Email</Label>
                     <Input
                       type="email"
-                      className="h-8 text-xs"
+                      className="h-7 text-xs"
                       value={clienteEdit.email}
                       onChange={(e) =>
                         setClienteEdit((p) => ({ ...p, email: e.target.value }))
@@ -8172,7 +8127,7 @@ export function ReservasView() {
                   propia banda quedan siempre enfrentadas, que es como se leen:
                   a la izquierda lo que le ha pasado a ESTA reserva, a la
                   derecha los cambios de datos de la PERSONA. */}
-              <div className="grid shrink-0 gap-3 md:grid-cols-2">
+              <div className="grid shrink-0 gap-2 md:grid-cols-2">
                 <div className="rounded-lg border bg-muted/25 p-2.5">
                   <ActividadReserva
                     key={actividadVersion}
@@ -8206,7 +8161,7 @@ export function ReservasView() {
                   dirigida al cliente; ahora todas lo hacen, así que enseña lo
                   mismo que su ficha en Clientes: idéntica se abra donde se
                   abra. */}
-              <div className="grid shrink-0 items-start gap-3 md:grid-cols-2">
+              <div className="grid shrink-0 items-start gap-2 md:grid-cols-2">
                 <div className="rounded-lg border bg-muted/25 px-2.5 py-2">
                   <HistoricoEmailsReserva reservaId={selectedReserva.id} />
                 </div>
@@ -8241,7 +8196,7 @@ export function ReservasView() {
                   SIN contador de caracteres: ocupaba un renglón entero debajo
                   de cada caja —y son dos— para un dato que no se mira; el
                   propio campo ya corta al llegar al límite (Iván, 06-sep). */}
-              <div className="grid shrink-0 gap-3 md:grid-cols-2">
+              <div className="grid shrink-0 gap-2 md:grid-cols-2">
                 <div className="space-y-1 rounded-lg border bg-muted/25 px-2.5 py-2">
                   {/* "de la reserva" en el título: el cliente tiene el suyo al
                       lado, y sin apellido los dos se leían como lo mismo. */}
@@ -8299,7 +8254,7 @@ export function ReservasView() {
                   de la reserva a media ventana y las del cliente mucho más
                   abajo. En su propia banda, fuera de las columnas, quedan
                   siempre enfrentadas y sus chips se leen en línea. */}
-              <div className="grid shrink-0 gap-3 md:grid-cols-2">
+              <div className="grid shrink-0 gap-2 md:grid-cols-2">
                 <div className="space-y-1.5 rounded-lg border bg-muted/25 p-2.5">
                   {/* "de la reserva" en el título: el cliente tiene sus PROPIAS
                       etiquetas al lado, y sin apellido las dos se leían como la
@@ -8343,32 +8298,6 @@ export function ReservasView() {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Salón para reasignar mesas a mano. Se monta solo con la ficha abierta:
-          las mesas y el plano que enseña son los de la sala que hay en pantalla. */}
-      {selectedReserva && (
-        <EditorMesasReserva
-          // Remonta al abrir y al cambiar de reserva: la selección de mesas
-          // siempre empieza en las que la reserva tiene grabadas ahora mismo.
-          key={`${selectedReserva.id}-${showEditorMesas}`}
-          abierto={showEditorMesas}
-          onCerrar={() => setShowEditorMesas(false)}
-          reserva={selectedReserva}
-          mesas={mesasActivas}
-          posiciones={posicionesPlano}
-          mesasMeta={mesasMeta}
-          zonas={zonasSalaActual}
-          decoraciones={decoracionesSalaActual}
-          esOscuro={esOscuro}
-          getReservasMesa={getReservasMesa}
-          onValidar={async (codigo, forzar) => {
-            await guardarMesasReserva(selectedReserva.id, codigo, forzar);
-          }}
-          onIntercambiar={async (p) => {
-            await intercambiarMesas(selectedReserva.id, p);
-          }}
-        />
-      )}
 
       {/* Editar los datos de un cliente reescribe SU ficha y todas sus reservas,
           no solo la abierta. Por eso se confirma, y la respuesta es binaria: se

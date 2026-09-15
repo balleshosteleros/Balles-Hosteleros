@@ -214,7 +214,7 @@ export function AdminFormacionPanel() {
                 onClick={() => setEditingCurso("new")}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Nuevo curso
+                Nuevo
               </Button>
             </div>
 
@@ -343,7 +343,7 @@ export function AdminFormacionPanel() {
                 onClick={() => setEditingNovedad("new")}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Nueva novedad
+                Nueva
               </Button>
             </div>
 

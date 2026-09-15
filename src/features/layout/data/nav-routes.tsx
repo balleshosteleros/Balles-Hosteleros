@@ -8,7 +8,7 @@ import {
   KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical, GraduationCap,
   UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch, PenLine, Music,
   CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound, Heart, UserPlus,
-  Apple, CreditCard, Presentation, QrCode, Link2, Globe, Send, Wallet, Fingerprint,
+  Apple, CreditCard, Presentation, QrCode, Globe, Send, Wallet, Fingerprint,
   Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard, FileQuestion,
   LayoutGrid, CalendarClock, AlertTriangle, HelpCircle,
   Video, Mail, MessageSquare, Banknote, Building2, Smartphone, Trash2,
@@ -57,6 +57,31 @@ export function EscandalloIcon({ className }: { className?: string }) {
       {/* 2 cortes verticales tocando el ala — 3 franjas iguales */}
       <path d="M9.5 5 V19" />
       <path d="M14.5 5 V19" />
+    </svg>
+  );
+}
+
+// La carta digital: un móvil con una manzana dentro. El QR es CÓMO se llega a
+// la carta, no lo que la carta es —y además ya nombra a "Códigos QR", que es
+// justo lo que había que distinguir. Lo que hay dentro del teléfono es comida.
+export function CartaDigitalIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      {/* teléfono */}
+      <rect x="5" y="2" width="14" height="20" rx="2.5" />
+      <path d="M10.5 4.6h3" />
+      {/* manzana: dos lóbulos que nacen del mismo punto y se cierran abajo */}
+      <path d="M12 10.1c-1.2-1.5-3.7-1-3.7 1.9 0 2.6 1.7 5.1 3.7 5.1s3.7-2.5 3.7-5.1c0-2.9-2.5-3.4-3.7-1.9Z" />
+      {/* hoja */}
+      <path d="M12 10.1c0-1.4.9-2.4 2.3-2.6" />
     </svg>
   );
 }
@@ -177,8 +202,8 @@ export const marketingSubs: SubItem[] = [
   { title: "CONTENIDO", url: "/marketing/contenido", icon: Folder },
   { title: "CAMPAÑAS", url: "/marketing/campanas", icon: Send },
   { title: "AUTOMATIZACIONES", url: "/marketing/automatizaciones", icon: Zap },
-  { title: "CARTA DIGITAL", url: "/marketing/carta-digital", icon: QrCode },
-  { title: "CÓDIGOS QR", url: "/marketing/qr", icon: Link2 },
+  { title: "CARTA DIGITAL", url: "/marketing/carta-digital", icon: CartaDigitalIcon },
+  { title: "CÓDIGOS QR", url: "/marketing/qr", icon: QrCode },
   { title: "APP CLIENTES", url: "/marketing/app-clientes", icon: Smartphone },
   { title: "PÁGINA WEB", url: "/marketing/pagina-web", icon: Globe },
   { title: "FIDELIZACIÓN", url: "/marketing/fidelizacion", icon: Heart },
@@ -277,10 +302,10 @@ const EXTRA_ROUTES: Record<string, { title: string; icon?: IconType }> = {
   "/logistica/partidas": { title: "PARTIDAS", icon: LayoutGrid },
   "/logistica/incidencias": { title: "INCIDENCIAS", icon: AlertTriangle },
   "/cocina/importar-fichas": { title: "IMPORTAR FICHAS", icon: FileUp },
-  "/marketing/campanas/email": { title: "CAMPAÑAS — EMAIL", icon: Mail },
-  "/marketing/campanas/meta": { title: "CAMPAÑAS — META", icon: Send },
-  "/marketing/campanas/sms": { title: "CAMPAÑAS — SMS", icon: MessageSquare },
-  "/marketing/campanas/whatsapp": { title: "CAMPAÑAS — WHATSAPP", icon: MessageSquare },
+  "/marketing/campanas/email": { title: "EMAIL", icon: Mail },
+  "/marketing/campanas/meta": { title: "META", icon: Send },
+  "/marketing/campanas/sms": { title: "SMS", icon: MessageSquare },
+  "/marketing/campanas/whatsapp": { title: "WHATSAPP", icon: MessageSquare },
   "/rrhh/puestos": { title: "PUESTOS", icon: Banknote },
   "/sala/reservas/links": { title: "ENLACES DE RESERVA", icon: Globe },
   "/calidad/auditorias/plantillas": { title: "PLANTILLAS", icon: ClipboardList },

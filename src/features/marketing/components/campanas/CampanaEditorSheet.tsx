@@ -40,8 +40,6 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
   const [draft, setDraft] = useState<Campana>(campana);
   const [guardando, startSave] = useTransition();
   const [links, setLinks] = useState<ReservaLink[]>([]);
-  const [nuevoLink, setNuevoLink] = useState("");
-  const [creandoLink, setCreandoLink] = useState(false);
   const [coincidencias, setCoincidencias] = useState<number | null>(null);
   // Cuántos lo recibirían de verdad: los del segmento que ADEMÁS dieron
   // permiso. Es siempre menor que las coincidencias, y es el número real.
@@ -118,8 +116,6 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
     return "";
   }, [draft]);
 
-  const asunto = draft.canal === "email" ? draft.asunto : "";
-
   const validacion = useMemo(() => {
     if (!draft.nombre.trim()) return { ok: false as const, msg: "Falta el nombre" };
     if (!mensaje.trim()) return { ok: false as const, msg: "Falta el mensaje" };
@@ -128,15 +124,16 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
     return { ok: true as const, msg: null };
   }, [draft, mensaje, coincidencias]);
 
+  /**
+   * El aviso de debajo del mensaje. Solo donde el número cuesta dinero.
+   *
+   * En el correo había un "Asunto: 31/50 caracteres ✓" colgado bajo el cuadro
+   * del mensaje: hablaba de otro campo, no avisaba de nada —el asunto ya está
+   * topado a 120— y era lo único que se leía debajo de un HTML entero. En SMS y
+   * WhatsApp sí se queda: pasar de 160 caracteres parte el mensaje en dos y
+   * duplica la factura.
+   */
   const recomendacion = useMemo(() => {
-    if (draft.canal === "email") {
-      const longAsunto = asunto.length;
-      const supera = longAsunto > 50;
-      return {
-        tono: supera ? "warn" as const : "ok" as const,
-        texto: `Asunto: ${longAsunto}/50 caracteres ${supera ? "(demasiado largo)" : "✓"}`,
-      };
-    }
     if (draft.canal === "sms") {
       const long = mensaje.length;
       const supera = long > 160;
@@ -153,7 +150,7 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
       };
     }
     return null;
-  }, [draft.canal, asunto, mensaje]);
+  }, [draft.canal, mensaje]);
 
   function updateDraft(patch: Partial<Campana>) {
     setDraft((d) => ({ ...d, ...patch } as Campana));
@@ -161,19 +158,6 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
   function updateMensaje(v: string) {
     if (draft.canal === "email") updateDraft({ cuerpoHtml: v } as Partial<Campana>);
     else if (draft.canal === "whatsapp" || draft.canal === "sms") updateDraft({ cuerpo: v } as Partial<Campana>);
-  }
-
-  async function crearLinkInline() {
-    const v = validarPalabraClave(nuevoLink);
-    if (!v.ok) { toast.error(v.error); return; }
-    setCreandoLink(true);
-    const r = await createReservaLink(nuevoLink);
-    setCreandoLink(false);
-    if (!r.ok) { toast.error(r.error ?? "Error al crear link"); return; }
-    setLinks((prev) => [r.data!, ...prev]);
-    updateDraft({ reservaLinkId: r.data!.id });
-    setNuevoLink("");
-    toast.success(`Link "${r.data!.palabraClave}" creado`);
   }
 
   function onGuardar() {
@@ -317,17 +301,6 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
             {linkActivo && (
               <p className="text-xs text-muted-foreground mt-1 break-all">{linkActivo.urlGenerada}</p>
             )}
-            <div className="flex gap-2 mt-2">
-              <Input
-                value={nuevoLink}
-                onChange={(e) => setNuevoLink(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ""))}
-                placeholder="Crear link rápido (ej. EMAIL_JUNIO)"
-                className="h-8 text-xs"
-              />
-              <Button type="button" size="sm" variant="outline" disabled={!nuevoLink || creandoLink} onClick={crearLinkInline}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Crear
-              </Button>
-            </div>
           </div>
 
           {/* ── Cuándo sale ────────────────────────────────────────────
@@ -452,7 +425,7 @@ export function CampanaEditorSheet({ open, onOpenChange, campana, onGuardada }: 
 
         <SheetFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button variant="outline" onClick={onGuardar} disabled={guardando || !draft.nombre.trim()}>
+          <Button onClick={onGuardar} disabled={guardando || !draft.nombre.trim()}>
             {guardando ? "Guardando..." : "Guardar"}
           </Button>
           {esCumpleanos && (

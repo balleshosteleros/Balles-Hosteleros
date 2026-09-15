@@ -8,6 +8,34 @@ export type SolicitudSubtipoAusencia =
 export type SolicitudSubtipoTrabajo = "horas_extras" | "dia_trabajado";
 /** Pedir uniforme o material. Al aprobarla se crea la entrega de verdad. */
 export type SolicitudSubtipoEntrega = "entrega_material";
+
+/**
+ * Las dos caras de una solicitud de material.
+ *
+ * `nuevo`      — pide una pieza del catálogo. Al aprobarla se le entrega.
+ * `devolucion` — devuelve una pieza QUE YA TIENE. Al aprobarla se le manda el
+ *                acta correspondiente para que firme la salida.
+ */
+export type EntregaModalidad = "nuevo" | "devolucion";
+
+/** Por qué devuelve la pieza. Las tres exigen foto. */
+export type DevolucionMotivo = "desgaste" | "tallaje" | "baja_contrato";
+
+export const DEVOLUCION_MOTIVO_LABEL: Record<DevolucionMotivo, string> = {
+  desgaste: "Desgaste o deterioro",
+  tallaje: "Por tallaje",
+  baja_contrato: "Baja de contrato",
+};
+
+export const DEVOLUCION_MOTIVO_DESC: Record<DevolucionMotivo, string> = {
+  desgaste: "Se ha roto o está gastada y ya no sirve.",
+  tallaje: "No es tu talla y necesitas otra.",
+  baja_contrato: "Te marchas y devuelves el material de la empresa.",
+};
+
+/** Máximo que puede ocupar la foto de la prenda. */
+export const FOTO_DEVOLUCION_MAX_MB = 10;
+export const FOTO_DEVOLUCION_MAX_BYTES = FOTO_DEVOLUCION_MAX_MB * 1024 * 1024;
 /** Las quejas y denuncias viven en su propia tabla, pero se listan aquí como un tipo más. */
 export type SolicitudSubtipoQueja = "denuncia";
 /** Cerrar la jornada antes de la hora del turno. La crea el propio fichaje. */
@@ -59,6 +87,17 @@ export interface SolicitudPersonal {
    */
   revisadoPor: string | null;
   revisadoAt: string | null;
+  /**
+   * Pide material nuevo o devuelve el suyo. Solo en las de entrega; las de
+   * antes de existir la devolución son todas `nuevo`.
+   */
+  entregaModalidad?: EntregaModalidad;
+  /** Por qué lo devuelve. Solo cuando la modalidad es `devolucion`. */
+  entregaDevolucionMotivo?: DevolucionMotivo | null;
+  /** Foto de la prenda (bucket `entregas-fotos`). Obligatoria al devolver. */
+  entregaFotoPath?: string | null;
+  /** Pieza que devuelve: una entrega suya ya firmada. */
+  entregaOrigenId?: string | null;
   /** Qué pidió, solo en las solicitudes de entrega de material. */
   entregaTipoId?: string | null;
   entregaTipoNombre?: string | null;

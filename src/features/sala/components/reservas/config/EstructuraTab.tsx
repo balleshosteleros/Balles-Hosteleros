@@ -293,7 +293,7 @@ export function EstructuraTab() {
                 onClick={() => { setSalaEdit(null); setSalaModalOpen(true); }}
                 disabled={!localId}
               >
-                <Plus className="h-4 w-4 mr-1" />Nueva sala
+                <Plus className="h-4 w-4 mr-1" />Nueva
               </Button>
             </header>
             {salas.length === 0 ? (
@@ -369,7 +369,7 @@ export function EstructuraTab() {
                 }}
                 disabled={salas.length === 0}
               >
-                <Plus className="h-4 w-4 mr-1" />Nueva zona
+                <Plus className="h-4 w-4 mr-1" />Nueva
               </Button>
             </header>
             {salas.length === 0 ? (
@@ -447,7 +447,7 @@ export function EstructuraTab() {
                 }}
                 disabled={zonas.length === 0}
               >
-                <Plus className="h-4 w-4 mr-1" />Nueva mesa
+                <Plus className="h-4 w-4 mr-1" />Nueva
               </Button>
             </header>
             {zonas.length === 0 ? (
@@ -522,7 +522,7 @@ export function EstructuraTab() {
                   setCombinacionModalOpen(true);
                 }}
               >
-                <Plus className="h-4 w-4 mr-1" />Nueva combinación
+                <Plus className="h-4 w-4 mr-1" />Nueva
               </Button>
             </header>
             {combinaciones.length === 0 ? (

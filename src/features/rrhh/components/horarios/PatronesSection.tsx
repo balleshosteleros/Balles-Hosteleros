@@ -9,6 +9,7 @@ import {
   type TipoJornada,
 } from "@/features/rrhh/data/horarios";
 import { listTurnos } from "@/features/rrhh/actions/turnos-actions";
+import { TurnoFormDialog } from "@/features/rrhh/components/horarios/TurnoFormDialog";
 import {
   listPatrones,
   createPatron,
@@ -117,12 +118,20 @@ export function PatronesSection({ empresaId }: { empresaId: string }) {
     refrescar();
   }, [refrescar]);
 
+  // Un turno creado desde el propio editor tiene que aparecer en su panel al
+  // momento, sin recargar los patrones ni perder el patrón a medio montar.
+  const refrescarTurnos = useCallback(async () => {
+    const tr = await listTurnos(empresaId, { todasLasVersiones: true });
+    if (tr.ok) setTurnos(tr.data);
+  }, [empresaId]);
+
   if (vista.tipo === "editor") {
     return (
       <PatronEditor
         empresaId={empresaId}
         turnos={turnos}
         departamentos={departamentos}
+        onTurnosCambiados={refrescarTurnos}
         patronTipo={vista.patronTipo}
         patronJornada={vista.patronJornada}
         patron={vista.patron}
@@ -692,6 +701,7 @@ function PatronEditor({
   patronJornada,
   patron,
   onSalir,
+  onTurnosCambiados,
 }: {
   empresaId: string;
   turnos: Turno[];
@@ -700,6 +710,7 @@ function PatronEditor({
   patronJornada: TipoJornada;
   patron?: PatronCompleto;
   onSalir: (refrescar: boolean) => Promise<void>;
+  onTurnosCambiados: () => Promise<void>;
 }) {
   // La jornada es inmutable una vez creado el patrón: al editar manda la del
   // patrón; al crear, la elegida en el diálogo.
@@ -711,6 +722,7 @@ function PatronEditor({
   );
   const [celda, setCelda] = useState<CeldaSel>(null);
   const [busquedaTurno, setBusquedaTurno] = useState("");
+  const [nuevoTurnoAbierto, setNuevoTurnoAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
   useGlobalLoadingSync(guardando);
 
@@ -933,8 +945,20 @@ function PatronEditor({
           setBusqueda={setBusquedaTurno}
           asignar={(id) => asignarTurno(id)}
           habilitado={!!celda}
+          onNuevoTurno={() => setNuevoTurnoAbierto(true)}
         />
       </div>
+
+      {/* La misma ficha que en Turnos. El tipo de jornada viene impuesto por el
+          patrón: uno fijo solo admite turnos fijos, así que dejar elegir el otro
+          crearía un turno que no aparecería aquí. */}
+      <TurnoFormDialog
+        empresaId={empresaId}
+        open={nuevoTurnoAbierto}
+        onOpenChange={setNuevoTurnoAbierto}
+        jornadaFija={jornada}
+        onGuardado={onTurnosCambiados}
+      />
     </div>
   );
 }
@@ -1194,17 +1218,28 @@ function TurnosPanel({
   setBusqueda,
   asignar,
   habilitado,
+  onNuevoTurno,
 }: {
   turnos: Turno[];
   busqueda: string;
   setBusqueda: (s: string) => void;
   asignar: (id: string) => void;
   habilitado: boolean;
+  onNuevoTurno: () => void;
 }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">Turnos</h3>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={onNuevoTurno}
+          className="gap-1.5"
+        >
+          <Plus className="h-4 w-4" />
+          Nuevo
+        </Button>
       </div>
       <div className="flex items-center gap-2">
         <div className="relative flex-1">

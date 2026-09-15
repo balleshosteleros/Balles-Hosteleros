@@ -82,8 +82,6 @@ export function QrListView() {
     switch (campo) {
       case "nombre":
         return item.nombre;
-      case "codigo":
-        return item.codigo;
       case "destino":
         return item.destino;
       case "estado":
@@ -115,7 +113,6 @@ export function QrListView() {
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "nombre", label: "Nombre", bloqueada: true },
-    { campo: "codigo", label: "Código" },
     { campo: "destino", label: "A dónde lleva" },
     { campo: "estado", label: "Estado" },
     { campo: "escaneos", label: "Escaneos" },
@@ -128,14 +125,6 @@ export function QrListView() {
       td: (p) => (
         <TableCell key="nombre" className="font-medium max-w-[260px] truncate">
           {p.nombre}
-        </TableCell>
-      ),
-    },
-    codigo: {
-      th: <TableHead key="codigo">Código</TableHead>,
-      td: (p) => (
-        <TableCell key="codigo" className="font-mono text-xs text-muted-foreground">
-          {p.codigo}
         </TableCell>
       ),
     },

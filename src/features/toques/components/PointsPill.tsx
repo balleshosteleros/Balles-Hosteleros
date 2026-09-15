@@ -79,7 +79,7 @@ export function PointsPill({ inicial = null, href = "/m/points", className }: Pr
   // misma con la que se pinta el logotipo de arriba. La elegida en el navegador
   // (`empresaActual`) puede ir por delante o por detrás un instante, y con ella
   // se acababa enseñando el saldo de una empresa bajo el logo de otra.
-  const { empresaVisible, empresas } = useEmpresa();
+  const { empresaVisible } = useEmpresa();
   const empresaDbId = empresaVisible?.dbId ?? null;
   const esMovil = useIsMobile();
   const router = useRouter();
@@ -177,13 +177,6 @@ export function PointsPill({ inicial = null, href = "/m/points", className }: Pr
 
   const color = datos.nivelColor || COLOR_NIVEL_POR_DEFECTO;
   const pct = Math.min(100, Math.max(0, datos.progresoPct));
-  // El nombre que se enseña es el de la empresa CON LA QUE SE CALCULÓ el saldo,
-  // no el de la del selector: así el rótulo nunca miente sobre de quién son.
-  // Si la lista de empresas aún no ha llegado, no se pone nombre: mejor sin
-  // rótulo que con el de otra empresa.
-  const nombreEmpresaDeLosDatos =
-    empresas.find((e) => e.dbId === datos.empresaId)?.nombre ?? null;
-
   function abrir() {
     // En el teléfono Points tiene su pantalla; en el ordenador se abre encima
     // para no sacar a nadie de donde estaba trabajando.
@@ -251,7 +244,7 @@ export function PointsPill({ inicial = null, href = "/m/points", className }: Pr
         <HoverCard openDelay={120} closeDelay={80}>
           <HoverCardTrigger asChild>{boton}</HoverCardTrigger>
           <HoverCardContent align="end" className="w-80 p-4">
-            <Escalera datos={datos} empresa={nombreEmpresaDeLosDatos} />
+            <Escalera datos={datos} />
           </HoverCardContent>
         </HoverCard>
       )}
@@ -312,7 +305,7 @@ function Insignia({
 }
 
 /** La escalera de niveles: dónde está y qué le queda por delante. */
-function Escalera({ datos, empresa }: { datos: PointsResumen; empresa: string | null }) {
+function Escalera({ datos }: { datos: PointsResumen }) {
   const pct = Math.min(100, Math.max(0, datos.progresoPct));
   return (
     <div className="space-y-3">
@@ -320,16 +313,7 @@ function Escalera({ datos, empresa }: { datos: PointsResumen; empresa: string | 
         <Insignia color={datos.nivelColor} icono={datos.nivelIcono} pct={pct} />
         <div className="min-w-0">
           <div className="text-sm font-bold leading-tight">{datos.nivelNombre}</div>
-          <div className="text-xs text-muted-foreground">
-            {datos.acumulados} points ganados · {datos.saldo} para gastar
-          </div>
-          {/* De qué empresa son: cada una tiene los suyos, y sin decirlo parecía
-              un descuadre al cambiar de empresa (Iván, 12-sep). */}
-          {empresa && (
-            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              {empresa}
-            </div>
-          )}
+          <div className="text-xs text-muted-foreground">{datos.saldo} points</div>
         </div>
       </div>
 

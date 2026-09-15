@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Mail, MessageCircle, Smartphone, Eye, Send, Calendar, Link2 } from "lucide-react";
+import { Mail, MessageCircle, Smartphone, Eye, Send, Calendar, Link2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SubmoduleToolbar, coincideBusquedaUniversal, type ToolbarColumna, type ToolbarColumnaVisible } from "@/shared/components/SubmoduleToolbar";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
@@ -74,7 +73,6 @@ function badgeEstado(estado: EstadoCampana) {
 export function CampanasListadoView({ canal }: Props) {
   const { empresaActual } = useEmpresa();
   const meta = CANAL_META[canal];
-  const Icon = meta.icon;
 
   const [rows, setRows] = useState<CampanaAtribucionRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,24 +135,12 @@ export function CampanasListadoView({ canal }: Props) {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center gap-3">
-        <Link href="/marketing/campanas" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Campañas
-        </Link>
-        <div className="h-5 w-px bg-border" />
-        <div className="inline-flex items-center gap-2">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-          <span className="font-semibold">{meta.label}</span>
-        </div>
-      </div>
-
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
         placeholderBusqueda={`Buscar campañas de ${meta.label.toLowerCase()}...`}
         onNuevo={onCrearNueva}
-        textoNuevo="Nueva campaña"
+        textoNuevo="Nueva"
         columnas={COLUMNAS}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
@@ -208,7 +194,7 @@ export function CampanasListadoView({ canal }: Props) {
                   <td colSpan={ordenVisible.length} className="text-center text-muted-foreground py-10">
                     <Send className="h-8 w-8 mx-auto mb-2 opacity-40" />
                     <div>Sin campañas de {meta.label.toLowerCase()} todavía.</div>
-                    <div className="text-xs">Pulsa &quot;+ Nueva campaña&quot; para crear la primera.</div>
+                    <div className="text-xs">Pulsa &quot;+ Nueva&quot; para crear la primera.</div>
                   </td>
                 </tr>
               )}
@@ -233,13 +219,13 @@ export function CampanasListadoView({ canal }: Props) {
                     {ordenVisible.includes("nombre") && (
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
+                          {/* Solo el nombre. La etiqueta del enlace ("EMAIL ·
+                              CUMPLEANOS") decía en cada fila el canal de la
+                              pantalla en la que ya estás, y la palabra interna
+                              del enlace, que no significa nada para quien mira
+                              el listado: ruido en todas las filas a cambio de
+                              cero información. */}
                           <span className="font-medium">{r.nombre || "(sin nombre)"}</span>
-                          {r.origen && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase bg-sky-600/10 text-sky-700 dark:text-sky-400 border border-sky-600/20 rounded px-1.5 py-px">
-                              <Link2 className="h-2.5 w-2.5" />
-                              {r.palabra ? `${r.origen} · ${r.palabra}` : r.origen}
-                            </span>
-                          )}
                           {abriendo === r.campanaId && (
                             <span className="text-[10px] text-muted-foreground">abriendo…</span>
                           )}

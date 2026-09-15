@@ -17,7 +17,13 @@ import {
   Palette,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
-import type { CartaAdminData, CartaCategoria, CartaItem } from "../../types";
+import type {
+  CartaAdminData,
+  CartaCategoria,
+  CartaItem,
+  FamiliaCarta,
+  FormatoFoto,
+} from "../../types";
 import {
   crearCategoria,
   actualizarCategoria,
@@ -32,6 +38,31 @@ import { SlugConfigCard } from "./SlugConfigCard";
 import { QrDownloadButton } from "./QrDownloadButton";
 import { CartaTemaCard } from "./CartaTemaCard";
 import { CartaValoracionCard } from "./CartaValoracionCard";
+import { CategoriaAjustes, APARTADOS, Pildora } from "./CategoriaAjustes";
+
+/**
+ * Las categorías, agrupadas y ordenadas como las ve el comensal: primero el
+ * apartado (comida, bebida, otros) y dentro de él, su orden. En la carta
+ * pública mandan esas dos cosas, así que el panel tiene que enseñarlas.
+ */
+function porApartados(categorias: CartaCategoria[]): Array<{
+  clave: FamiliaCarta;
+  nombre: string;
+  cats: CartaCategoria[];
+}> {
+  return APARTADOS.map(({ clave, nombre }) => ({
+    clave,
+    nombre,
+    cats: categorias
+      .filter((c) => (c.familia ?? "comida") === clave)
+      .sort((a, b) => a.orden - b.orden),
+  }));
+}
+
+/** Toda la lista en el orden en que se lee, de arriba abajo. */
+function listaOrdenada(categorias: CartaCategoria[]): CartaCategoria[] {
+  return porApartados(categorias).flatMap((g) => g.cats);
+}
 
 export function CartaAdminBoard({
   data,
@@ -46,9 +77,10 @@ export function CartaAdminBoard({
   const auth = useContext(AuthContext);
   const puedeVerAjustes = auth?.puedeVer?.("AJUSTES") ?? false;
   const [nuevaCat, setNuevaCat] = useState("");
-  // Forma de las fotos de la categoría nueva: se decide al crearla, que es
-  // cuando se sabe qué va dentro (platos anchos o copas altas).
-  const [nuevaCatFormato, setNuevaCatFormato] = useState<"cuadrada" | "vertical">("cuadrada");
+  // Apartado y forma de las fotos de la categoría nueva: se deciden al
+  // crearla, que es cuando se sabe qué va dentro (platos anchos o copas altas).
+  const [nuevaCatApartado, setNuevaCatApartado] = useState<FamiliaCarta>("comida");
+  const [nuevaCatFormato, setNuevaCatFormato] = useState<FormatoFoto | null>(null);
   const [pending, startTransition] = useTransition();
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CartaItem | null>(null);
@@ -77,6 +109,9 @@ export function CartaAdminBoard({
   }
 
   const slug = data.empresa.carta_slug;
+  // Forma de foto de la casa: la que se usa cuando una categoría no dice otra.
+  const formatoCarta: FormatoFoto =
+    data.empresa.carta_formato_foto === "cuadrada" ? "cuadrada" : "vertical";
   const urlPublica = slug
     ? conDominioPropio
       ? `${baseUrl}/carta`
@@ -86,7 +121,11 @@ export function CartaAdminBoard({
   const handleCreateCat = () => {
     if (!nuevaCat.trim()) return;
     startTransition(async () => {
-      const res = await crearCategoria({ nombre: nuevaCat.trim(), formatoFoto: nuevaCatFormato });
+      const res = await crearCategoria({
+        nombre: nuevaCat.trim(),
+        familia: nuevaCatApartado,
+        formatoFoto: nuevaCatFormato ?? formatoCarta,
+      });
       if (res.ok) setNuevaCat("");
     });
   };
@@ -107,7 +146,15 @@ export function CartaAdminBoard({
   const activeItems = activeCat
     ? data.items.filter((i) => i.categoria_id === activeCat.id)
     : [];
-  const activeIndex = activeCat ? data.categorias.findIndex((c) => c.id === activeCat.id) : -1;
+  // La posición se cuenta DENTRO del apartado: es el orden que verá el
+  // comensal, porque la carta pública enseña un apartado cada vez.
+  const grupoActivo = activeCat
+    ? porApartados(data.categorias).find((g) => g.clave === (activeCat.familia ?? "comida"))
+    : null;
+  const activeIndex = grupoActivo
+    ? grupoActivo.cats.findIndex((c) => c.id === activeCat!.id)
+    : -1;
+
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -177,7 +224,7 @@ export function CartaAdminBoard({
         <CardHeader>
           <CardTitle>Nueva categoría</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <div className="flex gap-2">
             <Input
               placeholder="Ej.: Entrantes, Principales, Postres..."
@@ -197,24 +244,37 @@ export function CartaAdminBoard({
               Crear
             </Button>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold uppercase text-muted-foreground">Fotos</span>
+          {/* Apartado primero: es lo que decide en qué mitad de la carta cae.
+              La forma de las fotos viene después, y se puede cambiar luego. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-16 shrink-0 text-xs font-bold uppercase text-muted-foreground">
+              Apartado
+            </span>
+            {APARTADOS.map(({ clave, nombre }) => (
+              <Pildora
+                key={clave}
+                activa={nuevaCatApartado === clave}
+                onClick={() => setNuevaCatApartado(clave)}
+              >
+                {nombre}
+              </Pildora>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-16 shrink-0 text-xs font-bold uppercase text-muted-foreground">
+              Fotos
+            </span>
             {([
               { v: "cuadrada" as const, t: "Cuadrada" },
               { v: "vertical" as const, t: "Vertical" },
             ]).map(({ v, t }) => (
-              <button
+              <Pildora
                 key={v}
-                type="button"
+                activa={(nuevaCatFormato ?? formatoCarta) === v}
                 onClick={() => setNuevaCatFormato(v)}
-                className={`rounded-md border px-2.5 py-1 text-xs font-medium transition ${
-                  nuevaCatFormato === v
-                    ? "border-primary bg-primary/5 text-primary"
-                    : "text-muted-foreground hover:bg-muted/40"
-                }`}
               >
                 {t}
-              </button>
+              </Pildora>
             ))}
             <span className="text-xs text-muted-foreground">
               Todas las fotos de la categoría se verán así. Se puede cambiar después.

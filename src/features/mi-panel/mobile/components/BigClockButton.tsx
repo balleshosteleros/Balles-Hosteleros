@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Fingerprint, Loader2, Coffee, Play, CheckCircle2, WifiOff, MapPin, House, TriangleAlert, Undo2 } from "lucide-react";
 import { toast } from "sonner";
@@ -15,12 +15,19 @@ import {
   getMiConfigFichaje,
   getMiVentanaFichajeHoy,
   getTiposFichajeDisponibles,
+  getProximaEntradaFichaje,
   anularEntradaRecienFichada,
   type ModoFichaje,
   type TipoFichajeDisponible,
   type VentanaFichajeHoy,
 } from "@/features/mi-panel/actions/mi-panel-actions";
-import { minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
+import {
+  minutosDiaEnZona,
+  ahoraEnZona,
+  zonaLocalAUtcISO,
+  formatHoraEnZona,
+  formatFechaEnZona,
+} from "@/features/empresa/lib/zona-horaria";
 import { MOTIVO_MIN_CARACTERES } from "@/features/mi-panel/types";
 import { fichajeColorDot } from "@/features/rrhh/data/fichajes";
 import { enqueue } from "../lib/offline-fichaje-db";
@@ -34,6 +41,13 @@ interface Props {
   estado: Estado;
   /** Se llama tras una acción de fichaje (entrada/salida/pausa) con éxito o no. */
   onAction?: () => void;
+  /**
+   * El fichaje de hoy todavía se está leyendo. El botón se pinta IGUAL de
+   * grande desde el primer instante, en gris y sin pulsar: antes quien abría
+   * la huella veía cinco segundos de hoja vacía (solo el título y la X) hasta
+   * que aparecía el recuadro de golpe.
+   */
+  cargando?: boolean;
 }
 
 const STYLES: Record<Estado, { label: string; bg: string; icon: typeof Fingerprint }> = {
@@ -64,6 +78,48 @@ function monotonicNowMs(): number {
   return Date.now();
 }
 
+/** Minutos del día (0–1439) como "HH:MM". */
+function minutosAHora(min: number): string {
+  const m = ((min % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** "2 h 14 min", "4 min 32 s", "45 s" — lo que falta, en una pieza corta. */
+function textoRestante(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const horas = Math.floor(total / 3600);
+  const min = Math.floor((total % 3600) / 60);
+  const seg = total % 60;
+  if (horas >= 24) {
+    const dias = Math.floor(horas / 24);
+    return `${dias} día${dias === 1 ? "" : "s"} y ${horas % 24} h`;
+  }
+  if (horas > 0) return `${horas} h ${min} min`;
+  if (min > 0) return `${min} min ${String(seg).padStart(2, "0")} s`;
+  return `${seg} s`;
+}
+
+/**
+ * Mini contador de lo que queda para poder fichar. Vive aparte para que el
+ * tictac de cada segundo repinte solo esta línea y no el botón entero.
+ */
+function CuentaAtras({ objetivoMs, onLlegada }: { objetivoMs: number; onLlegada: () => void }) {
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => {
+    const i = setInterval(() => setAhora(Date.now()), 1000);
+    return () => clearInterval(i);
+  }, []);
+  const restante = objetivoMs - ahora;
+  const yaAbre = restante <= 0;
+  // Llegó la hora: el botón se pone verde solo, sin que el empleado tenga que
+  // cerrar y volver a abrir la hoja.
+  useEffect(() => {
+    if (yaAbre) onLlegada();
+  }, [yaAbre, onLlegada]);
+  if (yaAbre) return null;
+  return <span className="tabular-nums">Faltan {textoRestante(restante)}</span>;
+}
+
 async function tryGetGeo() {
   try {
     return await obtenerPosicionActual();
@@ -72,7 +128,7 @@ async function tryGetGeo() {
   }
 }
 
-export function BigClockButton({ fichajeId, estado, onAction }: Props) {
+export function BigClockButton({ fichajeId, estado, onAction, cargando = false }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
@@ -191,6 +247,95 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
 
   const apagado = motivoApagado !== null;
   const disabled = estado === "completado" || busy || pending || flushing;
+  // "Aún no se sabe": ni el fichaje de hoy ni la ventana del turno. El botón se
+  // queda en gris neutro hasta saberlo — pintarlo verde y cambiarlo a gris un
+  // segundo después es peor que esperar ese segundo.
+  const enCarga = cargando || !ventanaCargada;
+
+  // ─── ¿A partir de cuándo se podrá fichar? ─────────────────────────────────
+  // El botón gris decía "fuera de tu turno" y ahí se acababa: verdad, pero
+  // inservible. Lo que hace falta saber es la hora exacta desde la que el
+  // fichaje se acepta — con la cortesía ya descontada, que es la hora real — y
+  // cuánto queda para eso.
+  //
+  // Los turnos de HOY salen de la ventana que el botón ya tiene: instantáneo,
+  // sin pedir nada. Si hoy ya no queda ninguno (o no hay turno), se pregunta al
+  // servidor, que sí sabe mirar los próximos días.
+  const minutoActual = Math.floor(nowMin / 60_000);
+  const aperturaHoyMs = useMemo(() => {
+    if (!ventana || !ventana.tieneHorario || ventana.permitirFueraHorario) return null;
+    const tz = ventana.zonaHoraria || "Europe/Madrid";
+    const hoy = ahoraEnZona(tz, new Date(nowMin)).fecha;
+    const antes = ventana.margenAntesMin ?? 0;
+    const inicios = ventana.entradasMin?.length
+      ? ventana.entradasMin
+      : ventana.entradaMin != null
+        ? [ventana.entradaMin]
+        : [];
+    let mejor: number | null = null;
+    for (const ini of inicios) {
+      const inicioMs = Date.parse(zonaLocalAUtcISO(hoy, minutosAHora(ini), tz));
+      if (Number.isNaN(inicioMs)) continue;
+      const abre = inicioMs - antes * 60_000;
+      if (abre <= nowMin) continue;
+      if (mejor === null || abre < mejor) mejor = abre;
+    }
+    return mejor;
+    // El minuto (no el milisegundo) basta para decidir qué tramos ya han pasado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ventana, minutoActual]);
+
+  // El cálculo de arriba da por hecho que el tramo es de HOY, y eso solo se
+  // sostiene a pocas horas vista: de madrugada, con un turno de noche, el "día"
+  // del servidor y el del móvil pueden no ser el mismo y saldría una hora
+  // inventada. Pasadas doce horas se deja de suponer y se pregunta.
+  const aperturaHoyFiable =
+    aperturaHoyMs !== null && aperturaHoyMs - nowMin <= 12 * 3_600_000 ? aperturaHoyMs : null;
+
+  // Lo que hoy no se puede saber: el siguiente turno puede ser mañana o el
+  // lunes que viene. Se pide UNA vez, y solo cuando de verdad hace falta.
+  const [proxima, setProxima] = useState<{ aperturaMs: number; zonaHoraria: string } | null>(null);
+  const necesitaProxima = apagado && ventanaCargada && aperturaHoyFiable === null;
+  useEffect(() => {
+    if (!necesitaProxima) return;
+    let vivo = true;
+    getProximaEntradaFichaje()
+      .then((r) => {
+        if (!vivo || !r.ok || !r.aperturaISO) return;
+        const ms = Date.parse(r.aperturaISO);
+        if (!Number.isNaN(ms)) setProxima({ aperturaMs: ms, zonaHoraria: r.zonaHoraria });
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [necesitaProxima]);
+
+  const apertura: { ms: number; tz: string } | null = aperturaHoyFiable
+    ? { ms: aperturaHoyFiable, tz: ventana?.zonaHoraria || "Europe/Madrid" }
+    : proxima && proxima.aperturaMs > nowMin
+      ? { ms: proxima.aperturaMs, tz: proxima.zonaHoraria }
+      : null;
+
+  /** "Podrás fichar a partir de las 18:55" — con el día si no es hoy. */
+  const fraseApertura = (() => {
+    if (!apertura) return null;
+    const iso = new Date(apertura.ms).toISOString();
+    const hora = formatHoraEnZona(iso, apertura.tz);
+    const dia = ahoraEnZona(apertura.tz, new Date(apertura.ms)).fecha;
+    const hoy = ahoraEnZona(apertura.tz, new Date(nowMin)).fecha;
+    if (dia === hoy) return `Podrás fichar a partir de las ${hora}`;
+    const [a, m, d] = hoy.split("-").map(Number);
+    const manana = new Date(Date.UTC(a, (m ?? 1) - 1, (d ?? 1) + 1)).toISOString().slice(0, 10);
+    if (dia === manana) return `Podrás fichar mañana a las ${hora}`;
+    return `Podrás fichar el ${formatFechaEnZona(iso, apertura.tz)} a las ${hora}`;
+  })();
+
+  // Cuando el contador llega a cero, el botón se enciende solo.
+  const alAbrirseLaVentana = useCallback(() => {
+    setNowMin(Date.now());
+    cargarVentana();
+  }, [cargarVentana]);
 
   // Al pulsar el botón apagado NO se ficha: se explica por qué, y se ofrece la
   // salida real (la solicitud), que es lo que el empleado tiene que hacer.
@@ -434,27 +579,31 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
           se le pasaba la ventana se quedaba sin ninguna forma de fichar. */}
       <button
         type="button"
-        onClick={apagado ? avisarApagado : action}
-        disabled={disabled}
-        aria-disabled={apagado}
+        onClick={enCarga ? undefined : apagado ? avisarApagado : action}
+        disabled={disabled || enCarga}
+        aria-disabled={apagado || enCarga}
         className={cn(
           "flex w-full flex-col items-center justify-center gap-3 rounded-3xl py-9 text-lg font-semibold shadow-lg transition-transform",
-          apagado
+          apagado || enCarga
             ? "bg-muted text-muted-foreground shadow-none"
             : STYLES[estado].bg,
-          !disabled && "active:scale-[0.98]",
+          !disabled && !enCarga && "active:scale-[0.98]",
           disabled && "opacity-90",
         )}
       >
-        {busy || pending ? (
+        {busy || pending || enCarga ? (
           <Loader2 className="h-10 w-10 animate-spin" />
         ) : (
           <Icon className="h-10 w-10" strokeWidth={2.2} />
         )}
-        <span className="tracking-wide">{STYLES[estado].label}</span>
-        {apagado && (
-          <span className="text-xs font-medium normal-case tracking-normal opacity-80">
-            {motivoApagado === "sin-turno" ? "Hoy no tienes turno" : "Fuera de tu turno"}
+        <span className="tracking-wide">{enCarga ? "UN MOMENTO" : STYLES[estado].label}</span>
+        {apagado && !enCarga && (
+          <span className="flex flex-col items-center gap-0.5 px-4 text-center text-xs font-medium normal-case leading-snug tracking-normal opacity-80">
+            <span>
+              {fraseApertura ??
+                (motivoApagado === "sin-turno" ? "Hoy no tienes turno" : "Fuera de tu turno")}
+            </span>
+            {apertura && <CuentaAtras objetivoMs={apertura.ms} onLlegada={alAbrirseLaVentana} />}
           </span>
         )}
       </button>
@@ -479,8 +628,12 @@ export function BigClockButton({ fichajeId, estado, onAction }: Props) {
             <Fingerprint className="h-4 w-4" /> Fichar nueva entrada
           </span>
           {apagado && (
-            <span className="text-xs font-normal opacity-80">
-              {motivoApagado === "sin-turno" ? "Hoy no tienes más turnos" : "Fuera de tu turno"}
+            <span className="flex flex-col items-center gap-0.5 px-4 text-center text-xs font-normal leading-snug opacity-80">
+              <span>
+                {fraseApertura ??
+                  (motivoApagado === "sin-turno" ? "Hoy no tienes más turnos" : "Fuera de tu turno")}
+              </span>
+              {apertura && <CuentaAtras objetivoMs={apertura.ms} onLlegada={alAbrirseLaVentana} />}
             </span>
           )}
         </button>

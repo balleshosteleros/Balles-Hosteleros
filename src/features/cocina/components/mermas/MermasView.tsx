@@ -203,7 +203,7 @@ export function MermasView() {
         busqueda={search}
         onBusquedaChange={setSearch}
         placeholderBusqueda="Buscar"
-        textoNuevo="Nueva merma"
+        textoNuevo="Nueva"
         onNuevo={abrirNueva}
         // Apuntar una merma se hace en la cocina, de pie y con el movil.
         accionEnMovil

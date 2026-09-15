@@ -170,7 +170,7 @@ export function MusicaView() {
           onBusquedaChange={setBusqueda}
           placeholderBusqueda="Buscar lista"
           onNuevo={puedeGestionar ? () => setNuevaOpen(true) : undefined}
-          textoNuevo="Nueva lista"
+          textoNuevo="Nueva"
           ocultarNuevo={!puedeGestionar}
           extraDerecha={
             <>

@@ -300,7 +300,7 @@ function ListView({
           <div className="text-center text-muted-foreground py-20">
             <p className="mb-3">No hay puestos en el área seleccionada.</p>
             <Button variant="primary" size="lg" onClick={() => { setEditingPuesto(null); setDialogOpen(true); }}>
-              <Plus className="h-4 w-4 mr-2" /> Nuevo puesto
+              <Plus className="h-4 w-4 mr-2" /> Nuevo
             </Button>
           </div>
         ) : (

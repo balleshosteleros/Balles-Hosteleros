@@ -38,6 +38,7 @@ import {
   DEVOLUCION_COLOR,
   sePuedePedirDevolucion,
   sePuedeDarDeBajaPorMerma,
+  pendientesDeDevolucion,
   sePuedeMarcarNoDevuelta,
   type Entrega,
 } from "@/features/rrhh/data/entregas";
@@ -133,13 +134,9 @@ export function EntregasView() {
   }, [entregas, busqueda, filtros, orden]);
 
   const stats = useMemo(() => {
-    // Sin devolver = firmada, hay que devolverla, y aún no la ha devuelto.
-    const pendientesDevolucion = entregas.filter(
-      (e) =>
-        e.estado === "firmada" &&
-        e.item?.requiereDevolucion &&
-        e.devolucionEstado !== "devuelta",
-    ).length;
+    // Sin devolver: la misma regla que usa el offboarding para reclamar. Deja
+    // fuera lo roto y lo dado por perdido — ya no hay nada que pedirle.
+    const pendientesDevolucion = pendientesDeDevolucion(entregas).length;
     return {
       total: entregas.length,
       firmadas: entregas.filter((e) => e.estado === "firmada").length,
@@ -378,8 +375,12 @@ export function EntregasView() {
                   </TableCell>
 
                   <TableCell className="align-top">
-                    {/* Solo tiene sentido hablar de devolución si hay que devolverlo. */}
-                    {!e.item?.requiereDevolucion ? (
+                    {/* Solo tiene sentido hablar de devolución si hay que
+                        devolverlo Y el trabajador ya ha firmado que lo tiene:
+                        mientras no firme, la pieza sigue siendo de la empresa y
+                        no hay nada que reclamar. Marcarlas todas "Sin devolver"
+                        contradecía al contador de arriba, que sí lo mira. */}
+                    {!e.item?.requiereDevolucion || e.estado !== "firmada" ? (
                       <span className="text-xs text-muted-foreground">—</span>
                     ) : e.devolucionEstado === "no_procede" ? (
                       <Badge

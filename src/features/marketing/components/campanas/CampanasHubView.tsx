@@ -3,76 +3,72 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Mail, MessageCircle, Smartphone, Megaphone, Globe } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { ProximamenteDialog } from "./ProximamenteDialog";
 
-type CanalBoton =
-  | { id: "email" | "whatsapp" | "sms" | "meta"; label: string; href: string; icon: React.ElementType }
-  | { id: "google"; label: string; placeholder: "google"; icon: React.ElementType };
+/**
+ * Por dónde se manda una campaña.
+ *
+ * Antes esta pantalla tenía dos filas que hacían exactamente lo mismo: una
+ * barra de botones pequeños arriba y las tarjetas debajo, las dos llevando al
+ * mismo sitio. Dos caminos idénticos no dan a elegir, solo obligan a mirar dos
+ * veces para descubrir que daba igual. Se queda la tarjeta, que es la que dice
+ * de un vistazo qué hay en cada canal.
+ */
+type CanalTarjeta =
+  | { id: "email" | "whatsapp" | "sms" | "meta"; label: string; descripcion: string; href: string; icon: React.ElementType }
+  | { id: "google"; label: string; descripcion: string; placeholder: "google"; icon: React.ElementType };
 
-const CANALES: CanalBoton[] = [
-  { id: "email", label: "Email", href: "/marketing/campanas/email", icon: Mail },
-  { id: "whatsapp", label: "WhatsApp", href: "/marketing/campanas/whatsapp", icon: MessageCircle },
-  { id: "sms", label: "SMS", href: "/marketing/campanas/sms", icon: Smartphone },
-  { id: "meta", label: "Meta", href: "/marketing/campanas/meta", icon: Megaphone },
-  { id: "google", label: "Google", placeholder: "google", icon: Globe },
+const CANALES: CanalTarjeta[] = [
+  { id: "email", label: "Email", descripcion: "Correos al cliente", href: "/marketing/campanas/email", icon: Mail },
+  { id: "whatsapp", label: "WhatsApp", descripcion: "Mensajes al móvil", href: "/marketing/campanas/whatsapp", icon: MessageCircle },
+  { id: "sms", label: "SMS", descripcion: "Mensajes de texto", href: "/marketing/campanas/sms", icon: Smartphone },
+  { id: "meta", label: "Meta", descripcion: "Anuncios en Facebook e Instagram", href: "/marketing/campanas/meta", icon: Megaphone },
+  { id: "google", label: "Google", descripcion: "Anuncios en el buscador", placeholder: "google", icon: Globe },
 ];
 
 export function CampanasHubView() {
   const [proximamente, setProximamente] = useState<"google" | null>(null);
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      {/* BARRA HORIZONTAL 1 — toolbar minimalista */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          {CANALES.map((c) => {
-            const Icon = c.icon;
-            const esPlaceholder = "placeholder" in c;
-            const inner = (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm font-medium transition-colors",
-                  esPlaceholder
-                    ? "border-dashed border-border text-muted-foreground hover:bg-muted/40"
-                    : "border-border bg-background hover:bg-accent hover:text-accent-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {c.label}
-                {esPlaceholder && <span className="text-[10px] uppercase ml-1 text-amber-600 dark:text-amber-400">Próx.</span>}
-              </span>
-            );
-            return esPlaceholder ? (
-              <button key={c.id} type="button" onClick={() => setProximamente(c.placeholder)}>
-                {inner}
-              </button>
-            ) : (
-              <Link key={c.id} href={c.href}>{inner}</Link>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tarjetas resumen por canal (Email / WhatsApp / SMS / Meta) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {CANALES.filter((c): c is Extract<CanalBoton, { href: string }> => "href" in c).map((c) => {
+    <div className="p-4 md:p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {CANALES.map((c) => {
           const Icon = c.icon;
-          return (
+          const esPlaceholder = "placeholder" in c;
+
+          const contenido = (
+            <div className="flex items-start gap-3">
+              <div className="rounded-md bg-muted/50 p-2.5 group-hover:bg-muted">
+                <Icon className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold">{c.label}</span>
+                  {esPlaceholder && (
+                    <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400">Próx.</span>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground">{c.descripcion}</div>
+              </div>
+            </div>
+          );
+
+          return esPlaceholder ? (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setProximamente(c.placeholder)}
+              className="rounded-xl border border-dashed bg-card p-5 text-left hover:bg-accent/50 transition-colors shadow-sm group"
+            >
+              {contenido}
+            </button>
+          ) : (
             <Link
               key={c.id}
               href={c.href}
               className="rounded-xl border bg-card p-5 hover:bg-accent/50 transition-colors shadow-sm group"
             >
-              <div className="flex items-center gap-3">
-                <div className="rounded-md bg-muted/50 p-2.5 group-hover:bg-muted">
-                  <Icon className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <div className="font-semibold">{c.label}</div>
-                  <div className="text-xs text-muted-foreground">Ver campañas →</div>
-                </div>
-              </div>
+              {contenido}
             </Link>
           );
         })}

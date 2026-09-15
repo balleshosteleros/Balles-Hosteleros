@@ -77,7 +77,7 @@ export function GestionarFasesDialog({ open, onOpenChange, onChanged }: Props) {
             <div className="flex items-center justify-between pr-6">
               <DialogTitle>Gestionar fases del pipeline</DialogTitle>
               <Button size="sm" onClick={() => setShowNew(true)} disabled={fases.length >= 10}>
-                <Plus className="h-4 w-4 mr-1" /> Nueva fase
+                <Plus className="h-4 w-4 mr-1" /> Nueva
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">

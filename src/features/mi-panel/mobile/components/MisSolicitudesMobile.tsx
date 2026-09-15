@@ -136,7 +136,7 @@ export function MisSolicitudesMobile() {
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-4 text-base font-semibold text-white shadow-md active:scale-[0.98] active:bg-emerald-600"
         >
           <Plus className="h-5 w-5" />
-          Nueva solicitud
+          Nueva
         </button>
       )}
 

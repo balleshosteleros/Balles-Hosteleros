@@ -8,7 +8,9 @@ export type EstadoFichaje =
   | "incidencia"
   | "validado";
 
-export type TipoFichajeCodigo = "ENT" | "SAL" | "IPA" | "FPA" | "MAN" | "COR" | "VAL" | "NOR";
+export type TipoFichajeCodigo =
+  | "ENT" | "SAL" | "IPA" | "FPA" | "MAN" | "COR" | "VAL"
+  | "NOR" | "SOL" | "EXT";
 
 export const TIPO_FICHAJE_LABEL: Record<TipoFichajeCodigo, string> = {
   ENT: "Normal",
@@ -18,7 +20,9 @@ export const TIPO_FICHAJE_LABEL: Record<TipoFichajeCodigo, string> = {
   MAN: "Manual",
   COR: "Corregido",
   VAL: "Validado",
-  NOR: "Normal",
+  NOR: "Fichaje normal",
+  SOL: "Fichaje por solicitud",
+  EXT: "Fichaje horas extras",
 };
 
 export const TIPO_FICHAJE_BADGE: Record<TipoFichajeCodigo, string> = {
@@ -29,7 +33,11 @@ export const TIPO_FICHAJE_BADGE: Record<TipoFichajeCodigo, string> = {
   MAN: "bg-violet-50 text-violet-700 border-violet-200",
   COR: "bg-orange-50 text-orange-700 border-orange-200",
   VAL: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  NOR: "bg-sky-50 text-sky-700 border-sky-200",
+  // Los tres vivos, con el color del catálogo: normal verde, por solicitud
+  // azul, horas extras rojo.
+  NOR: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  SOL: "bg-blue-50 text-blue-700 border-blue-200",
+  EXT: "bg-red-50 text-red-700 border-red-200",
 };
 
 // ─── Paleta de color de los tipos de fichaje (fuente única) ────────────────

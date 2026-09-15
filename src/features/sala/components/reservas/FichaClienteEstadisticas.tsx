@@ -78,13 +78,16 @@ export function FichaClienteEstadisticas({
   ];
 
   return (
-    <div className="grid grid-cols-5 gap-2 rounded-md border bg-muted/30 p-2.5">
+    // Mide lo justo: esta tira va enfrentada al desplegable de Estado de la
+    // otra columna, y cuando abultaba más que él las dos fichas dejaban de ir
+    // renglón con renglón y el nombre del cliente caía por debajo de la fecha.
+    <div className="grid grid-cols-5 gap-1 rounded-md border bg-muted/30 px-1.5 py-1">
       {celdas.map((c) => (
         <HoverCard key={c.label} openDelay={120} closeDelay={80}>
           <HoverCardTrigger asChild>
-            <div className="cursor-default rounded-sm px-1 py-0.5 text-center transition-colors hover:bg-muted">
-              <div className="text-base font-semibold leading-none">{c.valor}</div>
-              <div className="mt-1 text-[10px] text-muted-foreground">{c.label}</div>
+            <div className="cursor-default rounded-sm px-0.5 py-0.5 text-center transition-colors hover:bg-muted">
+              <div className="text-sm font-semibold leading-none">{c.valor}</div>
+              <div className="mt-0.5 text-[9px] leading-tight text-muted-foreground">{c.label}</div>
             </div>
           </HoverCardTrigger>
           <HoverCardContent align="center" className="w-64 p-2.5">

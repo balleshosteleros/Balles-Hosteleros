@@ -189,7 +189,7 @@ export function ReunionesView() {
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex justify-end">
         <Button onClick={() => setShowNew(true)}>
-          <Plus className="mr-1 h-4 w-4" /> Nueva reunión
+          <Plus className="mr-1 h-4 w-4" /> Nueva
         </Button>
       </div>
 

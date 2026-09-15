@@ -125,12 +125,6 @@ function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string
           {/* TU NÓMINA: del bruto (que ya incluye tu SS y tu IRPF) a lo que
               te queda en el banco, restando una a una las retenciones. */}
           <Rotulo texto="Tu nómina" />
-          {d.totalRetenido > 0 && (
-            <p className="mb-1 text-[11px] text-muted-foreground leading-snug">
-              Tu nómina bruta ya incluye tu Seguridad Social y tu IRPF. Se te descuentan
-              aquí abajo hasta llegar a la nómina neta.
-            </p>
-          )}
           <dl className="text-sm divide-y divide-border/60">
             <Fila label="Nómina bruta" valor={fmtEur(d.bruto)} />
             {d.ssEmpleado > 0 && (

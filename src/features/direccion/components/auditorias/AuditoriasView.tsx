@@ -145,7 +145,7 @@ export function AuditoriasView() {
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar departamento"
         onNuevo={() => setNuevaOpen(true)}
-        textoNuevo="Nueva auditoría"
+        textoNuevo="Nueva"
       />
 
       {/* Filtros en fila aparte (BARRA HORIZONTAL 1) */}

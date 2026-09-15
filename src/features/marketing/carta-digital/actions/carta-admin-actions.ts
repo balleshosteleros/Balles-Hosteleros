@@ -40,6 +40,8 @@ export async function crearCategoria(input: {
   descripcion?: string;
   /** Forma de las fotos de esta categoría. Se elige ya al crearla. */
   formatoFoto?: "cuadrada" | "vertical";
+  /** Apartado del primer nivel: comida, bebida u otros. */
+  familia?: "comida" | "bebida" | "otros";
 }): Promise<ActionResult<{ id: string }>> {
   try {
     const { supabase, empresaId } = await getAppContext();
@@ -63,6 +65,7 @@ export async function crearCategoria(input: {
         nombre,
         descripcion: input.descripcion?.trim() || null,
         formato_foto: input.formatoFoto ?? null,
+        familia: input.familia ?? "comida",
         orden,
       })
       .select("id")

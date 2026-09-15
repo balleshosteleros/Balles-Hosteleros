@@ -85,9 +85,15 @@ function rangoDe(periodo: Periodo, refDate: Date) {
   };
 }
 
+// Mayúscula solo en la primera letra: el botón llevaba `capitalize`, que
+// convertía "21 – 27 de sep 2026" en "21 – 27 De Sep 2026".
+function primeraMayuscula(texto: string): string {
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
 function etiquetaRango(periodo: Periodo, desde: Date, hasta: Date): string {
   if (periodo === "mes") {
-    return format(desde, "MMMM yyyy", { locale: es });
+    return primeraMayuscula(format(desde, "MMMM yyyy", { locale: es }));
   }
   if (isSameMonth(desde, hasta)) {
     return `${format(desde, "d")} – ${format(hasta, "d 'de' MMM yyyy", { locale: es })}`;
