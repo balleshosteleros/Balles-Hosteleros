@@ -231,7 +231,7 @@ export function ProveedoresView() {
   // aparece al momento. Se pausa con la ficha o el alta abiertas.
   useSincronizacionEnVivo({
     tablas: ["proveedores"],
-    empresaId: empresaActual.id,
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => void loadProveedores(),
     pausado: modalOpen || !!detalleProveedor || iaProvOpen,
   });

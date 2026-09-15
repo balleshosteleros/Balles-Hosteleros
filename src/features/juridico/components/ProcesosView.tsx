@@ -116,7 +116,7 @@ export function ProcesosView() {
   // recargar. Se pausa con el alta o el detalle abiertos.
   useSincronizacionEnVivo({
     tablas: ["procesos_juridicos", "documentos_juridicos"],
-    empresaId: empresaActual.id,
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => void loadProcesos(),
     pausado: modalOpen || !!detalleItem,
   });

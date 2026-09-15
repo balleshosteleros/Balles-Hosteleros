@@ -219,7 +219,7 @@ export function PedidosView() {
   // recargar. Se pausa con el alta o el detalle abiertos.
   useSincronizacionEnVivo({
     tablas: ["pedidos", "albaranes", "albaran_incidencias"],
-    empresaId: empresaActual.id,
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => { void loadPedidos(); void loadAlbaranes(); },
     pausado: modalOpen || !!detallePedido,
   });

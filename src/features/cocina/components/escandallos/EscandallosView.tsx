@@ -1423,7 +1423,7 @@ export function EscandallosView() {
   // recargar por debajo una ficha que se esta consultando o editando.
   useSincronizacionEnVivo({
     tablas: ["escandallos", "escandallo_ingredientes"],
-    empresaId: empresaActual.id,
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => void loadEscandallos(),
     pausado: detalleOpen || !!detalleEscandallo,
   });

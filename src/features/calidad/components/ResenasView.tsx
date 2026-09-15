@@ -235,7 +235,7 @@ export function ResenasView() {
   // agentes IA abiertos para no pisar una respuesta a medio redactar.
   useSincronizacionEnVivo({
     tablas: ["resenas"],
-    empresaId: empresaVisible.id,
+    empresaId: empresaVisible.dbId ?? null,
     onCambio: () => void cargar(),
     pausado: agentesOpen || !!detalleResena,
   });

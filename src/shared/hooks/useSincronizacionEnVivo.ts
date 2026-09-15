@@ -41,6 +41,14 @@ export interface SincronizacionEnVivoOpts {
   /**
    * Empresa a la que limitar la escucha. Si se indica, solo llegan cambios de
    * esa empresa (menos ruido y menos tráfico). Omitir en tablas sin `empresa_id`.
+   *
+   * ⚠️ EL UUID (`empresa.dbId`), NUNCA EL SLUG (`empresa.id`).
+   *
+   * El filtro se monta como `empresa_id=eq.<valor>` y `empresa_id` es un uuid en
+   * todas las tablas: con "habana" no casa con ninguna fila. No da ningún error
+   * — simplemente no llega nada y la pantalla se queda con la foto vieja, que
+   * es exactamente lo que este hook existe para evitar. Pasó en 14 vistas hasta
+   * el 15-09-2026 porque la línea se copiaba de una a otra.
    */
   empresaId?: string | null;
   /**

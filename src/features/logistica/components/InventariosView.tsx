@@ -140,7 +140,7 @@ export function InventariosView() {
   // pisar un conteo en curso.
   useSincronizacionEnVivo({
     tablas: ["inventarios", "lineas_inventario"],
-    empresaId: empresaActual.id,
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => void loadInventarios(),
     pausado: createOpen || !!detalleId,
   });

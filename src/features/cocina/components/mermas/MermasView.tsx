@@ -67,7 +67,7 @@ export function MermasView() {
   // Se pausa con el alta abierta para no perder lo que se esta registrando.
   useSincronizacionEnVivo({
     tablas: ["mermas"],
-    empresaId: empresaActual?.id ?? null,
+    empresaId: empresaActual?.dbId ?? null,
     onCambio: () => void recargar(),
     pausado: open,
   });

@@ -124,7 +124,7 @@ export function MantenimientoView() {
   // detalle abiertos para no pisar lo que se este escribiendo.
   useSincronizacionEnVivo({
     tablas: ["mantenimiento", "mantenimiento_actualizaciones"],
-    empresaId: empresaActual.id,
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => void loadIncidencias(),
     pausado: modalOpen || !!detalleItem,
   });

@@ -253,7 +253,7 @@ export function HorariosView() {
   // un turno: refrescar a media asignación la tiraría.
   useSincronizacionEnVivo({
     tablas: ["rrhh_cuadrantes", "empleados"],
-    empresaId,
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => void cargar(true),
     pausado: configOpen || panelOpen || !!activeDrag,
   });

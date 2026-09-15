@@ -174,7 +174,7 @@ export function EmpleadosView() {
   // abierta.
   useSincronizacionEnVivo({
     tablas: ["empleados"],
-    empresaId: empresaActual.id,
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => void cargar(),
     pausado: showConfig,
   });

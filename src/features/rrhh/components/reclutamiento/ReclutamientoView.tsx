@@ -479,7 +479,7 @@ export function ReclutamientoView() {
   // la foto cargada al entrar (candidatos en fases que ya no eran las suyas).
   useSincronizacionEnVivo({
     tablas: ["candidatos", "vacantes"],
-    empresaId: empresaActual.id,
+    empresaId: empresaActual.dbId ?? null,
     onCambio: recargar,
   });
 

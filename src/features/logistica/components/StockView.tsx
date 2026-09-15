@@ -202,7 +202,7 @@ export function StockView() {
   // debajo la cantidad que se está tecleando.
   useSincronizacionEnVivo({
     tablas: ["stock", "productos", "inventarios"],
-    empresaId: empresaActual.id,
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => void loadStockData(),
     pausado: !!editingId,
   });

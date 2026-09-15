@@ -202,7 +202,7 @@ export function FichajesView() {
   // revisando; lo que llegue entre medias se aplica al cerrarla.
   useSincronizacionEnVivo({
     tablas: ["fichajes"],
-    empresaId: empresaActual.id,
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => void loadFichajes(),
     pausado: !!fichajeModal,
   });

@@ -118,7 +118,7 @@ export function EtiquetasView() {
   // escribir y refrescar lo perderia.
   useSincronizacionEnVivo({
     tablas: ["etiquetas"],
-    empresaId: empresaActual?.id ?? null,
+    empresaId: empresaActual?.dbId ?? null,
     onCambio: () => void cargar(),
     pausado: dialogCrear.open || dialogEditar.open,
   });
