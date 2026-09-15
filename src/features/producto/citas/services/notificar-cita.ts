@@ -16,7 +16,7 @@ import "server-only";
  * Nunca lanza: un fallo de correo no puede tumbar una cita ya reservada.
  */
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendEmail } from "@/lib/email/send";
+import { sendEmail, direccionRemitente } from "@/lib/email/send";
 import { citaConfirmacionEmail } from "@/lib/email/citas/confirmacion";
 import { construirIcs } from "@/lib/email/citas/ics";
 import { zonaHorariaDeConfig } from "@/features/empresa/lib/empresa-server";
@@ -114,6 +114,9 @@ export async function notificarCitaConfirmada(
       meetUrl: (cita.google_meet_url as string | null) ?? null,
     });
 
+    // `REQUEST` (no `PUBLISH`) y dentro del correo (no como adjunto): es lo que
+    // hace que la cita entre sola en el calendario de quien reserva. Como
+    // adjunto llegaba un archivo inerte que había que abrir a mano.
     const ics = construirIcs({
       uid: `cita-${citaId}@balleshosteleros.com`,
       inicioISO,
@@ -121,6 +124,12 @@ export async function notificarCitaConfirmada(
       titulo: nombreEmpresa ? `${nombreCalendario} · ${nombreEmpresa}` : nombreCalendario,
       descripcion: (cita.google_meet_url as string | null) ?? null,
       url: (cita.google_meet_url as string | null) ?? null,
+      metodo: "REQUEST",
+      organizador: { nombre: nombreEmpresa || null, email: direccionRemitente() },
+      asistente: {
+        nombre: [cliente?.nombre, cliente?.apellidos].filter(Boolean).join(" ").trim() || null,
+        email: destino,
+      },
     });
 
     const res = await sendEmail({
@@ -131,9 +140,7 @@ export async function notificarCitaConfirmada(
       empresaId,
       // El correo pinta su propia cabecera de marca, como los de Sala.
       brandHeader: false,
-      attachments: [
-        { filename: "cita.ics", content: ics, contentType: "text/calendar; charset=utf-8" },
-      ],
+      icalEvent: { method: "REQUEST", filename: "cita.ics", content: ics },
     });
 
     if (!res.ok) {

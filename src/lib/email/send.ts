@@ -81,7 +81,31 @@ export type SendEmailInput = {
     contentType?: string;
     cid?: string;
   }[];
+  /**
+   * Invitación de calendario que viaja DENTRO del correo, no como archivo
+   * adjunto. Es lo que hace que Gmail enseñe la tarjeta de la cita y la meta
+   * en el calendario del destinatario sin que tenga que hacer nada.
+   *
+   * Con `method: "REQUEST"` el .ics tiene que traer ORGANIZER y ATTENDEE. Como
+   * archivo adjunto (`attachments`) el mismo .ics llega inerte: se ve un
+   * archivo que hay que abrir a mano, y casi nadie lo abre.
+   */
+  icalEvent?: {
+    method: "REQUEST" | "PUBLISH" | "CANCEL";
+    filename?: string;
+    content: string;
+  };
 };
+
+/**
+ * Dirección desde la que sale el correo, sin el nombre visible. La necesita
+ * quien construye una invitación de calendario: el ORGANIZER del .ics tiene que
+ * ser el mismo buzón que firma el correo, o Gmail no se fía de la invitación.
+ */
+export function direccionRemitente(): string {
+  const from = process.env.EMAIL_FROM?.trim() || NOREPLY;
+  return addressOf(from);
+}
 
 /** Extrae la dirección de un From que puede venir como "Nombre <email>" o "email". */
 function addressOf(from: string): string {
@@ -250,6 +274,15 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       html,
       text: input.text,
       replyTo,
+      ...(input.icalEvent
+        ? {
+            icalEvent: {
+              method: input.icalEvent.method,
+              filename: input.icalEvent.filename ?? "cita.ics",
+              content: input.icalEvent.content,
+            },
+          }
+        : {}),
       attachments: [
         // Logo inline (cid:) — se muestra sin pedir «mostrar imágenes».
         ...inlineAttachments.map((a) => ({

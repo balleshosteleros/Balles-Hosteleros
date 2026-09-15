@@ -88,7 +88,7 @@ export function citaConfirmacionEmail(input: CitaConfirmacionInput): {
       ${tarjeta}
       ${acceso}
       <p style="margin:18px 0 0 0;font-size:13px;color:#64748b;line-height:1.6;">
-        Te adjuntamos la cita para que la añadas a tu calendario.
+        La cita va como invitación, así que se te queda en el calendario.
       </p>
     `,
   });

@@ -179,11 +179,35 @@ export function envolverEmail(input: EnvolturaInput): string {
   const imgHtml = marcaSrc
     ? `<img src="${escapeAttr(marcaSrc)}" alt="${escapeAttr(empresaNombre)}" style="max-height:60px;max-width:220px;display:block;margin:0 auto;" />`
     : "";
+
+  /*
+    El isotipo va REDONDO, recortado en un círculo.
+
+    Antes se metía tal cual dentro de un óvalo blanco, y eso solo queda bien si
+    el isotipo viene recortado y sin fondo. El de BALLES es un cuadrado con su
+    propio fondo azul, así que salía un CUADRADO DENTRO DE UN CÍRCULO. Al
+    recortarlo, el que trae fondo propio queda como una insignia redonda y el
+    que no lo trae sigue apoyado en el blanco, que es lo que lo hace visible
+    cuando el isotipo es del mismo color que la cabecera (el rosa de HABANA
+    sobre fondo rosa desaparecía).
+
+    Un LOGO ancho no se recorta: perdería medio nombre. Ese se queda en la
+    píldora de siempre.
+  */
+  const esIsotipo = Boolean(input.empresa.isotipo_url);
+  const insigniaRedonda = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr><td width="96" height="96" align="center" valign="middle" style="width:96px;height:96px;background:#ffffff;border-radius:50%;"><img src="${escapeAttr(
+    marcaSrc ?? "",
+  )}" alt="${escapeAttr(
+    empresaNombre,
+  )}" width="86" height="86" style="width:86px;height:86px;border-radius:50%;display:inline-block;vertical-align:middle;border:0;outline:none;text-decoration:none;" /></td></tr></table>`;
+
   const cabeceraHtml = !marcaSrc
     ? `<div style="font-size:22px;font-weight:700;color:${textoSobrePrimario};letter-spacing:0.2px;">${escapeHtml(empresaNombre)}</div>`
     : logoParaFondo
       ? imgHtml
-      : `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr><td style="background:#ffffff;border-radius:999px;padding:14px 22px;">${imgHtml}</td></tr></table>`;
+      : esIsotipo
+        ? insigniaRedonda
+        : `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr><td style="background:#ffffff;border-radius:999px;padding:14px 22px;">${imgHtml}</td></tr></table>`;
 
   return `<!doctype html>
 <html lang="es">
