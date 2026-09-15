@@ -2394,8 +2394,11 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                 fecha: form.fecha,
                 turno: form.turno,
                 personas: form.comensales,
+                email: form.email,
               })}
-              contextoSerial={`${form.fecha}|${form.turno}|${form.comensales}`}
+              // El correo entra en la clave: un cupón de cumpleaños es de quien
+              // lo recibió, así que al cambiar el correo hay que revalidarlo.
+              contextoSerial={`${form.fecha}|${form.turno}|${form.comensales}|${form.email.trim().toLowerCase()}`}
               onResult={(r) => setCuponValido(r === null ? null : r.ok)}
             />
           </div>

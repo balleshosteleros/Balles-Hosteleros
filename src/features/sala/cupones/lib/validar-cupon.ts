@@ -34,6 +34,12 @@ export async function validarCuponServer(
      * un validador que no sabe cuántos son no puede decir que no.
      */
     personas?: number | null;
+    /**
+     * Correo de quien reserva. Los cupones con dueño —los de cumpleaños— solo
+     * valen para él: sin este dato, un cupón nominativo se rechaza, porque no
+     * hay forma de comprobar que sea suyo.
+     */
+    email?: string | null;
   },
 ): Promise<CuponValidacionResult> {
   const { data, error } = await supabase.rpc("validar_cupon", {
@@ -42,6 +48,7 @@ export async function validarCuponServer(
     p_fecha: args.fecha,
     p_turno: args.turno,
     p_personas: args.personas ?? null,
+    p_email: args.email ?? null,
   });
 
   if (error) {

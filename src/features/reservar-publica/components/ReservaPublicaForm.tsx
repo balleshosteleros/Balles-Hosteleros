@@ -921,8 +921,11 @@ export function ReservaPublicaForm({
                     fecha,
                     turno: turnoPorHora,
                     personas,
+                    email,
                   })}
-                  contextoSerial={`${fecha}|${turnoPorHora}|${personas}`}
+                  // El correo entra en la clave: si lo cambia después de validar
+                  // el código, hay que volver a comprobar de quién es el cupón.
+                  contextoSerial={`${fecha}|${turnoPorHora}|${personas}|${email.trim().toLowerCase()}`}
                   onResult={(r) => setCuponValido(r === null ? null : r.ok)}
                   label="Código promocional"
                 />

@@ -228,11 +228,13 @@ export async function crearReservaPublicaAction(
     return { ok: false, error: motor.error };
   }
 
-  // PRP-052: validar cupón y consumir stock atómicamente. Si falla, abortamos
-  // sin crear reserva. Regla del dueño: cupón NO coexiste con ticket.
+  // PRP-052: el cupón se COMPRUEBA aquí y se GASTA abajo, justo antes de crear
+  // la reserva. Regla del dueño: cupón NO coexiste con ticket.
   let codigoId: string | null = null;
   let codigoTexto: string | null = null;
   let cuponTituloCliente: string | null = null;
+  /** Cupón ya gastado, para poder devolverlo si la reserva no llega a existir. */
+  let codigoConsumido: string | null = null;
   if (data.codigo) {
     if (data.ticketProductoId) {
       return { ok: false, error: "Una reserva con ticket no puede llevar cupón." };
@@ -246,6 +248,9 @@ export async function crearReservaPublicaAction(
       // El mínimo se comprueba AQUÍ, no solo en el formulario: el navegador se
       // puede saltar, esto no.
       p_personas: data.personas,
+      // Y de quién es el cupón, por lo mismo: los de cumpleaños son personales,
+      // y quien reenvía el suyo por WhatsApp no puede regalárselo a otro.
+      p_email: data.email ?? null,
     });
     if (vErr) {
       console.error("[reservar-publica] validar_cupon:", vErr);
@@ -274,16 +279,14 @@ export async function crearReservaPublicaAction(
       };
       return { ok: false, error: labelMap[motivo] ?? "Cupón no válido." };
     }
-    const { error: cErr } = await admin.rpc("consumir_stock_cupon", {
-      p_codigo_id: row.cupon_id,
-      p_personas: data.personas,
-    });
-    if (cErr) {
-      const msg = cErr.message ?? "";
-      if (msg.includes("AGOTADO")) return { ok: false, error: "Cupón agotado." };
-      console.error("[reservar-publica] consumir_stock_cupon:", cErr);
-      return { ok: false, error: "No se pudo aplicar el cupón." };
-    }
+    // El cupón se COMPRUEBA aquí, pero NO se gasta todavía: se gasta justo
+    // antes de crear la reserva.
+    //
+    // Antes se gastaba en este punto, y cualquier tropiezo posterior —no elegir
+    // zona, quedarse sin mesa libre— devolvía un error dejando el cupón ya
+    // consumido. Con los de cumpleaños, que son personales y de un solo uso,
+    // eso significa que la persona pierde su regalo sin haber reservado nada, y
+    // encima el sistema le dice después «este código ya se ha usado».
     codigoId = row.cupon_id;
     codigoTexto = norm;
     cuponTituloCliente = row.titulo_cliente_efectivo;
@@ -513,6 +516,23 @@ export async function crearReservaPublicaAction(
   }
 
   /** El cupo ya está apartado: hay que devolverlo si la reserva no llega a crearse. */
+  /**
+   * Devuelve el cupón cuando la reserva no llega a existir. Es dinero de quien
+   * reserva: si no hay mesa, no puede perderlo. Nunca lanza.
+   */
+  const devolverCupon = async () => {
+    if (!codigoConsumido) return;
+    try {
+      await admin.rpc("devolver_stock_cupon", {
+        p_codigo_id: codigoConsumido,
+        p_personas: data.personas,
+      });
+      codigoConsumido = null;
+    } catch (e) {
+      console.error("[reservar-publica] devolver_stock_cupon:", e);
+    }
+  };
+
   const liberarCupo = async () => {
     try {
       await admin.rpc("liberar_slot_manual", {
@@ -706,6 +726,25 @@ export async function crearReservaPublicaAction(
   const datosDeclarados = hayQueRevisar ? decision.declarados : null;
   const motivoVinculacion = hayQueRevisar ? decision.motivo : null;
 
+  // AHORA sí se gasta el cupón: todo lo que podía salir mal ya ha salido bien y
+  // lo siguiente es crear la reserva. Antes se gastaba al validarlo, cientos de
+  // líneas antes, y quien se caía por el camino perdía su cupón sin reservar.
+  if (codigoId) {
+    const { error: cErr } = await admin.rpc("consumir_stock_cupon", {
+      p_codigo_id: codigoId,
+      p_personas: data.personas,
+    });
+    if (cErr) {
+      await liberarCupo();
+      const msg = cErr.message ?? "";
+      console.error("[reservar-publica] consumir_stock_cupon:", cErr);
+      // Entre la comprobación y este punto puede haberlo usado otra persona.
+      if (msg.includes("AGOTADO")) return { ok: false, error: "Cupón agotado." };
+      return { ok: false, error: "No se pudo aplicar el cupón." };
+    }
+    codigoConsumido = codigoId;
+  }
+
   // Id generado en código para poder disparar el correo sin releer la fila.
   const reservaId = crypto.randomUUID();
   const { data: filaCreada, error } = await admin.from("reservas").insert({
@@ -778,6 +817,7 @@ export async function crearReservaPublicaAction(
     // hay que soltarlo a mano o el turno quedaría ocupado por una reserva
     // que no existe.
     await liberarCupo();
+    await devolverCupon();
     console.error("[reservar-publica] insert error:", error);
     return { ok: false, error: "No pudimos crear la reserva" };
   }
@@ -798,6 +838,7 @@ export async function crearReservaPublicaAction(
     if (canje.error) {
       await admin.from("reservas").delete().eq("id", reservaId);
       await liberarCupo();
+      await devolverCupon();
       const msg = canje.error.message ?? "";
       console.error("[reservar-publica] canjear_ticket_compra:", canje.error);
       if (msg.includes("YA_UTILIZADO")) {

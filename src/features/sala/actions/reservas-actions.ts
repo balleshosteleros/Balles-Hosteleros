@@ -580,6 +580,9 @@ export async function createReserva(input: {
         p_turno: input.turno ?? "COMIDA",
         // El mínimo del cupón se juzga con los comensales de ESTA reserva.
         p_personas: input.personas,
+        // Y el dueño, con el correo de ESTE cliente: un cupón de cumpleaños
+        // solo lo gasta quien lo recibió, también si lo mete sala a mano.
+        p_email: input.clienteEmail ?? null,
       });
       if (vErr) {
         console.error("[reservas] validar_cupon:", vErr);

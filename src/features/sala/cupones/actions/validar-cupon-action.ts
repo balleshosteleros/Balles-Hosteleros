@@ -16,6 +16,12 @@ export async function validarCuponAdminAction(args: {
   turno: "COMIDA" | "CENA" | null;
   /** Comensales de la reserva: es lo que decide si se cumple el mínimo. */
   personas?: number | null;
+  /**
+   * Correo del cliente de la reserva. Los cupones de cumpleaños son suyos y solo
+   * suyos: sala tiene que escribir el correo del cliente para poder aplicarlos,
+   * igual que si reservara él por la web.
+   */
+  email?: string | null;
 }): Promise<CuponValidacionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -31,5 +37,6 @@ export async function validarCuponAdminAction(args: {
     fecha: args.fecha,
     turno: args.turno,
     personas: args.personas ?? null,
+    email: args.email ?? null,
   });
 }

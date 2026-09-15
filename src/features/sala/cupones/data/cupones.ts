@@ -68,7 +68,13 @@ export type CuponMotivoInvalidez =
   | "TURNO_NO_PERMITIDO"
   | "MINIMO_PERSONAS"
   /** Personal y de un solo uso: ya lo gastó quien lo tenía. */
-  | "YA_USADO";
+  | "YA_USADO"
+  /**
+   * El cupón tiene dueño y la reserva no va a su nombre. Los de cumpleaños
+   * nacen con nombre y correo: si se reenvían por WhatsApp, el que lo recibe no
+   * puede gastarlo.
+   */
+  | "OTRO_CLIENTE";
 
 export const CUPON_MOTIVO_LABELS: Record<CuponMotivoInvalidez, string> = {
   NO_EXISTE: "No existe ningún código así",
@@ -79,6 +85,7 @@ export const CUPON_MOTIVO_LABELS: Record<CuponMotivoInvalidez, string> = {
   DIA_NO_PERMITIDO: "Este código no vale para ese día de la semana",
   TURNO_NO_PERMITIDO: "Este código no vale para ese turno",
   MINIMO_PERSONAS: "Sois menos de los que pide el cupón",
+  OTRO_CLIENTE: "Este código es de otro cliente: reserva con el correo al que le llegó",
 };
 
 export interface CuponValidacionResult {
