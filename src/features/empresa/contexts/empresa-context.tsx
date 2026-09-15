@@ -328,6 +328,23 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
         const matchByCookie = activaDbId ? list.find((e) => e.dbId === activaDbId) : null;
         if (matchByCookie) {
           setEmpresaId(matchByCookie.id);
+          // LA COPIA DEL NAVEGADOR VA SIEMPRE DETRÁS DE LA COOKIE.
+          //
+          // El servidor manda: si la cookie dice BACANAL, esta pestaña consulta
+          // BACANAL. La copia local (la que viaja en `x-bh-empresa` en cada
+          // consulta del navegador) solo se refrescaba al pulsar el selector
+          // del ordenador, así que cualquier otro camino —el selector del
+          // móvil, entrar con la cookie ya puesta— dejaba al navegador pidiendo
+          // la empresa ANTERIOR mientras el servidor servía la nueva: datos de
+          // una empresa con el rótulo de la otra.
+          setEmpresaActivaCliente(matchByCookie.dbId ?? null);
+          if (typeof window !== "undefined") {
+            try {
+              window.localStorage.setItem(EMPRESA_ACTIVA_SLUG_KEY, matchByCookie.id);
+            } catch {
+              // ignore
+            }
+          }
         } else {
           // Sin cookie: 2ª preferencia es el slug que dejamos en localStorage la
           // última vez que el usuario eligió empresa. Evita que un reinicio del

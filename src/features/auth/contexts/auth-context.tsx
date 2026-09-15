@@ -151,6 +151,29 @@ function writeAuthCache(userId: string, value: AuthCache) {
     // quota / private mode → ignoramos
   }
 }
+/**
+ * TIRA LOS PERMISOS GUARDADOS EN ESTE NAVEGADOR.
+ *
+ * Los permisos (qué módulos ves) son DE LA EMPRESA en la que estás, pero se
+ * guardan por usuario para que el menú se pinte al instante al entrar. Al
+ * cambiar de empresa hay que tirarlos: si no, la pantalla arranca enseñando
+ * los módulos de la empresa anterior hasta que llega la respuesta del
+ * servidor. Mejor un momento sin menú que un menú de otra empresa.
+ */
+export function limpiarCacheAuthLocal(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const aBorrar: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith("bh_auth_cache_")) aBorrar.push(k);
+    }
+    for (const k of aBorrar) window.localStorage.removeItem(k);
+  } catch {
+    // Modo privado o almacenamiento bloqueado: no había caché que tirar.
+  }
+}
+
 function readLastCachedAuth(): AuthCache | null {
   if (typeof window === "undefined") return null;
   try {

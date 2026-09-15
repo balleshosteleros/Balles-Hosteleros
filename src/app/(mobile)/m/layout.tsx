@@ -125,9 +125,18 @@ export default async function MobileLayout({ children }: { children: React.React
             por tramos hasta 1100px, que es donde la rejilla deja de estirarse.
       */}
       <main className="mx-auto w-full max-w-screen-sm flex-1 bg-transparent md:max-w-3xl lg:max-w-5xl xl:max-w-[1100px]">
-        <GateDocumentacion activo={shouldShowWizard} modo={modo} bloquea={bloquea} pendientes={pendientes}>
-          {children}
-        </GateDocumentacion>
+        {/* La empresa activa es la LLAVE de la pantalla: al cambiar de empresa
+            cambia la llave y React tira la pantalla entera y la construye de
+            cero, con lo que cada pantalla vuelve a pedir SUS datos a la nueva
+            empresa. Sin esto, lo que ya estaba cargado se quedaba puesto —el
+            chat seguía enseñando los grupos de la empresa anterior— porque las
+            pantallas del teléfono cargan sus datos al montarse. Es la misma
+            llave que usa el software de ordenador. */}
+        <div key={identidad.empresaActual?.id ?? "sin-empresa"} className="contents">
+          <GateDocumentacion activo={shouldShowWizard} modo={modo} bloquea={bloquea} pendientes={pendientes}>
+            {children}
+          </GateDocumentacion>
+        </div>
       </main>
       <MobileBottomNav />
       {/* Va en TODAS las pantallas de la app: si su aviso de fichaje revienta,
