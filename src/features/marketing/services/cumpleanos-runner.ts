@@ -190,23 +190,20 @@ async function crearCuponCumpleanos(
   if (errCodigo || !codigo) return null;
 
   const caducidad = sumarDias(args.fechaCumple, args.reglas.diasValidezDespues);
-  const anio = args.fechaCumple.slice(0, 4);
-  // Hay fichas sin nombre (las que entraron por WhatsApp con un emoji por
-  // nombre). Interpolar directo escribía "null" en el título del cupón.
-  const nombre =
-    [args.cliente.nombre, args.cliente.apellidos].filter(Boolean).join(" ").trim() ||
-    "Cliente";
 
   const { data, error } = await admin
     .from("reserva_codigos")
     .insert({
       empresa_id: args.empresaId,
       codigo: codigo as string,
-      // El título es lo que ve el camarero: tiene que decir de quién es y qué
-      // hay que aplicar sin abrir nada ni preguntar a nadie.
-      titulo_interno:
-        `Cumpleaños · ${nombre} · ${args.reglas.descuentoPorcentaje}% (si son ${args.reglas.mesaParaGratis}, invita la casa) · ${anio}`.slice(0, 120),
-      titulo_cliente: `${args.reglas.descuentoPorcentaje}% por tu cumpleaños`,
+      // El distintivo dice DOS cosas y ninguna más: qué es y cuánto se
+      // descuenta. Antes el título llevaba además el nombre y el año, y en la
+      // pastilla de la reserva salía un renglón larguísimo — con el nombre
+      // repetido, porque la reserva ya es de esa persona y se lee al lado.
+      // El mismo texto para el cliente y para sala: es lo mismo, y tenerlo
+      // escrito de dos maneras solo hace que no cuadren al compararlos.
+      titulo_interno: `Cumpleaños ${args.reglas.descuentoPorcentaje} %`,
+      titulo_cliente: `Cumpleaños ${args.reglas.descuentoPorcentaje} %`,
       beneficio_tipo: "porcentaje",
       beneficio_valor: args.reglas.descuentoPorcentaje,
       unidad_stock: "reservas",
