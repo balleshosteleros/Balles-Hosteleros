@@ -129,11 +129,38 @@ export async function enviarCorreoMarketing(input: {
   }
 }
 
+/**
+ * Marcadores sin rellenar. `{{TOKEN_BAJA}}` no cuenta: ese lo sustituye este
+ * mismo envío, persona a persona.
+ */
+const MARCADOR_SIN_RELLENAR = /\{\{(?!TOKEN_BAJA)[A-Z_]+\}\}/;
+
 export async function sendEmailCampana(campana: CampanaEmail): Promise<ResendSendResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { success: false, error: "Falta RESEND_API_KEY" };
   if (!campana.asunto?.trim()) return { success: false, error: "La campaña no tiene asunto" };
   if (!campana.cuerpoHtml?.trim()) return { success: false, error: "La campaña no tiene mensaje" };
+
+  // ── El freno que faltaba ────────────────────────────────────────────
+  //
+  // Este envío manda el MISMO correo a todo el segmento: no sabe el nombre de
+  // nadie ni puede rellenar un código. Si el texto trae marcadores, es de una
+  // campaña que se escribe persona a persona y que ha llegado aquí por error.
+  //
+  // Pasó el 13-09-2026: quince clientes recibieron "¡Felicidades, {{NOMBRE}}!".
+  // Un correo así no se puede recuperar, así que esto no avisa: no envía.
+  const conMarcador = [campana.asunto, campana.cuerpoHtml].find((t) =>
+    MARCADOR_SIN_RELLENAR.test(t ?? ""),
+  );
+  if (conMarcador) {
+    const marcador = conMarcador.match(MARCADOR_SIN_RELLENAR)?.[0] ?? "";
+    return {
+      success: false,
+      error:
+        `El texto lleva ${marcador} sin rellenar: esta campaña se escribe para cada persona ` +
+        "y no puede salir por el envío en bloque.",
+    };
+  }
 
   const admin = createAdminClient();
 

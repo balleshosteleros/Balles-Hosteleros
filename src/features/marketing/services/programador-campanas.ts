@@ -38,8 +38,17 @@ import type {
   SegmentoJson,
 } from "@/features/marketing/data/campanas";
 
-/** La de cumpleaños se envía sola, persona a persona, y tiene su propio motor. */
-const CLAVE_CUMPLEANOS = "CUMPLEANOS";
+/**
+ * Las de cumpleaños se envían solas, persona a persona, y tienen su propio
+ * motor. NINGUNA puede pasar por aquí.
+ *
+ * Están las DOS claves a propósito. Con solo la del aviso, la felicitación del
+ * día se coló por este camino el 13-09-2026 y salió con `sendEmailCampana`, que
+ * manda el mismo correo a todo el segmento sin sustituir los marcadores: quince
+ * clientes de BACANAL recibieron un correo cuyo asunto era, literalmente,
+ * "¡Felicidades, {{NOMBRE}}!".
+ */
+const CLAVES_CUMPLEANOS = new Set(["CUMPLEANOS", "CUMPLEANOS_FELICITACION"]);
 
 export interface ResultadoCampana {
   campana: string;
@@ -152,7 +161,7 @@ function yaLeTocaba(fechaEnvio: string, reloj: { iso: string; hora: number }): b
 }
 
 function esCumpleanos(c: FilaCampana): boolean {
-  return (c.payload?.claveSeed as string | undefined) === CLAVE_CUMPLEANOS;
+  return CLAVES_CUMPLEANOS.has((c.payload?.claveSeed as string | undefined) ?? "");
 }
 
 /** Monta el objeto que espera cada emisor a partir de la fila. */
