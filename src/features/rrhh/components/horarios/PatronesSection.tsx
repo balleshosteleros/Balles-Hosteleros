@@ -51,11 +51,11 @@ import {
   Pencil,
   Copy,
   Trash2,
-  ChevronRight,
   GripVertical,
   X,
   CalendarDays,
   CalendarSync,
+  ArrowLeft,
   SlidersHorizontal,
   Loader2,
   History,
@@ -842,19 +842,16 @@ function PatronEditor({
         </p>
       </div>
 
-      <nav className="flex items-center gap-2 text-sm">
-        <button onClick={() => onSalir(false)} className="text-primary underline">
-          Patrones
-        </button>
-        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-muted-foreground">
-          Configurador de patrones {patronTipo === "semanal" ? "semanales" : "libres"}
-          {" · jornada "}
-          {JORNADA_LABEL[jornada].toLowerCase()}
-        </span>
-      </nav>
-
       <div className="flex items-center justify-between gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Volver a patrones"
+          onClick={() => onSalir(false)}
+          className="shrink-0"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
         <input
           type="text"
           value={borrador.nombre}
@@ -878,7 +875,7 @@ function PatronEditor({
               onChange={(e) =>
                 setBorrador((prev) => ({ ...prev, departamento: e.target.value }))
               }
-              className="h-9 w-52 rounded-md border border-input bg-background pl-8 pr-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-10 w-52 rounded-lg border border-input bg-background pl-8 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="">Sin asignar</option>
               {departamentos.map((d) => (
@@ -888,9 +885,6 @@ function PatronEditor({
               ))}
             </Desplegable>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">
-            Agrupa y filtra el patrón, aunque tenga turnos de varios departamentos.
-          </p>
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Fecha de inicio</label>
@@ -908,7 +902,6 @@ function PatronEditor({
             onChange={(valor) => setBorrador((prev) => ({ ...prev, vigenteHasta: valor }))}
             className="w-44"
           />
-          <p className="text-[11px] text-muted-foreground mt-1">Vacío = sin fecha de fin.</p>
         </div>
       </div>
       {rangoInvalido && (
@@ -1255,11 +1248,6 @@ function TurnosPanel({
           <SlidersHorizontal className="h-4 w-4" />
         </Button>
       </div>
-      {!habilitado && (
-        <p className="text-xs text-muted-foreground italic">
-          Selecciona un día para asignarle un turno
-        </p>
-      )}
       <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
         {turnos.map((t) => (
           <button
