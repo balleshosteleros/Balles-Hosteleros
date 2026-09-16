@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { getMiFichajeHoy } from "@/features/mi-panel/actions/mi-panel-actions";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { cn } from "@/shared/lib/utils";
 import { BigClockButton } from "./BigClockButton";
 
 type Estado = "sin-fichar" | "trabajando" | "pausa" | "completado";
@@ -65,10 +66,21 @@ export function FicharSheet({
   // nace al pulsar la huella, esas lecturas empiezan justo cuando el empleado
   // ya está mirando la pantalla. Montado desde el principio, al tocar la huella
   // todo eso está resuelto y la hoja sale entera.
+  //
+  // ESCONDERLA ES `flex`/`hidden` EN LA CLASE, NUNCA el atributo `hidden` a
+  // secas: la regla del atributo vive en la capa `base` de Tailwind y la clase
+  // `flex` en `utilities`, que gana siempre. Con el atributo, la hoja se quedaba
+  // pintada encima de la app entera —fondo oscuro incluido— y la X no la
+  // quitaba, porque cerrarla no cambiaba nada de lo que se ve (Iván, 16-09-2026:
+  // "se queda pillada la pantalla de abajo y no deja pulsar la x"). El atributo
+  // se conserva por accesibilidad, pero quien esconde de verdad es la clase.
   return (
     <div
       hidden={!abierto}
-      className="fixed inset-0 z-[60] flex flex-col justify-end bg-black/50"
+      className={cn(
+        "fixed inset-0 z-[60] flex-col justify-end bg-black/50",
+        abierto ? "flex" : "hidden",
+      )}
       onClick={onCerrar}
     >
       <div

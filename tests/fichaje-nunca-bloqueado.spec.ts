@@ -89,6 +89,37 @@ test.describe("El fichaje nunca se queda sin responder", () => {
     }
   });
 
+  test("una capa a pantalla completa no se esconde con el atributo `hidden`", () => {
+    // Qué pasó (15-09-2026): la hoja de fichar pasó a estar montada siempre y
+    // escondida con `hidden={!abierto}`. No escondía NADA: la regla del
+    // atributo (`[hidden] { display: none }`) vive en la capa `base` de Tailwind
+    // y la clase `flex` en `utilities`, que gana siempre. La hoja se quedó
+    // pintada encima de la app entera —fondo oscuro incluido— y la X no la
+    // quitaba, porque cerrarla no cambiaba nada de lo que se ve. Nadie pudo
+    // usar el móvil hasta el arreglo.
+    const ficheros = execSync(`grep -rl "fixed inset-0" src --include="*.tsx" || true`, {
+      cwd: raiz,
+      encoding: "utf8",
+    })
+      .split("\n")
+      .filter(Boolean);
+
+    for (const rel of ficheros) {
+      const src = codigo(rel);
+      // Solo importa cuando el atributo convive con una capa a pantalla
+      // completa: es ahí donde "no esconder" significa tapar el software.
+      const i = src.indexOf("hidden={");
+      if (i === -1) continue;
+      const alrededor = src.slice(Math.max(0, i - 400), i + 400);
+      if (!alrededor.includes("fixed inset-0")) continue;
+      expect(
+        /["'\s]hidden["'\s]/.test(alrededor),
+        `${rel} esconde una capa a pantalla completa con el atributo \`hidden\`, que Tailwind ` +
+          'pisa con `flex`. Hay que esconderla con la CLASE: abierto ? "flex" : "hidden".',
+      ).toBe(true);
+    }
+  });
+
   test("los avisos de la app se apartan mientras toca fichar", () => {
     const gate = codigo(GATE);
     expect(
